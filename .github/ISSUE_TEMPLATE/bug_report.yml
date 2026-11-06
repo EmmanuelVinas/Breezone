@@ -1,0 +1,35 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, what you got (screenshots welcome).
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Breezone version
+      placeholder: e.g. 0.1.0 (Réglages › Mon compte, or the image tag)
+    validations:
+      required: true
+  - type: dropdown
+    id: part
+    attributes:
+      label: Where
+      multiple: true
+      options: [Server, Web UI, Android app, iOS app, Docker / install]
+  - type: input
+    id: airzone
+    attributes:
+      label: Airzone hardware
+      placeholder: WebServer model and firmware (e.g. Airzone Cloud WebServer, firmware 4.22)
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: "`docker logs breezone` (remove any personal information)"
+      render: text
