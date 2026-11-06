@@ -20,7 +20,7 @@ export function Brand({ className }: { className?: string }) {
     <span className={cn("inline-flex items-center gap-2.5", className)}>
       <BrandMark />
       <span className="font-heading text-lg font-semibold tracking-tight">
-        Free<span className="text-primary">Zone</span>
+        Bree<span className="text-primary">zone</span>
       </span>
     </span>
   )
