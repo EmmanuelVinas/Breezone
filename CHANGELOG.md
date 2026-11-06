@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-06
+
 ### Added
 
 - Rust server driving Airzone WebServers through their local API: zones, groups, modes, history,
@@ -21,3 +23,6 @@ All notable changes are documented here. The format follows
 
 - Project renamed from FreeZone to Breezone (former `FREEZONE_*` variables and `freezone.db` are
   still recognised).
+
+[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/EmmanuelVinas/breezone/releases/tag/v0.1.0
