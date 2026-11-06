@@ -1,0 +1,12 @@
+Breezone controls your Airzone heating and air conditioning through your own Breezone server, installed at home (Docker, NAS, Raspberry Pi), which uses the local API of your Airzone WebServer.
+
+• Zones: on/off, setpoint, mode, fan speed, sleep; groups per floor
+• Routines and timers: "in 2 hours, switch the first floor off", one-tap scenes
+• Schedules of the Airzone app, editable from Breezone
+• Several sites and servers in the same app
+• History and real-time activity feed
+• No ads, no trackers; your data stays on your server
+
+The app requires a Breezone server (free, see github.com/EmmanuelVinas/breezone).
+
+Breezone is an independent project, not affiliated with Airzone. "Airzone" is a trademark of its owner, used only to describe compatibility.

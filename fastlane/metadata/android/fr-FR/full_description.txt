@@ -1,0 +1,12 @@
+Breezone pilote vos climatisations et chauffages Airzone via votre propre serveur Breezone, installé chez vous (Docker, NAS, Raspberry Pi), qui utilise l'API locale de votre WebServer Airzone.
+
+• Zones : marche/arrêt, consigne, mode, ventilation, veille ; groupes par étage
+• Routines et minuteries : « dans 2 h, éteindre l'étage », scènes en un geste
+• Programmations de l'application Airzone, modifiables depuis Breezone
+• Plusieurs sites et plusieurs serveurs dans la même application
+• Historique et journal d'activité en temps réel
+• Aucune publicité, aucun traceur ; vos données restent sur votre serveur
+
+L'application nécessite un serveur Breezone (gratuit, voir github.com/EmmanuelVinas/breezone).
+
+Breezone est un projet indépendant, sans lien avec Airzone. « Airzone » est une marque de son propriétaire, citée uniquement pour indiquer la compatibilité.
