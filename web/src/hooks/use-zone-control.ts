@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import type { Installation, Zone, ZoneCommand } from "@/lib/api"
 import { api } from "@/lib/api"
+import { setCommandStatus } from "@/lib/command-status"
 
 type Target = Pick<Zone, "installation_id" | "system_id" | "zone_id">
 
@@ -12,6 +13,7 @@ export function useZoneControl() {
     mutationFn: ({ zone, cmd }: { zone: Target; cmd: ZoneCommand }) =>
       api.control(zone, cmd),
     onMutate: async ({ zone, cmd }) => {
+      setCommandStatus([zone], "pending")
       await qc.cancelQueries({ queryKey: ["status"] })
       const previous = qc.getQueryData<Installation[]>(["status"])
       qc.setQueryData<Installation[]>(["status"], (old) =>
@@ -33,7 +35,9 @@ export function useZoneControl() {
       )
       return { previous }
     },
-    onError: (err, _vars, ctx) => {
+    onSuccess: (_zone, { zone }) => setCommandStatus([zone], "done"),
+    onError: (err, { zone }, ctx) => {
+      setCommandStatus([zone], "error")
       if (ctx?.previous) qc.setQueryData(["status"], ctx.previous)
       toast.error("Commande refusée", {
         description: err instanceof Error ? err.message : String(err),
@@ -48,11 +52,18 @@ function stripUndefined(cmd: ZoneCommand) {
   )
 }
 
-/** Switches a set of zones on/off at once (e.g. a whole floor). */
+/** Switches a set of zones on/off at once (e.g. a whole floor), with a confirmation message. */
 export function useGroupPower() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ zones, on }: { zones: Zone[]; on: boolean }) =>
+    mutationFn: ({
+      zones,
+      on,
+    }: {
+      zones: Zone[]
+      on: boolean
+      label?: string
+    }) =>
       api.batch(
         zones.map((z) => ({
           installation_id: z.installation_id,
@@ -62,6 +73,7 @@ export function useGroupPower() {
         }))
       ),
     onMutate: async ({ zones, on }) => {
+      setCommandStatus(zones, "pending")
       const keys = new Set(
         zones.map((z) => `${z.installation_id}-${z.system_id}-${z.zone_id}`)
       )
@@ -76,11 +88,24 @@ export function useGroupPower() {
         }))
       )
     },
-    onSuccess: (res) => {
+    onSuccess: (res, { zones, on, label }) => {
+      zones.forEach((z, i) =>
+        setCommandStatus([z], res.results[i]?.ok === false ? "error" : "done")
+      )
       const failed = res.results.filter((r) => !r.ok).length
-      if (failed) toast.warning(`${failed} zone(s) n'ont pas répondu`)
+      const ok = zones.length - failed
+      const what = on ? "allumée" : "éteinte"
+      if (failed)
+        toast.warning(
+          `${label ? `${label} : ` : ""}${ok} zone(s) ${what}(s), ${failed} sans réponse`
+        )
+      else
+        toast.success(
+          `${label ? `${label} : ` : ""}${ok} zone${ok > 1 ? "s" : ""} ${what}${ok > 1 ? "s" : ""}`
+        )
     },
-    onError: (err) => {
+    onError: (err, { zones }) => {
+      setCommandStatus(zones, "error")
       toast.error("Échec", {
         description: err instanceof Error ? err.message : String(err),
       })

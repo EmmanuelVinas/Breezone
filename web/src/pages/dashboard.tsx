@@ -186,7 +186,16 @@ function SystemModes({ inst }: { inst: Installation }) {
             type="single"
             value={m.mode ?? undefined}
             onValueChange={(v) =>
-              v && control.mutate({ zone: m, cmd: { mode: v as Mode } })
+              v &&
+              control.mutate(
+                { zone: m, cmd: { mode: v as Mode } },
+                {
+                  onSuccess: () =>
+                    toast.success(
+                      `Mode ${MODE_LABEL[v as Mode].toLowerCase()} appliqué${masters.length > 1 ? ` au système ${m.system_id}` : ""}`
+                    ),
+                }
+              )
             }
             className="rounded-2xl border bg-card/60 p-1"
           >
@@ -234,7 +243,9 @@ function ZoneGroup({ name, zones }: { name: string | null; zones: Zone[] }) {
             size="sm"
             variant="ghost"
             disabled={on === zones.length}
-            onClick={() => power.mutate({ zones, on: true })}
+            onClick={() =>
+              power.mutate({ zones, on: true, label: name ?? undefined })
+            }
           >
             <Power /> Tout allumer
           </Button>
@@ -242,7 +253,9 @@ function ZoneGroup({ name, zones }: { name: string | null; zones: Zone[] }) {
             size="sm"
             variant="ghost"
             disabled={on === 0}
-            onClick={() => power.mutate({ zones, on: false })}
+            onClick={() =>
+              power.mutate({ zones, on: false, label: name ?? undefined })
+            }
           >
             <PowerOff /> Tout éteindre
           </Button>

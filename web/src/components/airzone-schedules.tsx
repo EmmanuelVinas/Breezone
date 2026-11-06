@@ -375,7 +375,12 @@ function ScheduleCard({
   const toggle = useMutation({
     mutationFn: (enabled: boolean) =>
       api.setAirzoneScheduleEnabled(s.cloud_id, s.id, enabled),
-    onSuccess: done,
+    onSuccess: (r, enabled) => {
+      done(r)
+      toast.success(
+        `« ${s.name} » ${enabled ? "activée" : "désactivée"} chez Airzone`
+      )
+    },
     onError: (e) => toast.error(errorText(e)),
   })
   const remove = useMutation({

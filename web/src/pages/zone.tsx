@@ -13,6 +13,7 @@ import {
 } from "lucide-react"
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts"
 import { toast } from "sonner"
+import { CommandIndicator } from "@/components/command-indicator"
 import type { Mode, Zone } from "@/lib/api"
 import { api } from "@/lib/api"
 import {
@@ -314,6 +315,7 @@ function ZoneDetail({ zone }: { zone: Zone }) {
             >
               <Power /> {zone.on ? "Allumée" : "Éteinte"}
             </Button>
+            <CommandIndicator zone={zone} />
             <Button
               size="icon"
               variant="outline"
@@ -361,7 +363,17 @@ function ZoneDetail({ zone }: { zone: Zone }) {
                   return (
                     <button
                       key={m}
-                      onClick={() => control.mutate({ zone, cmd: { mode: m } })}
+                      onClick={() =>
+                        control.mutate(
+                          { zone, cmd: { mode: m } },
+                          {
+                            onSuccess: () =>
+                              toast.success(
+                                `Mode ${MODE_LABEL[m].toLowerCase()} appliqué à tout le système`
+                              ),
+                          }
+                        )
+                      }
                       className={cn(
                         "flex flex-col items-center gap-2 rounded-2xl border p-3 text-xs font-medium transition-colors hover:bg-muted",
                         active &&

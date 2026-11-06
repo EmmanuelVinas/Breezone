@@ -20,6 +20,7 @@ import { useZoneControl } from "@/hooks/use-zone-control"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
+import { CommandIndicator } from "@/components/command-indicator"
 
 /** Debounces quick +/- taps into a single setpoint command. */
 export function useSetpointDraft(zone: Zone) {
@@ -30,8 +31,17 @@ export function useSetpointDraft(zone: Zone) {
   const value = draft ?? zone.setpoint ?? 20
   const commit = (v: number) => {
     clearTimeout(timer.current)
-    setDraft(null)
-    if (v !== zone.setpoint) control.mutate({ zone, cmd: { setpoint: v } })
+    if (v === zone.setpoint) {
+      setDraft(null)
+      return
+    }
+    // Keep showing the chosen value until the server answered: clearing it now would show the
+    // previous setpoint for a moment (the value "jumps back, then forward").
+    setDraft(v)
+    control.mutate(
+      { zone, cmd: { setpoint: v } },
+      { onSettled: () => setDraft((d) => (d === v ? null : d)) }
+    )
   }
   const nudge = (delta: number) => {
     const next = clampSetpoint(zone, value + delta)
@@ -97,6 +107,7 @@ export function ZoneCard({ zone }: { zone: Zone }) {
             )}
           </div>
         </Link>
+        <CommandIndicator zone={zone} className="ml-auto" />
         <Switch
           checked={zone.on}
           onCheckedChange={(on) => control.mutate({ zone, cmd: { on } })}

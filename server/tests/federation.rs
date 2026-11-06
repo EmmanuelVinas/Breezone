@@ -275,7 +275,10 @@ async fn an_installation_added_by_hand_is_linked_to_the_airzone_account() {
     assert_eq!(list[0]["cloud_id"], "inst-home");
 
     // The installation now points to another WebServer (the office one): its old MAC address
-    // must not prevent linking it to the office installation of the account.
+    // must not prevent linking it to the office installation of the account, and the zone names,
+    // groups and history of the previous WebServer must not stick to the new one.
+    let (_, before) = n.call(Method::GET, &format!("/api/installations/{id}"), None).await;
+    assert!(before["zones"].as_array().unwrap().iter().any(|z| z["group"] == "Etage"));
     let office: MockState = Arc::new(Mutex::new(mock::preset("bureau")));
     let office_ws = serve(mock::router_with_mac(office, "AA:BB:CC:DD:EE:FF")).await;
     let (s, v) = n.call(Method::PUT, &format!("/api/installations/{id}"), Some(json!({"name":"Bureau","host":"127.0.0.1","port":office_ws}))).await;
@@ -285,4 +288,12 @@ async fn an_installation_added_by_hand_is_linked_to_the_airzone_account() {
     let (_, list) = n.call(Method::GET, "/api/installations", None).await;
     assert_eq!(list[0]["mac"], "AA:BB:CC:DD:EE:FF");
     assert_eq!(list[0]["cloud_id"], "inst-office");
+    let (_, after) = n.call(Method::GET, &format!("/api/installations/{id}"), None).await;
+    let zones = after["zones"].as_array().unwrap();
+    assert!(zones.iter().all(|z| z["group"] != "Etage" && z["group"] != "Rez de chaussée"), "groups of the home kept: {after}");
+    assert_eq!(zones.iter().find(|z| z["zone_id"] == 1).unwrap()["name"], "Open space", "zone names of the office");
+    let (_, history) = n.call(Method::GET, &format!("/api/installations/{id}/zones/1/1/history?hours=24"), None).await;
+    assert!(history.as_array().unwrap().iter().all(|r| r["room_temp"] != 19.5), "history of the home kept: {history}");
+    let (_, events) = n.call(Method::GET, "/api/events?limit=20", None).await;
+    assert!(events.as_array().unwrap().iter().any(|e| e["message"].as_str().unwrap_or_default().contains("pointe vers un autre WebServer")));
 }

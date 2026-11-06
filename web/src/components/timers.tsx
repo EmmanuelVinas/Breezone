@@ -111,7 +111,10 @@ function TimerRow({
   const countdown = useCountdown(runAt)
   const cancel = useMutation({
     mutationFn: () => api.cancelTimer(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["timers"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["timers"] })
+      toast.success("Minuterie annulée")
+    },
     onError: (e) => toast.error(errorText(e)),
   })
   const at = new Date(runAt * 1000).toLocaleTimeString("fr-FR", {

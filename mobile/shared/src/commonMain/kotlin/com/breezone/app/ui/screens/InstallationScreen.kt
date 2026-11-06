@@ -31,6 +31,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.breezone.app.data.Hub
+import com.breezone.app.data.commandKey
+import com.breezone.app.ui.labelRes
+import org.jetbrains.compose.resources.getString
 import com.breezone.app.data.Installation
 import com.breezone.app.data.Mode
 import com.breezone.app.data.Zone
@@ -57,6 +60,7 @@ private const val TYPE_ZONE = "zone"
 fun InstallationScreen(serverId: String, installationId: Long, onBack: () -> Unit, onOpenZone: (Zone) -> Unit) {
     val hub = koinInject<Hub>()
     val servers by hub.servers.collectAsState()
+    val commandStatus by hub.commandStatus.collectAsState()
     val inst = servers.firstOrNull { it.account.id == serverId }?.installations?.firstOrNull { it.id == installationId }
 
     Scaffold(
@@ -98,7 +102,11 @@ fun InstallationScreen(serverId: String, installationId: Long, onBack: () -> Uni
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item(key = TYPE_MODES, span = { GridItemSpan(maxLineSpan) }, contentType = TYPE_MODES) {
-                SystemModes(inst) { master, mode -> hub.control(serverId, master, ZoneCommand(mode = mode)) }
+                SystemModes(inst) { master, mode ->
+                    hub.control(serverId, master, ZoneCommand(mode = mode)) {
+                        getString(Res.string.hub_mode_applied, getString(mode.labelRes).lowercase())
+                    }
+                }
             }
             if (inst.zones.isEmpty()) {
                 item(key = TYPE_MESSAGE, span = { GridItemSpan(maxLineSpan) }, contentType = TYPE_MESSAGE) {
@@ -119,10 +127,10 @@ fun InstallationScreen(serverId: String, installationId: Long, onBack: () -> Uni
                             Text(group ?: stringResource(Res.string.installation_group_default), style = MaterialTheme.typography.titleMedium)
                             Text(pluralStringResource(Res.plurals.installation_group_on, on, on, zones.size), fontSize = 12.sp, color = Fz.colors.muted)
                         }
-                        TextButton(onClick = { hub.setPower(serverId, zones, true) }, enabled = on < zones.size) {
+                        TextButton(onClick = { hub.setPower(serverId, zones, true, group) }, enabled = on < zones.size) {
                             Text(stringResource(Res.string.installation_all_on))
                         }
-                        TextButton(onClick = { hub.setPower(serverId, zones, false) }, enabled = on > 0) {
+                        TextButton(onClick = { hub.setPower(serverId, zones, false, group) }, enabled = on > 0) {
                             Text(stringResource(Res.string.installation_all_off))
                         }
                     }
@@ -130,6 +138,7 @@ fun InstallationScreen(serverId: String, installationId: Long, onBack: () -> Uni
                 items(zones, key = { "zone-${it.systemId}-${it.zoneId}" }, contentType = { TYPE_ZONE }) { zone ->
                     ZoneCard(
                         zone = zone,
+                        status = commandStatus[commandKey(serverId, zone)],
                         onToggle = { hub.control(serverId, zone, ZoneCommand(on = it)) },
                         onSetpoint = { hub.control(serverId, zone, ZoneCommand(setpoint = it)) },
                         onClick = { onOpenZone(zone) },

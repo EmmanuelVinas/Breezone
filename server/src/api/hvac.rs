@@ -99,6 +99,26 @@ pub async fn update_installation(State(state): State<AppState>, AdminUser(admin)
     if req.enabled {
         state.hub.poll_one(id).await;
         if current.host != host || current.port != port {
+            // Another WebServer (another MAC address) is another installation: its zones only share
+            // numbers with the previous ones. Forget the previous names, groups, history and link.
+            let new_mac = state.hub.current_webserver_mac(id).await;
+            if let (Some(old), Some(new)) = (&current.mac, &new_mac) {
+                if cloud::normalize_mac(old) != cloud::normalize_mac(new) {
+                    db::reset_installation_for_new_webserver(&state.db, id).await?;
+                    state.hub.reload_installations().await?;
+                    state
+                        .hub
+                        .log(
+                            "system",
+                            "info",
+                            Some(id),
+                            Some(&admin.username),
+                            &format!("« {name} » pointe vers un autre WebServer ({new}) : noms et groupes des zones, historique et lien Airzone remis à zéro"),
+                            None,
+                        )
+                        .await;
+                }
+            }
             if let Err(e) = cloud::auto_link(&state, id, &admin.username).await {
                 tracing::warn!("cannot link to Airzone Cloud: {}", e.message);
             }

@@ -22,6 +22,9 @@ import com.breezone.app.resources.common_failure
 import com.breezone.app.resources.hub_command_refused
 import com.breezone.app.resources.hub_read_only
 import com.breezone.app.resources.hub_zones_no_answer
+import com.breezone.app.resources.hub_zones_switched_off
+import com.breezone.app.resources.hub_zones_switched_on
+import com.breezone.app.resources.installation_group_default
 import org.jetbrains.compose.resources.getPluralString
 import org.jetbrains.compose.resources.getString
 import kotlin.random.Random
@@ -239,40 +242,82 @@ class Hub(
     private fun readOnly(serverId: String, zones: List<Zone>): Installation? =
         server(serverId)?.installations?.firstOrNull { inst -> !inst.controllable && zones.any { it.installationId == inst.id } }
 
-    fun control(serverId: String, zone: Zone, cmd: ZoneCommand) {
+    // -----------------------------------------------------------------------------------
+    // Visual acknowledgement of commands: pending → done ✓ (or error) on the zone card.
+    // -----------------------------------------------------------------------------------
+
+    private val _commandStatus = MutableStateFlow<Map<String, CommandStatus>>(emptyMap())
+    val commandStatus: StateFlow<Map<String, CommandStatus>> = _commandStatus.asStateFlow()
+    private val statusJobs = mutableMapOf<String, Job>()
+
+    private fun setStatus(serverId: String, zones: List<Zone>, status: CommandStatus) {
+        val keys = zones.map { commandKey(serverId, it) }
+        keys.forEach { statusJobs.remove(it)?.cancel() }
+        _commandStatus.update { it + keys.associateWith { status } }
+        if (status == CommandStatus.Pending) return
+        keys.forEach { key ->
+            statusJobs[key] = scope.launch {
+                delay(if (status == CommandStatus.Done) 1_500 else 3_000)
+                _commandStatus.update { it - key }
+            }
+        }
+    }
+
+    /**
+     * Sends a command to one zone. [successMessage] is shown once the server confirmed it (for
+     * actions whose effect is not visible on the card, e.g. a system-wide mode).
+     */
+    fun control(serverId: String, zone: Zone, cmd: ZoneCommand, successMessage: (suspend () -> String)? = null) {
         val api = apis[serverId] ?: return
         readOnly(serverId, listOf(zone))?.let { inst ->
             scope.launch { _messages.tryEmit(getString(Res.string.hub_read_only, inst.name)) }
             return
         }
         applyLocally(serverId, zone, cmd)
+        setStatus(serverId, listOf(zone), CommandStatus.Pending)
         scope.launch {
             try {
                 api.control(zone, cmd)
+                setStatus(serverId, listOf(zone), CommandStatus.Done)
+                successMessage?.let { _messages.tryEmit(it()) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                setStatus(serverId, listOf(zone), CommandStatus.Error)
                 _messages.tryEmit(getString(Res.string.hub_command_refused, e.message.orEmpty()))
                 resync(serverId)
             }
         }
     }
 
-    fun setPower(serverId: String, zones: List<Zone>, on: Boolean) {
+    /** Switches several zones (a group) on or off, then confirms with a message. */
+    fun setPower(serverId: String, zones: List<Zone>, on: Boolean, label: String? = null) {
         val api = apis[serverId] ?: return
         readOnly(serverId, zones)?.let { inst ->
             scope.launch { _messages.tryEmit(getString(Res.string.hub_read_only, inst.name)) }
             return
         }
         zones.forEach { applyLocally(serverId, it, ZoneCommand(on = on)) }
+        setStatus(serverId, zones, CommandStatus.Pending)
         scope.launch {
             try {
                 val result = api.batch(zones.map { Action(it.installationId, it.systemId, it.zoneId, on = on) })
+                zones.forEachIndexed { i, z ->
+                    setStatus(serverId, listOf(z), if (result.results.getOrNull(i)?.ok == false) CommandStatus.Error else CommandStatus.Done)
+                }
                 val failed = result.results.count { !it.ok }
-                if (failed > 0) _messages.tryEmit(getPluralString(Res.plurals.hub_zones_no_answer, failed, failed))
+                val ok = zones.size - failed
+                if (failed > 0) {
+                    _messages.tryEmit(getPluralString(Res.plurals.hub_zones_no_answer, failed, failed))
+                } else {
+                    val group = label ?: getString(Res.string.installation_group_default)
+                    val text = if (on) Res.plurals.hub_zones_switched_on else Res.plurals.hub_zones_switched_off
+                    _messages.tryEmit(getPluralString(text, ok, group, ok))
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                setStatus(serverId, zones, CommandStatus.Error)
                 _messages.tryEmit(getString(Res.string.common_failure, e.message.orEmpty()))
                 resync(serverId)
             }
@@ -283,3 +328,9 @@ class Hub(
         _messages.tryEmit(message)
     }
 }
+
+/** Acknowledgement of a command sent to a zone. */
+enum class CommandStatus { Pending, Done, Error }
+
+/** Key of a zone in [Hub.commandStatus]. */
+fun commandKey(serverId: String, zone: Zone): String = "$serverId/${zone.installationId}/${zone.systemId}/${zone.zoneId}"

@@ -212,6 +212,9 @@ struct InstState {
     controllable: bool,
     /// Last recorded history point per zone.
     last_recorded: HashMap<(i64, i64), Recorded>,
+    /// Incremented when a command starts: a poll started before it carries stale values (the
+    /// previous setpoint…) and must not overwrite what the command set.
+    commands: u64,
 }
 
 impl InstState {
@@ -231,6 +234,7 @@ impl InstState {
             node,
             controllable,
             last_recorded: HashMap::new(),
+            commands: 0,
         }
     }
 
@@ -622,8 +626,8 @@ impl Hub {
     }
 
     pub async fn poll_one(&self, id: i64) {
-        let backend = match self.state.read().await.get(&id) {
-            Some(s) => s.backend.clone(),
+        let (backend, commands) = match self.state.read().await.get(&id) {
+            Some(s) => (s.backend.clone(), s.commands),
             None => return,
         };
         let client = match backend {
@@ -648,7 +652,10 @@ impl Hub {
                     }
                     s.failures = 0;
                     s.conn = ConnectionView { state: "online", last_seen: Some(db::now()), last_error: None, latency_ms: Some(latency) };
-                    to_record = s.apply_zones(resp.zones(), self.cfg.history_interval_secs);
+                    // A command was sent while this read was in flight: its values are stale.
+                    if s.commands == commands {
+                        to_record = s.apply_zones(resp.zones(), self.cfg.history_interval_secs);
+                    }
                 }
                 Err(e) => {
                     s.failures += 1;
@@ -709,6 +716,15 @@ impl Hub {
             Some(n) => (n.client.clone(), n.node.name.clone()),
             None => return,
         };
+        // Commands sent while the snapshot is in flight make its values stale (see poll_one).
+        let commands: HashMap<i64, u64> = self
+            .state
+            .read()
+            .await
+            .values()
+            .filter(|s| s.node_id() == Some(node_id))
+            .map(|s| (s.inst.id, s.commands))
+            .collect();
         let started = Instant::now();
         let result = match client {
             Some(c) => c.snapshot().await,
@@ -716,12 +732,12 @@ impl Hub {
         };
         let latency = started.elapsed().as_millis() as u64;
         match result {
-            Ok(snap) => self.node_ok(node_id, &node_name, snap, latency).await,
+            Ok(snap) => self.node_ok(node_id, &node_name, snap, latency, &commands).await,
             Err(e) => self.node_failed(node_id, &node_name, e).await,
         }
     }
 
-    async fn node_ok(&self, node_id: i64, node_name: &str, snap: FedSnapshot, latency: u64) {
+    async fn node_ok(&self, node_id: i64, node_name: &str, snap: FedSnapshot, latency: u64, commands: &HashMap<i64, u64>) {
         // 1. Node state.
         let now = db::now();
         let (was, persist, permission_changed) = {
@@ -773,6 +789,7 @@ impl Hub {
                 if !s.inst.enabled {
                     continue;
                 }
+                let stale = commands.get(&s.inst.id).is_some_and(|c| *c != s.commands);
                 let before = (s.conn.clone(), s.zones.clone(), s.remote_meta.clone());
                 s.remote_meta = fed.meta.into_iter().map(|m| ((m.system_id, m.zone_id), m)).collect();
                 s.failures = 0;
@@ -786,7 +803,9 @@ impl Hub {
                     last_error: fed.connection.last_error,
                     latency_ms: Some(latency),
                 };
-                if s.conn.state == "online" {
+                if stale {
+                    // A command was sent meanwhile: keep the values it set.
+                } else if s.conn.state == "online" {
                     records.push((s.inst.id, s.apply_zones(fed.zones, self.cfg.history_interval_secs)));
                 } else {
                     s.zones = fed.zones;
@@ -920,11 +939,13 @@ impl Hub {
             return Err(ApiError::bad_request("empty command"));
         }
         let remote = {
-            let state = self.state.read().await;
-            let s = state.get(&id).ok_or_else(|| ApiError::not_found("installation not found"))?;
+            let mut state = self.state.write().await;
+            let s = state.get_mut(&id).ok_or_else(|| ApiError::not_found("installation not found"))?;
             if !s.inst.enabled {
                 return Err(ApiError::bad_request("installation is disabled"));
             }
+            // Any poll already in flight now carries stale values (see `poll_one`).
+            s.commands += 1;
             match s.backend {
                 Backend::Node { node_id, remote_id } => Some((node_id, remote_id, s.inst.name.clone(), s.controllable)),
                 Backend::Local(_) => None,

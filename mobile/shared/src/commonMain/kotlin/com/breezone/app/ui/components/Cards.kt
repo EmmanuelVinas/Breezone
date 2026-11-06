@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -47,6 +48,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.breezone.app.data.CloudInstallation
+import com.breezone.app.data.CommandStatus
 import com.breezone.app.data.Installation
 import com.breezone.app.data.Zone
 import com.breezone.app.resources.*
@@ -215,7 +217,14 @@ fun rememberSetpointDraft(zone: Zone, commit: (Double) -> Unit): SetpointDraft {
 }
 
 @Composable
-fun ZoneCard(zone: Zone, onToggle: (Boolean) -> Unit, onSetpoint: (Double) -> Unit, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun ZoneCard(
+    zone: Zone,
+    onToggle: (Boolean) -> Unit,
+    onSetpoint: (Double) -> Unit,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    status: CommandStatus? = null,
+) {
     val tone = zone.tone()
     val card = Fz.colors.card
     // Animated border read in the draw phase only: the animation does not recompose the card.
@@ -267,6 +276,7 @@ fun ZoneCard(zone: Zone, onToggle: (Boolean) -> Unit, onSetpoint: (Double) -> Un
                     }
                 }
             }
+            CommandIndicator(status, Modifier.padding(end = 6.dp))
             Switch(
                 checked = zone.on,
                 onCheckedChange = onToggle,
@@ -306,5 +316,20 @@ fun ZoneCard(zone: Zone, onToggle: (Boolean) -> Unit, onSetpoint: (Double) -> Un
                 Icon(FzIcons.Plus, stringResource(Res.string.common_raise), Modifier.size(16.dp))
             }
         }
+    }
+}
+
+/** Small acknowledgement next to a zone's controls: sending… → applied ✓ (or refused). */
+@Composable
+fun CommandIndicator(status: CommandStatus?, modifier: Modifier = Modifier) {
+    when (status) {
+        null -> Unit
+        CommandStatus.Pending -> CircularProgressIndicator(
+            modifier.size(16.dp),
+            strokeWidth = 2.dp,
+            color = Fz.colors.muted,
+        )
+        CommandStatus.Done -> Icon(FzIcons.Check, stringResource(Res.string.command_done), modifier.size(18.dp), tint = Fz.colors.success)
+        CommandStatus.Error -> Icon(FzIcons.TriangleAlert, stringResource(Res.string.command_error), modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
     }
 }

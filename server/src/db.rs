@@ -299,6 +299,18 @@ pub async fn insert_remote_installation(db: &Db, name: &str, node_id: i64, remot
     .await
 }
 
+/// The installation now points to another WebServer: forget what belonged to the previous one
+/// (zone names and groups, history, Airzone Cloud link).
+pub async fn reset_installation_for_new_webserver(db: &Db, id: i64) -> sqlx::Result<()> {
+    let mut tx = db.begin().await?;
+    sqlx::query("DELETE FROM zone_meta WHERE installation_id = ?").bind(id).execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM readings WHERE installation_id = ?").bind(id).execute(&mut *tx).await?;
+    sqlx::query("UPDATE installations SET cloud_id = NULL, location = NULL WHERE id = ?").bind(id).execute(&mut *tx).await?;
+    sqlx::query("UPDATE cloud_installations SET installation_id = NULL WHERE installation_id = ?").bind(id).execute(&mut *tx).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
 pub async fn set_installation_mac(db: &Db, id: i64, mac: &str) -> sqlx::Result<()> {
     sqlx::query("UPDATE installations SET mac = ? WHERE id = ?").bind(mac).bind(id).execute(db).await?;
     Ok(())
