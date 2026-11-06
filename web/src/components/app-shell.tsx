@@ -1,0 +1,214 @@
+import type { ReactNode } from "react"
+import { NavLink, useNavigate } from "react-router"
+import {
+  Activity,
+  CalendarClock,
+  LayoutGrid,
+  LogOut,
+  Moon,
+  Settings,
+  Sun,
+  Timer,
+} from "lucide-react"
+import { useQueryClient } from "@tanstack/react-query"
+import type { LiveState } from "@/hooks/use-live"
+import { api, currentUser } from "@/lib/api"
+import { cn } from "@/lib/utils"
+import { useTheme } from "@/components/theme-provider"
+import { Brand, BrandMark } from "@/components/brand"
+import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+
+const NAV = [
+  { to: "/", label: "Installations", icon: LayoutGrid, end: true },
+  {
+    to: "/programmations",
+    label: "Programmations",
+    icon: CalendarClock,
+    end: false,
+  },
+  { to: "/routines", label: "Routines", icon: Timer, end: false },
+  { to: "/activity", label: "Activité", icon: Activity, end: false },
+  { to: "/settings", label: "Réglages", icon: Settings, end: false },
+]
+
+function LiveIndicator({ state }: { state: LiveState }) {
+  const label =
+    state === "live"
+      ? "Temps réel"
+      : state === "connecting"
+        ? "Connexion…"
+        : "Reconnexion…"
+  return (
+    <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+      <span
+        className={cn(
+          "size-2 rounded-full",
+          state === "live" ? "bg-success" : "animate-pulse bg-warning"
+        )}
+      />
+      {label}
+    </span>
+  )
+}
+
+export function AppShell({
+  live,
+  children,
+}: {
+  live: LiveState
+  children: ReactNode
+}) {
+  const { theme, setTheme } = useTheme()
+  const user = currentUser()
+  const navigate = useNavigate()
+  const qc = useQueryClient()
+  const dark =
+    theme === "dark" ||
+    (theme === "system" &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches)
+
+  const logout = async () => {
+    await api.logout()
+    qc.clear()
+    navigate("/login")
+  }
+
+  return (
+    <div className="fz-backdrop min-h-svh">
+      <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col border-r bg-sidebar/70 p-4 backdrop-blur-xl md:flex">
+        <div className="px-2 py-3">
+          <Brand />
+        </div>
+        <nav className="mt-6 flex flex-col gap-1">
+          {NAV.map(({ to, label, icon: Icon, end }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={end}
+              className={({ isActive }) =>
+                cn(
+                  "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground",
+                  isActive && "bg-sidebar-accent text-foreground"
+                )
+              }
+            >
+              <Icon className="size-4.5" />
+              {label}
+            </NavLink>
+          ))}
+        </nav>
+        <div className="mt-auto px-3">
+          <LiveIndicator state={live} />
+        </div>
+      </aside>
+
+      <div className="md:pl-64">
+        <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-background/70 px-4 backdrop-blur-xl md:px-8">
+          <div className="md:hidden">
+            <BrandMark className="size-8" />
+          </div>
+          <div className="md:hidden">
+            <LiveIndicator state={live} />
+          </div>
+          <div className="ml-auto flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setTheme(dark ? "light" : "dark")}
+              aria-label="Changer de thème"
+            >
+              {dark ? <Sun /> : <Moon />}
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="gap-2 rounded-full px-2">
+                  <span className="inline-flex size-8 items-center justify-center rounded-full bg-primary/15 text-sm font-semibold text-primary uppercase">
+                    {user?.username.slice(0, 1) ?? "?"}
+                  </span>
+                  <span className="hidden text-sm sm:inline">
+                    {user?.username}
+                  </span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuLabel>
+                  {user?.username}
+                  <div className="text-xs font-normal text-muted-foreground">
+                    {user?.role === "admin" ? "Administrateur" : "Utilisateur"}
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => navigate("/settings?tab=account")}
+                >
+                  <Settings /> Mon compte
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={logout} variant="destructive">
+                  <LogOut /> Se déconnecter
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </header>
+        <main className="mx-auto max-w-7xl px-4 pt-6 pb-28 md:px-8 md:pb-12">
+          {children}
+        </main>
+      </div>
+
+      <nav className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-4 rounded-3xl border bg-card/80 p-1.5 shadow-2xl backdrop-blur-xl md:hidden">
+        {NAV.map(({ to, label, icon: Icon, end }) => (
+          <NavLink
+            key={to}
+            to={to}
+            end={end}
+            className={({ isActive }) =>
+              cn(
+                "flex flex-col items-center gap-1 rounded-2xl py-2 text-[11px] text-muted-foreground",
+                isActive && "bg-primary/12 text-primary"
+              )
+            }
+          >
+            <Icon className="size-5" />
+            {label}
+          </NavLink>
+        ))}
+      </nav>
+    </div>
+  )
+}
+
+export function PageHeader({
+  title,
+  description,
+  actions,
+}: {
+  title: ReactNode
+  description?: ReactNode
+  actions?: ReactNode
+}) {
+  return (
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+      <div className="min-w-0">
+        <h1 className="font-heading text-2xl font-semibold tracking-tight md:text-3xl">
+          {title}
+        </h1>
+        {description && (
+          <div className="mt-1 text-sm text-muted-foreground">
+            {description}
+          </div>
+        )}
+      </div>
+      {actions && (
+        <div className="flex flex-wrap items-center gap-2">{actions}</div>
+      )}
+    </div>
+  )
+}
