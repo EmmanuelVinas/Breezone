@@ -1,0 +1,62 @@
+# Breezone — docker compose
+#
+#   docker compose up -d                      # pulls ghcr.io/emmanuelvinas/breezone and starts it
+#   BREEZONE_VERSION=0.1.0 docker compose up -d   # a given version (default: latest)
+#
+# From a clone of the repository, to build the image yourself:
+#   ./scripts/run-local.sh                    # build + start, asks before wiping the database
+#
+# Profiles:
+#   demo   → fake Airzone WebServer + fake Airzone Cloud, to try Breezone without hardware
+#   tunnel → Cloudflare Tunnel, to reach Breezone from outside without VPN nor open port
+
+name: breezone
+
+services:
+  breezone:
+    image: ${BREEZONE_IMAGE:-ghcr.io/emmanuelvinas/breezone}:${BREEZONE_VERSION:-latest}
+    container_name: breezone
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      BREEZONE_PORT: "8080"
+      TZ: ${TZ:-Europe/Paris}
+      # Overridden by scripts/run-local.sh --demo to target the fake Airzone.
+      BREEZONE_AIRZONE_HOSTS: ${BREEZONE_AIRZONE_HOSTS:-}
+      BREEZONE_AIRZONE_CLOUD_URL: ${BREEZONE_AIRZONE_CLOUD_URL:-https://m.airzonecloud.com}
+    ports:
+      - "${BREEZONE_HTTP_PORT:-8080}:8080"
+    volumes:
+      - breezone_data:/data
+    # The NAS budget is 300 MB for server + web UI; Breezone uses a few MB.
+    mem_limit: 300m
+    # On Linux, `network_mode: host` lets Breezone scan the LAN automatically.
+    # With the default bridge network, set BREEZONE_SCAN_SUBNET in .env instead.
+    # network_mode: host
+
+  mock-airzone:
+    profiles: ["demo"]
+    image: ${BREEZONE_IMAGE:-ghcr.io/emmanuelvinas/breezone}:${BREEZONE_VERSION:-latest}
+    container_name: breezone-mock-airzone
+    entrypoint: ["mock-airzone"]
+    environment:
+      MOCK_PORT: "3000"
+      MOCK_CLOUD_PORT: "3900"
+    mem_limit: 32m
+
+  cloudflared:
+    profiles: ["tunnel"]
+    image: cloudflare/cloudflared:latest
+    container_name: breezone-tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      - breezone
+    mem_limit: 64m
+
+volumes:
+  breezone_data:
