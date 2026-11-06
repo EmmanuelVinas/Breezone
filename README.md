@@ -53,6 +53,9 @@ docker run -d --name breezone --restart unless-stopped -p 8080:8080 \
   -v breezone_data:/data -e TZ=Europe/Paris ghcr.io/emmanuelvinas/breezone:latest
 ```
 
+**Synology NAS**: step-by-step guide with Container Manager, in French:
+[docs/install-synology.md](docs/install-synology.md).
+
 **Network.** The server must reach the WebServers (port 3000) on your LAN. Inside Docker's default
 bridge network it cannot guess your LAN: set it in *Settings › Installations* (e.g. `192.168.1.0/24`)
 or use `network_mode: host` (Linux).
