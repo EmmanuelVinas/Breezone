@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- French (default language). Every user-visible text of the app belongs here. -->
+<resources>
+    <string name="app_name">Breezone</string>
+
+    <!-- Common -->
+    <string name="common_back">Retour</string>
+    <string name="common_cancel">Annuler</string>
+    <string name="common_close">Fermer</string>
+    <string name="common_ok">OK</string>
+    <string name="common_save">Enregistrer</string>
+    <string name="common_delete">Supprimer</string>
+    <string name="common_failure">Échec : %1$s</string>
+    <string name="common_lower">Baisser</string>
+    <string name="common_raise">Monter</string>
+    <string name="common_auto">Auto</string>
+
+    <!-- Tabs -->
+    <string name="tab_installations">Installations</string>
+    <string name="tab_routines">Routines</string>
+    <string name="tab_settings">Réglages</string>
+
+    <!-- Operation modes -->
+    <string name="mode_stop">Arrêt</string>
+    <string name="mode_cooling">Froid</string>
+    <string name="mode_heating">Chaud</string>
+    <string name="mode_fan">Ventilation</string>
+    <string name="mode_dry">Déshumid.</string>
+    <string name="mode_aux_heating">Appoint</string>
+    <string name="mode_auto">Auto</string>
+
+    <!-- Relative time -->
+    <string name="time_never">jamais</string>
+    <string name="time_now">à l’instant</string>
+    <string name="time_soon">dans un instant</string>
+    <string name="time_minutes_ago">il y a %1$d min</string>
+    <string name="time_in_minutes">dans %1$d min</string>
+    <string name="time_hours_ago">il y a %1$d h</string>
+    <string name="time_in_hours">dans %1$d h</string>
+    <string name="time_days_ago">il y a %1$d j</string>
+    <string name="time_in_days">dans %1$d j</string>
+
+    <!-- Days -->
+    <string-array name="days_short">
+        <item>L</item>
+        <item>M</item>
+        <item>M</item>
+        <item>J</item>
+        <item>V</item>
+        <item>S</item>
+        <item>D</item>
+    </string-array>
+    <string-array name="days_names">
+        <item>Lun</item>
+        <item>Mar</item>
+        <item>Mer</item>
+        <item>Jeu</item>
+        <item>Ven</item>
+        <item>Sam</item>
+        <item>Dim</item>
+    </string-array>
+    <string name="schedule_manual">Scène manuelle</string>
+    <string name="schedule_every_day">Tous les jours</string>
+    <string name="schedule_weekdays">En semaine</string>
+    <string name="schedule_weekend">Le week-end</string>
+    <string name="schedule_at">%1$s à %2$s</string>
+
+    <!-- Connection -->
+    <string name="connection_online">Connectée</string>
+    <string name="connection_offline">Hors ligne</string>
+    <string name="connection_unknown">En attente</string>
+    <string name="connection_latency">%1$d ms</string>
+    <string name="live_on">Temps réel</string>
+    <string name="live_connecting">Connexion…</string>
+
+    <!-- Add server / sign in -->
+    <string name="add_server_title">Connexion à votre serveur</string>
+    <string name="add_server_title_setup">Nouveau serveur</string>
+    <string name="add_server_title_reauth">Session expirée sur %1$s</string>
+    <string name="add_server_hint">Adresse de votre serveur Breezone : son IP locale (http://192.168.1.10:8080) ou son adresse publique via Cloudflare Tunnel.</string>
+    <string name="add_server_hint_setup">Ce serveur n’a encore aucun compte : vous allez créer son administrateur.</string>
+    <string name="add_server_hint_reauth">Saisissez à nouveau votre mot de passe.</string>
+    <string name="add_server_url">Adresse du serveur</string>
+    <string name="add_server_url_placeholder">https://breezone.mondomaine.fr</string>
+    <string name="add_server_username">Identifiant</string>
+    <string name="add_server_password">Mot de passe</string>
+    <string name="add_server_password_setup">Mot de passe (8 caractères min.)</string>
+    <string name="add_server_confirm">Confirmation</string>
+    <string name="add_server_show_password">Afficher le mot de passe</string>
+    <string name="add_server_sign_in">Se connecter</string>
+    <string name="add_server_create">Créer le compte</string>
+    <string name="add_server_stay_signed_in">Vous resterez connecté : le mot de passe ne sera redemandé que si le trousseau sécurisé de ce téléphone change, ou si vous déconnectez cet appareil depuis Breezone.</string>
+    <string name="add_server_forget">Oublier ce serveur</string>
+    <string name="add_server_error_unreachable">Serveur injoignable</string>
+    <string name="add_server_error_mismatch">Les mots de passe ne correspondent pas</string>
+    <string name="error_not_breezone">Ce n’est pas un serveur Breezone</string>
+    <string name="error_invalid_credentials">Identifiant ou mot de passe incorrect</string>
+    <string name="error_session_expired">Session expirée</string>
+    <string name="error_server_unavailable">Serveur indisponible</string>
+
+    <!-- Home -->
+    <string name="home_title">Mes installations</string>
+    <string name="home_reauth_title">Session expirée sur %1$s</string>
+    <string name="home_reauth_text">Le trousseau sécurisé a changé ou l’appareil a été déconnecté depuis Breezone.</string>
+    <string name="home_reauth_button">Se reconnecter</string>
+    <string name="home_empty_title">Aucune installation</string>
+    <string name="home_empty_no_server">Connectez l’application à votre serveur Breezone.</string>
+    <string name="home_empty_text">Ajoutez vos installations depuis Réglages › Compte Airzone (import automatique) ou depuis l’interface web de Breezone.</string>
+    <string name="home_add_server">Ajouter un serveur</string>
+    <string name="home_remote_text">Cette installation figure dans votre compte Airzone, mais aucun de vos serveurs Breezone ne joint son WebServer. S’il est sur le réseau d’un serveur, indiquez son adresse locale dans l’interface web (Réglages › Installations). S’il est sur un autre site, installez Breezone sur place et ajoutez ce serveur ici.</string>
+    <string name="installation_not_reached">Non jointe</string>
+    <plurals name="installation_remote_zones">
+        <item quantity="one">%1$s · %2$d zone</item>
+        <item quantity="many">%1$s · %2$d zones</item>
+        <item quantity="other">%1$s · %2$d zones</item>
+    </plurals>
+    <plurals name="installation_zones_on">
+        <item quantity="one">%1$d/%2$d zone allumée</item>
+        <item quantity="many">%1$d/%2$d zones allumées</item>
+        <item quantity="other">%1$d/%2$d zones allumées</item>
+    </plurals>
+
+    <!-- Installation -->
+    <string name="installation_title">Installation</string>
+    <string name="installation_not_found">Installation introuvable.</string>
+    <string name="installation_offline">Le WebServer ne répond pas : %1$s</string>
+    <string name="installation_waiting">En attente des données du WebServer…</string>
+    <string name="installation_group_default">Zones</string>
+    <plurals name="installation_group_on">
+        <item quantity="one">%1$d/%2$d allumée</item>
+        <item quantity="many">%1$d/%2$d allumées</item>
+        <item quantity="other">%1$d/%2$d allumées</item>
+    </plurals>
+    <string name="installation_all_on">Tout allumer</string>
+    <string name="installation_all_off">Éteindre</string>
+
+    <!-- Zone -->
+    <string name="zone_title">Zone</string>
+    <string name="zone_not_found">Zone introuvable.</string>
+    <string name="zone_on">Allumée</string>
+    <string name="zone_off">Éteinte</string>
+    <string name="zone_demand">En demande</string>
+    <string name="zone_battery_low">Pile faible</string>
+    <string name="zone_alert">Alerte</string>
+    <string name="zone_humidity">%1$d %</string>
+    <string name="zone_temperature">Température</string>
+    <string name="zone_humidity_label">Humidité</string>
+    <string name="zone_setpoint">Consigne</string>
+    <string name="zone_setpoint_caps">CONSIGNE</string>
+    <string name="zone_ambient">Ambiante %1$s</string>
+    <string name="zone_mode_title">Mode</string>
+    <string name="zone_mode_hint">S’applique à toutes les zones du système.</string>
+    <string name="zone_fan_title">Ventilation</string>
+    <string name="zone_sleep_title">Veille</string>
+    <string name="zone_sleep_off">Non</string>
+    <string name="zone_sleep_minutes">%1$d min</string>
+    <string name="zone_alerts_title">Alertes Airzone</string>
+    <string name="zone_history_title">Historique</string>
+    <string name="zone_history_24h">24 h</string>
+    <string name="zone_history_7d">7 j</string>
+    <string name="zone_history_loading">Chargement…</string>
+    <string name="zone_history_empty">Pas encore assez de relevés : ils s’accumulent toutes les 5 minutes.</string>
+
+    <!-- Routines -->
+    <string name="routines_title">Routines</string>
+    <string name="routines_subtitle">Scènes lancées à la demande, exécutées par votre serveur Breezone. Les programmations à heure fixe sont celles d’Airzone.</string>
+    <string name="routines_empty">Aucune scène pour l’instant.</string>
+    <string name="routines_new">Nouvelle scène</string>
+    <string name="routines_run">Lancer</string>
+    <string name="routines_ran">« %1$s » exécutée</string>
+    <plurals name="routines_ran_with_failures">
+        <item quantity="one">« %1$s » : %2$d échec</item>
+        <item quantity="many">« %1$s » : %2$d échecs</item>
+        <item quantity="other">« %1$s » : %2$d échecs</item>
+    </plurals>
+    <string name="routines_saved">Programmation enregistrée</string>
+    <plurals name="routines_zone_count">
+        <item quantity="one">%1$d zone</item>
+        <item quantity="many">%1$d zones</item>
+        <item quantity="other">%1$d zones</item>
+    </plurals>
+    <string name="routines_next">prochaine %1$s</string>
+    <string name="routines_last">dernière %1$s</string>
+    <string name="routine_editor_edit">Modifier la scène</string>
+    <string name="routine_editor_name">Nom</string>
+    <string name="routine_editor_name_placeholder">Je pars</string>
+    <string name="routine_editor_scheduled">Programmée</string>
+    <string name="routine_editor_manual">Scène manuelle</string>
+    <string name="routine_editor_time">Heure</string>
+    <string name="routine_editor_switch_on">Allumer</string>
+    <string name="routine_editor_switch_off">Éteindre</string>
+    <string name="routine_editor_setpoint">Consigne</string>
+    <string name="routine_editor_less">Moins</string>
+    <string name="routine_editor_more">Plus</string>
+    <string name="routine_editor_zones">Zones</string>
+    <string name="routine_editor_complex">Cette programmation contient des actions différentes selon les zones : modifiez ses actions depuis l’interface web. Le nom et l’horaire restent modifiables ici.</string>
+    <string name="routine_editor_delete_confirm">Supprimer « %1$s » ?</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Réglages</string>
+    <string name="settings_servers_title">Serveurs Breezone</string>
+    <string name="settings_servers_hint">Un serveur par site (maison, bureau…). Toutes leurs installations s’affichent ensemble.</string>
+    <string name="settings_server_user">%1$s · %2$s</string>
+    <string name="settings_server_user_admin">%1$s (admin) · %2$s</string>
+    <string name="settings_session_expired">Session expirée</string>
+    <string name="settings_reconnect">Se reconnecter</string>
+    <string name="settings_remove">Retirer</string>
+    <string name="settings_add_server">Ajouter un serveur</string>
+    <string name="settings_remove_title">Retirer %1$s ?</string>
+    <string name="settings_remove_text">Cet appareil sera déconnecté de ce serveur. Ses installations, programmations et réglages restent sur le serveur.</string>
+    <string name="settings_security_title">Sécurité</string>
+    <string name="settings_security_text">Cet appareil reste connecté sans redemander votre mot de passe : la session est conservée dans le trousseau sécurisé du téléphone (Keychain iOS / Keystore Android). Elle n’est perdue que si ce trousseau change, ou si vous déconnectez l’appareil depuis l’interface web de Breezone (Réglages › Appareils).</string>
+    <string name="settings_version">Breezone %1$s</string>
+    <string name="cloud_title">Compte Airzone</string>
+    <string name="cloud_title_server">Compte Airzone · %1$s</string>
+    <string name="cloud_hint">Facultatif. Sert uniquement à récupérer vos installations et leurs paramètres (noms, ville, groupes de zones) ; le pilotage se fait toujours en local.</string>
+    <string name="cloud_account">Compte : %1$s</string>
+    <string name="cloud_last_sync">Dernière synchro : %1$s</string>
+    <string name="cloud_last_sync_daily">Dernière synchro : %1$s · synchro quotidienne</string>
+    <string name="cloud_report_created">Créée(s) : %1$s</string>
+    <string name="cloud_report_updated">Mise(s) à jour : %1$s</string>
+    <string name="cloud_report_unreachable">Non jointe(s) : %1$s</string>
+    <string name="cloud_report_empty">Aucune installation dans ce compte</string>
+    <string name="cloud_driven">pilotée</string>
+    <string name="cloud_not_reached">non jointe</string>
+    <string name="cloud_connect">Connecter mon compte</string>
+    <string name="cloud_reconnect">Reconnecter</string>
+    <string name="cloud_sync">Synchroniser</string>
+    <string name="cloud_sync_failed">Synchronisation impossible : %1$s</string>
+    <string name="cloud_admin_only">Seul un administrateur du serveur peut connecter le compte Airzone.</string>
+    <string name="cloud_dialog_text">Vos installations, groupes et noms de zones seront importés. Les WebServers trouvés sur le réseau du serveur sont ajoutés automatiquement.</string>
+    <string name="cloud_email">E-mail Airzone</string>
+    <string name="cloud_password">Mot de passe Airzone</string>
+    <string name="cloud_remember">Mémoriser (chiffré, sur le serveur) pour la synchro quotidienne</string>
+    <string name="cloud_import">Importer</string>
+    <string name="cloud_importing">Import…</string>
+
+    <!-- Hub messages -->
+    <string name="hub_command_refused">Commande refusée : %1$s</string>
+    <plurals name="hub_zones_no_answer">
+        <item quantity="one">%1$d zone n’a pas répondu</item>
+        <item quantity="many">%1$d zones n’ont pas répondu</item>
+        <item quantity="other">%1$d zones n’ont pas répondu</item>
+    </plurals>
+    <string name="installation_via">via %1$s</string>
+    <string name="hub_read_only">« %1$s » est partagée en lecture seule par son serveur</string>
+</resources>

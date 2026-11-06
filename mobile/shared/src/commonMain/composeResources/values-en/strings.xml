@@ -1,0 +1,240 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Breezone</string>
+
+    <!-- Common -->
+    <string name="common_back">Back</string>
+    <string name="common_cancel">Cancel</string>
+    <string name="common_close">Close</string>
+    <string name="common_ok">OK</string>
+    <string name="common_save">Save</string>
+    <string name="common_delete">Delete</string>
+    <string name="common_failure">Failed: %1$s</string>
+    <string name="common_lower">Lower</string>
+    <string name="common_raise">Raise</string>
+    <string name="common_auto">Auto</string>
+
+    <!-- Tabs -->
+    <string name="tab_installations">Installations</string>
+    <string name="tab_routines">Routines</string>
+    <string name="tab_settings">Settings</string>
+
+    <!-- Operation modes -->
+    <string name="mode_stop">Stop</string>
+    <string name="mode_cooling">Cooling</string>
+    <string name="mode_heating">Heating</string>
+    <string name="mode_fan">Fan</string>
+    <string name="mode_dry">Dry</string>
+    <string name="mode_aux_heating">Aux heat</string>
+    <string name="mode_auto">Auto</string>
+
+    <!-- Relative time -->
+    <string name="time_never">never</string>
+    <string name="time_now">just now</string>
+    <string name="time_soon">in a moment</string>
+    <string name="time_minutes_ago">%1$d min ago</string>
+    <string name="time_in_minutes">in %1$d min</string>
+    <string name="time_hours_ago">%1$d h ago</string>
+    <string name="time_in_hours">in %1$d h</string>
+    <string name="time_days_ago">%1$d d ago</string>
+    <string name="time_in_days">in %1$d d</string>
+
+    <!-- Days -->
+    <string-array name="days_short">
+        <item>M</item>
+        <item>T</item>
+        <item>W</item>
+        <item>T</item>
+        <item>F</item>
+        <item>S</item>
+        <item>S</item>
+    </string-array>
+    <string-array name="days_names">
+        <item>Mon</item>
+        <item>Tue</item>
+        <item>Wed</item>
+        <item>Thu</item>
+        <item>Fri</item>
+        <item>Sat</item>
+        <item>Sun</item>
+    </string-array>
+    <string name="schedule_manual">Manual scene</string>
+    <string name="schedule_every_day">Every day</string>
+    <string name="schedule_weekdays">Weekdays</string>
+    <string name="schedule_weekend">Weekends</string>
+    <string name="schedule_at">%1$s at %2$s</string>
+
+    <!-- Connection -->
+    <string name="connection_online">Connected</string>
+    <string name="connection_offline">Offline</string>
+    <string name="connection_unknown">Waiting</string>
+    <string name="connection_latency">%1$d ms</string>
+    <string name="live_on">Live</string>
+    <string name="live_connecting">Connecting…</string>
+
+    <!-- Add server / sign in -->
+    <string name="add_server_title">Sign in to your server</string>
+    <string name="add_server_title_setup">New server</string>
+    <string name="add_server_title_reauth">Session expired on %1$s</string>
+    <string name="add_server_hint">Address of your Breezone server: its local IP (http://192.168.1.10:8080) or its public address through Cloudflare Tunnel.</string>
+    <string name="add_server_hint_setup">This server has no account yet: you are about to create its administrator.</string>
+    <string name="add_server_hint_reauth">Enter your password again.</string>
+    <string name="add_server_url">Server address</string>
+    <string name="add_server_url_placeholder">https://breezone.example.com</string>
+    <string name="add_server_username">Username</string>
+    <string name="add_server_password">Password</string>
+    <string name="add_server_password_setup">Password (8 characters min.)</string>
+    <string name="add_server_confirm">Confirm password</string>
+    <string name="add_server_show_password">Show password</string>
+    <string name="add_server_sign_in">Sign in</string>
+    <string name="add_server_create">Create account</string>
+    <string name="add_server_stay_signed_in">You will stay signed in: your password is only asked again if this phone’s secure keychain changes, or if you sign this device out from Breezone.</string>
+    <string name="add_server_forget">Forget this server</string>
+    <string name="add_server_error_unreachable">Server unreachable</string>
+    <string name="add_server_error_mismatch">Passwords do not match</string>
+    <string name="error_not_breezone">This is not a Breezone server</string>
+    <string name="error_invalid_credentials">Wrong username or password</string>
+    <string name="error_session_expired">Session expired</string>
+    <string name="error_server_unavailable">Server unavailable</string>
+
+    <!-- Home -->
+    <string name="home_title">My installations</string>
+    <string name="home_reauth_title">Session expired on %1$s</string>
+    <string name="home_reauth_text">The secure keychain changed, or this device was signed out from Breezone.</string>
+    <string name="home_reauth_button">Sign in again</string>
+    <string name="home_empty_title">No installation</string>
+    <string name="home_empty_no_server">Connect the app to your Breezone server.</string>
+    <string name="home_empty_text">Add your installations from Settings › Airzone account (automatic import) or from the Breezone web interface.</string>
+    <string name="home_add_server">Add a server</string>
+    <string name="home_remote_text">This installation is in your Airzone account, but none of your Breezone servers reaches its WebServer. If it is on a server’s network, set its local address in the web interface (Settings › Installations). If it is on another site, install Breezone there and add that server here.</string>
+    <string name="installation_not_reached">Not reached</string>
+    <plurals name="installation_remote_zones">
+        <item quantity="one">%1$s · %2$d zone</item>
+        <item quantity="other">%1$s · %2$d zones</item>
+    </plurals>
+    <plurals name="installation_zones_on">
+        <item quantity="one">%1$d/%2$d zone on</item>
+        <item quantity="other">%1$d/%2$d zones on</item>
+    </plurals>
+
+    <!-- Installation -->
+    <string name="installation_title">Installation</string>
+    <string name="installation_not_found">Installation not found.</string>
+    <string name="installation_offline">The WebServer does not answer: %1$s</string>
+    <string name="installation_waiting">Waiting for the WebServer data…</string>
+    <string name="installation_group_default">Zones</string>
+    <plurals name="installation_group_on">
+        <item quantity="one">%1$d/%2$d on</item>
+        <item quantity="other">%1$d/%2$d on</item>
+    </plurals>
+    <string name="installation_all_on">All on</string>
+    <string name="installation_all_off">Switch off</string>
+
+    <!-- Zone -->
+    <string name="zone_title">Zone</string>
+    <string name="zone_not_found">Zone not found.</string>
+    <string name="zone_on">On</string>
+    <string name="zone_off">Off</string>
+    <string name="zone_demand">Demanding</string>
+    <string name="zone_battery_low">Low battery</string>
+    <string name="zone_alert">Alert</string>
+    <string name="zone_humidity">%1$d %</string>
+    <string name="zone_temperature">Temperature</string>
+    <string name="zone_humidity_label">Humidity</string>
+    <string name="zone_setpoint">Setpoint</string>
+    <string name="zone_setpoint_caps">SETPOINT</string>
+    <string name="zone_ambient">Room %1$s</string>
+    <string name="zone_mode_title">Mode</string>
+    <string name="zone_mode_hint">Applies to every zone of the system.</string>
+    <string name="zone_fan_title">Fan</string>
+    <string name="zone_sleep_title">Sleep</string>
+    <string name="zone_sleep_off">Off</string>
+    <string name="zone_sleep_minutes">%1$d min</string>
+    <string name="zone_alerts_title">Airzone alerts</string>
+    <string name="zone_history_title">History</string>
+    <string name="zone_history_24h">24 h</string>
+    <string name="zone_history_7d">7 d</string>
+    <string name="zone_history_loading">Loading…</string>
+    <string name="zone_history_empty">Not enough readings yet: one is recorded every 5 minutes.</string>
+
+    <!-- Routines -->
+    <string name="routines_title">Routines</string>
+    <string name="routines_subtitle">Scenes started on demand, run by your Breezone server. Fixed-time schedules are the Airzone ones.</string>
+    <string name="routines_empty">No scene yet.</string>
+    <string name="routines_new">New scene</string>
+    <string name="routines_run">Run</string>
+    <string name="routines_ran">“%1$s” done</string>
+    <plurals name="routines_ran_with_failures">
+        <item quantity="one">“%1$s”: %2$d failure</item>
+        <item quantity="other">“%1$s”: %2$d failures</item>
+    </plurals>
+    <string name="routines_saved">Schedule saved</string>
+    <plurals name="routines_zone_count">
+        <item quantity="one">%1$d zone</item>
+        <item quantity="other">%1$d zones</item>
+    </plurals>
+    <string name="routines_next">next %1$s</string>
+    <string name="routines_last">last %1$s</string>
+    <string name="routine_editor_edit">Edit scene</string>
+    <string name="routine_editor_name">Name</string>
+    <string name="routine_editor_name_placeholder">Leaving home</string>
+    <string name="routine_editor_scheduled">Scheduled</string>
+    <string name="routine_editor_manual">Manual scene</string>
+    <string name="routine_editor_time">Time</string>
+    <string name="routine_editor_switch_on">Switch on</string>
+    <string name="routine_editor_switch_off">Switch off</string>
+    <string name="routine_editor_setpoint">Setpoint</string>
+    <string name="routine_editor_less">Less</string>
+    <string name="routine_editor_more">More</string>
+    <string name="routine_editor_zones">Zones</string>
+    <string name="routine_editor_complex">This schedule has different actions per zone: edit its actions from the web interface. Its name and time can be changed here.</string>
+    <string name="routine_editor_delete_confirm">Delete “%1$s”?</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_servers_title">Breezone servers</string>
+    <string name="settings_servers_hint">One server per site (home, office…). All their installations are shown together.</string>
+    <string name="settings_server_user">%1$s · %2$s</string>
+    <string name="settings_server_user_admin">%1$s (admin) · %2$s</string>
+    <string name="settings_session_expired">Session expired</string>
+    <string name="settings_reconnect">Sign in again</string>
+    <string name="settings_remove">Remove</string>
+    <string name="settings_add_server">Add a server</string>
+    <string name="settings_remove_title">Remove %1$s?</string>
+    <string name="settings_remove_text">This device will be signed out of this server. Its installations, schedules and settings stay on the server.</string>
+    <string name="settings_security_title">Security</string>
+    <string name="settings_security_text">This device stays signed in without asking for your password again: the session is kept in the phone’s secure keychain (iOS Keychain / Android Keystore). It is only lost if that keychain changes, or if you sign the device out from the Breezone web interface (Settings › Devices).</string>
+    <string name="settings_version">Breezone %1$s</string>
+    <string name="cloud_title">Airzone account</string>
+    <string name="cloud_title_server">Airzone account · %1$s</string>
+    <string name="cloud_hint">Optional. Only used to retrieve your installations and their settings (names, city, zone groups); control always stays local.</string>
+    <string name="cloud_account">Account: %1$s</string>
+    <string name="cloud_last_sync">Last sync: %1$s</string>
+    <string name="cloud_last_sync_daily">Last sync: %1$s · daily sync</string>
+    <string name="cloud_report_created">Created: %1$s</string>
+    <string name="cloud_report_updated">Updated: %1$s</string>
+    <string name="cloud_report_unreachable">Not reached: %1$s</string>
+    <string name="cloud_report_empty">No installation in this account</string>
+    <string name="cloud_driven">driven</string>
+    <string name="cloud_not_reached">not reached</string>
+    <string name="cloud_connect">Connect my account</string>
+    <string name="cloud_reconnect">Reconnect</string>
+    <string name="cloud_sync">Sync</string>
+    <string name="cloud_sync_failed">Sync failed: %1$s</string>
+    <string name="cloud_admin_only">Only an administrator of the server can connect the Airzone account.</string>
+    <string name="cloud_dialog_text">Your installations, groups and zone names will be imported. WebServers found on the server’s network are added automatically.</string>
+    <string name="cloud_email">Airzone e-mail</string>
+    <string name="cloud_password">Airzone password</string>
+    <string name="cloud_remember">Remember (encrypted, on the server) for the daily sync</string>
+    <string name="cloud_import">Import</string>
+    <string name="cloud_importing">Importing…</string>
+
+    <!-- Hub messages -->
+    <string name="hub_command_refused">Command refused: %1$s</string>
+    <plurals name="hub_zones_no_answer">
+        <item quantity="one">%1$d zone did not answer</item>
+        <item quantity="other">%1$d zones did not answer</item>
+    </plurals>
+    <string name="installation_via">via %1$s</string>
+    <string name="hub_read_only">“%1$s” is shared read-only by its server</string>
+</resources>
