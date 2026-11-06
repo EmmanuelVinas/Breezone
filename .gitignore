@@ -1,0 +1,35 @@
+# Rust
+/server/target/
+**/*.rs.bk
+
+# Node / web
+node_modules/
+dist/
+.vite/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# macOS
+.DS_Store
+
+# Env / secrets
+.env
+*.local
+
+# Analysis artifacts (reverse-engineering scratch, not part of the product)
+analysis/
+
+# Local data (dev runs)
+/data/
+
+# Claude Code (local skills and settings)
+.claude/
+
+# Architecture decision records (kept local)
+docs/adrs/
+
+# Maintainer scripts (publishing, signing): kept local
+scripts/private/

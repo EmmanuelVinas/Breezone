@@ -1,0 +1,11 @@
+**/node_modules
+**/target
+**/dist
+analysis
+data
+.git
+.env
+*.md
+!web/**/*.md
+docs
+mobile
