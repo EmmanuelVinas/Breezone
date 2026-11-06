@@ -237,4 +237,5 @@
     </plurals>
     <string name="installation_via">via %1$s</string>
     <string name="hub_read_only">“%1$s” is shared read-only by its server</string>
+    <string name="add_server_error_local_network">Android blocks Breezone from the local network. Allow “Nearby devices” in Settings › Apps › Breezone › Permissions, then try again.</string>
 </resources>

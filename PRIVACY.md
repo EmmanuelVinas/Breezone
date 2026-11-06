@@ -10,8 +10,9 @@ data from it.
   kept in the Android Keystore / iOS Keychain. Your password is not stored.
 - **Data exchanged**: with your Breezone server only — the state of your installations and the
   commands you send. Use an `https://` address to reach it from outside your home network.
-- **Local network**: the app may connect to addresses of your local network (e.g. `192.168.1.10`)
-  to reach a server at home.
+- **Local network**: the app connects to addresses of your local network (e.g. `192.168.1.10`)
+  to reach a server at home. On Android 17 and later this requires the « Nearby devices / local
+  network » permission, asked at first launch; it is used for nothing else.
 - **Your server** stores your accounts, installations and history in its own database. If you connect
   your Airzone account to it, your Airzone credentials are stored encrypted on your server and used to
   talk to Airzone Cloud, which is subject to Airzone's own privacy policy.

@@ -13,3 +13,9 @@ expect class SecureStore {
 
 /** Human readable name of this device, shown in the server's "connected devices" list. */
 expect fun deviceName(): String
+
+/**
+ * The system blocks this app from the local network (Android 17+ "local network" permission
+ * refused). Used to explain a connection failure instead of showing a timeout.
+ */
+expect fun localNetworkBlocked(): Boolean

@@ -37,7 +37,10 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.breezone.app.data.ApiException
+import com.breezone.app.data.AuthRequiredException
 import com.breezone.app.data.Hub
+import com.breezone.app.data.localNetworkBlocked
 import com.breezone.app.resources.*
 import com.breezone.app.ui.icons.FzIcons
 import com.breezone.app.ui.theme.Fz
@@ -84,7 +87,11 @@ fun AddServerScreen(reauthServerId: String?, canGoBack: Boolean, onBack: () -> U
                 hub.signIn(url, username, password, setup = needsSetup)
                 onDone()
             } catch (e: Exception) {
-                error = e.message ?: getString(Res.string.add_server_error_unreachable)
+                error = when {
+                    e is ApiException || e is AuthRequiredException -> e.message
+                    localNetworkBlocked() -> getString(Res.string.add_server_error_local_network)
+                    else -> null
+                } ?: e.message ?: getString(Res.string.add_server_error_unreachable)
             } finally {
                 busy = false
             }

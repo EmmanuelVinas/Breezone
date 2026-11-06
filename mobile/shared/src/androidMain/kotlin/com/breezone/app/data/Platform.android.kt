@@ -65,3 +65,9 @@ actual fun deviceName(): String {
     val model = Build.MODEL
     return (if (model.startsWith(maker, ignoreCase = true)) model else "$maker $model") + " (Android)"
 }
+
+actual fun localNetworkBlocked(): Boolean {
+    if (Build.VERSION.SDK_INT < 37) return false
+    val context = runCatching { org.koin.core.context.GlobalContext.get().get<Context>() }.getOrNull() ?: return false
+    return context.checkSelfPermission(android.Manifest.permission.ACCESS_LOCAL_NETWORK) != android.content.pm.PackageManager.PERMISSION_GRANTED
+}

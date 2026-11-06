@@ -27,3 +27,6 @@ actual class SecureStore {
 }
 
 actual fun deviceName(): String = "${UIDevice.currentDevice.name} (iOS)"
+
+/** iOS asks for the local network itself (NSLocalNetworkUsageDescription) and cannot be checked. */
+actual fun localNetworkBlocked(): Boolean = false
