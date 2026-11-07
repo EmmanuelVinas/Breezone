@@ -13,14 +13,16 @@ dependencies {
     implementation(libs.koin.android)
 }
 
-// Release signing: mobile/keystore.properties (never committed), see CONTRIBUTING.md.
-//   storeFile=/path/to/breezone-upload.jks
+// Release signing (never committed): mobile/docs/stores/android/keystore.properties (see the
+// README of that folder), or mobile/keystore.properties.
+//   storeFile=keys/breezone-upload.jks   (relative to the properties file, or absolute)
 //   storePassword=…
 //   keyAlias=upload
 //   keyPassword=…
+val keystoreFile = listOf(rootProject.file("docs/stores/android/keystore.properties"), rootProject.file("keystore.properties"))
+    .firstOrNull { it.exists() }
 val keystoreProperties = Properties().apply {
-    val file = rootProject.file("keystore.properties")
-    if (file.exists()) file.inputStream().use { load(it) }
+    keystoreFile?.inputStream()?.use { load(it) }
 }
 
 android {
@@ -37,7 +39,7 @@ android {
     signingConfigs {
         if (keystoreProperties.isNotEmpty()) {
             create("release") {
-                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storeFile = keystoreFile!!.parentFile.resolve(keystoreProperties.getProperty("storeFile"))
                 storePassword = keystoreProperties.getProperty("storePassword")
                 keyAlias = keystoreProperties.getProperty("keyAlias")
                 keyPassword = keystoreProperties.getProperty("keyPassword")

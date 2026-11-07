@@ -33,3 +33,6 @@ docs/adrs/
 
 # Maintainer scripts (publishing, signing): kept local
 scripts/private/
+
+# Store publishing kits (signing keys, passwords, console answers): kept local
+/mobile/docs/stores/
