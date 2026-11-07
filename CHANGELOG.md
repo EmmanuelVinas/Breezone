@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-07
+
 ### Added
 
 - Reciprocal sharing: an invitation can ask the other server to share its installations too; the
@@ -19,6 +21,12 @@ All notable changes are documented here. The format follows
 - Clearer errors when another server cannot be reached (certificate not covering the name, unknown
   domain, refused connection).
 - A server waiting for acceptance no longer shows a wrong permission and a raw English message.
+- The fake WebServers of the demo have distinct MAC addresses.
+
+### Documentation
+
+- Screenshots, a guide to link two sites, the older Synology Docker package, the reverse proxy
+  certificate, and a minimal `docker-compose.yml` using the published image.
 
 ## [0.2.1] - 2026-11-07
 
@@ -66,7 +74,8 @@ All notable changes are documented here. The format follows
 - Project renamed from FreeZone to Breezone (former `FREEZONE_*` variables and `freezone.db` are
   still recognised).
 
-[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/EmmanuelVinas/breezone/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/EmmanuelVinas/breezone/releases/tag/v0.1.0
