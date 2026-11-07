@@ -423,6 +423,17 @@ struct NodeState {
     failures: u32,
     /// Last time `last_seen` was written to the database.
     persisted_at: i64,
+    /// Installations the node shares with this one (last answer), shown or not.
+    offered: Vec<OfferedInstallation>,
+}
+
+/// An installation another node shares with this one.
+#[derive(Debug, Clone, Serialize)]
+pub struct OfferedInstallation {
+    /// Id on that node.
+    pub remote_id: i64,
+    pub name: String,
+    pub location: Option<String>,
 }
 
 impl NodeState {
@@ -436,7 +447,7 @@ impl NodeState {
             latency_ms: None,
             permission: node.permission.clone(),
         };
-        Self { node, client, status, failures: 0, persisted_at: 0 }
+        Self { node, client, status, failures: 0, persisted_at: 0, offered: vec![] }
     }
 
     fn reference(&self) -> NodeRef {
@@ -718,6 +729,11 @@ impl Hub {
         self.nodes.read().await.iter().map(|(id, n)| (*id, n.status.clone())).collect()
     }
 
+    /// Installations each node shares with this one (as of its last answer).
+    pub async fn node_offers(&self) -> HashMap<i64, Vec<OfferedInstallation>> {
+        self.nodes.read().await.iter().map(|(id, n)| (*id, n.offered.clone())).collect()
+    }
+
     /// What this server exposes to a share: its local installations among `ids`.
     pub async fn federated(&self, ids: &[i64]) -> Vec<FedInstallation> {
         let state = self.state.read().await;
@@ -768,6 +784,11 @@ impl Hub {
             let was = n.status.state;
             let permission_changed = n.status.permission != snap.permission;
             n.failures = 0;
+            n.offered = snap
+                .installations
+                .iter()
+                .map(|f| OfferedInstallation { remote_id: f.id, name: f.name.clone(), location: f.location.clone() })
+                .collect();
             n.status = NodeStatus { state: "online", last_seen: Some(now), last_error: None, latency_ms: Some(latency), permission: snap.permission.clone() };
             n.node.permission = snap.permission.clone();
             let persist = was != "online" || permission_changed || now - n.persisted_at >= 60;
@@ -918,8 +939,18 @@ impl Hub {
         }
         let Some(node) = db::node_by_id(&self.db, node_id).await? else { return Ok(false) };
         let mine: Vec<&Installation> = all.iter().filter(|i| i.node_id == Some(node_id)).collect();
+        let excluded = db::node_exclusions(&self.db, node_id).await?;
         let mut changed = false;
         for fed in &snap.installations {
+            if excluded.contains(&fed.id) {
+                // Shared, but not wanted on this server.
+                if let Some(i) = mine.iter().find(|i| i.remote_id == Some(fed.id)) {
+                    db::delete_installation(&self.db, i.id).await?;
+                    self.log("system", "info", None, None, &format!("« {} » (nœud « {node_name} ») n'est plus affichée sur ce serveur", i.name), None).await;
+                    changed = true;
+                }
+                continue;
+            }
             let here = fed.mac.as_deref().map(normalize_mac).and_then(|m| local.get(&m).copied());
             let existing = mine.iter().find(|i| i.remote_id == Some(fed.id));
             match (existing, here) {

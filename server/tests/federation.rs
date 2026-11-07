@@ -538,3 +538,41 @@ async fn a_shared_installation_replaces_an_unreachable_local_copy() {
         "{events}"
     );
 }
+
+#[tokio::test]
+async fn a_node_chooses_which_shared_installations_it_shows() {
+    let office = Node::start("pick-office", |c| c.scan_port = 9).await;
+    let home = Node::start("pick-home", |c| c.scan_port = 9).await;
+    let mut ids = vec![];
+    for (name, mac) in [("Atelier", "AA:BB:CC:DD:EE:01"), ("Entrepôt", "AA:BB:CC:DD:EE:02")] {
+        let ws = serve(mock::router_with_mac(Arc::new(Mutex::new(mock::preset("bureau"))), mac)).await;
+        let (_, v) = office.call(Method::POST, "/api/installations", Some(json!({"name": name, "host": "127.0.0.1", "port": ws}))).await;
+        ids.push(v["id"].as_i64().unwrap());
+    }
+    office.call(Method::PUT, "/api/node", Some(json!({"name":"Bureau","public_url": office.base}))).await;
+    let (_, created) = office.call(Method::POST, "/api/shares", Some(json!({"label":"Maison","installation_ids": ids}))).await;
+    let (_, node) = home.call(Method::POST, "/api/nodes", Some(json!({"token": created["token"]}))).await;
+    let node_id = node["id"].as_i64().unwrap();
+    let share_id = office.call(Method::GET, "/api/shares", None).await.1[0]["id"].as_i64().unwrap();
+    office.call(Method::POST, &format!("/api/shares/{share_id}/approve"), None).await;
+    let (_, node) = home.call(Method::POST, &format!("/api/nodes/{node_id}/refresh"), None).await;
+    assert_eq!(node["installations"].as_array().unwrap().len(), 2, "everything shared is shown by default: {node}");
+    assert_eq!(node["offered"].as_array().unwrap().len(), 2);
+    let atelier = node["offered"].as_array().unwrap().iter().find(|o| o["name"] == "Atelier").unwrap()["remote_id"].as_i64().unwrap();
+
+    // Only the workshop.
+    let (s, node) = home.call(Method::PUT, &format!("/api/nodes/{node_id}/installations"), Some(json!({"included": [atelier]}))).await;
+    assert_eq!(s, StatusCode::OK, "{node}");
+    let names: Vec<&str> = node["installations"].as_array().unwrap().iter().map(|i| i["name"].as_str().unwrap()).collect();
+    assert_eq!(names, vec!["Atelier"], "{node}");
+    let excluded = node["offered"].as_array().unwrap().iter().find(|o| o["name"] == "Entrepôt").unwrap();
+    assert_eq!(excluded["included"], false);
+    // It stays hidden on later polls.
+    let (_, node) = home.call(Method::POST, &format!("/api/nodes/{node_id}/refresh"), None).await;
+    assert_eq!(node["installations"].as_array().unwrap().len(), 1);
+
+    // Shown again.
+    let all: Vec<i64> = node["offered"].as_array().unwrap().iter().map(|o| o["remote_id"].as_i64().unwrap()).collect();
+    let (_, node) = home.call(Method::PUT, &format!("/api/nodes/{node_id}/installations"), Some(json!({"included": all}))).await;
+    assert_eq!(node["installations"].as_array().unwrap().len(), 2, "{node}");
+}

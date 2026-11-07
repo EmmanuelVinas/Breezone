@@ -996,6 +996,21 @@ pub async fn upsert_node(db: &Db, remote_node_id: &str, name: &str, url: &str, k
     .await
 }
 
+/// Installations of a node this node chose not to show (their ids on that node).
+pub async fn node_exclusions(db: &Db, node_id: i64) -> sqlx::Result<Vec<i64>> {
+    sqlx::query_scalar("SELECT remote_id FROM node_excluded_installations WHERE node_id = ? ORDER BY remote_id").bind(node_id).fetch_all(db).await
+}
+
+pub async fn set_node_exclusions(db: &Db, node_id: i64, remote_ids: &[i64]) -> sqlx::Result<()> {
+    let mut tx = db.begin().await?;
+    sqlx::query("DELETE FROM node_excluded_installations WHERE node_id = ?").bind(node_id).execute(&mut *tx).await?;
+    for id in remote_ids {
+        sqlx::query("INSERT OR IGNORE INTO node_excluded_installations (node_id, remote_id) VALUES (?, ?)").bind(node_id).bind(id).execute(&mut *tx).await?;
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
 pub async fn set_node_fingerprint(db: &Db, id: i64, fingerprint: Option<&str>) -> sqlx::Result<()> {
     sqlx::query("UPDATE nodes SET tls_fingerprint = ? WHERE id = ?").bind(fingerprint).bind(id).execute(db).await?;
     Ok(())

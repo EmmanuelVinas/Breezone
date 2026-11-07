@@ -264,15 +264,43 @@ pub struct NodeView {
     pub installations: Vec<ShareInstallation>,
     /// A certificate failing the usual HTTPS checks was trusted for this node.
     pub certificate_pinned: bool,
+    /// Installations the node shares with this one, and whether they are shown here.
+    pub offered: Vec<OfferedView>,
+}
+
+#[derive(Serialize)]
+pub struct OfferedView {
+    /// Id on the other node.
+    pub remote_id: i64,
+    pub name: String,
+    pub location: Option<String>,
+    /// Shown on this server.
+    pub included: bool,
 }
 
 async fn node_views(state: &AppState) -> ApiResult<Vec<NodeView>> {
     let statuses = state.hub.node_statuses().await;
+    let mut offers = state.hub.node_offers().await;
     let installations = db::list_installations(&state.db).await?;
+    let mut exclusions = HashMap::new();
+    for n in db::list_nodes(&state.db).await? {
+        exclusions.insert(n.id, db::node_exclusions(&state.db, n.id).await?);
+    }
     Ok(db::list_nodes(&state.db)
         .await?
         .into_iter()
         .map(|n| NodeView {
+            offered: offers
+                .remove(&n.id)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|o| OfferedView {
+                    included: !exclusions.get(&n.id).is_some_and(|e| e.contains(&o.remote_id)),
+                    remote_id: o.remote_id,
+                    name: o.name,
+                    location: o.location,
+                })
+                .collect(),
             status: statuses.get(&n.id).cloned().unwrap_or(NodeStatus {
                 state: "unknown",
                 last_seen: n.last_seen,
@@ -300,6 +328,7 @@ pub async fn list_nodes(State(state): State<AppState>, user: AuthUser) -> ApiRes
     if !access.is_admin() {
         for n in &mut nodes {
             n.installations.retain(|i| access.can_view(i.id));
+            n.offered.clear();
         }
     }
     Ok(Json(nodes))
@@ -489,6 +518,38 @@ pub async fn untrust_node_certificate(State(state): State<AppState>, AdminUser(a
     state.hub.reload_installations().await?;
     state.hub.poll_node(id).await;
     state.hub.log("system", "info", None, Some(&admin.username), &format!("Serveur « {} » : vérification HTTPS habituelle rétablie", node.name), None).await;
+    node_views(&state).await?.into_iter().find(|n| n.id == id).map(Json).ok_or_else(|| ApiError::not_found("nœud introuvable"))
+}
+
+#[derive(Deserialize)]
+pub struct NodeInstallationsInput {
+    /// Installations of the node to show on this server (ids on that node); the others it
+    /// shares are hidden. Installations it shares later are shown until excluded.
+    pub included: Vec<i64>,
+}
+
+/// Chooses which of the installations a node shares are shown on this server.
+pub async fn set_node_installations(
+    State(state): State<AppState>,
+    AdminUser(admin): AdminUser,
+    Path(id): Path<i64>,
+    Json(req): Json<NodeInstallationsInput>,
+) -> ApiResult<Json<NodeView>> {
+    let node = db::node_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("nœud introuvable"))?;
+    let offered = state.hub.node_offers().await.remove(&id).unwrap_or_default();
+    if offered.is_empty() {
+        return Err(ApiError::bad_request(format!("« {} » ne partage encore aucune installation avec ce serveur", node.name)));
+    }
+    // Exclusions of installations not offered right now are kept.
+    let mut excluded: Vec<i64> = db::node_exclusions(&state.db, id).await?.into_iter().filter(|r| !offered.iter().any(|o| o.remote_id == *r)).collect();
+    excluded.extend(offered.iter().map(|o| o.remote_id).filter(|r| !req.included.contains(r)));
+    db::set_node_exclusions(&state.db, id, &excluded).await?;
+    state.hub.poll_node(id).await;
+    let shown = offered.iter().filter(|o| req.included.contains(&o.remote_id)).count();
+    state
+        .hub
+        .log("system", "info", None, Some(&admin.username), &format!("Nœud « {} » : {shown} installation(s) sur {} affichée(s)", node.name, offered.len()), None)
+        .await;
     node_views(&state).await?.into_iter().find(|n| n.id == id).map(Json).ok_or_else(|| ApiError::not_found("nœud introuvable"))
 }
 
