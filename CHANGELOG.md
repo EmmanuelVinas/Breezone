@@ -6,6 +6,13 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-07
+
+### Changed
+
+- Default port is now 8427 instead of 8080, which is often taken by other applications. Set
+  `BREEZONE_PORT` (and `BREEZONE_HTTP_PORT` with compose) to `8080` to keep the former address.
+
 ## [0.2.0] - 2026-11-07
 
 ### Added
@@ -18,8 +25,6 @@ All notable changes are documented here. The format follows
 
 ### Changed
 
-- Default port is now 8427 instead of 8080, which is often taken by other applications. Set
-  `BREEZONE_PORT` (and `BREEZONE_HTTP_PORT` with compose) to `8080` to keep the former address.
 - Invitations from 0.1.0 (`bz1.`) are no longer accepted: existing links between servers are
   removed on upgrade and must be paired again.
 
@@ -47,6 +52,7 @@ All notable changes are documented here. The format follows
 - Project renamed from FreeZone to Breezone (former `FREEZONE_*` variables and `freezone.db` are
   still recognised).
 
-[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/EmmanuelVinas/breezone/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/EmmanuelVinas/breezone/releases/tag/v0.1.0
