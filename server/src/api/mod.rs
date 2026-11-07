@@ -58,10 +58,11 @@ pub fn router() -> Router<AppState> {
         .route("/api/node", get(federation::get_identity).put(federation::save_identity))
         .route("/api/shares", get(federation::list_shares).post(federation::create_share))
         .route("/api/shares/{id}", put(federation::update_share).delete(federation::delete_share))
+        .route("/api/shares/{id}/approve", post(federation::approve_share))
         .route("/api/nodes", get(federation::list_nodes).post(federation::add_node))
         .route("/api/nodes/{id}", put(federation::update_node).delete(federation::delete_node))
         .route("/api/nodes/{id}/refresh", post(federation::refresh_node))
-        .route("/api/federation/hello", post(federation::hello))
+        .route("/api/federation/pair", post(federation::pair))
         .route("/api/federation/installations", get(federation::installations))
         .route("/api/federation/installations/{id}/zones/{system_id}/{zone_id}", patch(federation::control))
         // Routines

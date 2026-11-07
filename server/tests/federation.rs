@@ -26,6 +26,7 @@ struct Node {
     base: String,
     http: reqwest::Client,
     token: String,
+    state: breezone_server::AppState,
 }
 
 impl Node {
@@ -34,7 +35,7 @@ impl Node {
         let mut cfg = Config::for_tests(temp_dir(name));
         configure(&mut cfg);
         let state = breezone_server::init_state(cfg).await.unwrap();
-        let port = serve(breezone_server::app(state)).await;
+        let port = serve(breezone_server::app(state.clone())).await;
         let base = format!("http://127.0.0.1:{port}");
         let http = reqwest::Client::new();
         let v: Value = http
@@ -46,7 +47,7 @@ impl Node {
             .json()
             .await
             .unwrap();
-        Node { base, http, token: v["access_token"].as_str().unwrap().into() }
+        Node { base, http, token: v["access_token"].as_str().unwrap().into(), state }
     }
 
     async fn call(&self, method: Method, path: &str, body: Option<Value>) -> (StatusCode, Value) {
@@ -92,14 +93,18 @@ async fn a_node_drives_the_installations_another_node_shares() {
         .await;
     assert_eq!(s, StatusCode::CREATED, "{created}");
     let token = created["token"].as_str().unwrap().to_string();
-    assert!(token.starts_with("bz1."));
+    assert!(token.starts_with("bz2."));
     assert_eq!(created["share"]["connected"], false);
+    assert_eq!(created["share"]["status"], "invited");
 
-    // A node cannot add its own token; a garbled token is refused.
+    // A node cannot add its own token; a garbled or old-format token is refused.
     let (s, _) = office.call(Method::POST, "/api/nodes", Some(json!({"token": token}))).await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
-    let (s, _) = home.call(Method::POST, "/api/nodes", Some(json!({"token":"bz1.nope"}))).await;
+    let (s, _) = home.call(Method::POST, "/api/nodes", Some(json!({"token":"bz2.nope"}))).await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
+    let (s, v) = home.call(Method::POST, "/api/nodes", Some(json!({"token":"bz1.eyJ2IjoxfQ"}))).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+    assert!(v["error"].as_str().unwrap().contains("ancien format"), "{v}");
 
     // Home: the Airzone account first (the office installation is not reachable from home)…
     let (s, v) = home
@@ -110,9 +115,32 @@ async fn a_node_drives_the_installations_another_node_shares() {
     let (s, node) = home.call(Method::POST, "/api/nodes", Some(json!({"token": token}))).await;
     assert_eq!(s, StatusCode::CREATED, "{node}");
     assert_eq!(node["name"], "Bureau");
-    assert_eq!(node["status"]["state"], "online");
-    assert_eq!(node["status"]["permission"], "control");
+    assert_eq!(node["status"]["state"], "pending", "waits for the office to accept: {node}");
     let node_id = node["id"].as_i64().unwrap();
+    let (_, status) = home.call(Method::GET, "/api/status", None).await;
+    assert!(status.as_array().unwrap().iter().all(|i| i["access"] == "local"), "nothing shared before approval");
+
+    // The invitation is single-use.
+    let (s, v) = home.call(Method::POST, "/api/nodes", Some(json!({"token": token}))).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST, "{v}");
+
+    // The office sees the request and accepts it.
+    let (_, shares) = office.call(Method::GET, "/api/shares", None).await;
+    assert_eq!(shares[0]["status"], "pending");
+    assert_eq!(shares[0]["remote_name"], "Breezone");
+    assert!(shares[0]["requested_at"].is_i64());
+    let (_, events) = office.call(Method::GET, "/api/events?limit=5", None).await;
+    assert!(events.as_array().unwrap().iter().any(|e| e["message"].as_str().unwrap_or_default().contains("demande l'accès")));
+    let share_id = shares[0]["id"].as_i64().unwrap();
+    let (s, v) = office.call(Method::POST, &format!("/api/shares/{share_id}/approve"), None).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    assert_eq!(v["status"], "active");
+    let (_, node) = home.call(Method::POST, &format!("/api/nodes/{node_id}/refresh"), None).await;
+    assert_eq!(node["status"]["state"], "online", "{node}");
+    assert_eq!(node["status"]["permission"], "control");
+    // The Airzone link of installations received from a node runs in the background (every 5
+    // minutes); trigger it now.
+    breezone_server::cloud::auto_link_all(&home.state).await;
 
     // The shared installation is driven from home like a local one.
     let (_, status) = home.call(Method::GET, "/api/status", None).await;
@@ -160,7 +188,6 @@ async fn a_node_drives_the_installations_another_node_shares() {
     assert_eq!(cmd["actor"], "admin (nœud Breezone)", "{cmd}");
 
     // Read-only share: commands refused, state still visible.
-    let share_id = share["id"].as_i64().unwrap();
     let (s, v) = office
         .call(Method::PUT, &format!("/api/shares/{share_id}"), Some(json!({"label":"Maison","installation_ids":[office_inst],"permission":"read"})))
         .await;
@@ -188,8 +215,43 @@ async fn a_node_drives_the_installations_another_node_shares() {
     assert!(status.as_array().unwrap().iter().all(|i| i["access"] == "local"));
 }
 
+/// A fake node: its key, and signed calls made by hand.
+struct FakeNode {
+    id: String,
+    key: ed25519_dalek::SigningKey,
+}
+
+impl FakeNode {
+    fn new(id: &str, seed: u8) -> FakeNode {
+        FakeNode { id: id.into(), key: ed25519_dalek::SigningKey::from_bytes(&[seed; 32]) }
+    }
+
+    fn request(&self, http: &reqwest::Client, base: &str, method: Method, path: &str, body: &[u8]) -> reqwest::RequestBuilder {
+        let mut req = http.request(method.clone(), format!("{base}{path}"));
+        for (name, value) in breezone_server::federation::signed_headers(&self.key, &self.id, method.as_str(), path, body) {
+            req = req.header(name, value);
+        }
+        if !body.is_empty() {
+            req = req.header("content-type", "application/json").body(body.to_vec());
+        }
+        req
+    }
+
+    async fn pair(&self, http: &reqwest::Client, base: &str, token: &str) -> reqwest::Response {
+        use base64::Engine;
+        let raw = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(token.trim_start_matches("bz2.")).unwrap();
+        let inv: Value = serde_json::from_slice(&raw).unwrap();
+        let body = serde_json::to_vec(&json!({
+            "code": inv["code"], "node_id": self.id, "name": "Voisin",
+            "public_key": breezone_server::federation::public_key_text(&self.key),
+        }))
+        .unwrap();
+        self.request(http, base, Method::POST, "/api/federation/pair", &body).send().await.unwrap()
+    }
+}
+
 #[tokio::test]
-async fn shares_only_expose_their_installations() {
+async fn pairing_and_signed_requests_are_enforced() {
     let a_mock: MockState = Arc::new(Mutex::new(mock::preset("maison")));
     let a_ws = serve(mock::router(a_mock)).await;
     let b_mock: MockState = Arc::new(Mutex::new(mock::preset("bureau")));
@@ -197,40 +259,85 @@ async fn shares_only_expose_their_installations() {
     let office = Node::start("scope", |_| {}).await;
     let (_, a) = office.call(Method::POST, "/api/installations", Some(json!({"name":"A","host":"127.0.0.1","port":a_ws}))).await;
     let (_, b) = office.call(Method::POST, "/api/installations", Some(json!({"name":"B","host":"127.0.0.1","port":b_ws}))).await;
-    let (s, created) = office
-        .call(Method::POST, "/api/shares", Some(json!({"label":"Voisin","installation_ids":[a["id"]],"permission":"control","url": office.base})))
-        .await;
-    assert_eq!(s, StatusCode::CREATED, "{created}");
-    let token = created["token"].as_str().unwrap();
-    let inv: Value = {
-        use base64::Engine;
-        let raw = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(token.trim_start_matches("bz1.")).unwrap();
-        serde_json::from_slice(&raw).unwrap()
-    };
-    let key = inv["key"].as_str().unwrap();
+    let share = |label: &str| json!({"label": label, "installation_ids": [a["id"]], "permission": "control", "url": office.base});
     let http = reqwest::Client::new();
+    let neighbour = FakeNode::new("neighbour", 1);
+    let list = "/api/federation/installations";
 
-    // Only installation A is visible; B cannot be driven with this key.
-    let snap: Value = http.get(format!("{}/api/federation/installations", office.base)).bearer_auth(key).send().await.unwrap().json().await.unwrap();
+    // An expired invitation is refused.
+    let (_, old) = office.call(Method::POST, "/api/shares", Some(share("Ancien"))).await;
+    sqlx::query("UPDATE shares SET pairing_expires_at = 0").execute(&office.state.db).await.unwrap();
+    let r = neighbour.pair(&http, &office.base, old["token"].as_str().unwrap()).await;
+    assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+    assert!(r.text().await.unwrap().contains("expirée"));
+
+    // Pairing with a valid invitation: pending until approved.
+    let (_, created) = office.call(Method::POST, "/api/shares", Some(share("Voisin"))).await;
+    let token = created["token"].as_str().unwrap();
+    // The request must be signed with the key it presents.
+    let impostor = FakeNode { id: "neighbour".into(), key: ed25519_dalek::SigningKey::from_bytes(&[9; 32]) };
+    {
+        use base64::Engine;
+        let raw = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(token.trim_start_matches("bz2.")).unwrap();
+        let inv: Value = serde_json::from_slice(&raw).unwrap();
+        // Presents the neighbour's public key but signs with another key.
+        let body = serde_json::to_vec(&json!({"code": inv["code"], "node_id": "neighbour", "name": "x",
+            "public_key": breezone_server::federation::public_key_text(&neighbour.key)})).unwrap();
+        let r = impostor.request(&http, &office.base, Method::POST, "/api/federation/pair", &body).send().await.unwrap();
+        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
+    }
+    let r = neighbour.pair(&http, &office.base, token).await;
+    assert_eq!(r.status(), StatusCode::OK);
+    let r = neighbour.request(&http, &office.base, Method::GET, list, b"").send().await.unwrap();
+    assert_eq!(r.status(), StatusCode::FORBIDDEN, "pending approval");
+    let share_id = created["share"]["id"].as_i64().unwrap();
+    office.call(Method::POST, &format!("/api/shares/{share_id}/approve"), None).await;
+
+    // Only installation A is visible; B cannot be driven.
+    let snap: Value = neighbour.request(&http, &office.base, Method::GET, list, b"").send().await.unwrap().json().await.unwrap();
     let ids: Vec<i64> = snap["installations"].as_array().unwrap().iter().map(|i| i["id"].as_i64().unwrap()).collect();
     assert_eq!(ids, vec![a["id"].as_i64().unwrap()]);
-    let r = http
-        .patch(format!("{}/api/federation/installations/{}/zones/1/1", office.base, b["id"]))
-        .bearer_auth(key)
-        .json(&json!({"on": false}))
-        .send()
-        .await
-        .unwrap();
+    let path_b = format!("/api/federation/installations/{}/zones/1/1", b["id"]);
+    let r = neighbour.request(&http, &office.base, Method::PATCH, &path_b, br#"{"on":false}"#).send().await.unwrap();
     assert_eq!(r.status(), StatusCode::NOT_FOUND);
-    // No key, a user token, or a wrong key: refused.
-    let r = http.get(format!("{}/api/federation/installations", office.base)).send().await.unwrap();
+
+    // A captured request cannot be replayed.
+    let path_a = format!("/api/federation/installations/{}/zones/1/1", a["id"]);
+    let headers = breezone_server::federation::signed_headers(&neighbour.key, &neighbour.id, "PATCH", &path_a, br#"{"on":true}"#);
+    let send = |body: &'static [u8]| {
+        let mut req = http.patch(format!("{}{path_a}", office.base)).header("content-type", "application/json").body(body);
+        for (n, v) in &headers {
+            req = req.header(*n, v);
+        }
+        req.send()
+    };
+    assert_eq!(send(br#"{"on":true}"#).await.unwrap().status(), StatusCode::OK);
+    assert_eq!(send(br#"{"on":true}"#).await.unwrap().status(), StatusCode::UNAUTHORIZED, "replay");
+    // A modified body breaks the signature (fresh nonce, same signed body).
+    let headers2 = breezone_server::federation::signed_headers(&neighbour.key, &neighbour.id, "PATCH", &path_a, br#"{"on":true}"#);
+    let mut req = http.patch(format!("{}{path_a}", office.base)).header("content-type", "application/json").body(br#"{"on":false}"#.to_vec());
+    for (n, v) in &headers2 {
+        req = req.header(*n, v);
+    }
+    assert_eq!(req.send().await.unwrap().status(), StatusCode::UNAUTHORIZED, "tampered body");
+
+    // Unsigned, a user token, another key: refused. The federation API gives no user API access.
+    let r = http.get(format!("{}{list}", office.base)).send().await.unwrap();
     assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
-    let r = http.get(format!("{}/api/federation/installations", office.base)).bearer_auth(&office.token).send().await.unwrap();
+    let r = http.get(format!("{}{list}", office.base)).bearer_auth(&office.token).send().await.unwrap();
     assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
-    let r = http.get(format!("{}/api/federation/installations", office.base)).bearer_auth("bzk_wrong").send().await.unwrap();
+    let r = impostor.request(&http, &office.base, Method::GET, list, b"").send().await.unwrap();
     assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
-    // The federation API does not give access to the user API.
-    let r = http.get(format!("{}/api/status", office.base)).bearer_auth(key).send().await.unwrap();
+    let r = neighbour.request(&http, &office.base, Method::GET, "/api/status", b"").send().await.unwrap();
+    assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
+
+    // The invitation cannot be used twice.
+    let r = FakeNode::new("other", 3).pair(&http, &office.base, token).await;
+    assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+
+    // Revoked: access stops.
+    office.call(Method::DELETE, &format!("/api/shares/{share_id}"), None).await;
+    let r = neighbour.request(&http, &office.base, Method::GET, list, b"").send().await.unwrap();
     assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
 }
 

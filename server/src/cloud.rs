@@ -891,6 +891,18 @@ pub async fn auto_link_all(state: &AppState) {
 pub async fn run_auto_sync(state: AppState) {
     tokio::time::sleep(Duration::from_secs(20)).await;
     auto_link_all(&state).await;
+    // Installations shared by another node appear once it accepted the pairing: link them to
+    // the Airzone account too (cheap: MAC addresses are known).
+    {
+        let state = state.clone();
+        tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(Duration::from_secs(300));
+            loop {
+                ticker.tick().await;
+                auto_link_all(&state).await;
+            }
+        });
+    }
     let mut ticker = tokio::time::interval(AUTO_SYNC_PERIOD);
     loop {
         ticker.tick().await;

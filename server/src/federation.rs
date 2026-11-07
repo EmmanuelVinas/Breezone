@@ -2,19 +2,24 @@
 //!
 //! A node only reaches the Airzone WebServers of its own network. To drive several sites from
 //! one instance, a node **exposes** some of its local installations to another node through a
-//! *share* (a secret key limited to these installations, read-only or with control), and
-//! **consumes** the installations other nodes expose to it.
+//! *share* (limited to these installations, read-only or with control), and **consumes** the
+//! installations other nodes expose to it.
 //!
-//! * The exposing node creates the share and gives an invitation token
-//!   `bz1.<base64url(JSON {v, node_id, name, url, key})>` (also shown as a QR code). Only the
-//!   SHA-256 of the key is stored.
-//! * The consuming node is given the token, stores the URL and the key (encrypted), calls
-//!   `POST /api/federation/hello` and then polls `GET /api/federation/installations`. Commands go
-//!   through `PATCH /api/federation/installations/{id}/zones/{system_id}/{zone_id}`.
-//! * The exposing node stays the authority for its installations; the consuming node keeps a
-//!   local copy of the history, like for its own installations.
+//! Pairing (simple for the user, no secret ever sent twice):
 //!
-//! Only servers talk to each other: the key never reaches the phones.
+//! 1. The exposing node creates a share and shows an invitation token (and QR code)
+//!    `bz2.<base64url(JSON {v, node_id, name, url, code})>`. The `code` is **single-use** and
+//!    valid **15 minutes**; only its SHA-256 is stored.
+//! 2. The consuming node is given the token. It has its own **Ed25519 key pair** (the private
+//!    key never leaves it) and calls `POST /api/federation/pair` with the code and its public key,
+//!    signed with that key. The code is then burnt.
+//! 3. The exposing node shows the request ("Maison asks for access, from 82.x.x.x") and an
+//!    administrator **accepts** or refuses it.
+//! 4. Every later call is **signed** (method, path, timestamp, nonce, body hash): no bearer
+//!    secret travels; a captured request cannot be replayed (5-minute window, nonces remembered).
+//!
+//! The exposing node stays the authority for its installations; the consuming node keeps a local
+//! copy of the history, like for its own installations. Only servers talk to each other.
 
 use crate::airzone::ZoneData;
 use crate::auth::{hash_token, random_bytes};
@@ -23,13 +28,24 @@ use crate::error::ApiError;
 use crate::hub::ZoneCommand;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
+use ed25519_dalek::{Signature, Signer, SigningKey, VerifyingKey};
+use sha2::{Digest, Sha256};
 use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
 use std::time::Duration;
 
-const TOKEN_PREFIX: &str = "bz1.";
-pub const KEY_PREFIX: &str = "bzk_";
+const TOKEN_PREFIX: &str = "bz2.";
+const LEGACY_TOKEN_PREFIX: &str = "bz1.";
+/// An invitation code can be used once, within this delay.
+pub const PAIRING_TTL_SECS: i64 = 15 * 60;
+/// Signed requests older (or newer) than this are refused.
+pub const SIGNATURE_WINDOW_SECS: i64 = 5 * 60;
 const SETTING_NODE_ID: &str = "node.id";
+const SETTING_SIGNING_KEY: &str = "node.signing_key";
+pub const HEADER_NODE: &str = "x-breezone-node";
+pub const HEADER_TIMESTAMP: &str = "x-breezone-timestamp";
+pub const HEADER_NONCE: &str = "x-breezone-nonce";
+pub const HEADER_SIGNATURE: &str = "x-breezone-signature";
 const SETTING_NODE_NAME: &str = "node.name";
 const SETTING_PUBLIC_URL: &str = "node.public_url";
 /// Header carrying the user who sent a command through a node (for the activity feed).
@@ -77,6 +93,26 @@ pub async fn save_identity(db: &Db, name: &str, public_url: Option<&str>) -> Res
     Ok(identity(db).await?)
 }
 
+/// The Ed25519 key of this node, created at first use and stored encrypted with the server
+/// secret. Its public half is what other nodes use to check this node's requests.
+pub async fn signing_key(db: &Db, secret: &[u8; 32]) -> sqlx::Result<SigningKey> {
+    if let Some(enc) = db::get_setting(db, SETTING_SIGNING_KEY).await? {
+        let bytes = crate::cloud::decrypt(secret, &enc).and_then(|b64| URL_SAFE_NO_PAD.decode(b64).ok());
+        if let Some(bytes) = bytes.and_then(|b| <[u8; 32]>::try_from(b).ok()) {
+            return Ok(SigningKey::from_bytes(&bytes));
+        }
+        tracing::warn!("node key unreadable (server secret changed?): a new one is created, nodes must pair again");
+    }
+    let key = SigningKey::from_bytes(&random_bytes::<32>());
+    let enc = crate::cloud::encrypt(secret, &URL_SAFE_NO_PAD.encode(key.to_bytes()));
+    db::set_setting(db, SETTING_SIGNING_KEY, &enc).await?;
+    Ok(key)
+}
+
+pub fn public_key_text(key: &SigningKey) -> String {
+    URL_SAFE_NO_PAD.encode(key.verifying_key().to_bytes())
+}
+
 // ---------------------------------------------------------------------------------------
 // Invitation token and keys
 // ---------------------------------------------------------------------------------------
@@ -88,7 +124,8 @@ pub struct Invitation {
     pub node_id: String,
     pub name: String,
     pub url: String,
-    pub key: String,
+    /// Single-use pairing code (valid 15 minutes).
+    pub code: String,
 }
 
 pub fn encode_token(inv: &Invitation) -> String {
@@ -99,23 +136,56 @@ pub fn encode_token(inv: &Invitation) -> String {
 pub fn parse_token(token: &str) -> Result<Invitation, ApiError> {
     let invalid = || ApiError::bad_request("jeton d'invitation invalide : copiez-le en entier depuis Réglages › Partages du serveur qui partage");
     let compact: String = token.chars().filter(|c| !c.is_whitespace()).collect();
+    if compact.starts_with(LEGACY_TOKEN_PREFIX) {
+        return Err(ApiError::bad_request("ancien format de jeton : créez un nouveau partage sur l'autre serveur (mis à jour)"));
+    }
     let body = compact.strip_prefix(TOKEN_PREFIX).ok_or_else(invalid)?;
     let raw = URL_SAFE_NO_PAD.decode(body.trim_end_matches('=')).map_err(|_| invalid())?;
     let inv: Invitation = serde_json::from_slice(&raw).map_err(|_| invalid())?;
-    if inv.v != 1 {
+    if inv.v != 2 {
         return Err(ApiError::bad_request("version de jeton non prise en charge : mettez Breezone à jour"));
     }
-    if !inv.key.starts_with(KEY_PREFIX) || inv.node_id.is_empty() {
+    if inv.code.len() < 20 || inv.node_id.is_empty() {
         return Err(invalid());
     }
     Ok(Invitation { url: normalize_url(&inv.url)?, ..inv })
 }
 
-/// A new share key and its hash (the only thing stored by the exposing node).
-pub fn new_share_key() -> (String, String) {
-    let key = format!("{KEY_PREFIX}{}", URL_SAFE_NO_PAD.encode(random_bytes::<32>()));
-    let hash = hash_token(&key);
-    (key, hash)
+/// A new single-use pairing code and its hash (the only thing stored by the exposing node).
+pub fn new_pairing_code() -> (String, String) {
+    let code = URL_SAFE_NO_PAD.encode(random_bytes::<24>());
+    let hash = hash_token(&code);
+    (code, hash)
+}
+
+// ---------------------------------------------------------------------------------------
+// Signed requests between nodes
+// ---------------------------------------------------------------------------------------
+
+/// What is signed: method, path with query, timestamp, nonce and the SHA-256 of the body.
+pub fn signing_message(method: &str, path: &str, timestamp: i64, nonce: &str, body: &[u8]) -> Vec<u8> {
+    format!("{}\n{path}\n{timestamp}\n{nonce}\n{}", method.to_ascii_uppercase(), hex::encode(Sha256::digest(body))).into_bytes()
+}
+
+/// Headers to add to a request from node `node_id`.
+pub fn signed_headers(key: &SigningKey, node_id: &str, method: &str, path: &str, body: &[u8]) -> Vec<(&'static str, String)> {
+    let timestamp = db::now();
+    let nonce = URL_SAFE_NO_PAD.encode(random_bytes::<16>());
+    let signature = key.sign(&signing_message(method, path, timestamp, &nonce, body));
+    vec![
+        (HEADER_NODE, node_id.to_string()),
+        (HEADER_TIMESTAMP, timestamp.to_string()),
+        (HEADER_NONCE, nonce),
+        (HEADER_SIGNATURE, URL_SAFE_NO_PAD.encode(signature.to_bytes())),
+    ]
+}
+
+/// Checks a signature made with the public key `public_key` (base64url).
+pub fn verify_signature(public_key: &str, message: &[u8], signature: &str) -> bool {
+    let Some(key) = URL_SAFE_NO_PAD.decode(public_key).ok().and_then(|b| <[u8; 32]>::try_from(b).ok()) else { return false };
+    let Ok(key) = VerifyingKey::from_bytes(&key) else { return false };
+    let Some(sig) = URL_SAFE_NO_PAD.decode(signature).ok().and_then(|b| Signature::from_slice(&b).ok()) else { return false };
+    key.verify_strict(message, &sig).is_ok()
 }
 
 // ---------------------------------------------------------------------------------------
@@ -220,8 +290,19 @@ pub struct FedZoneMeta {
     pub position: i64,
 }
 
+/// Pairing request of a consuming node (`POST /api/federation/pair`), signed with `public_key`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Hello {
+pub struct PairRequest {
+    pub code: String,
+    pub node_id: String,
+    pub name: String,
+    pub public_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PairResponse {
+    /// "pending": an administrator of the exposing node must accept the request.
+    pub status: String,
     pub node_id: String,
     pub name: String,
 }
@@ -245,6 +326,7 @@ impl NodeError {
         match self {
             NodeError::Rejected { status: 401, message } if message.contains("expired") => "expired",
             NodeError::Rejected { status: 401, .. } => "revoked",
+            NodeError::Rejected { status: 403, message } if message.contains("pending") => "pending",
             NodeError::Rejected { .. } => "error",
             NodeError::Unreachable(_) => "offline",
         }
@@ -255,7 +337,7 @@ impl From<NodeError> for ApiError {
     fn from(e: NodeError) -> Self {
         match e {
             NodeError::Rejected { status: 400, message } => ApiError::bad_request(message),
-            NodeError::Rejected { status: 401, message } => ApiError::bad_gateway(format!("le nœud a refusé la clé ({message})")),
+            NodeError::Rejected { status: 401, message } => ApiError::bad_gateway(format!("le nœud a refusé l'accès ({message})")),
             NodeError::Rejected { status: 403, message } => ApiError::forbidden(message),
             NodeError::Rejected { status: 404, message } => ApiError::not_found(message),
             other => ApiError::bad_gateway(other.to_string()),
@@ -267,7 +349,9 @@ impl From<NodeError> for ApiError {
 pub struct NodeClient {
     http: reqwest::Client,
     url: String,
-    key: String,
+    /// Id of this (consuming) node and its signing key.
+    node_id: String,
+    key: SigningKey,
 }
 
 impl std::fmt::Debug for NodeClient {
@@ -278,18 +362,30 @@ impl std::fmt::Debug for NodeClient {
 }
 
 impl NodeClient {
-    pub fn new(url: &str, key: &str) -> Self {
+    pub fn new(url: &str, node_id: &str, key: SigningKey) -> Self {
         let http = reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(4))
             .timeout(Duration::from_secs(10))
             .user_agent(concat!("Breezone/", env!("CARGO_PKG_VERSION")))
             .build()
             .unwrap_or_default();
-        Self { http, url: url.trim_end_matches('/').to_string(), key: key.to_string() }
+        Self { http, url: url.trim_end_matches('/').to_string(), node_id: node_id.to_string(), key }
     }
 
-    async fn send<T: serde::de::DeserializeOwned>(&self, req: reqwest::RequestBuilder) -> Result<T, NodeError> {
-        let resp = req.bearer_auth(&self.key).send().await.map_err(|e| NodeError::Unreachable(describe(&e)))?;
+    /// Sends a signed request (path relative to the node URL, e.g. `/api/federation/installations`).
+    async fn send<T: serde::de::DeserializeOwned>(&self, method: reqwest::Method, path: &str, body: Option<Vec<u8>>, actor: Option<&str>) -> Result<T, NodeError> {
+        let body = body.unwrap_or_default();
+        let mut req = self.http.request(method.clone(), format!("{}{path}", self.url));
+        for (name, value) in signed_headers(&self.key, &self.node_id, method.as_str(), path, &body) {
+            req = req.header(name, value);
+        }
+        if let Some(actor) = actor {
+            req = req.header(ACTOR_HEADER, actor.chars().filter(|c| !c.is_control()).take(80).collect::<String>());
+        }
+        if !body.is_empty() {
+            req = req.header(reqwest::header::CONTENT_TYPE, "application/json").body(body);
+        }
+        let resp = req.send().await.map_err(|e| NodeError::Unreachable(describe(&e)))?;
         let status = resp.status();
         if !status.is_success() {
             let body: serde_json::Value = resp.json().await.unwrap_or_default();
@@ -299,19 +395,21 @@ impl NodeClient {
         resp.json::<T>().await.map_err(|e| NodeError::Unreachable(format!("réponse inattendue ({e}) : est-ce bien un serveur Breezone ?")))
     }
 
-    pub async fn hello(&self, me: &Identity) -> Result<FedSnapshot, NodeError> {
-        let hello = Hello { node_id: me.node_id.clone(), name: me.name.clone() };
-        self.send(self.http.post(format!("{}/api/federation/hello", self.url)).json(&hello)).await
+    /// Uses the invitation code: the exposing node records this node's public key.
+    pub async fn pair(&self, code: &str, name: &str) -> Result<PairResponse, NodeError> {
+        let req = PairRequest { code: code.to_string(), node_id: self.node_id.clone(), name: name.to_string(), public_key: public_key_text(&self.key) };
+        let body = serde_json::to_vec(&req).expect("serializable request");
+        self.send(reqwest::Method::POST, "/api/federation/pair", Some(body), None).await
     }
 
     pub async fn snapshot(&self) -> Result<FedSnapshot, NodeError> {
-        self.send(self.http.get(format!("{}/api/federation/installations", self.url))).await
+        self.send(reqwest::Method::GET, "/api/federation/installations", None, None).await
     }
 
     pub async fn control(&self, remote_id: i64, system_id: i64, zone_id: i64, cmd: &ZoneCommand, actor: &str) -> Result<FedInstallation, NodeError> {
-        let url = format!("{}/api/federation/installations/{remote_id}/zones/{system_id}/{zone_id}", self.url);
-        let actor: String = actor.chars().filter(|c| !c.is_control()).take(80).collect();
-        self.send(self.http.patch(url).header(ACTOR_HEADER, actor).json(cmd)).await
+        let path = format!("/api/federation/installations/{remote_id}/zones/{system_id}/{zone_id}");
+        let body = serde_json::to_vec(cmd).expect("serializable command");
+        self.send(reqwest::Method::PATCH, &path, Some(body), Some(actor)).await
     }
 }
 
@@ -331,13 +429,14 @@ mod tests {
 
     #[test]
     fn token_round_trip() {
-        let inv = Invitation { v: 1, node_id: "abc".into(), name: "Bureau".into(), url: "https://fz.example.org".into(), key: "bzk_secret".into() };
+        let inv = Invitation { v: 2, node_id: "abc".into(), name: "Bureau".into(), url: "https://fz.example.org".into(), code: new_pairing_code().0 };
         let token = encode_token(&inv);
-        assert!(token.starts_with("bz1."));
+        assert!(token.starts_with("bz2."));
         // Pasted with line breaks.
         let wrapped = format!("{}\n{}", &token[..10], &token[10..]);
         assert_eq!(parse_token(&wrapped).unwrap(), inv);
-        assert!(parse_token("bz1.garbage").is_err());
+        assert!(parse_token("bz2.garbage").is_err());
+        assert!(parse_token("bz1.eyJ2IjoxfQ").unwrap_err().message.contains("ancien format"));
         assert!(parse_token("hello").is_err());
     }
 
@@ -355,7 +454,24 @@ mod tests {
     }
 
     #[test]
+    fn signatures_cover_method_path_time_nonce_and_body() {
+        let key = SigningKey::from_bytes(&[7u8; 32]);
+        let public = public_key_text(&key);
+        let headers = signed_headers(&key, "home", "PATCH", "/api/x", b"{\"on\":true}");
+        let get = |n: &str| headers.iter().find(|(h, _)| *h == n).unwrap().1.clone();
+        let ts: i64 = get(HEADER_TIMESTAMP).parse().unwrap();
+        let (nonce, sig) = (get(HEADER_NONCE), get(HEADER_SIGNATURE));
+        assert!(verify_signature(&public, &signing_message("PATCH", "/api/x", ts, &nonce, b"{\"on\":true}"), &sig));
+        assert!(!verify_signature(&public, &signing_message("PATCH", "/api/x", ts, &nonce, b"{\"on\":false}"), &sig), "body");
+        assert!(!verify_signature(&public, &signing_message("PATCH", "/api/y", ts, &nonce, b"{\"on\":true}"), &sig), "path");
+        assert!(!verify_signature(&public, &signing_message("PATCH", "/api/x", ts + 1, &nonce, b"{\"on\":true}"), &sig), "time");
+        let other = public_key_text(&SigningKey::from_bytes(&[8u8; 32]));
+        assert!(!verify_signature(&other, &signing_message("PATCH", "/api/x", ts, &nonce, b"{\"on\":true}"), &sig), "key");
+    }
+
+    #[test]
     fn errors_map_to_states() {
+        assert_eq!(NodeError::Rejected { status: 403, message: "pairing pending approval".into() }.state(), "pending");
         assert_eq!(NodeError::Rejected { status: 401, message: "share expired".into() }.state(), "expired");
         assert_eq!(NodeError::Rejected { status: 401, message: "share revoked".into() }.state(), "revoked");
         assert_eq!(NodeError::Unreachable("x".into()).state(), "offline");

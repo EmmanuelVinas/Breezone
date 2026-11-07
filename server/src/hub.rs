@@ -7,7 +7,8 @@
 //! * Broadcasts every change to WebSocket clients (mobile app, web UI).
 
 use crate::airzone::{master_zone, AirzoneClient, AirzoneError, OperationMode, ZoneData};
-use crate::cloud::{decrypt, normalize_mac};
+use crate::cloud::normalize_mac;
+use ed25519_dalek::SigningKey;
 use crate::config::Config;
 use crate::db::{self, Db, Event, Installation, ZoneMeta};
 use crate::error::{ApiError, ApiResult};
@@ -415,8 +416,9 @@ struct NodeState {
 }
 
 impl NodeState {
-    fn new(node: db::Node, secret: &[u8; 32]) -> Self {
-        let client = decrypt(secret, &node.key_enc).map(|key| NodeClient::new(&node.url, &key));
+    fn new(node: db::Node, me: Option<&(String, SigningKey)>) -> Self {
+        // Requests to the node are signed with this node's key (see `federation`).
+        let client = me.map(|(node_id, key)| NodeClient::new(&node.url, node_id, key.clone()));
         let status = NodeStatus {
             state: "unknown",
             last_seen: node.last_seen,
@@ -465,18 +467,24 @@ impl Hub {
         }
         // Nodes first: installations reached through a node show its name and state.
         let nodes = db::list_nodes(&self.db).await?;
+        let me = if nodes.is_empty() {
+            None
+        } else {
+            let id = crate::federation::identity(&self.db).await?.node_id;
+            Some((id, crate::federation::signing_key(&self.db, &self.secret).await?))
+        };
         let node_refs: HashMap<i64, (NodeRef, bool)> = {
             let mut states = self.nodes.write().await;
             let ids: Vec<i64> = nodes.iter().map(|n| n.id).collect();
             states.retain(|id, _| ids.contains(id));
             for n in nodes {
                 match states.get_mut(&n.id) {
-                    Some(existing) if existing.node.url == n.url && existing.node.key_enc == n.key_enc => {
+                    Some(existing) if existing.node.url == n.url && existing.client.is_some() => {
                         existing.status.permission = n.permission.clone();
                         existing.node = n;
                     }
                     _ => {
-                        states.insert(n.id, NodeState::new(n, &self.secret));
+                        states.insert(n.id, NodeState::new(n, me.as_ref()));
                     }
                 }
             }
@@ -844,6 +852,7 @@ impl Hub {
             let text = match state_now {
                 "revoked" => format!("Nœud « {node_name} » : la clé de partage a été révoquée"),
                 "expired" => format!("Nœud « {node_name} » : le partage a expiré"),
+                "pending" => format!("Nœud « {node_name} » : en attente d'acceptation sur ce serveur (Réglages › Partages)"),
                 _ => format!("Nœud « {node_name} » injoignable : {message}"),
             };
             self.log("connection", "warn", None, None, &text, None).await;

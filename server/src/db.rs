@@ -704,6 +704,11 @@ pub struct Share {
     pub remote_name: Option<String>,
     pub last_seen: Option<i64>,
     pub last_address: Option<String>,
+    /// 'invited' | 'pending' | 'active'
+    pub status: String,
+    pub pairing_expires_at: Option<i64>,
+    pub remote_public_key: Option<String>,
+    pub requested_at: Option<i64>,
 }
 
 pub async fn insert_share(
@@ -717,7 +722,8 @@ pub async fn insert_share(
 ) -> sqlx::Result<Share> {
     let mut tx = db.begin().await?;
     let share: Share = sqlx::query_as(
-        "INSERT INTO shares (label, key_hash, permission, expires_at, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?) RETURNING *",
+        "INSERT INTO shares (label, key_hash, permission, expires_at, created_at, created_by, status, pairing_expires_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'invited', ?) RETURNING *",
     )
     .bind(label)
     .bind(key_hash)
@@ -725,6 +731,7 @@ pub async fn insert_share(
     .bind(expires_at)
     .bind(now())
     .bind(created_by)
+    .bind(now() + crate::federation::PAIRING_TTL_SECS)
     .fetch_one(&mut *tx)
     .await?;
     for id in installation_ids {
@@ -746,8 +753,40 @@ pub async fn share_by_id(db: &Db, id: i64) -> sqlx::Result<Option<Share>> {
     sqlx::query_as("SELECT * FROM shares WHERE id = ?").bind(id).fetch_optional(db).await
 }
 
-pub async fn share_by_key_hash(db: &Db, key_hash: &str) -> sqlx::Result<Option<Share>> {
-    sqlx::query_as("SELECT * FROM shares WHERE key_hash = ?").bind(key_hash).fetch_optional(db).await
+/// Share still waiting for its invitation code to be used.
+pub async fn invited_share(db: &Db, code_hash: &str) -> sqlx::Result<Option<Share>> {
+    sqlx::query_as("SELECT * FROM shares WHERE key_hash = ? AND status = 'invited'").bind(code_hash).fetch_optional(db).await
+}
+
+/// Uses the invitation code (once): records the requesting node and waits for approval.
+/// Returns false if the code was used meanwhile.
+pub async fn claim_share(db: &Db, id: i64, node_id: &str, name: &str, public_key: &str, address: Option<&str>) -> sqlx::Result<bool> {
+    let r = sqlx::query(
+        "UPDATE shares SET status = 'pending', key_hash = 'used:' || id, remote_node_id = ?, remote_name = ?,
+         remote_public_key = ?, last_address = ?, requested_at = ? WHERE id = ? AND status = 'invited'",
+    )
+    .bind(node_id)
+    .bind(name)
+    .bind(public_key)
+    .bind(address)
+    .bind(now())
+    .bind(id)
+    .execute(db)
+    .await?;
+    Ok(r.rows_affected() == 1)
+}
+
+/// The share a paired node uses (the most recent one if it paired several times).
+pub async fn share_of_node(db: &Db, node_id: &str) -> sqlx::Result<Option<Share>> {
+    sqlx::query_as("SELECT * FROM shares WHERE remote_node_id = ? AND status IN ('pending', 'active') ORDER BY id DESC LIMIT 1")
+        .bind(node_id)
+        .fetch_optional(db)
+        .await
+}
+
+pub async fn approve_share(db: &Db, id: i64) -> sqlx::Result<bool> {
+    let r = sqlx::query("UPDATE shares SET status = 'active' WHERE id = ? AND status = 'pending'").bind(id).execute(db).await?;
+    Ok(r.rows_affected() == 1)
 }
 
 pub async fn share_installation_ids(db: &Db, share_id: i64) -> sqlx::Result<Vec<i64>> {

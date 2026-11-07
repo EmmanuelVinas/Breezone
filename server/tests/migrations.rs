@@ -13,6 +13,7 @@ const APPLIED: &[(&str, &str)] = &[
     ("0006_airzone_schedules.sql", "305dbe6efbe1dc6c6ecd273dce1888d13b2562acd0ec86b28854e0c6de2ba8d2"),
     ("0007_timers.sql", "190e858a202f25ce277aae97f4a868032ff8d3a0d831508086b2dc2530951086"),
     ("0008_routines_on_demand.sql", "cbc51332cbf9b9aa39524f0f8e89c05cf4846fbbfec6514cbef243144acfdebb"),
+    ("0009_signed_pairing.sql", "5be35fca82e8e11723e6e3c799ea357a123b4a7f0cf91f710136f26ff10bfb4c"),
 ];
 
 #[test]

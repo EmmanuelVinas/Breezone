@@ -1,21 +1,22 @@
 //! Federation between Breezone nodes (ADR 0008).
 //!
-//! * Administration (user JWT): identity of this node, shares it exposes, nodes it consumes.
-//! * Node to node (share key): `/api/federation/*`, limited to the installations of the share.
+//! * Administration (user JWT): identity of this node, shares it exposes (and the access requests
+//!   to accept), nodes it consumes.
+//! * Node to node (requests signed with the node's Ed25519 key): `/api/federation/*`, limited to
+//!   the installations of the share. `POST /api/federation/pair` uses a single-use invitation code.
 
 use crate::auth::{hash_token, AdminUser, AuthUser};
-use crate::cloud;
 use crate::db::{self, Share};
 use crate::error::{ApiError, ApiResult};
-use crate::federation::{self, FedInstallation, FedSnapshot, Hello, Identity, Invitation, NodeClient, ACTOR_HEADER, KEY_PREFIX};
+use crate::federation::{self, FedInstallation, FedSnapshot, Identity, Invitation, NodeClient, PairRequest, PairResponse, ACTOR_HEADER};
 use crate::hub::{NodeStatus, ZoneCommand};
 use crate::AppState;
-use axum::extract::{ConnectInfo, FromRequestParts, Path, State};
-use axum::http::header::AUTHORIZATION;
-use axum::http::request::Parts;
+use axum::body::Bytes;
+use axum::extract::{ConnectInfo, FromRequest, Path, Request, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::Json;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::net::SocketAddr;
 
 // ---------------------------------------------------------------------------------------
@@ -58,6 +59,14 @@ pub struct ShareView {
     pub last_address: Option<String>,
     /// The node called recently.
     pub connected: bool,
+    /// "invited" (code not used yet) | "pending" (a node asks for access) | "active"
+    pub status: String,
+    /// End of validity of the invitation code (status "invited").
+    pub pairing_expires_at: Option<i64>,
+    /// The invitation code can no longer be used.
+    pub pairing_expired: bool,
+    /// When the node asked for access (status "pending").
+    pub requested_at: Option<i64>,
 }
 
 #[derive(Serialize)]
@@ -90,6 +99,10 @@ async fn share_view(state: &AppState, s: Share) -> ApiResult<ShareView> {
         remote_name: s.remote_name,
         last_seen: s.last_seen,
         last_address: s.last_address,
+        pairing_expired: s.status == "invited" && s.pairing_expires_at.is_some_and(|e| e <= now),
+        status: s.status,
+        pairing_expires_at: s.pairing_expires_at,
+        requested_at: s.requested_at,
     })
 }
 
@@ -148,7 +161,7 @@ async fn validate_share(state: &AppState, req: &ShareInput) -> ApiResult<(String
 #[derive(Serialize)]
 pub struct CreatedShare {
     pub share: ShareView,
-    /// Invitation token, shown once (only the hash of the key is kept).
+    /// Invitation token, shown once: single-use pairing code, valid 15 minutes.
     pub token: String,
 }
 
@@ -161,12 +174,12 @@ pub async fn create_share(State(state): State<AppState>, AdminUser(admin): Admin
             ApiError::bad_request("indiquez l'adresse à laquelle l'autre serveur joindra celui-ci (Réglages › Partages › Adresse publique)")
         })?,
     };
-    let (key, hash) = federation::new_share_key();
+    let (code, hash) = federation::new_pairing_code();
     let mut ids = req.installation_ids.clone();
     ids.sort_unstable();
     ids.dedup();
     let share = db::insert_share(&state.db, &label, &hash, &req.permission, expires_at, &admin.username, &ids).await?;
-    let token = federation::encode_token(&Invitation { v: 1, node_id: me.node_id, name: me.name, url, key });
+    let token = federation::encode_token(&Invitation { v: 2, node_id: me.node_id, name: me.name, url, code });
     state
         .hub
         .log("system", "info", None, Some(&admin.username), &format!("Partage « {label} » créé ({} installation(s), {})", ids.len(), permission_label(&req.permission)), None)
@@ -189,7 +202,19 @@ pub async fn update_share(State(state): State<AppState>, AdminUser(admin): Admin
     Ok(Json(share_view(&state, share).await?))
 }
 
-/// Revokes a share: the key stops working immediately.
+/// Accepts the access request of the node that used the invitation.
+pub async fn approve_share(State(state): State<AppState>, AdminUser(admin): AdminUser, Path(id): Path<i64>) -> ApiResult<Json<ShareView>> {
+    let share = db::share_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("partage introuvable"))?;
+    if !db::approve_share(&state.db, id).await? {
+        return Err(ApiError::bad_request("aucune demande d'accès en attente pour ce partage"));
+    }
+    let who = share.remote_name.clone().unwrap_or_else(|| "?".into());
+    state.hub.log("system", "info", None, Some(&admin.username), &format!("Accès accordé au serveur « {who} » (partage « {} »)", share.label), None).await;
+    let share = db::share_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("partage introuvable"))?;
+    Ok(Json(share_view(&state, share).await?))
+}
+
+/// Revokes a share (or refuses a request): access stops immediately.
 pub async fn delete_share(State(state): State<AppState>, AdminUser(admin): AdminUser, Path(id): Path<i64>) -> ApiResult<StatusCode> {
     let share = db::share_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("partage introuvable"))?;
     db::delete_share(&state.db, id).await?;
@@ -252,14 +277,15 @@ pub async fn list_nodes(State(state): State<AppState>, _user: AuthUser) -> ApiRe
 
 #[derive(Deserialize)]
 pub struct AddNodeInput {
-    /// Invitation token (`bz1.…`) from the node that shares.
+    /// Invitation token (`bz2.…`) from the node that shares.
     pub token: String,
     /// Address to use instead of the one in the token (e.g. its local address).
     #[serde(default)]
     pub url: Option<String>,
 }
 
-/// Adds a node from its invitation token: checks it answers, then imports its installations.
+/// Adds a node from its invitation token: pairs with it (single-use code + this node's public
+/// key). The node then waits until an administrator over there accepts the request.
 pub async fn add_node(State(state): State<AppState>, AdminUser(admin): AdminUser, Json(req): Json<AddNodeInput>) -> ApiResult<(StatusCode, Json<NodeView>)> {
     let inv = federation::parse_token(&req.token)?;
     let url = match req.url.as_deref().map(str::trim).filter(|u| !u.is_empty()) {
@@ -270,16 +296,16 @@ pub async fn add_node(State(state): State<AppState>, AdminUser(admin): AdminUser
     if inv.node_id == me.node_id {
         return Err(ApiError::bad_request("ce jeton a été créé par ce serveur : utilisez-le sur l'autre serveur"));
     }
-    let client = NodeClient::new(&url, &inv.key);
-    let snap = client.hello(&me).await.map_err(|e| match e {
+    let key = federation::signing_key(&state.db, &state.cloud_key).await?;
+    let client = NodeClient::new(&url, &me.node_id, key);
+    let paired = client.pair(&inv.code, &me.name).await.map_err(|e| match e {
         federation::NodeError::Unreachable(m) => ApiError::bad_gateway(format!("le serveur « {} » ne répond pas à {url} ({m})", inv.name)),
         other => other.into(),
     })?;
-    if snap.node_id != inv.node_id {
+    if paired.node_id != inv.node_id {
         return Err(ApiError::bad_request(format!("{url} n'est pas le serveur « {} » du jeton", inv.name)));
     }
-    let key_enc = cloud::encrypt(&state.cloud_key, &inv.key);
-    let node = db::upsert_node(&state.db, &snap.node_id, &snap.name, &url, &key_enc, &snap.permission).await?;
+    let node = db::upsert_node(&state.db, &paired.node_id, &paired.name, &url, "", "read").await?;
     state.hub.reload_installations().await?;
     state.hub.poll_node(node.id).await;
     state
@@ -289,16 +315,10 @@ pub async fn add_node(State(state): State<AppState>, AdminUser(admin): AdminUser
             "info",
             None,
             Some(&admin.username),
-            &format!("Nœud « {} » ajouté ({} installation(s), {})", snap.name, snap.installations.len(), permission_label(&snap.permission)),
+            &format!("Nœud « {} » ajouté : en attente d'acceptation sur ce serveur (Réglages › Partages)", paired.name),
             None,
         )
         .await;
-    // Installations of the Airzone account reached through this node.
-    for i in db::list_installations(&state.db).await?.into_iter().filter(|i| i.node_id == Some(node.id)) {
-        if let Err(e) = cloud::auto_link(&state, i.id, &admin.username).await {
-            tracing::warn!("cannot link to Airzone Cloud: {}", e.message);
-        }
-    }
     let view = node_views(&state).await?.into_iter().find(|n| n.id == node.id).ok_or_else(|| ApiError::internal("node not stored"))?;
     Ok((StatusCode::CREATED, Json(view)))
 }
@@ -334,36 +354,90 @@ pub async fn delete_node(State(state): State<AppState>, AdminUser(admin): AdminU
 }
 
 // ---------------------------------------------------------------------------------------
-// Node to node, authenticated by a share key
+// Node to node: signed requests
 // ---------------------------------------------------------------------------------------
 
-/// A call from another node, with a valid share key.
+/// Nonces already seen (with their timestamp), to refuse replayed requests.
+static NONCES: std::sync::Mutex<Option<HashMap<String, i64>>> = std::sync::Mutex::new(None);
+
+/// A request from another node: signature headers and the raw body (checked against the key of
+/// the node it claims to come from, see [`ShareAuth`] and [`pair`]).
+pub struct Signed {
+    pub node_id: String,
+    message: Vec<u8>,
+    signature: String,
+    pub body: Bytes,
+    pub headers: HeaderMap,
+    pub address: Option<String>,
+}
+
+impl Signed {
+    fn verify(&self, public_key: &str) -> bool {
+        federation::verify_signature(public_key, &self.message, &self.signature)
+    }
+}
+
+impl FromRequest<AppState> for Signed {
+    type Rejection = ApiError;
+
+    async fn from_request(req: Request, _state: &AppState) -> Result<Self, Self::Rejection> {
+        let (parts, body) = req.into_parts();
+        let body = axum::body::to_bytes(body, 64 * 1024).await.map_err(|_| ApiError::bad_request("body too large"))?;
+        let header = |name: &str| parts.headers.get(name).and_then(|v| v.to_str().ok()).map(str::to_string);
+        let (Some(node_id), Some(timestamp), Some(nonce), Some(signature)) = (
+            header(federation::HEADER_NODE),
+            header(federation::HEADER_TIMESTAMP).and_then(|t| t.parse::<i64>().ok()),
+            header(federation::HEADER_NONCE),
+            header(federation::HEADER_SIGNATURE),
+        ) else {
+            return Err(ApiError::unauthorized("signed request required"));
+        };
+        let now = db::now();
+        if (now - timestamp).abs() > federation::SIGNATURE_WINDOW_SECS {
+            return Err(ApiError::unauthorized("request too old: check the clocks of both servers"));
+        }
+        {
+            let mut guard = NONCES.lock().unwrap();
+            let seen = guard.get_or_insert_with(HashMap::new);
+            seen.retain(|_, t| now - *t <= 2 * federation::SIGNATURE_WINDOW_SECS);
+            if seen.insert(format!("{node_id}:{nonce}"), timestamp).is_some() {
+                return Err(ApiError::unauthorized("replayed request"));
+            }
+        }
+        let path = parts.uri.path_and_query().map(|p| p.as_str()).unwrap_or_else(|| parts.uri.path()).to_string();
+        let message = federation::signing_message(parts.method.as_str(), &path, timestamp, &nonce, &body);
+        let connect = parts.extensions.get::<ConnectInfo<SocketAddr>>().map(|c| c.0.ip().to_string());
+        let address = client_address(&parts.headers).or(connect);
+        Ok(Signed { node_id, message, signature, body, headers: parts.headers, address })
+    }
+}
+
+/// A signed call from a paired node whose access was accepted.
 pub struct ShareAuth {
     pub share: Share,
     pub installation_ids: Vec<i64>,
     pub address: Option<String>,
+    pub body: Bytes,
+    pub headers: HeaderMap,
 }
 
-impl FromRequestParts<AppState> for ShareAuth {
+impl FromRequest<AppState> for ShareAuth {
     type Rejection = ApiError;
 
-    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
-        let key = parts
-            .headers
-            .get(AUTHORIZATION)
-            .and_then(|v| v.to_str().ok())
-            .and_then(|h| h.strip_prefix("Bearer ").or_else(|| h.strip_prefix("bearer ")))
-            .map(str::trim)
-            .filter(|k| k.starts_with(KEY_PREFIX))
-            .ok_or_else(|| ApiError::unauthorized("share key required"))?;
-        let share = db::share_by_key_hash(&state.db, &hash_token(key)).await?.ok_or_else(|| ApiError::unauthorized("share revoked"))?;
+    async fn from_request(req: Request, state: &AppState) -> Result<Self, Self::Rejection> {
+        let signed = Signed::from_request(req, state).await?;
+        let share = db::share_of_node(&state.db, &signed.node_id).await?.ok_or_else(|| ApiError::unauthorized("share revoked"))?;
+        if !share.remote_public_key.as_deref().is_some_and(|k| signed.verify(k)) {
+            return Err(ApiError::unauthorized("invalid signature"));
+        }
         if share.expires_at.is_some_and(|e| e <= db::now()) {
             return Err(ApiError::unauthorized("share expired"));
         }
+        if share.status != "active" {
+            return Err(ApiError::forbidden("pairing pending approval"));
+        }
         let installation_ids = db::share_installation_ids(&state.db, share.id).await?;
-        let connect = parts.extensions.get::<ConnectInfo<SocketAddr>>().map(|c| c.0.ip().to_string());
-        let address = client_address(&parts.headers).or(connect);
-        Ok(ShareAuth { share, installation_ids, address })
+        Ok(ShareAuth { share, installation_ids, address: signed.address, body: signed.body, headers: signed.headers })
     }
 }
 
@@ -386,18 +460,41 @@ async fn fed_snapshot(state: &AppState, auth: &ShareAuth) -> ApiResult<FedSnapsh
     })
 }
 
-/// First call of a node: records who uses the share.
-pub async fn hello(State(state): State<AppState>, auth: ShareAuth, Json(req): Json<Hello>) -> ApiResult<Json<FedSnapshot>> {
+/// A node uses an invitation code: it proves it holds the key it presents (the request is signed
+/// with it), the code is burnt, and an administrator of this node must accept the request.
+pub async fn pair(State(state): State<AppState>, signed: Signed) -> ApiResult<Json<PairResponse>> {
+    let req: PairRequest = serde_json::from_slice(&signed.body).map_err(|_| ApiError::bad_request("invalid pairing request"))?;
+    if req.node_id != signed.node_id || !signed.verify(&req.public_key) {
+        return Err(ApiError::unauthorized("invalid signature"));
+    }
+    let me = federation::identity(&state.db).await?;
+    if req.node_id == me.node_id {
+        return Err(ApiError::bad_request("ce jeton a été créé par ce serveur : utilisez-le sur l'autre serveur"));
+    }
+    let share = db::invited_share(&state.db, &hash_token(req.code.trim()))
+        .await?
+        .ok_or_else(|| ApiError::bad_request("invitation inconnue ou déjà utilisée : créez un nouveau partage"))?;
+    if share.pairing_expires_at.is_some_and(|e| e <= db::now()) {
+        return Err(ApiError::bad_request("invitation expirée (15 minutes) : créez un nouveau partage"));
+    }
     let name: String = req.name.trim().chars().take(60).collect();
     let node_id: String = req.node_id.trim().chars().take(64).collect();
-    db::touch_share(&state.db, auth.share.id, Some(&node_id), Some(&name), auth.address.as_deref()).await?;
-    if auth.share.remote_node_id.as_deref() != Some(node_id.as_str()) {
-        state
-            .hub
-            .log("system", "info", None, None, &format!("Le serveur « {name} » utilise le partage « {} »", auth.share.label), None)
-            .await;
+    if !db::claim_share(&state.db, share.id, &node_id, &name, &req.public_key, signed.address.as_deref()).await? {
+        return Err(ApiError::bad_request("invitation déjà utilisée : créez un nouveau partage"));
     }
-    Ok(Json(fed_snapshot(&state, &auth).await?))
+    let from = signed.address.as_deref().map(|a| format!(" depuis {a}")).unwrap_or_default();
+    state
+        .hub
+        .log(
+            "system",
+            "warn",
+            None,
+            None,
+            &format!("Le serveur « {name} » demande l'accès au partage « {} »{from} : acceptez ou refusez dans Réglages › Partages", share.label),
+            None,
+        )
+        .await;
+    Ok(Json(PairResponse { status: "pending".into(), node_id: me.node_id, name: me.name }))
 }
 
 pub async fn installations(State(state): State<AppState>, auth: ShareAuth) -> ApiResult<Json<FedSnapshot>> {
@@ -405,13 +502,8 @@ pub async fn installations(State(state): State<AppState>, auth: ShareAuth) -> Ap
     Ok(Json(fed_snapshot(&state, &auth).await?))
 }
 
-pub async fn control(
-    State(state): State<AppState>,
-    auth: ShareAuth,
-    headers: HeaderMap,
-    Path((id, system_id, zone_id)): Path<(i64, i64, i64)>,
-    Json(cmd): Json<ZoneCommand>,
-) -> ApiResult<Json<FedInstallation>> {
+pub async fn control(State(state): State<AppState>, Path((id, system_id, zone_id)): Path<(i64, i64, i64)>, auth: ShareAuth) -> ApiResult<Json<FedInstallation>> {
+    let cmd: ZoneCommand = serde_json::from_slice(&auth.body).map_err(|e| ApiError::bad_request(format!("invalid command: {e}")))?;
     if !auth.installation_ids.contains(&id) {
         return Err(ApiError::not_found("installation non partagée"));
     }
@@ -420,7 +512,8 @@ pub async fn control(
     }
     db::touch_share(&state.db, auth.share.id, None, None, auth.address.as_deref()).await?;
     let node = auth.share.remote_name.clone().unwrap_or_else(|| auth.share.label.clone());
-    let user: String = headers
+    let user: String = auth
+        .headers
         .get(ACTOR_HEADER)
         .and_then(|v| v.to_str().ok())
         .map(|v| v.chars().filter(|c| !c.is_control()).take(60).collect())
