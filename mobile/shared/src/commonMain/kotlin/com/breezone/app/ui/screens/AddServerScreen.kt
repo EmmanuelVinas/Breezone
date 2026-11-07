@@ -48,6 +48,8 @@ import com.breezone.app.data.NetworkProblem
 import com.breezone.app.data.TlsTrust
 import com.breezone.app.data.classify
 import com.breezone.app.data.explain
+import com.breezone.app.data.DEMO_LOGIN_URL
+import com.breezone.app.data.isDemoLogin
 import com.breezone.app.data.fingerprintText
 import com.breezone.app.ui.day
 import com.breezone.app.data.Hub
@@ -81,6 +83,7 @@ fun AddServerScreen(reauthServerId: String?, canGoBack: Boolean, onBack: () -> U
     // Certificate refused by the usual checks, shown before the user trusts it.
     var review by remember { mutableStateOf<CertificateInfo?>(null) }
     var trusted by remember { mutableStateOf(existing?.certificate) }
+    val demoLogin = existing == null && !needsSetup && isDemoLogin(username, password)
 
     fun submit() {
         error = null
@@ -88,6 +91,12 @@ fun AddServerScreen(reauthServerId: String?, canGoBack: Boolean, onBack: () -> U
         busy = true
         scope.launch {
             try {
+                // Demo account (store reviews): no request is sent anywhere.
+                if (existing == null && isDemoLogin(username, password)) {
+                    hub.startDemo(getString(Res.string.demo_label))
+                    onDone()
+                    return@launch
+                }
                 if (!needsSetup) {
                     val status = hub.discovery.probe(url)
                     if (status.needsSetup) {
@@ -151,12 +160,13 @@ fun AddServerScreen(reauthServerId: String?, canGoBack: Boolean, onBack: () -> U
             ),
         )
         OutlinedTextField(
-            value = url,
+            value = if (demoLogin) DEMO_LOGIN_URL else url,
             onValueChange = { url = it; needsSetup = false },
             label = { Text(stringResource(Res.string.add_server_url)) },
             placeholder = { Text(stringResource(Res.string.add_server_url_placeholder)) },
             singleLine = true,
-            enabled = existing == null,
+            // demo / demo: the demo address, not editable.
+            enabled = existing == null && !demoLogin,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
@@ -207,7 +217,7 @@ fun AddServerScreen(reauthServerId: String?, canGoBack: Boolean, onBack: () -> U
         }
         Button(
             onClick = ::submit,
-            enabled = !busy && url.isNotBlank() && username.isNotBlank() && password.isNotEmpty(),
+            enabled = !busy && (url.isNotBlank() || demoLogin) && username.isNotBlank() && password.isNotEmpty(),
             modifier = Modifier.fillMaxWidth().height(54.dp),
             shape = RoundedCornerShape(16.dp),
         ) {

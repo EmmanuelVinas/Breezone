@@ -54,6 +54,16 @@ const val DEMO_URL = "https://demo.breezone.invalid"
 
 fun isDemo(url: String) = normalizeUrl(url) == DEMO_URL
 
+/**
+ * Demo account given to store reviewers: user `demo`, password `demo` opens the built-in
+ * demonstration, with this address shown (read-only) in the server field. No real Breezone
+ * account can match: server passwords need at least 8 characters. Nothing is sent anywhere.
+ */
+const val DEMO_LOGIN_URL = "https://breezone.com"
+
+fun isDemoLogin(username: String, password: String): Boolean =
+    username.trim().equals("demo", ignoreCase = true) && password == "demo"
+
 /** HTTP client whose requests are answered by the demonstration server. */
 fun demoHttpClient(): HttpClient = HttpClient(MockEngine { request -> DemoServer.handle(this, request) }) {
     install(ContentNegotiation) { json(FzJson) }
