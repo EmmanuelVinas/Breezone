@@ -15,7 +15,7 @@ use crate::error::{ApiError, ApiResult};
 use crate::federation::{FedConnection, FedInstallation, FedSnapshot, FedZoneMeta, NodeClient, NodeError};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{broadcast, RwLock};
@@ -404,6 +404,14 @@ fn zone_view(installation_id: i64, z: &ZoneData, is_master: bool, meta: Option<&
         battery_low: z.battery == Some(0),
         errors,
     }
+}
+
+/// Whether this server reaches its local copy of a WebServer (ordered: the best one wins).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Local {
+    Unreachable,
+    Unknown,
+    Reached,
 }
 
 /// A node this server consumes.
@@ -892,25 +900,56 @@ impl Hub {
     /// here) and deletes the ones it no longer exposes. Returns whether anything changed.
     async fn sync_node_installations(&self, node_id: i64, node_name: &str, snap: &FedSnapshot) -> anyhow::Result<bool> {
         let all = db::list_installations(&self.db).await?;
-        let local_macs: HashSet<String> = all.iter().filter(|i| i.is_local()).filter_map(|i| i.mac.as_deref().map(normalize_mac)).collect();
+        // The same WebServer may also exist here as a local installation (same MAC): added by
+        // hand, or by the Airzone account when it is connected on both servers. The local copy
+        // only wins when this server actually reaches it; otherwise the shared copy is used.
+        let reach: HashMap<i64, &'static str> = self.state.read().await.values().map(|s| (s.inst.id, s.conn.state)).collect();
+        let mut local: HashMap<String, Local> = HashMap::new();
+        for i in all.iter().filter(|i| i.is_local()) {
+            let Some(mac) = i.mac.as_deref().map(normalize_mac) else { continue };
+            let here = match reach.get(&i.id).copied() {
+                _ if !i.enabled => Local::Unreachable,
+                Some("online") => Local::Reached,
+                Some("offline") => Local::Unreachable,
+                _ => Local::Unknown,
+            };
+            let best = local.entry(mac).or_insert(Local::Unreachable);
+            *best = (*best).max(here);
+        }
         let Some(node) = db::node_by_id(&self.db, node_id).await? else { return Ok(false) };
         let mine: Vec<&Installation> = all.iter().filter(|i| i.node_id == Some(node_id)).collect();
         let mut changed = false;
         for fed in &snap.installations {
-            let driven_here = fed.mac.as_deref().map(normalize_mac).is_some_and(|m| local_macs.contains(&m));
+            let here = fed.mac.as_deref().map(normalize_mac).and_then(|m| local.get(&m).copied());
             let existing = mine.iter().find(|i| i.remote_id == Some(fed.id));
-            match (existing, driven_here) {
-                (None, false) => {
+            match (existing, here) {
+                // Not known yet (first poll of the local copy): decide on a later poll.
+                (_, Some(Local::Unknown)) => {}
+                (None, here) if here != Some(Local::Reached) => {
                     let inst = db::insert_remote_installation(&self.db, &fed.name, node_id, fed.id, &node.url, fed.mac.as_deref(), fed.location.as_deref()).await?;
                     self.log("system", "info", Some(inst.id), None, &format!("Installation « {} » ajoutée via le nœud « {node_name} »", fed.name), None).await;
+                    if here == Some(Local::Unreachable) {
+                        self.log(
+                            "system",
+                            "warn",
+                            Some(inst.id),
+                            None,
+                            &format!(
+                                "« {} » existe aussi sur ce serveur, mais son WebServer n'y répond pas : elle est pilotée via le nœud « {node_name} ». Supprimez la copie locale si elle ne sert plus (Réglages › Installations)",
+                                fed.name
+                            ),
+                            None,
+                        )
+                        .await;
+                    }
                     changed = true;
                 }
-                (Some(i), true) => {
-                    // Its WebServer is on this network now: drive it directly.
+                (Some(i), Some(Local::Reached)) => {
+                    // Its WebServer is on this network: drive it directly.
                     db::delete_installation(&self.db, i.id).await?;
                     changed = true;
                 }
-                (Some(i), false) if i.mac.is_none() && fed.mac.is_some() => {
+                (Some(i), _) if i.mac.is_none() && fed.mac.is_some() => {
                     db::set_installation_mac(&self.db, i.id, fed.mac.as_deref().unwrap_or_default()).await?;
                 }
                 _ => {}

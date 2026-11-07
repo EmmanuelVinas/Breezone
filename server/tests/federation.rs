@@ -503,3 +503,38 @@ async fn sharing_back_needs_a_reciprocal_invitation() {
     let (_, shares) = home.call(Method::GET, "/api/shares", None).await;
     assert!(shares.as_array().unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn a_shared_installation_replaces_an_unreachable_local_copy() {
+    // The office WebServer is shared by the office node…
+    let office_mock: MockState = Arc::new(Mutex::new(mock::preset("bureau")));
+    let office_ws = serve(mock::router_with_mac(office_mock, "AA:BB:CC:DD:EE:FF")).await;
+    let office = Node::start("dup-office", |c| c.scan_port = 9).await;
+    let home = Node::start("dup-home", |c| c.scan_port = 9).await;
+    let (_, inst) = office.call(Method::POST, "/api/installations", Some(json!({"name":"Atelier","host":"127.0.0.1","port":office_ws}))).await;
+    let office_inst = inst["id"].as_i64().unwrap();
+    office.call(Method::PUT, "/api/node", Some(json!({"name":"Bureau","public_url": office.base}))).await;
+
+    // …and home already knows it as a local installation it cannot reach from its network.
+    let (s, local) = home.call(Method::POST, "/api/installations", Some(json!({"name":"Atelier (local)","host":"127.0.0.1","port":9}))).await;
+    assert_eq!(s, StatusCode::CREATED, "{local}");
+    let local_id = local["id"].as_i64().unwrap();
+    breezone_server::db::set_installation_mac(&home.state.db, local_id, "AA:BB:CC:DD:EE:FF").await.unwrap();
+    for _ in 0..3 {
+        home.call(Method::POST, &format!("/api/installations/{local_id}/refresh"), None).await;
+    }
+
+    let (_, created) = office.call(Method::POST, "/api/shares", Some(json!({"label":"Maison","installation_ids":[office_inst]}))).await;
+    let (_, node) = home.call(Method::POST, "/api/nodes", Some(json!({"token": created["token"]}))).await;
+    let share_id = office.call(Method::GET, "/api/shares", None).await.1[0]["id"].as_i64().unwrap();
+    office.call(Method::POST, &format!("/api/shares/{share_id}/approve"), None).await;
+    let node_id = node["id"].as_i64().unwrap();
+    let (_, node) = home.call(Method::POST, &format!("/api/nodes/{node_id}/refresh"), None).await;
+    assert_eq!(node["status"]["state"], "online", "{node}");
+    assert_eq!(node["installations"][0]["name"], "Atelier", "the shared copy is used: {node}");
+    let (_, events) = home.call(Method::GET, "/api/events?limit=20", None).await;
+    assert!(
+        events.as_array().unwrap().iter().any(|e| e["message"].as_str().unwrap_or_default().contains("existe aussi sur ce serveur")),
+        "{events}"
+    );
+}
