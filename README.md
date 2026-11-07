@@ -17,6 +17,11 @@ self-hosted server that talks to it, with a web UI and an Android / iOS app.
 > Airzone** (Corporación Empresarial Altra S.L.). "Airzone" is a trademark of its owner, used here only
 > to describe compatibility.
 
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/web/dashboard-light.webp">
+  <img alt="Breezone dashboard: two installations and their zones" src="docs/images/web/dashboard.webp">
+</picture>
+
 ## Features
 
 - **Zones**: on/off, setpoint, mode (heat, cool, fan, dry, auto), fan speed, sleep; groups (floors)
@@ -26,21 +31,50 @@ self-hosted server that talks to it, with a web UI and an Android / iOS app.
   living room off now, the bedrooms in 2 hours"), and timers ("in 2 hours, switch everything off").
 - **History** (temperature, setpoint, humidity) and a real-time **activity feed**.
 - **Several sites without VPN**: each site runs its own Breezone; a server can share some of its
-  installations with another one (invitation token / QR code, read-only or control, revocable).
+  installations with another one (single-use invitation, approval, signed requests, read-only or
+  control, revocable) — see [Linking two sites](docs/federation.md) (in French).
 - **Users and devices**: administrators and members, sessions revocable per device.
 - **Optional Airzone account import** (read-only): installation names, city, zone groups; WebServers
   are found on the network by their MAC address.
 - **Tiny**: one ~20 MB image, a few MB of RAM — fits on any NAS or Raspberry Pi.
 
+## Screenshots
+
+| | |
+|---|---|
+| ![Zone: setpoint, mode, fan speed and history](docs/images/web/zone.webp) | ![Airzone schedules](docs/images/web/schedules.webp) |
+| **Zone**: setpoint, mode, fan speed, sleep and history | **Schedules** of the Airzone account, editable here |
+| ![Routines: timers and scenes](docs/images/web/routines.webp) | ![Scene editor](docs/images/web/scene-editor.webp) |
+| **Routines**: timers and scenes | **Scene** with delayed actions |
+| ![Activity feed](docs/images/web/activity.webp) | ![Installations: Airzone account and access](docs/images/web/settings-installations.webp) |
+| Real-time **activity** | **Installations**: on this network or through another site |
+
+The web UI is in French for now; English is on the [roadmap](docs/ROADMAP.md).
+
 ## Install (Docker)
 
-The image is published on GitHub Container Registry for `linux/amd64` and `linux/arm64`.
+The image is published on GitHub Container Registry: `ghcr.io/emmanuelvinas/breezone`
+(`linux/amd64` and `linux/arm64`). Tags: `latest`, the version (`0.2.1`) and the minor line (`0.2`).
 
-```bash
-mkdir breezone && cd breezone
-curl -fsSLO https://raw.githubusercontent.com/EmmanuelVinas/breezone/main/docker-compose.yml
-curl -fsSL https://raw.githubusercontent.com/EmmanuelVinas/breezone/main/.env.sample -o .env   # optional settings
-docker compose up -d
+Create a `breezone` folder with this `docker-compose.yml`, then run `docker compose up -d`:
+
+```yaml
+services:
+  breezone:
+    image: ghcr.io/emmanuelvinas/breezone:latest
+    container_name: breezone
+    restart: unless-stopped
+    # Host network (Linux): Breezone finds the WebServers of your LAN by itself.
+    network_mode: host
+    environment:
+      TZ: Europe/Paris
+      # BREEZONE_PORT: "8427"   # if port 8427 is already taken
+    volumes:
+      - breezone_data:/data
+    mem_limit: 300m
+
+volumes:
+  breezone_data:
 ```
 
 Open `http://<your-server>:8427`: the first page creates the administrator account, then offers to
@@ -49,23 +83,24 @@ import your Airzone account (optional) or to search for WebServers on the networ
 Without compose:
 
 ```bash
-docker run -d --name breezone --restart unless-stopped -p 8427:8427 \
+docker run -d --name breezone --restart unless-stopped --network host \
   -v breezone_data:/data -e TZ=Europe/Paris ghcr.io/emmanuelvinas/breezone:latest
 ```
 
 **Synology NAS**: step-by-step guide with Container Manager, in French:
 [docs/install-synology.md](docs/install-synology.md).
 
-**Network.** The server must reach the WebServers (port 3000) on your LAN. Inside Docker's default
-bridge network it cannot guess your LAN: set it in *Settings › Installations* (e.g. `192.168.1.0/24`)
-or use `network_mode: host` (Linux).
+**Network.** The server must reach the WebServers (port 3000) on your LAN. Without `network_mode: host`
+(Docker Desktop, `bridge` network with `-p 8427:8427`) it cannot guess your LAN: set it in
+*Settings › Installations* (e.g. `192.168.1.0/24`) or give the WebServer's IP address.
 
 **Remote access without VPN.** Use a [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/):
-put its token in `.env` (`CLOUDFLARE_TUNNEL_TOKEN`) and start the `tunnel` profile
-(`docker compose --profile tunnel up -d`). No port is opened on your router. **Never** expose port
+the repository's [full `docker-compose.yml`](docker-compose.yml) has a `cloudflared` service (`tunnel`
+profile, token in `.env`: `CLOUDFLARE_TUNNEL_TOKEN`). No port is opened on your router. **Never** expose port
 3000 of the WebServers: their API has no authentication.
 
-**Update.** `docker compose pull && docker compose up -d`. Data (SQLite database, signing secret) is
+**Update.** `docker compose pull && docker compose up -d`. To stay on a given version, replace
+`latest` with its number (e.g. `0.2.1`). Data (SQLite database, signing secret) is
 in the `breezone_data` volume; back it up with
 `docker run --rm -v breezone_data:/data -v "$PWD":/backup alpine tar czf /backup/breezone.tgz -C /data .`
 

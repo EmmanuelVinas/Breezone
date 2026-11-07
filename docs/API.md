@@ -104,25 +104,32 @@ Administration (jeton utilisateur) :
 | Méthode | Chemin | Description |
 |---------|--------|-------------|
 | GET 🔒 / PUT 👑 | `/api/node` | Ce serveur : `{node_id, name, public_url}` ; PUT `{name, public_url}` |
-| GET 👑 | `/api/shares` | Partages exposés : `[{id, label, permission, installations:[{id,name}], status, pairing_expires_at, pairing_expired, requested_at, expires_at, expired, remote_name, last_seen, last_address, connected}]` |
-| POST 👑 | `/api/shares` | `{label, installation_ids, permission:"read"\|"control", expires_in_days?, url?}` → `{share, token}` (jeton à usage unique, valable 15 minutes, affiché une seule fois) |
+| GET 👑 | `/api/shares` | Partages exposés : `[{id, label, permission, installations:[{id,name}], status, pairing_expires_at, pairing_expired, requested_at, reciprocal, remote_shares_back, reverse, expires_at, expired, remote_name, last_seen, last_address, connected}]` |
+| POST 👑 | `/api/shares` | `{label, installation_ids, permission:"read"\|"control", expires_in_days?, url?, reciprocal?}` → `{share, token}` (jeton à usage unique, valable 15 minutes, affiché une seule fois) |
 | POST 👑 | `/api/shares/{id}/approve` | Accepte la demande d'accès d'un partage `pending` → `active` |
 | PUT 👑 | `/api/shares/{id}` | Idem sans `url` : change installations, droit, validité (même clé) |
 | DELETE 👑 | `/api/shares/{id}` | Révoque (ou refuse une demande) : le nœud perd l'accès immédiatement |
 | GET 🔒 | `/api/nodes` | Nœuds consommés : `[{id, name, url, status:{state, last_seen, last_error, latency_ms, permission}, installations}]` |
-| POST 👑 | `/api/nodes` | `{token, url?}` : s'appaire au nœud avec son jeton ; il reste `pending` jusqu'à acceptation |
+| POST 👑 | `/api/nodes` | `{token, url?, reciprocal?:{installation_ids, permission, url?}, certificate?}` : s'appaire au nœud avec son jeton ; il reste `pending` jusqu'à acceptation. `reciprocal` (jeton réciproque seulement) crée en retour un partage lié à la clé de l'autre nœud |
 | PUT 👑 | `/api/nodes/{id}` | `{url}` : change l'adresse du nœud |
 | POST 🔒 | `/api/nodes/{id}/refresh` | Interroge le nœud maintenant |
+| GET 👑 | `/api/nodes/{id}/certificate` | Certificat HTTPS présenté : `{pinned, certificate:{fingerprint, subject, names, issuer, not_before, not_after, self_signed}}` |
+| PUT 👑 | `/api/nodes/{id}/certificate` | `{fingerprint}` : fait confiance à ce certificat (doit être celui présenté, sinon 409) ; seul lui est ensuite accepté |
+| DELETE 👑 | `/api/nodes/{id}/certificate` | Rétablit la vérification HTTPS habituelle |
 | DELETE 👑 | `/api/nodes/{id}` | Retire le nœud et ses installations |
 
-`state` d'un nœud : `online | pending | offline | revoked | expired | error | unknown`.
+`state` d'un nœud : `online | pending | certificate | offline | revoked | expired | error | unknown`.
 
 `status` d'un partage : `invited` (jeton pas encore utilisé) → `pending` (demande d'accès reçue) → `active`.
 
-Jeton d'invitation : `bz2.<base64url(JSON {v:2, node_id, name, url, code})>`. Le code est à usage unique
+Jeton d'invitation : `bz2.<base64url(JSON {v:2, node_id, name, url, code, reciprocal?})>`. Le code est à usage unique
 et expire après 15 minutes ; il ne donne aucun accès par lui-même. Les jetons `bz1.` (ancienne version)
 sont refusés. HTTP n'est accepté que vers une adresse locale (IP privée, `*.local`, nom sans point) ;
 sinon `https://`.
+
+Certificat refusé par la vérification HTTPS habituelle : `POST /api/nodes` répond 502 avec, en plus
+de `error`, `certificate` (comme ci-dessus) et `certificate_error` ; renvoyez la requête avec
+`certificate: <empreinte>` pour lui faire confiance (épinglage : seul ce certificat est accepté).
 
 Chaque serveur possède une clé Ed25519 (stockée chiffrée). Toute requête entre serveurs est signée :
 
@@ -137,7 +144,7 @@ Routes entre serveurs — limitées aux installations du partage :
 
 | Méthode | Chemin | Description |
 |---------|--------|-------------|
-| POST | `/api/federation/pair` | `{code, node_id, name, public_key}` signé avec la clé présentée → `{status:"pending", node_id, name}` ; le code est consommé |
+| POST | `/api/federation/pair` | `{code, node_id, name, public_key, shares_back_from?}` signé avec la clé présentée → `{status:"pending", node_id, name, public_key}` ; le code est consommé. `shares_back_from` (adresse du demandeur) n'est retenu que si l'invitation est réciproque : à l'acceptation, ce nœud ajoute le demandeur comme nœud |
 | GET | `/api/federation/installations` | `FedSnapshot` : `{node_id, name, permission, installations:[{id, name, location, mac, connection, zones (format Airzone), meta}]}` |
 | PATCH | `/api/federation/installations/{id}/zones/{system_id}/{zone_id}` | `ZoneCommand` (droit `control`), en-tête `X-Breezone-Actor` pour le journal → installation à jour |
 

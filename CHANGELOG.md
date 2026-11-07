@@ -6,6 +6,20 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Reciprocal sharing: an invitation can ask the other server to share its installations too; the
+  invited server chooses which ones, and both directions are linked when the request is accepted.
+- Servers behind an HTTPS certificate that fails the usual checks: the certificate is shown (names,
+  issuer, dates, SHA-256 fingerprint) and can be trusted; only that exact certificate is then
+  accepted, in both directions.
+
+### Fixed
+
+- Clearer errors when another server cannot be reached (certificate not covering the name, unknown
+  domain, refused connection).
+- A server waiting for acceptance no longer shows a wrong permission and a raw English message.
+
 ## [0.2.1] - 2026-11-07
 
 ### Changed
