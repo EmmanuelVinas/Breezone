@@ -2,19 +2,32 @@
 # Breezone: one small image with the Rust server, the fake Airzone (demo) and the web UI.
 
 # --- Web UI (React + Vite) -----------------------------------------------------------------
-FROM node:24-alpine AS web
+# Static files, identical for every platform: built once, natively.
+FROM --platform=$BUILDPLATFORM node:24-alpine AS web
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY web/ ./
 RUN npm run build
 
+# --- Dependency manifest, without the crate version ----------------------------------------
+# Every release bumps the version in Cargo.toml and Cargo.lock; masking it keeps the layer
+# that compiles the dependencies cached from one release to the next.
+FROM --platform=$BUILDPLATFORM alpine:3.22 AS manifest
+WORKDIR /src
+COPY server/Cargo.toml server/Cargo.lock ./
+RUN awk '!done && /^version = /{print "version = \"0.0.0\""; done=1; next} 1' Cargo.toml > t \
+ && mv t Cargo.toml \
+ && awk 'own && /^version = /{print "version = \"0.0.0\""; own=0; next} \
+         {own = ($0 == "name = \"breezone-server\"")} 1' Cargo.lock > t \
+ && mv t Cargo.lock
+
 # --- Server (Rust, static musl binary) -----------------------------------------------------
 FROM rust:1-alpine AS server
 RUN apk add --no-cache musl-dev gcc make
 WORKDIR /src
 # Build the dependencies first, with stub sources, so that they are cached.
-COPY server/Cargo.toml server/Cargo.lock ./
+COPY --from=manifest /src/Cargo.toml /src/Cargo.lock ./
 RUN mkdir -p src/bin \
  && echo 'fn main() {}' > src/main.rs \
  && echo 'fn main() {}' > src/bin/mock_airzone.rs \

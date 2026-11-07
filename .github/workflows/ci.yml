@@ -68,5 +68,6 @@ jobs:
         with:
           context: .
           push: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Same scope as the amd64 release build, which reuses this cache.
+          cache-from: type=gha,scope=amd64
+          cache-to: type=gha,scope=amd64,mode=max
