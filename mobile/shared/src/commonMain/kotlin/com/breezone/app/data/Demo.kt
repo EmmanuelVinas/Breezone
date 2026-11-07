@@ -59,7 +59,7 @@ fun isDemo(url: String) = normalizeUrl(url) == DEMO_URL
  * demonstration, with this address shown (read-only) in the server field. No real Breezone
  * account can match: server passwords need at least 8 characters. Nothing is sent anywhere.
  */
-const val DEMO_LOGIN_URL = "https://breezone.com"
+const val DEMO_LOGIN_URL = "https://breezone.cloud"
 
 fun isDemoLogin(username: String, password: String): Boolean =
     username.trim().equals("demo", ignoreCase = true) && password == "demo"

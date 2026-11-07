@@ -10,6 +10,8 @@ All notable changes are documented here. The format follows
 
 - App: built-in demo (« Try the demo » on the first screen): a simulated home and workshop, with
   live updates, history and routines, without any server nor Airzone hardware.
+  The demo account `https://breezone.cloud` / `demo` / `demo` opens it too (store reviews); no request
+  is sent to that address.
 
 - App: Spanish translation (French, English and Spanish, following the phone's language; per-app
   language in Android 13+ and iOS settings).
