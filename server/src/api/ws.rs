@@ -15,7 +15,11 @@ use crate::auth;
 use crate::hub::HubMessage;
 use crate::db;
 use crate::AppState;
+use axum::extract::ws::rejection::WebSocketUpgradeRejection;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
+use std::sync::atomic::{AtomicI64, Ordering};
 use axum::extract::State;
 use axum::response::Response;
 use futures_util::{SinkExt, StreamExt};
@@ -23,9 +27,30 @@ use serde_json::{json, Value};
 use std::time::Duration;
 use tokio::sync::broadcast::error::RecvError;
 
-pub async fn handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> Response {
-    ws.on_upgrade(move |socket| session(socket, state))
+pub async fn handler(ws: Result<WebSocketUpgrade, WebSocketUpgradeRejection>, State(state): State<AppState>) -> Response {
+    match ws {
+        Ok(ws) => ws.on_upgrade(move |socket| session(socket, state)),
+        Err(rejection) => {
+            // Typically a reverse proxy that does not forward the WebSocket headers: live
+            // updates cannot work through it. Say so once in a while in the activity feed.
+            static LAST_HINT: AtomicI64 = AtomicI64::new(0);
+            let now = crate::db::now();
+            let last = LAST_HINT.load(Ordering::Relaxed);
+            if now - last >= 3600 && LAST_HINT.compare_exchange(last, now, Ordering::Relaxed, Ordering::Relaxed).is_ok() {
+                state
+                    .hub
+                    .log("system", "warn", None, None, PROXY_HINT, None)
+                    .await;
+            }
+            tracing::warn!("websocket refused ({rejection}): {PROXY_HINT}");
+            (StatusCode::BAD_REQUEST, axum::Json(json!({ "error": PROXY_HINT }))).into_response()
+        }
+    }
 }
+
+const PROXY_HINT: &str = "Temps réel indisponible : la demande de WebSocket est arrivée sans ses en-têtes. \
+Si Breezone est derrière un proxy inversé (NAS Synology, nginx…), ajoutez-y les en-têtes WebSocket \
+(Synology : Proxy inversé › En-tête personnalisé › Créer › WebSocket).";
 
 async fn send_json(sink: &mut futures_util::stream::SplitSink<WebSocket, Message>, value: &Value) -> bool {
     sink.send(Message::Text(value.to_string().into())).await.is_ok()
