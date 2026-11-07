@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-07
+
 ### Added
 
 - Per-user access: a user only sees the installations an administrator gives them, read-only or
@@ -18,6 +20,12 @@ All notable changes are documented here. The format follows
 - Read-only installations show their controls disabled in the web UI.
 - A reciprocal share tells whether the other server shares back, and how to fix it if not.
 - Linking an installation through another server shows when that server still has to accept.
+
+### Fixed
+
+- An installation shared by another server is no longer hidden by a local copy of the same
+  WebServer that this server cannot reach (e.g. Airzone account connected on both servers); the
+  local copy still wins when it answers.
 
 ## [0.3.0] - 2026-11-07
 
@@ -87,7 +95,8 @@ All notable changes are documented here. The format follows
 - Project renamed from FreeZone to Breezone (former `FREEZONE_*` variables and `freezone.db` are
   still recognised).
 
-[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/EmmanuelVinas/breezone/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.1.0...v0.2.0
