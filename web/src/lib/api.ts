@@ -52,7 +52,14 @@ export type Zone = {
 }
 
 export type NodeState =
-  "online" | "offline" | "revoked" | "expired" | "error" | "pending" | "unknown"
+  | "online"
+  | "offline"
+  | "revoked"
+  | "expired"
+  | "error"
+  | "pending"
+  | "certificate"
+  | "unknown"
 
 export type NodeRef = { id: number; name: string; state: NodeState }
 
@@ -111,6 +118,12 @@ export type Share = {
   pairing_expires_at: number | null
   pairing_expired: boolean
   requested_at: number | null
+  /** The invitation asks the other server to share back. */
+  reciprocal: boolean
+  /** The other server accepted to share back (its installations are added on approval). */
+  remote_shares_back: boolean
+  /** Share given back to a server that invited this one. */
+  reverse: boolean
 }
 
 export type ShareInput = {
@@ -118,6 +131,15 @@ export type ShareInput = {
   installation_ids: number[]
   permission: "read" | "control"
   expires_in_days?: number | null
+  url?: string | null
+  /** Ask the other server to share its installations too (creation only). */
+  reciprocal?: boolean
+}
+
+/** Answer to a reciprocal invitation: what this server shares back. */
+export type ReciprocalInput = {
+  installation_ids: number[]
+  permission: "read" | "control"
   url?: string | null
 }
 
@@ -136,6 +158,20 @@ export type BreezoneNode = {
   created_at: number
   status: NodeStatus
   installations: { id: number; name: string }[]
+  /** A certificate failing the usual HTTPS checks was trusted for this server. */
+  certificate_pinned: boolean
+}
+
+/** HTTPS certificate presented by another server, to review before trusting it. */
+export type CertificateInfo = {
+  /** SHA-256, lowercase hex */
+  fingerprint: string
+  subject: string | null
+  names: string[]
+  issuer: string | null
+  not_before: number | null
+  not_after: number | null
+  self_signed: boolean
 }
 
 export type ZoneCommand = {
@@ -423,9 +459,16 @@ async function refreshOnce(attempts: number): Promise<boolean> {
 
 export class ApiError extends Error {
   status: number
-  constructor(status: number, message: string) {
+  /** Whole JSON body of the error (extra fields such as `certificate`). */
+  data: Record<string, unknown>
+  constructor(
+    status: number,
+    message: string,
+    data: Record<string, unknown> = {}
+  ) {
     super(message)
     this.status = status
+    this.data = data
   }
 }
 
@@ -453,14 +496,15 @@ export async function request<T>(
   }
   if (!res.ok) {
     let message = res.statusText
+    let data: Record<string, unknown> = {}
     try {
-      const data = (await res.json()) as { error?: string }
-      if (data.error) message = data.error
+      data = (await res.json()) as Record<string, unknown>
+      if (typeof data.error === "string") message = data.error
     } catch {
       /* not JSON */
     }
     if (res.status === 401 && auth) clearTokens()
-    throw new ApiError(res.status, message)
+    throw new ApiError(res.status, message, data)
   }
   if (res.status === 204) return undefined as T
   const text = await res.text()
@@ -581,8 +625,29 @@ export const api = {
   approveShare: (id: number) =>
     request<Share>("POST", `/api/shares/${id}/approve`),
   nodes: () => request<BreezoneNode[]>("GET", "/api/nodes"),
-  addNode: (token: string, url?: string | null) =>
-    request<BreezoneNode>("POST", "/api/nodes", { token, url }),
+  addNode: (
+    token: string,
+    url?: string | null,
+    reciprocal?: ReciprocalInput | null,
+    certificate?: string | null
+  ) =>
+    request<BreezoneNode>("POST", "/api/nodes", {
+      token,
+      url,
+      reciprocal,
+      certificate,
+    }),
+  nodeCertificate: (id: number) =>
+    request<{ pinned: string | null; certificate: CertificateInfo }>(
+      "GET",
+      `/api/nodes/${id}/certificate`
+    ),
+  trustNodeCertificate: (id: number, fingerprint: string) =>
+    request<BreezoneNode>("PUT", `/api/nodes/${id}/certificate`, {
+      fingerprint,
+    }),
+  untrustNodeCertificate: (id: number) =>
+    request<BreezoneNode>("DELETE", `/api/nodes/${id}/certificate`),
   updateNode: (id: number, url: string) =>
     request<BreezoneNode>("PUT", `/api/nodes/${id}`, { url }),
   refreshNode: (id: number) =>

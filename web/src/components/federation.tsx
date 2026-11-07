@@ -2,6 +2,9 @@ import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { QRCodeSVG } from "qrcode.react"
 import {
+  ArrowLeftRight,
+  ShieldAlert,
+  ShieldCheck,
   Copy,
   Link2,
   Loader2,
@@ -12,8 +15,14 @@ import {
   Trash2,
 } from "lucide-react"
 import { toast } from "sonner"
-import type { BreezoneNode, NodeState, Share, ShareInput } from "@/lib/api"
-import { api } from "@/lib/api"
+import type {
+  BreezoneNode,
+  CertificateInfo,
+  NodeState,
+  Share,
+  ShareInput,
+} from "@/lib/api"
+import { api, ApiError } from "@/lib/api"
 import { dateTime, relativeTime } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Confirm } from "@/components/confirm"
@@ -55,6 +64,7 @@ const NODE_STATE: Record<NodeState, { label: string; tone: string }> = {
   expired: { label: "Partage expiré", tone: "bg-warning" },
   error: { label: "Erreur", tone: "bg-destructive" },
   pending: { label: "En attente d'acceptation", tone: "bg-warning" },
+  certificate: { label: "Certificat refusé", tone: "bg-destructive" },
   unknown: { label: "En attente", tone: "bg-muted-foreground" },
 }
 
@@ -83,6 +93,97 @@ export function NodeStateBadge({
       )}
     </span>
   )
+}
+
+/** `ab12…` → `AB:12:…`, as browsers show certificate fingerprints. */
+function fingerprintText(fp: string) {
+  return fp.toUpperCase().match(/.{2}/g)?.join(":") ?? fp
+}
+
+/** Review of an HTTPS certificate that fails the usual checks, before trusting it. */
+function CertificateReview({
+  certificate,
+  reason,
+  host,
+  pending,
+  onTrust,
+  onCancel,
+}: {
+  certificate: CertificateInfo
+  reason?: string
+  host: string
+  pending: boolean
+  onTrust: () => void
+  onCancel?: () => void
+}) {
+  return (
+    <div className="grid gap-3 rounded-2xl border border-destructive/50 bg-destructive/5 p-3 text-sm">
+      <div className="flex items-start gap-2">
+        <ShieldAlert className="mt-0.5 size-4 shrink-0 text-destructive" />
+        <div>
+          <p className="font-medium">Certificat HTTPS non valide</p>
+          {reason && <p className="text-muted-foreground">{reason}</p>}
+        </div>
+      </div>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+        <dt className="text-muted-foreground">Adresse</dt>
+        <dd className="break-all">{host}</dd>
+        <dt className="text-muted-foreground">Délivré à</dt>
+        <dd className="break-all">{certificate.subject ?? "—"}</dd>
+        <dt className="text-muted-foreground">Valable pour</dt>
+        <dd className="break-all">
+          {certificate.names.length ? certificate.names.join(", ") : "—"}
+        </dd>
+        <dt className="text-muted-foreground">Émis par</dt>
+        <dd className="break-all">
+          {certificate.self_signed
+            ? "lui-même (auto-signé)"
+            : (certificate.issuer ?? "—")}
+        </dd>
+        <dt className="text-muted-foreground">Valable</dt>
+        <dd>
+          {certificate.not_before
+            ? `du ${dateTime(certificate.not_before)} `
+            : ""}
+          {certificate.not_after ? `au ${dateTime(certificate.not_after)}` : ""}
+        </dd>
+        <dt className="text-muted-foreground">Empreinte SHA-256</dt>
+        <dd className="font-mono break-all">
+          {fingerprintText(certificate.fingerprint)}
+        </dd>
+      </dl>
+      <p className="text-xs text-muted-foreground">
+        Faites confiance à ce certificat seulement si vous savez pourquoi il
+        n'est pas valide (par exemple un certificat du NAS qui ne couvre pas ce
+        nom). Pour en être sûr, comparez l'empreinte avec celle affichée par
+        votre navigateur sur cette adresse. Breezone n'acceptera ensuite que ce
+        certificat précis et vous redemandera votre accord s'il change.
+      </p>
+      <div className="flex flex-wrap justify-end gap-2">
+        {onCancel && (
+          <Button size="sm" variant="ghost" onClick={onCancel}>
+            Annuler
+          </Button>
+        )}
+        <Button
+          size="sm"
+          variant="destructive"
+          onClick={onTrust}
+          disabled={pending}
+        >
+          {pending && <Loader2 className="animate-spin" />}
+          Faire confiance à ce certificat
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+/** Certificate attached to an API error, if the other server's certificate was refused. */
+function certificateOf(e: unknown): CertificateInfo | null {
+  if (!(e instanceof ApiError)) return null
+  const c = e.data.certificate
+  return c && typeof c === "object" ? (c as CertificateInfo) : null
 }
 
 const permissionLabel = (p: string) =>
@@ -179,6 +280,7 @@ function ShareDialog({
   )
   const [expiry, setExpiry] = useState("never")
   const [url, setUrl] = useState("")
+  const [reciprocal, setReciprocal] = useState(false)
   const [token, setToken] = useState<string | null>(null)
 
   const input = (): ShareInput => ({
@@ -187,6 +289,7 @@ function ShareDialog({
     permission,
     expires_in_days: expiry === "never" ? null : Number(expiry),
     url: url.trim() || null,
+    reciprocal: share ? undefined : reciprocal,
   })
   const save = useMutation({
     mutationFn: async () => {
@@ -227,6 +330,8 @@ function ShareDialog({
               <strong>15 minutes</strong>, et ne contient aucune clé d'accès.
               Vous devrez ensuite <strong>accepter la demande</strong> ici, dans
               « À qui ce serveur est partagé ».
+              {reciprocal &&
+                " L'autre serveur pourra aussi vous partager ses installations : elles apparaîtront dans Nœuds une fois la demande acceptée."}
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-center rounded-2xl bg-white p-4">
@@ -357,6 +462,23 @@ function ShareDialog({
               </p>
             </div>
           )}
+          {!share && (
+            <label className="flex items-start gap-3 rounded-xl border p-3 text-sm">
+              <Checkbox
+                className="mt-0.5"
+                checked={reciprocal}
+                onCheckedChange={(v) => setReciprocal(v === true)}
+              />
+              <span>
+                <span className="font-medium">Partage réciproque</span>
+                <span className="block text-muted-foreground">
+                  Proposer à l'autre serveur de partager aussi ses installations
+                  avec celui-ci. Il choisira lesquelles en ajoutant le jeton ;
+                  elles apparaîtront ici quand vous accepterez sa demande.
+                </span>
+              </span>
+            </label>
+          )}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
@@ -435,6 +557,11 @@ function SharesCard() {
                 {s.status === "invited" && (
                   <Badge variant="secondary">Invitation non utilisée</Badge>
                 )}
+                {(s.reciprocal || s.reverse) && (
+                  <Badge variant="outline">
+                    <ArrowLeftRight /> Réciproque
+                  </Badge>
+                )}
                 {s.status === "pending" && (
                   <Badge className="bg-warning text-black">
                     Demande d'accès
@@ -453,6 +580,15 @@ function SharesCard() {
                   {s.requested_at ? ` (${relativeTime(s.requested_at)})` : ""}.
                   Acceptez seulement si c'est bien vous qui venez d'utiliser
                   l'invitation.
+                  {s.reciprocal &&
+                    (s.remote_shares_back
+                      ? ` Il vous partage aussi ses installations : elles apparaîtront dans Nœuds dès que vous accepterez.`
+                      : ` Il n'a pas accepté le partage réciproque.`)}
+                </p>
+              )}
+              {s.reverse && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  En retour de l'invitation de « {s.remote_name} ».
                 </p>
               )}
               <div className="text-xs text-muted-foreground">
@@ -539,14 +675,72 @@ export function SharesTab() {
 // Nodes (other servers whose installations this server shows)
 // ---------------------------------------------------------------------------------------
 
+/** Reads the invitation (`bz2.` + base64url JSON) to adapt the dialog; the server checks it. */
+function readInvitation(
+  token: string
+): { name: string; url: string; reciprocal: boolean } | null {
+  const t = token.replace(/\s+/g, "")
+  if (!t.startsWith("bz2.")) return null
+  try {
+    const b64 = t.slice(4).replace(/-/g, "+").replace(/_/g, "/")
+    const json = new TextDecoder().decode(
+      Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
+    )
+    const inv = JSON.parse(json) as {
+      name?: unknown
+      url?: unknown
+      reciprocal?: unknown
+    }
+    return {
+      name: String(inv.name ?? "?"),
+      url: String(inv.url ?? ""),
+      reciprocal: inv.reciprocal === true,
+    }
+  } catch {
+    return null
+  }
+}
+
 export function AddNodeDialog({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient()
   const [token, setToken] = useState("")
   const [url, setUrl] = useState("")
+  const [shareBack, setShareBack] = useState(true)
+  const [selected, setSelected] = useState<Set<number> | null>(null)
+  const [permission, setPermission] =
+    useState<ShareInput["permission"]>("control")
+  const invitation = readInvitation(token)
+  const reciprocal = invitation?.reciprocal === true
+  const installations = useQuery({
+    queryKey: ["installations"],
+    queryFn: api.installations,
+    enabled: reciprocal,
+  })
+  const identity = useQuery({
+    queryKey: ["identity"],
+    queryFn: api.identity,
+    enabled: reciprocal,
+  })
+  const local = (installations.data ?? []).filter((i) => i.node_id === null)
+  // All local installations by default.
+  const chosen = selected ?? new Set(local.map((i) => i.id))
+  const sharing = reciprocal && shareBack
+  // Certificate refused by the usual checks, shown for review.
+  const [review, setReview] = useState<{
+    certificate: CertificateInfo
+    reason: string
+  } | null>(null)
   const add = useMutation({
-    mutationFn: () => api.addNode(token.trim(), url.trim() || null),
+    mutationFn: (certificate: string | null) =>
+      api.addNode(
+        token.trim(),
+        url.trim() || null,
+        sharing ? { installation_ids: [...chosen], permission } : null,
+        certificate
+      ),
     onSuccess: (n) => {
       qc.invalidateQueries({ queryKey: ["nodes"] })
+      qc.invalidateQueries({ queryKey: ["shares"] })
       qc.invalidateQueries({ queryKey: ["installations"] })
       qc.invalidateQueries({ queryKey: ["status"] })
       qc.invalidateQueries({ queryKey: ["cloud"] })
@@ -555,11 +749,26 @@ export function AddNodeDialog({ onClose }: { onClose: () => void }) {
       )
       onClose()
     },
-    onError: (e) => toast.error(errorText(e)),
+    onError: (e) => {
+      const certificate = certificateOf(e)
+      if (certificate) {
+        const reason =
+          e instanceof ApiError && typeof e.data.certificate_error === "string"
+            ? e.data.certificate_error
+            : errorText(e)
+        setReview({ certificate, reason })
+      } else toast.error(errorText(e))
+    },
   })
+  const toggle = (id: number, on: boolean) => {
+    const next = new Set(chosen)
+    if (on) next.add(id)
+    else next.delete(id)
+    setSelected(next)
+  }
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Ajouter un serveur Breezone</DialogTitle>
           <DialogDescription>
@@ -578,7 +787,10 @@ export function AddNodeDialog({ onClose }: { onClose: () => void }) {
               className="min-h-24 rounded-xl border bg-transparent px-3 py-2 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
               value={token}
               placeholder="bz2.…"
-              onChange={(e) => setToken(e.target.value)}
+              onChange={(e) => {
+                setToken(e.target.value)
+                setReview(null)
+              }}
             />
           </div>
           <div className="grid gap-2">
@@ -587,17 +799,106 @@ export function AddNodeDialog({ onClose }: { onClose: () => void }) {
               id="node-url-override"
               value={url}
               placeholder="Celle du jeton, sinon par ex. http://192.168.1.20:8427"
-              onChange={(e) => setUrl(e.target.value)}
+              onChange={(e) => {
+                setUrl(e.target.value)
+                setReview(null)
+              }}
             />
           </div>
+          {review && (
+            <CertificateReview
+              certificate={review.certificate}
+              reason={review.reason}
+              host={url.trim() || invitation?.url || ""}
+              pending={add.isPending}
+              onTrust={() => add.mutate(review.certificate.fingerprint)}
+              onCancel={() => setReview(null)}
+            />
+          )}
+          {reciprocal && (
+            <div className="grid gap-3 rounded-2xl border p-3">
+              <label className="flex items-start gap-3 text-sm">
+                <Checkbox
+                  className="mt-0.5"
+                  checked={shareBack}
+                  onCheckedChange={(v) => setShareBack(v === true)}
+                />
+                <span>
+                  <span className="font-medium">
+                    Partager aussi mes installations avec « {invitation?.name} »
+                  </span>
+                  <span className="block text-muted-foreground">
+                    Ce serveur propose un partage réciproque. Il verra les
+                    installations cochées dès qu'il aura accepté votre demande ;
+                    vous pourrez révoquer ce partage dans Réglages › Partages.
+                  </span>
+                </span>
+              </label>
+              {shareBack && (
+                <>
+                  {local.length === 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      Aucune installation locale à partager.
+                    </p>
+                  )}
+                  {local.map((i) => (
+                    <label
+                      key={i.id}
+                      className="flex items-center gap-3 rounded-xl border p-2.5 text-sm"
+                    >
+                      <Checkbox
+                        checked={chosen.has(i.id)}
+                        onCheckedChange={(v) => toggle(i.id, v === true)}
+                      />
+                      <span className="flex-1">{i.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {i.location ?? `${i.host}:${i.port}`}
+                      </span>
+                    </label>
+                  ))}
+                  <div className="grid gap-2">
+                    <Label>Droit</Label>
+                    <Select
+                      value={permission}
+                      onValueChange={(v) =>
+                        setPermission(v as ShareInput["permission"])
+                      }
+                    >
+                      <SelectTrigger className="w-fit">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="control">
+                          Lecture et pilotage
+                        </SelectItem>
+                        <SelectItem value="read">Lecture seule</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {!identity.data?.public_url && (
+                    <p className="text-sm text-destructive">
+                      Renseignez d'abord l'adresse publique de ce serveur
+                      (Réglages › Partages › Ce serveur) : l'autre serveur en a
+                      besoin pour le joindre.
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
             Annuler
           </Button>
           <Button
-            onClick={() => add.mutate()}
-            disabled={add.isPending || !token.trim().startsWith("bz2.")}
+            onClick={() => add.mutate(null)}
+            disabled={
+              add.isPending ||
+              review !== null ||
+              !invitation ||
+              (sharing && (chosen.size === 0 || !identity.data?.public_url))
+            }
           >
             {add.isPending && <Loader2 className="animate-spin" />} Ajouter
           </Button>
@@ -634,6 +935,36 @@ function NodeRow({ node }: { node: BreezoneNode }) {
     onSuccess: invalidate,
     onError: (e) => toast.error(errorText(e)),
   })
+  // Certificate refused by the usual checks: review it, then trust it.
+  const [review, setReview] = useState<CertificateInfo | null>(null)
+  const inspect = useMutation({
+    mutationFn: () => api.nodeCertificate(node.id),
+    onSuccess: (r) => setReview(r.certificate),
+    onError: (e) => toast.error(errorText(e)),
+  })
+  const trust = useMutation({
+    mutationFn: (fingerprint: string) =>
+      api.trustNodeCertificate(node.id, fingerprint),
+    onSuccess: () => {
+      setReview(null)
+      invalidate()
+      toast.success(`Certificat de « ${node.name} » accepté`)
+    },
+    onError: (e) => {
+      // It changed meanwhile: show the new one.
+      const certificate = certificateOf(e)
+      if (certificate) setReview(certificate)
+      toast.error(errorText(e))
+    },
+  })
+  const untrust = useMutation({
+    mutationFn: () => api.untrustNodeCertificate(node.id),
+    onSuccess: () => {
+      invalidate()
+      toast.success("Vérification HTTPS habituelle rétablie")
+    },
+    onError: (e) => toast.error(errorText(e)),
+  })
   const s = node.status
   return (
     <div className="grid gap-3 rounded-2xl border p-3">
@@ -643,11 +974,24 @@ function NodeRow({ node }: { node: BreezoneNode }) {
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium">{node.name}</span>
             <NodeStateBadge state={s.state} latency={s.latency_ms} />
-            <Badge variant="outline">{permissionLabel(s.permission)}</Badge>
+            {/* The permission is only known once the other server accepted. */}
+            {s.state !== "pending" && (
+              <Badge variant="outline">{permissionLabel(s.permission)}</Badge>
+            )}
+            {node.certificate_pinned && (
+              <Badge
+                variant="outline"
+                title="Certificat HTTPS accepté manuellement"
+              >
+                <ShieldCheck /> Certificat accepté
+              </Badge>
+            )}
           </div>
           <div className="text-xs text-muted-foreground">
             {node.installations.map((i) => i.name).join(", ") ||
-              "Aucune installation partagée"}
+              (s.state === "pending"
+                ? `Ses installations apparaîtront quand « ${node.name} » aura accepté la demande (Réglages › Partages sur ce serveur)`
+                : "Aucune installation partagée")}
           </div>
           <div className="text-xs text-muted-foreground">
             {s.state === "online"
@@ -655,7 +999,10 @@ function NodeRow({ node }: { node: BreezoneNode }) {
               : s.last_seen
                 ? `Dernière réponse ${relativeTime(s.last_seen)}`
                 : "Jamais joint"}
-            {s.last_error && s.state !== "online" && ` · ${s.last_error}`}
+            {s.last_error &&
+              s.state !== "online" &&
+              s.state !== "pending" &&
+              ` · ${s.last_error}`}
           </div>
         </div>
         <Button
@@ -692,7 +1039,42 @@ function NodeRow({ node }: { node: BreezoneNode }) {
             <Link2 /> Enregistrer l'adresse
           </Button>
         )}
+        {s.state === "certificate" && !review && (
+          <Button
+            variant="outline"
+            onClick={() => inspect.mutate()}
+            disabled={inspect.isPending}
+          >
+            {inspect.isPending ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <ShieldAlert />
+            )}
+            Examiner le certificat
+          </Button>
+        )}
+        {node.certificate_pinned && s.state !== "certificate" && (
+          <Confirm
+            title="Rétablir la vérification HTTPS habituelle ?"
+            description="À faire quand l'autre serveur a un certificat valide. S'il n'en a pas, la connexion sera de nouveau refusée."
+            onConfirm={() => untrust.mutate()}
+          >
+            <Button variant="ghost" disabled={untrust.isPending}>
+              Rétablir la vérification habituelle
+            </Button>
+          </Confirm>
+        )}
       </div>
+      {review && (
+        <CertificateReview
+          certificate={review}
+          reason={s.last_error ?? undefined}
+          host={node.url}
+          pending={trust.isPending}
+          onTrust={() => trust.mutate(review.fingerprint)}
+          onCancel={() => setReview(null)}
+        />
+      )}
     </div>
   )
 }
