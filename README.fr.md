@@ -2,7 +2,7 @@
 
 **Pilotez vos climatisations et chauffages Airzone en local — sans abonnement, sans cloud obligatoire.**
 
-🇬🇧 [Read in English](README.md)
+🌐 [breezone.cloud](https://breezone.cloud) · 🇬🇧 [Read in English](README.md)
 
 En 2025, des fonctions de l'application Airzone jusque-là gratuites (routines, certaines fonctions à
 distance…) sont passées sous abonnement payant

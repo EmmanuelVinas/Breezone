@@ -6,7 +6,7 @@
 [![License: PolyForm Noncommercial](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue)](LICENSE.md)
 [![Image](https://img.shields.io/badge/image-ghcr.io%2Femmanuelvinas%2Fbreezone-2496ED?logo=docker&logoColor=white)](https://github.com/EmmanuelVinas/breezone/pkgs/container/breezone)
 
-🇫🇷 [Lire en français](README.fr.md)
+🌐 [breezone.cloud](https://breezone.cloud) · 🇫🇷 [Lire en français](README.fr.md)
 
 In 2025, features of the Airzone app that used to be free (routines, some remote features…) became
 part of a paid subscription ([Next.ink, in French](https://next.ink/265416/airzone-withings-quand-des-fonctions-connectees-gratuites-deviennent-payantes/)).
