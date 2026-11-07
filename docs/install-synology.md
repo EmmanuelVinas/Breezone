@@ -178,9 +178,25 @@ Onglet **Général** :
 | | Nom d'hôte | **localhost** |
 | | Port | **8427** (ou la valeur de `BREEZONE_PORT`) |
 
-Onglet **En-tête personnalisé** : **Créer › WebSocket** (ajoute `Upgrade` et `Connection`).
-Indispensable : sans ces en-têtes, les mises à jour en temps réel ne passent pas. L'onglet
-**Paramètres avancés** peut rester par défaut.
+Onglet **En-tête personnalisé** : **Créer › WebSocket**. Deux lignes doivent apparaître :
+
+| Nom de l'en-tête | Valeur |
+|---|---|
+| `Upgrade` | `$http_upgrade` |
+| `Connection` | `$connection_upgrade` |
+
+**Indispensable** : sans ces en-têtes, le temps réel (WebSocket) ne passe pas. Le web affiche
+alors « Reconnexion… » en permanence, l'application « Temps réel indisponible », et le journal d'activité de Breezone
+indique « la demande de WebSocket est arrivée sans ses en-têtes ». Les données restent visibles
+mais ne se mettent plus à jour en direct. L'onglet **Paramètres avancés** peut rester par défaut.
+
+Pour vérifier depuis un ordinateur, la commande suivante doit afficher `HTTP 101` (et non 400) :
+
+```bash
+curl -s -o /dev/null -w 'HTTP %{http_code}\n' -m 5 --http1.1 \
+  -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' \
+  -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' https://breezone.mondomaine.fr/api/ws
+```
 
 Ensuite :
 
@@ -249,6 +265,7 @@ Hyper Backup.
 | Le téléchargement de l'image échoue (`denied`, `unauthorized`) | L'image n'est pas encore publique, ou le nom est mal saisi : `ghcr.io/emmanuelvinas/breezone` (en minuscules). |
 | Le conteneur redémarre en boucle, « address already in use » | Le port 8427 est pris : changez `BREEZONE_PORT` (ex. `8099`). |
 | Le conteneur redémarre en boucle, « (code: 14) unable to open database file » | Le dossier monté sur `/data` n'est pas accessible en écriture : `sudo chown -R 10001:10001 /volume1/docker/breezone` en SSH (étape 2 bis, « Droits du dossier »). |
+| « Temps réel indisponible » (app) ou « Reconnexion… » permanent (web) | Le proxy inversé ne transmet pas le WebSocket : ajoutez les en-têtes `Upgrade` et `Connection` (section 5, onglet En-tête personnalisé). |
 | Ajout d'un serveur : « certificat HTTPS refusé : il ne couvre pas ce nom de domaine » | Le certificat du NAS ne couvre pas le nom du proxy inversé : voir l'étape « Certificat » de la section 5. |
 | Aucun WebServer trouvé | Vérifiez `network_mode: host` ; sinon indiquez le réseau dans *Réglages › Installations* (ex. `192.168.1.0/24`) ou l'adresse IP du WebServer. |
 | L'application Android affiche une erreur de réseau local | Autorisez « Appareils à proximité » dans *Paramètres › Applications › Breezone › Autorisations*. |
