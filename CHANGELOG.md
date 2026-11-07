@@ -6,6 +6,18 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- App: Spanish translation (French, English and Spanish, following the phone's language; per-app
+  language in Android 13+ and iOS settings).
+- App: a server whose HTTPS certificate fails the usual checks can be trusted after reviewing it
+  (names, issuer, dates, SHA-256 fingerprint); only that exact certificate is then accepted.
+
+### Changed
+
+- App: explicit connection errors (invalid certificate, unknown address, refused connection, no
+  answer, no network) instead of the raw system message.
+
 ## [0.4.1] - 2026-11-07
 
 ### Added

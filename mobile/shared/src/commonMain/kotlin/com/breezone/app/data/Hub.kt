@@ -71,6 +71,7 @@ class Hub(
         val saved = store.get(SERVERS_KEY)?.let {
             runCatching { FzJson.decodeFromString(ListSerializer(ServerAccount.serializer()), it) }.getOrNull()
         } ?: emptyList()
+        saved.forEach { a -> a.certificate?.let { TlsTrust.pin(a.url, it) } }
         _servers.value = saved.map { ServerState(it, authRequired = it.refreshToken == null) }
         saved.filter { it.refreshToken != null }.forEach { start(it) }
     }
@@ -101,7 +102,7 @@ class Hub(
      * Signs in to a server (or creates its first administrator when `setup`) and starts
      * following it. Re-signing to an already known server replaces its session.
      */
-    suspend fun signIn(url: String, username: String, password: String, setup: Boolean = false): ServerAccount {
+    suspend fun signIn(url: String, username: String, password: String, setup: Boolean = false, certificate: String? = null): ServerAccount {
         val base = normalizeUrl(url)
         val pair = discovery.login(base, username, password, setup)
         val existing = _servers.value.firstOrNull { normalizeUrl(it.account.url) == base && it.account.username.equals(username.trim(), true) }
@@ -112,6 +113,7 @@ class Hub(
             label = existing?.account?.label ?: label,
             username = pair.user.username,
             refreshToken = pair.refreshToken,
+            certificate = certificate ?: existing?.account?.certificate,
         )
         jobs.remove(account.id)?.cancel()
         _servers.update { list ->
@@ -167,7 +169,8 @@ class Hub(
                 updateServer(id) { it.copy(authRequired = true, live = Live.Offline) }
                 return
             } catch (e: Exception) {
-                updateServer(id) { it.copy(live = Live.Offline, error = e.message) }
+                val message = explain(e, api.account.url) ?: e.message
+                updateServer(id) { it.copy(live = Live.Offline, error = message) }
             }
             updateServer(id) { it.copy(live = Live.Offline) }
             delay(minOf(30_000L, 1_000L shl minOf(attempt++, 5)))

@@ -34,6 +34,7 @@ import com.breezone.app.resources.time_soon
 import com.breezone.app.ui.icons.FzIcons
 import com.breezone.app.ui.theme.Fz
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.number
 import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringArrayResource
@@ -117,6 +118,12 @@ fun relativeTime(ts: Long?): String {
         a < 86_400 -> stringResource(if (future) Res.string.time_in_hours else Res.string.time_hours_ago, (a / 3600.0).roundToInt())
         else -> stringResource(if (future) Res.string.time_in_days else Res.string.time_days_ago, (a / 86_400.0).roundToInt())
     }
+}
+
+/** "dd/MM/yyyy" in the phone's timezone (dates of a certificate). */
+fun day(ts: Long): String {
+    val t = Instant.fromEpochSeconds(ts).toLocalDateTime(TimeZone.currentSystemDefault())
+    return "${t.day.toString().padStart(2, '0')}/${t.month.number.toString().padStart(2, '0')}/${t.year}"
 }
 
 /** "HH:mm" in the phone's timezone (a time of day, not translated). */

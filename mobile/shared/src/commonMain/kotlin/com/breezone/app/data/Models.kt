@@ -200,4 +200,6 @@ data class ServerAccount(
     val label: String,
     val username: String,
     val refreshToken: String? = null,
+    /** HTTPS certificate trusted although it fails the usual checks (SHA-256), if any. */
+    val certificate: String? = null,
 )

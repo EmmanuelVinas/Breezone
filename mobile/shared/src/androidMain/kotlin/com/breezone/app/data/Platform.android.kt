@@ -71,3 +71,5 @@ actual fun localNetworkBlocked(): Boolean {
     val context = runCatching { org.koin.core.context.GlobalContext.get().get<Context>() }.getOrNull() ?: return false
     return context.checkSelfPermission(android.Manifest.permission.ACCESS_LOCAL_NETWORK) != android.content.pm.PackageManager.PERMISSION_GRANTED
 }
+
+actual fun sha256(bytes: ByteArray): ByteArray = java.security.MessageDigest.getInstance("SHA-256").digest(bytes)

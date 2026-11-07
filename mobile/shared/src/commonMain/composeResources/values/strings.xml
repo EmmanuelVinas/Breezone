@@ -259,4 +259,20 @@
     <string name="command_pending">Envoi en cours</string>
     <string name="command_done">Appliqué</string>
     <string name="command_error">Refusé</string>
+    <string name="error_certificate">Le certificat HTTPS de %1$s n’est pas valide (nom non couvert, auto-signé ou expiré).</string>
+    <string name="error_certificate_changed">Le certificat HTTPS de %1$s a changé depuis que vous l’avez accepté.</string>
+    <string name="error_unknown_host">Adresse introuvable : %1$s n’existe pas pour le DNS. Vérifiez l’adresse.</string>
+    <string name="error_refused">%1$s refuse la connexion : le serveur est arrêté ou ce port est fermé.</string>
+    <string name="error_timeout">%1$s ne répond pas : vérifiez l’adresse, et que le téléphone est sur le même réseau ou que le serveur est accessible depuis Internet.</string>
+    <string name="error_offline">Ce téléphone n’est pas connecté au réseau.</string>
+    <string name="cert_title">Certificat HTTPS non valide</string>
+    <string name="cert_issued_to">Délivré à</string>
+    <string name="cert_valid_for">Valable pour</string>
+    <string name="cert_issuer">Émis par</string>
+    <string name="cert_self_signed">lui-même (auto-signé)</string>
+    <string name="cert_validity">Validité</string>
+    <string name="cert_validity_range">du %1$s au %2$s</string>
+    <string name="cert_fingerprint">Empreinte SHA-256</string>
+    <string name="cert_warning">Faites confiance à ce certificat seulement si vous savez pourquoi il n’est pas valide (par exemple un certificat du NAS qui ne couvre pas ce nom). Comparez l’empreinte avec celle affichée par Breezone sur le web ou par votre navigateur. L’application n’acceptera ensuite que ce certificat précis pour ce serveur.</string>
+    <string name="cert_trust">Faire confiance à ce certificat</string>
 </resources>

@@ -15,7 +15,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.border
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -31,6 +33,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -39,6 +42,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.breezone.app.data.ApiException
 import com.breezone.app.data.AuthRequiredException
+import com.breezone.app.data.CertificateInfo
+import com.breezone.app.data.NetworkProblem
+import com.breezone.app.data.TlsTrust
+import com.breezone.app.data.classify
+import com.breezone.app.data.explain
+import com.breezone.app.data.fingerprintText
+import com.breezone.app.ui.day
 import com.breezone.app.data.Hub
 import com.breezone.app.data.localNetworkBlocked
 import com.breezone.app.resources.*
@@ -67,9 +77,13 @@ fun AddServerScreen(reauthServerId: String?, canGoBack: Boolean, onBack: () -> U
     var needsSetup by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    // Certificate refused by the usual checks, shown before the user trusts it.
+    var review by remember { mutableStateOf<CertificateInfo?>(null) }
+    var trusted by remember { mutableStateOf(existing?.certificate) }
 
     fun submit() {
         error = null
+        review = null
         busy = true
         scope.launch {
             try {
@@ -84,13 +98,14 @@ fun AddServerScreen(reauthServerId: String?, canGoBack: Boolean, onBack: () -> U
                     error = getString(Res.string.add_server_error_mismatch)
                     return@launch
                 }
-                hub.signIn(url, username, password, setup = needsSetup)
+                hub.signIn(url, username, password, setup = needsSetup, certificate = trusted)
                 onDone()
             } catch (e: Exception) {
+                if (classify(e) == NetworkProblem.Certificate) review = TlsTrust.presented(url)
                 error = when {
                     e is ApiException || e is AuthRequiredException -> e.message
                     localNetworkBlocked() -> getString(Res.string.add_server_error_local_network)
-                    else -> null
+                    else -> explain(e, url)
                 } ?: e.message ?: getString(Res.string.add_server_error_unreachable)
             } finally {
                 busy = false
@@ -182,6 +197,13 @@ fun AddServerScreen(reauthServerId: String?, canGoBack: Boolean, onBack: () -> U
             )
         }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        review?.let { cert ->
+            CertificateReview(cert) {
+                trusted = cert.fingerprint
+                TlsTrust.pin(url, cert.fingerprint)
+                submit()
+            }
+        }
         Button(
             onClick = ::submit,
             enabled = !busy && url.isNotBlank() && username.isNotBlank() && password.isNotEmpty(),
@@ -202,5 +224,48 @@ fun AddServerScreen(reauthServerId: String?, canGoBack: Boolean, onBack: () -> U
         if (existing != null) {
             TextButton(onClick = { hub.removeServer(existing.id); onDone() }) { Text(stringResource(Res.string.add_server_forget)) }
         }
+    }
+}
+
+/** Details of a certificate that fails the usual checks, and the button to trust it. */
+@Composable
+private fun CertificateReview(cert: CertificateInfo, onTrust: () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .border(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(FzIcons.TriangleAlert, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+            Spacer(Modifier.size(8.dp))
+            Text(stringResource(Res.string.cert_title), style = MaterialTheme.typography.titleSmall)
+        }
+        CertLine(stringResource(Res.string.cert_issued_to), cert.subject ?: "—")
+        CertLine(stringResource(Res.string.cert_valid_for), cert.names.joinToString(", ").ifEmpty { "—" })
+        CertLine(
+            stringResource(Res.string.cert_issuer),
+            if (cert.selfSigned) stringResource(Res.string.cert_self_signed) else cert.issuer ?: "—",
+        )
+        if (cert.notBefore != null && cert.notAfter != null) {
+            CertLine(stringResource(Res.string.cert_validity), stringResource(Res.string.cert_validity_range, day(cert.notBefore), day(cert.notAfter)))
+        }
+        CertLine(stringResource(Res.string.cert_fingerprint), fingerprintText(cert.fingerprint), mono = true)
+        Muted(stringResource(Res.string.cert_warning))
+        Button(
+            onClick = onTrust,
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+        ) { Text(stringResource(Res.string.cert_trust)) }
+    }
+}
+
+@Composable
+private fun CertLine(label: String, value: String, mono: Boolean = false) {
+    Column {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = Fz.colors.muted)
+        Text(value, style = MaterialTheme.typography.bodySmall, fontFamily = if (mono) FontFamily.Monospace else null)
     }
 }

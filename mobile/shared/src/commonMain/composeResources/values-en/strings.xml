@@ -250,4 +250,20 @@
     <string name="command_pending">Sending</string>
     <string name="command_done">Applied</string>
     <string name="command_error">Refused</string>
+    <string name="error_certificate">The HTTPS certificate of %1$s is not valid (name not covered, self-signed or expired).</string>
+    <string name="error_certificate_changed">The HTTPS certificate of %1$s changed since you trusted it.</string>
+    <string name="error_unknown_host">Address not found: %1$s does not exist in DNS. Check the address.</string>
+    <string name="error_refused">%1$s refuses the connection: the server is stopped or this port is closed.</string>
+    <string name="error_timeout">%1$s does not answer: check the address, and that the phone is on the same network or that the server is reachable from the Internet.</string>
+    <string name="error_offline">This phone is not connected to a network.</string>
+    <string name="cert_title">Invalid HTTPS certificate</string>
+    <string name="cert_issued_to">Issued to</string>
+    <string name="cert_valid_for">Valid for</string>
+    <string name="cert_issuer">Issued by</string>
+    <string name="cert_self_signed">itself (self-signed)</string>
+    <string name="cert_validity">Validity</string>
+    <string name="cert_validity_range">from %1$s to %2$s</string>
+    <string name="cert_fingerprint">SHA-256 fingerprint</string>
+    <string name="cert_warning">Trust this certificate only if you know why it is not valid (for instance a NAS certificate that does not cover this name). Compare the fingerprint with the one Breezone shows on the web or your browser shows. The app will then accept only this exact certificate for this server.</string>
+    <string name="cert_trust">Trust this certificate</string>
 </resources>
