@@ -16,6 +16,7 @@ pub mod hub;
 pub mod mock;
 pub mod routines;
 pub mod timers;
+pub mod tls;
 
 use crate::auth::AuthService;
 use crate::config::Config;

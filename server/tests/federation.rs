@@ -404,3 +404,102 @@ async fn an_installation_added_by_hand_is_linked_to_the_airzone_account() {
     let (_, events) = n.call(Method::GET, "/api/events?limit=20", None).await;
     assert!(events.as_array().unwrap().iter().any(|e| e["message"].as_str().unwrap_or_default().contains("pointe vers un autre WebServer")));
 }
+
+#[tokio::test]
+async fn a_reciprocal_invitation_links_both_ways_once_accepted() {
+    let home_mock: MockState = Arc::new(Mutex::new(mock::preset("maison")));
+    let home_ws = serve(mock::router_with_mac(home_mock.clone(), mock::MOCK_MAC)).await;
+    let office_mock: MockState = Arc::new(Mutex::new(mock::preset("bureau")));
+    let office_ws = serve(mock::router_with_mac(office_mock.clone(), "AA:BB:CC:DD:EE:FF")).await;
+    let office = Node::start("rec-office", |c| c.scan_port = 9).await;
+    let home = Node::start("rec-home", |c| c.scan_port = 9).await;
+    for (node, name, port) in [(&office, "Bureau", office_ws), (&home, "Maison", home_ws)] {
+        let (s, v) = node.call(Method::POST, "/api/installations", Some(json!({"name": name, "host": "127.0.0.1", "port": port}))).await;
+        assert_eq!(s, StatusCode::CREATED, "{v}");
+        let (s, v) = node.call(Method::PUT, "/api/node", Some(json!({"name": name, "public_url": node.base}))).await;
+        assert_eq!(s, StatusCode::OK, "{v}");
+    }
+    let office_inst = office.call(Method::GET, "/api/installations", None).await.1[0]["id"].as_i64().unwrap();
+    let home_inst = home.call(Method::GET, "/api/installations", None).await.1[0]["id"].as_i64().unwrap();
+
+    // The office invites home and asks for a reciprocal share.
+    let (s, created) = office
+        .call(Method::POST, "/api/shares", Some(json!({"label":"Maison","installation_ids":[office_inst],"permission":"control","reciprocal":true})))
+        .await;
+    assert_eq!(s, StatusCode::CREATED, "{created}");
+    assert_eq!(created["share"]["reciprocal"], true);
+    let token = created["token"].as_str().unwrap().to_string();
+
+    // Home cannot share an installation it does not drive (checked before the single-use code is
+    // burnt, so the token still works below).
+    let (s, v) = home
+        .call(Method::POST, "/api/nodes", Some(json!({"token": token, "reciprocal": {"installation_ids": [9999], "permission": "read"}})))
+        .await;
+    assert_eq!(s, StatusCode::BAD_REQUEST, "{v}");
+
+    // Home accepts and shares its installation back (read only).
+    let (s, node) = home
+        .call(Method::POST, "/api/nodes", Some(json!({"token": token, "reciprocal": {"installation_ids": [home_inst], "permission": "read"}})))
+        .await;
+    assert_eq!(s, StatusCode::CREATED, "{node}");
+    assert_eq!(node["status"]["state"], "pending");
+    let (_, home_shares) = home.call(Method::GET, "/api/shares", None).await;
+    assert_eq!(home_shares[0]["reverse"], true, "{home_shares}");
+    assert_eq!(home_shares[0]["status"], "active");
+    assert_eq!(home_shares[0]["remote_name"], "Bureau");
+
+    // The office sees that home shares back; nothing is consumed before approval.
+    let (_, shares) = office.call(Method::GET, "/api/shares", None).await;
+    assert_eq!(shares[0]["status"], "pending");
+    assert_eq!(shares[0]["remote_shares_back"], true, "{shares}");
+    let (_, nodes) = office.call(Method::GET, "/api/nodes", None).await;
+    assert!(nodes.as_array().unwrap().is_empty());
+
+    // Approval links both ways.
+    let share_id = shares[0]["id"].as_i64().unwrap();
+    let (s, v) = office.call(Method::POST, &format!("/api/shares/{share_id}/approve"), None).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    let (_, nodes) = office.call(Method::GET, "/api/nodes", None).await;
+    assert_eq!(nodes[0]["name"], "Maison", "{nodes}");
+    assert_eq!(nodes[0]["status"]["state"], "online", "{nodes}");
+    assert_eq!(nodes[0]["status"]["permission"], "read");
+    assert_eq!(nodes[0]["installations"][0]["name"], "Maison");
+    let node_id = node["id"].as_i64().unwrap();
+    let (_, node) = home.call(Method::POST, &format!("/api/nodes/{node_id}/refresh"), None).await;
+    assert_eq!(node["status"]["state"], "online", "{node}");
+    assert_eq!(node["installations"][0]["name"], "Bureau");
+
+    // Read only: the office cannot drive the home installation.
+    let (_, status) = office.call(Method::GET, "/api/status", None).await;
+    let remote = status.as_array().unwrap().iter().find(|i| i["access"] == "node").expect("home installation on the office node").clone();
+    let (s, _) = office
+        .call(Method::PATCH, &format!("/api/installations/{}/zones/1/1", remote["id"]), Some(json!({"setpoint": 21.5})))
+        .await;
+    assert_eq!(s, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn sharing_back_needs_a_reciprocal_invitation() {
+    let office_mock: MockState = Arc::new(Mutex::new(mock::preset("bureau")));
+    let office_ws = serve(mock::router_with_mac(office_mock, "AA:BB:CC:DD:EE:FF")).await;
+    let home_mock: MockState = Arc::new(Mutex::new(mock::preset("maison")));
+    let home_ws = serve(mock::router(home_mock)).await;
+    let office = Node::start("norec-office", |c| c.scan_port = 9).await;
+    let home = Node::start("norec-home", |c| c.scan_port = 9).await;
+    office.call(Method::POST, "/api/installations", Some(json!({"name":"Bureau","host":"127.0.0.1","port":office_ws}))).await;
+    home.call(Method::POST, "/api/installations", Some(json!({"name":"Maison","host":"127.0.0.1","port":home_ws}))).await;
+    office.call(Method::PUT, "/api/node", Some(json!({"name":"Bureau","public_url": office.base}))).await;
+    let office_inst = office.call(Method::GET, "/api/installations", None).await.1[0]["id"].as_i64().unwrap();
+    let home_inst = home.call(Method::GET, "/api/installations", None).await.1[0]["id"].as_i64().unwrap();
+    let (_, created) = office.call(Method::POST, "/api/shares", Some(json!({"label":"Maison","installation_ids":[office_inst]}))).await;
+    let token = created["token"].as_str().unwrap();
+    let (s, v) = home
+        .call(Method::POST, "/api/nodes", Some(json!({"token": token, "reciprocal": {"installation_ids": [home_inst], "url": home.base}})))
+        .await;
+    assert_eq!(s, StatusCode::BAD_REQUEST, "{v}");
+    // The code was not burnt: pairing without sharing back still works.
+    let (s, v) = home.call(Method::POST, "/api/nodes", Some(json!({"token": token}))).await;
+    assert_eq!(s, StatusCode::CREATED, "{v}");
+    let (_, shares) = home.call(Method::GET, "/api/shares", None).await;
+    assert!(shares.as_array().unwrap().is_empty());
+}

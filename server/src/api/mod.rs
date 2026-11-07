@@ -62,6 +62,10 @@ pub fn router() -> Router<AppState> {
         .route("/api/nodes", get(federation::list_nodes).post(federation::add_node))
         .route("/api/nodes/{id}", put(federation::update_node).delete(federation::delete_node))
         .route("/api/nodes/{id}/refresh", post(federation::refresh_node))
+        .route(
+            "/api/nodes/{id}/certificate",
+            get(federation::node_certificate).put(federation::trust_node_certificate).delete(federation::untrust_node_certificate),
+        )
         .route("/api/federation/pair", post(federation::pair))
         .route("/api/federation/installations", get(federation::installations))
         .route("/api/federation/installations/{id}/zones/{system_id}/{zone_id}", patch(federation::control))

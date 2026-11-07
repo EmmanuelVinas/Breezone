@@ -101,7 +101,7 @@ pub struct NodeRef {
 /// Connection state of a node this server consumes.
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct NodeStatus {
-    /// "online" | "offline" (unreachable) | "revoked" | "expired" | "error" | "unknown"
+    /// "online" | "offline" (unreachable) | "pending" | "certificate" | "revoked" | "expired" | "error" | "unknown"
     pub state: &'static str,
     pub last_seen: Option<i64>,
     pub last_error: Option<String>,
@@ -418,7 +418,7 @@ struct NodeState {
 impl NodeState {
     fn new(node: db::Node, me: Option<&(String, SigningKey)>) -> Self {
         // Requests to the node are signed with this node's key (see `federation`).
-        let client = me.map(|(node_id, key)| NodeClient::new(&node.url, node_id, key.clone()));
+        let client = me.map(|(node_id, key)| NodeClient::new(&node.url, node_id, key.clone(), node.tls_fingerprint.as_deref()));
         let status = NodeStatus {
             state: "unknown",
             last_seen: node.last_seen,
@@ -479,7 +479,7 @@ impl Hub {
             states.retain(|id, _| ids.contains(id));
             for n in nodes {
                 match states.get_mut(&n.id) {
-                    Some(existing) if existing.node.url == n.url && existing.client.is_some() => {
+                    Some(existing) if existing.node.url == n.url && existing.node.tls_fingerprint == n.tls_fingerprint && existing.client.is_some() => {
                         existing.status.permission = n.permission.clone();
                         existing.node = n;
                     }
@@ -853,6 +853,7 @@ impl Hub {
                 "revoked" => format!("Nœud « {node_name} » : la clé de partage a été révoquée"),
                 "expired" => format!("Nœud « {node_name} » : le partage a expiré"),
                 "pending" => format!("Nœud « {node_name} » : en attente d'acceptation sur ce serveur (Réglages › Partages)"),
+                "certificate" => format!("Nœud « {node_name} » : {message} (Réglages › Nœuds pour l'examiner)"),
                 _ => format!("Nœud « {node_name} » injoignable : {message}"),
             };
             self.log("connection", "warn", None, None, &text, None).await;

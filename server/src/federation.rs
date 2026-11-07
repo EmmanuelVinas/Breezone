@@ -32,7 +32,6 @@ use ed25519_dalek::{Signature, Signer, SigningKey, VerifyingKey};
 use sha2::{Digest, Sha256};
 use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
-use std::time::Duration;
 
 const TOKEN_PREFIX: &str = "bz2.";
 const LEGACY_TOKEN_PREFIX: &str = "bz1.";
@@ -126,6 +125,9 @@ pub struct Invitation {
     pub url: String,
     /// Single-use pairing code (valid 15 minutes).
     pub code: String,
+    /// The inviting node asks the invited one to share its installations too.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub reciprocal: bool,
 }
 
 pub fn encode_token(inv: &Invitation) -> String {
@@ -297,6 +299,9 @@ pub struct PairRequest {
     pub node_id: String,
     pub name: String,
     pub public_key: String,
+    /// Reciprocal invitation accepted: address at which the inviting node reaches this one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shares_back_from: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -305,6 +310,9 @@ pub struct PairResponse {
     pub status: String,
     pub node_id: String,
     pub name: String,
+    /// Public key of the exposing node (to bind a reciprocal share to it).
+    #[serde(default)]
+    pub public_key: Option<String>,
 }
 
 // ---------------------------------------------------------------------------------------
@@ -318,6 +326,9 @@ pub enum NodeError {
     Rejected { status: u16, message: String },
     #[error("injoignable : {0}")]
     Unreachable(String),
+    /// The node's HTTPS certificate is refused (it can be reviewed and trusted).
+    #[error("{0}")]
+    Certificate(String),
 }
 
 impl NodeError {
@@ -329,6 +340,7 @@ impl NodeError {
             NodeError::Rejected { status: 403, message } if message.contains("pending") => "pending",
             NodeError::Rejected { .. } => "error",
             NodeError::Unreachable(_) => "offline",
+            NodeError::Certificate(_) => "certificate",
         }
     }
 }
@@ -362,13 +374,9 @@ impl std::fmt::Debug for NodeClient {
 }
 
 impl NodeClient {
-    pub fn new(url: &str, node_id: &str, key: SigningKey) -> Self {
-        let http = reqwest::Client::builder()
-            .connect_timeout(Duration::from_secs(4))
-            .timeout(Duration::from_secs(10))
-            .user_agent(concat!("Breezone/", env!("CARGO_PKG_VERSION")))
-            .build()
-            .unwrap_or_default();
+    /// `pinned`: certificate trusted by an administrator (only that one is then accepted).
+    pub fn new(url: &str, node_id: &str, key: SigningKey, pinned: Option<&str>) -> Self {
+        let http = crate::tls::node_http_client(pinned);
         Self { http, url: url.trim_end_matches('/').to_string(), node_id: node_id.to_string(), key }
     }
 
@@ -385,7 +393,14 @@ impl NodeClient {
         if !body.is_empty() {
             req = req.header(reqwest::header::CONTENT_TYPE, "application/json").body(body);
         }
-        let resp = req.send().await.map_err(|e| NodeError::Unreachable(describe(&e)))?;
+        let resp = req.send().await.map_err(|e| {
+            let text = describe(&e);
+            if text.starts_with("certificat") {
+                NodeError::Certificate(text)
+            } else {
+                NodeError::Unreachable(text)
+            }
+        })?;
         let status = resp.status();
         if !status.is_success() {
             let body: serde_json::Value = resp.json().await.unwrap_or_default();
@@ -396,8 +411,14 @@ impl NodeClient {
     }
 
     /// Uses the invitation code: the exposing node records this node's public key.
-    pub async fn pair(&self, code: &str, name: &str) -> Result<PairResponse, NodeError> {
-        let req = PairRequest { code: code.to_string(), node_id: self.node_id.clone(), name: name.to_string(), public_key: public_key_text(&self.key) };
+    pub async fn pair(&self, code: &str, name: &str, shares_back_from: Option<&str>) -> Result<PairResponse, NodeError> {
+        let req = PairRequest {
+            code: code.to_string(),
+            node_id: self.node_id.clone(),
+            name: name.to_string(),
+            public_key: public_key_text(&self.key),
+            shares_back_from: shares_back_from.map(str::to_string),
+        };
         let body = serde_json::to_vec(&req).expect("serializable request");
         self.send(reqwest::Method::POST, "/api/federation/pair", Some(body), None).await
     }
@@ -414,8 +435,30 @@ impl NodeClient {
 }
 
 fn describe(e: &reqwest::Error) -> String {
+    // The useful part (TLS, DNS, refused) is deep in the source chain.
+    let mut chain = String::new();
+    let mut source: Option<&dyn std::error::Error> = Some(e);
+    while let Some(err) = source {
+        chain.push_str(&err.to_string().to_lowercase());
+        chain.push(' ');
+        source = err.source();
+    }
     if e.is_timeout() {
         "délai dépassé".into()
+    } else if chain.contains(crate::tls::PIN_MISMATCH) {
+        "certificat HTTPS différent de celui que vous aviez accepté".into()
+    } else if chain.contains("certificate") {
+        if chain.contains("not valid for name") || chain.contains("notvalidforname") {
+            "certificat HTTPS refusé : il ne couvre pas ce nom de domaine".into()
+        } else if chain.contains("expired") {
+            "certificat HTTPS expiré".into()
+        } else {
+            "certificat HTTPS refusé (non reconnu ou auto-signé)".into()
+        }
+    } else if chain.contains("dns error") || chain.contains("failed to lookup") {
+        "nom de domaine introuvable".into()
+    } else if chain.contains("refused") {
+        "connexion refusée (port fermé ou serveur arrêté)".into()
     } else if e.is_connect() {
         "connexion impossible".into()
     } else {
@@ -429,7 +472,7 @@ mod tests {
 
     #[test]
     fn token_round_trip() {
-        let inv = Invitation { v: 2, node_id: "abc".into(), name: "Bureau".into(), url: "https://fz.example.org".into(), code: new_pairing_code().0 };
+        let inv = Invitation { v: 2, node_id: "abc".into(), name: "Bureau".into(), url: "https://fz.example.org".into(), code: new_pairing_code().0, reciprocal: false };
         let token = encode_token(&inv);
         assert!(token.starts_with("bz2."));
         // Pasted with line breaks.

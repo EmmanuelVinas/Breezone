@@ -709,8 +709,22 @@ pub struct Share {
     pub pairing_expires_at: Option<i64>,
     pub remote_public_key: Option<String>,
     pub requested_at: Option<i64>,
+    /// The invitation asks the other node to share back.
+    pub reciprocal: bool,
+    /// Address of the other node, sent with its access request.
+    pub remote_url: Option<String>,
+    /// The other node accepted to share back.
+    pub remote_shares_back: bool,
 }
 
+impl Share {
+    /// Share created by this node in answer to a reciprocal invitation (bound to the inviter).
+    pub fn is_reverse(&self) -> bool {
+        self.key_hash.starts_with("reciprocal:")
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 pub async fn insert_share(
     db: &Db,
     label: &str,
@@ -719,11 +733,12 @@ pub async fn insert_share(
     expires_at: Option<i64>,
     created_by: &str,
     installation_ids: &[i64],
+    reciprocal: bool,
 ) -> sqlx::Result<Share> {
     let mut tx = db.begin().await?;
     let share: Share = sqlx::query_as(
-        "INSERT INTO shares (label, key_hash, permission, expires_at, created_at, created_by, status, pairing_expires_at)
-         VALUES (?, ?, ?, ?, ?, ?, 'invited', ?) RETURNING *",
+        "INSERT INTO shares (label, key_hash, permission, expires_at, created_at, created_by, status, pairing_expires_at, reciprocal)
+         VALUES (?, ?, ?, ?, ?, ?, 'invited', ?, ?) RETURNING *",
     )
     .bind(label)
     .bind(key_hash)
@@ -732,6 +747,7 @@ pub async fn insert_share(
     .bind(now())
     .bind(created_by)
     .bind(now() + crate::federation::PAIRING_TTL_SECS)
+    .bind(reciprocal)
     .fetch_one(&mut *tx)
     .await?;
     for id in installation_ids {
@@ -760,16 +776,29 @@ pub async fn invited_share(db: &Db, code_hash: &str) -> sqlx::Result<Option<Shar
 
 /// Uses the invitation code (once): records the requesting node and waits for approval.
 /// Returns false if the code was used meanwhile.
-pub async fn claim_share(db: &Db, id: i64, node_id: &str, name: &str, public_key: &str, address: Option<&str>) -> sqlx::Result<bool> {
+/// `shares_back_from`: address of the requesting node when it shares back (reciprocal invitation).
+#[allow(clippy::too_many_arguments)]
+pub async fn claim_share(
+    db: &Db,
+    id: i64,
+    node_id: &str,
+    name: &str,
+    public_key: &str,
+    address: Option<&str>,
+    shares_back_from: Option<&str>,
+) -> sqlx::Result<bool> {
     let r = sqlx::query(
         "UPDATE shares SET status = 'pending', key_hash = 'used:' || id, remote_node_id = ?, remote_name = ?,
-         remote_public_key = ?, last_address = ?, requested_at = ? WHERE id = ? AND status = 'invited'",
+         remote_public_key = ?, last_address = ?, requested_at = ?, remote_url = ?, remote_shares_back = ?
+         WHERE id = ? AND status = 'invited'",
     )
     .bind(node_id)
     .bind(name)
     .bind(public_key)
     .bind(address)
     .bind(now())
+    .bind(shares_back_from)
+    .bind(shares_back_from.is_some())
     .bind(id)
     .execute(db)
     .await?;
@@ -782,6 +811,45 @@ pub async fn share_of_node(db: &Db, node_id: &str) -> sqlx::Result<Option<Share>
         .bind(node_id)
         .fetch_optional(db)
         .await
+}
+
+/// Share given back to the node that invited this one (reciprocal invitation): bound to that
+/// node's key right away, since this node's administrator chose to share.
+#[allow(clippy::too_many_arguments)]
+pub async fn insert_reverse_share(
+    db: &Db,
+    label: &str,
+    permission: &str,
+    created_by: &str,
+    installation_ids: &[i64],
+    node_id: &str,
+    name: &str,
+    public_key: &str,
+) -> sqlx::Result<Share> {
+    let mut tx = db.begin().await?;
+    let share: Share = sqlx::query_as(
+        "INSERT INTO shares (label, key_hash, permission, created_at, created_by, status, remote_node_id, remote_name, remote_public_key, reciprocal)
+         VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, 1) RETURNING *",
+    )
+    .bind(label)
+    .bind(format!("reciprocal:{}", hex::encode(crate::auth::random_bytes::<16>())))
+    .bind(permission)
+    .bind(now())
+    .bind(created_by)
+    .bind(node_id)
+    .bind(name)
+    .bind(public_key)
+    .fetch_one(&mut *tx)
+    .await?;
+    for id in installation_ids {
+        sqlx::query("INSERT INTO share_installations (share_id, installation_id) VALUES (?, ?)")
+            .bind(share.id)
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+    }
+    tx.commit().await?;
+    Ok(share)
 }
 
 pub async fn approve_share(db: &Db, id: i64) -> sqlx::Result<bool> {
@@ -853,6 +921,8 @@ pub struct Node {
     pub created_at: i64,
     pub last_seen: Option<i64>,
     pub last_error: Option<String>,
+    /// Certificate trusted by an administrator (SHA-256): the only one accepted for this node.
+    pub tls_fingerprint: Option<String>,
 }
 
 pub async fn list_nodes(db: &Db) -> sqlx::Result<Vec<Node>> {
@@ -880,6 +950,11 @@ pub async fn upsert_node(db: &Db, remote_node_id: &str, name: &str, url: &str, k
     .bind(now())
     .fetch_one(db)
     .await
+}
+
+pub async fn set_node_fingerprint(db: &Db, id: i64, fingerprint: Option<&str>) -> sqlx::Result<()> {
+    sqlx::query("UPDATE nodes SET tls_fingerprint = ? WHERE id = ?").bind(fingerprint).bind(id).execute(db).await?;
+    Ok(())
 }
 
 pub async fn set_node_url(db: &Db, id: i64, url: &str) -> sqlx::Result<()> {

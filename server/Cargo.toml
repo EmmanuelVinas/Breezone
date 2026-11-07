@@ -24,6 +24,8 @@ axum = { version = "0.8", features = ["ws"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+x509-parser = "0.17"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tower-http = { version = "0.6", features = ["fs", "cors", "trace"] }
@@ -51,3 +53,5 @@ panic = "abort"
 
 [dev-dependencies]
 tokio-tungstenite = "0.30.0"
+rcgen = "0.14"
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }

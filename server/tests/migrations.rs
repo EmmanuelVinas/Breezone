@@ -14,6 +14,7 @@ const APPLIED: &[(&str, &str)] = &[
     ("0007_timers.sql", "190e858a202f25ce277aae97f4a868032ff8d3a0d831508086b2dc2530951086"),
     ("0008_routines_on_demand.sql", "cbc51332cbf9b9aa39524f0f8e89c05cf4846fbbfec6514cbef243144acfdebb"),
     ("0009_signed_pairing.sql", "5be35fca82e8e11723e6e3c799ea357a123b4a7f0cf91f710136f26ff10bfb4c"),
+    ("0010_federation_v2.sql", "6c5226bd7af97dc40f20e3c8fa0171ef7957e9cd55d99025d4c9c18dad6e12bd"),
 ];
 
 #[test]

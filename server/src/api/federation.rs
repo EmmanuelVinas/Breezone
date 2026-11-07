@@ -10,6 +10,7 @@ use crate::db::{self, Share};
 use crate::error::{ApiError, ApiResult};
 use crate::federation::{self, FedInstallation, FedSnapshot, Identity, Invitation, NodeClient, PairRequest, PairResponse, ACTOR_HEADER};
 use crate::hub::{NodeStatus, ZoneCommand};
+use crate::tls;
 use crate::AppState;
 use axum::body::Bytes;
 use axum::extract::{ConnectInfo, FromRequest, Path, Request, State};
@@ -67,6 +68,12 @@ pub struct ShareView {
     pub pairing_expired: bool,
     /// When the node asked for access (status "pending").
     pub requested_at: Option<i64>,
+    /// The invitation asks the other node to share back.
+    pub reciprocal: bool,
+    /// The other node accepted to share back: its installations are added here on approval.
+    pub remote_shares_back: bool,
+    /// Share given back to a node that invited this one (reciprocal invitation).
+    pub reverse: bool,
 }
 
 #[derive(Serialize)]
@@ -87,6 +94,9 @@ async fn share_view(state: &AppState, s: Share) -> ApiResult<ShareView> {
     // A consuming node polls at its own poll interval (10 s by default).
     let window = (state.cfg.poll_interval_secs as i64 * 3).max(90);
     Ok(ShareView {
+        reverse: s.is_reverse(),
+        reciprocal: s.reciprocal && !s.is_reverse(),
+        remote_shares_back: s.remote_shares_back,
         id: s.id,
         expired: s.expires_at.is_some_and(|e| e <= now),
         connected: s.last_seen.is_some_and(|t| now - t <= window),
@@ -126,6 +136,9 @@ pub struct ShareInput {
     /// Address the other node will use (default: the public address of this node).
     #[serde(default)]
     pub url: Option<String>,
+    /// Ask the other node to share its installations with this one too.
+    #[serde(default)]
+    pub reciprocal: bool,
 }
 
 fn read() -> String {
@@ -178,8 +191,8 @@ pub async fn create_share(State(state): State<AppState>, AdminUser(admin): Admin
     let mut ids = req.installation_ids.clone();
     ids.sort_unstable();
     ids.dedup();
-    let share = db::insert_share(&state.db, &label, &hash, &req.permission, expires_at, &admin.username, &ids).await?;
-    let token = federation::encode_token(&Invitation { v: 2, node_id: me.node_id, name: me.name, url, code });
+    let share = db::insert_share(&state.db, &label, &hash, &req.permission, expires_at, &admin.username, &ids, req.reciprocal).await?;
+    let token = federation::encode_token(&Invitation { v: 2, node_id: me.node_id, name: me.name, url, code, reciprocal: req.reciprocal });
     state
         .hub
         .log("system", "info", None, Some(&admin.username), &format!("Partage « {label} » créé ({} installation(s), {})", ids.len(), permission_label(&req.permission)), None)
@@ -210,6 +223,13 @@ pub async fn approve_share(State(state): State<AppState>, AdminUser(admin): Admi
     }
     let who = share.remote_name.clone().unwrap_or_else(|| "?".into());
     state.hub.log("system", "info", None, Some(&admin.username), &format!("Accès accordé au serveur « {who} » (partage « {} »)", share.label), None).await;
+    // Reciprocal invitation accepted by the other node: consume what it shares back.
+    if let (true, true, Some(url), Some(node_id)) = (share.reciprocal, share.remote_shares_back, share.remote_url.as_deref(), share.remote_node_id.as_deref()) {
+        let node = db::upsert_node(&state.db, node_id, &who, url, "", "read").await?;
+        state.hub.reload_installations().await?;
+        state.hub.poll_node(node.id).await;
+        state.hub.log("system", "info", None, Some(&admin.username), &format!("Nœud « {who} » ajouté : il partage aussi ses installations avec ce serveur"), None).await;
+    }
     let share = db::share_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("partage introuvable"))?;
     Ok(Json(share_view(&state, share).await?))
 }
@@ -242,6 +262,8 @@ pub struct NodeView {
     pub created_at: i64,
     pub status: NodeStatus,
     pub installations: Vec<ShareInstallation>,
+    /// A certificate failing the usual HTTPS checks was trusted for this node.
+    pub certificate_pinned: bool,
 }
 
 async fn node_views(state: &AppState) -> ApiResult<Vec<NodeView>> {
@@ -263,6 +285,7 @@ async fn node_views(state: &AppState) -> ApiResult<Vec<NodeView>> {
                 .filter(|i| i.node_id == Some(n.id))
                 .map(|i| ShareInstallation { id: i.id, name: i.name.clone() })
                 .collect(),
+            certificate_pinned: n.tls_fingerprint.is_some(),
             id: n.id,
             name: n.name,
             url: n.url,
@@ -282,6 +305,32 @@ pub struct AddNodeInput {
     /// Address to use instead of the one in the token (e.g. its local address).
     #[serde(default)]
     pub url: Option<String>,
+    /// Answer to a reciprocal invitation: what this node shares back (none = declined).
+    #[serde(default)]
+    pub reciprocal: Option<ReciprocalInput>,
+    /// Fingerprint of a certificate the administrator reviewed and trusts although it fails the
+    /// usual HTTPS checks (only that certificate is then accepted for this node).
+    #[serde(default)]
+    pub certificate: Option<String>,
+}
+
+/// Certificate error with what an administrator needs to decide whether to trust it.
+async fn certificate_error(url: &str, who: &str, reason: &str) -> ApiError {
+    let err = ApiError::bad_gateway(format!("le serveur « {who} » à {url} présente un {reason}"));
+    match tls::fetch_certificate(url).await {
+        Some(info) => err.with_detail("certificate", info).with_detail("certificate_error", reason),
+        None => err,
+    }
+}
+
+#[derive(Deserialize)]
+pub struct ReciprocalInput {
+    pub installation_ids: Vec<i64>,
+    #[serde(default = "read")]
+    pub permission: String,
+    /// Address at which the other node reaches this one (default: the public address).
+    #[serde(default)]
+    pub url: Option<String>,
 }
 
 /// Adds a node from its invitation token: pairs with it (single-use code + this node's public
@@ -296,18 +345,70 @@ pub async fn add_node(State(state): State<AppState>, AdminUser(admin): AdminUser
     if inv.node_id == me.node_id {
         return Err(ApiError::bad_request("ce jeton a été créé par ce serveur : utilisez-le sur l'autre serveur"));
     }
+    // Share back (reciprocal invitation): checked before the single-use code is burnt.
+    let share_back = match (&req.reciprocal, inv.reciprocal) {
+        (Some(r), true) => {
+            let input = ShareInput {
+                label: inv.name.clone(),
+                installation_ids: r.installation_ids.clone(),
+                permission: r.permission.clone(),
+                expires_in_days: None,
+                url: None,
+                reciprocal: false,
+            };
+            let (label, _) = validate_share(&state, &input).await?;
+            let my_url = match r.url.as_deref().map(str::trim).filter(|u| !u.is_empty()) {
+                Some(u) => federation::normalize_url(u)?,
+                None => me.public_url.clone().ok_or_else(|| {
+                    ApiError::bad_request("indiquez l'adresse à laquelle l'autre serveur joindra celui-ci (Réglages › Partages › Adresse publique)")
+                })?,
+            };
+            let mut ids = r.installation_ids.clone();
+            ids.sort_unstable();
+            ids.dedup();
+            Some((label, ids, r.permission.clone(), my_url))
+        }
+        (Some(_), false) => return Err(ApiError::bad_request("ce jeton ne demande pas de partage réciproque")),
+        _ => None,
+    };
+    let pinned = match req.certificate.as_deref().map(str::trim).filter(|c| !c.is_empty()) {
+        Some(c) => Some(tls::normalize_fingerprint(c).ok_or_else(|| ApiError::bad_request("empreinte de certificat invalide"))?),
+        None => None,
+    };
     let key = federation::signing_key(&state.db, &state.cloud_key).await?;
-    let client = NodeClient::new(&url, &me.node_id, key);
-    let paired = client.pair(&inv.code, &me.name).await.map_err(|e| match e {
-        federation::NodeError::Unreachable(m) => ApiError::bad_gateway(format!("le serveur « {} » ne répond pas à {url} ({m})", inv.name)),
-        other => other.into(),
-    })?;
+    let client = NodeClient::new(&url, &me.node_id, key, pinned.as_deref());
+    let back_url = share_back.as_ref().map(|(_, _, _, u)| u.as_str());
+    let paired = match client.pair(&inv.code, &me.name, back_url).await {
+        Ok(p) => p,
+        Err(federation::NodeError::Certificate(reason)) => return Err(certificate_error(&url, &inv.name, &reason).await),
+        Err(federation::NodeError::Unreachable(m)) => return Err(ApiError::bad_gateway(format!("le serveur « {} » ne répond pas à {url} ({m})", inv.name))),
+        Err(other) => return Err(other.into()),
+    };
     if paired.node_id != inv.node_id {
         return Err(ApiError::bad_request(format!("{url} n'est pas le serveur « {} » du jeton", inv.name)));
     }
+    if let Some((label, ids, permission, _)) = &share_back {
+        let public_key = paired.public_key.as_deref().ok_or_else(|| ApiError::bad_gateway("l'autre serveur n'a pas envoyé sa clé publique : mettez-le à jour"))?;
+        db::insert_reverse_share(&state.db, label, permission, &admin.username, ids, &paired.node_id, &paired.name, public_key).await?;
+        state
+            .hub
+            .log(
+                "system",
+                "info",
+                None,
+                Some(&admin.username),
+                &format!("Partage réciproque « {label} » créé ({} installation(s), {})", ids.len(), permission_label(permission)),
+                None,
+            )
+            .await;
+    }
     let node = db::upsert_node(&state.db, &paired.node_id, &paired.name, &url, "", "read").await?;
+    db::set_node_fingerprint(&state.db, node.id, pinned.as_deref()).await?;
     state.hub.reload_installations().await?;
     state.hub.poll_node(node.id).await;
+    if pinned.is_some() {
+        state.hub.log("system", "warn", None, Some(&admin.username), &format!("Certificat HTTPS du serveur « {} » accepté manuellement", paired.name), None).await;
+    }
     state
         .hub
         .log(
@@ -336,6 +437,51 @@ pub async fn update_node(State(state): State<AppState>, AdminUser(admin): AdminU
     state.hub.reload_installations().await?;
     state.hub.poll_node(id).await;
     state.hub.log("system", "info", None, Some(&admin.username), &format!("Nœud « {} » : adresse {url}", node.name), None).await;
+    node_views(&state).await?.into_iter().find(|n| n.id == id).map(Json).ok_or_else(|| ApiError::not_found("nœud introuvable"))
+}
+
+/// Certificate the node presents, to review it before trusting it.
+pub async fn node_certificate(State(state): State<AppState>, _admin: AdminUser, Path(id): Path<i64>) -> ApiResult<Json<NodeCertificate>> {
+    let node = db::node_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("nœud introuvable"))?;
+    let certificate = tls::fetch_certificate(&node.url).await.ok_or_else(|| ApiError::bad_gateway(format!("impossible de lire le certificat de {}", node.url)))?;
+    Ok(Json(NodeCertificate { pinned: node.tls_fingerprint, certificate }))
+}
+
+#[derive(Serialize)]
+pub struct NodeCertificate {
+    /// Certificate trusted so far, if any.
+    pub pinned: Option<String>,
+    pub certificate: tls::CertificateInfo,
+}
+
+#[derive(Deserialize)]
+pub struct TrustInput {
+    /// Fingerprint of the certificate reviewed (it must still be the one presented).
+    pub fingerprint: String,
+}
+
+/// Trusts the certificate a node presents although it fails the usual HTTPS checks.
+pub async fn trust_node_certificate(State(state): State<AppState>, AdminUser(admin): AdminUser, Path(id): Path<i64>, Json(req): Json<TrustInput>) -> ApiResult<Json<NodeView>> {
+    let node = db::node_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("nœud introuvable"))?;
+    let wanted = tls::normalize_fingerprint(&req.fingerprint).ok_or_else(|| ApiError::bad_request("empreinte de certificat invalide"))?;
+    let current = tls::fetch_certificate(&node.url).await.ok_or_else(|| ApiError::bad_gateway(format!("impossible de lire le certificat de {}", node.url)))?;
+    if current.fingerprint != wanted {
+        return Err(ApiError::conflict("le certificat a changé entre-temps : examinez-le de nouveau").with_detail("certificate", current));
+    }
+    db::set_node_fingerprint(&state.db, id, Some(&wanted)).await?;
+    state.hub.reload_installations().await?;
+    state.hub.poll_node(id).await;
+    state.hub.log("system", "warn", None, Some(&admin.username), &format!("Certificat HTTPS du serveur « {} » accepté manuellement", node.name), None).await;
+    node_views(&state).await?.into_iter().find(|n| n.id == id).map(Json).ok_or_else(|| ApiError::not_found("nœud introuvable"))
+}
+
+/// Goes back to the usual HTTPS checks (e.g. once the node has a valid certificate).
+pub async fn untrust_node_certificate(State(state): State<AppState>, AdminUser(admin): AdminUser, Path(id): Path<i64>) -> ApiResult<Json<NodeView>> {
+    let node = db::node_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("nœud introuvable"))?;
+    db::set_node_fingerprint(&state.db, id, None).await?;
+    state.hub.reload_installations().await?;
+    state.hub.poll_node(id).await;
+    state.hub.log("system", "info", None, Some(&admin.username), &format!("Serveur « {} » : vérification HTTPS habituelle rétablie", node.name), None).await;
     node_views(&state).await?.into_iter().find(|n| n.id == id).map(Json).ok_or_else(|| ApiError::not_found("nœud introuvable"))
 }
 
@@ -479,7 +625,12 @@ pub async fn pair(State(state): State<AppState>, signed: Signed) -> ApiResult<Js
     }
     let name: String = req.name.trim().chars().take(60).collect();
     let node_id: String = req.node_id.trim().chars().take(64).collect();
-    if !db::claim_share(&state.db, share.id, &node_id, &name, &req.public_key, signed.address.as_deref()).await? {
+    // Only a reciprocal invitation lets the requesting node share back.
+    let shares_back_from = match req.shares_back_from.as_deref().filter(|_| share.reciprocal) {
+        Some(u) => Some(federation::normalize_url(u)?),
+        None => None,
+    };
+    if !db::claim_share(&state.db, share.id, &node_id, &name, &req.public_key, signed.address.as_deref(), shares_back_from.as_deref()).await? {
         return Err(ApiError::bad_request("invitation déjà utilisée : créez un nouveau partage"));
     }
     let from = signed.address.as_deref().map(|a| format!(" depuis {a}")).unwrap_or_default();
@@ -494,7 +645,8 @@ pub async fn pair(State(state): State<AppState>, signed: Signed) -> ApiResult<Js
             None,
         )
         .await;
-    Ok(Json(PairResponse { status: "pending".into(), node_id: me.node_id, name: me.name }))
+    let key = federation::signing_key(&state.db, &state.cloud_key).await?;
+    Ok(Json(PairResponse { status: "pending".into(), node_id: me.node_id, name: me.name, public_key: Some(federation::public_key_text(&key)) }))
 }
 
 pub async fn installations(State(state): State<AppState>, auth: ShareAuth) -> ApiResult<Json<FedSnapshot>> {

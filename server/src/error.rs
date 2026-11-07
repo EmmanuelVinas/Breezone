@@ -10,11 +10,18 @@ use serde_json::json;
 pub struct ApiError {
     pub status: StatusCode,
     pub message: String,
+    /// Extra fields merged into the JSON body (e.g. the certificate to review).
+    pub details: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
 impl ApiError {
     pub fn new(status: StatusCode, message: impl Into<String>) -> Self {
-        Self { status, message: message.into() }
+        Self { status, message: message.into(), details: None }
+    }
+    pub fn with_detail(mut self, key: &str, value: impl serde::Serialize) -> Self {
+        let value = serde_json::to_value(value).unwrap_or_default();
+        self.details.get_or_insert_with(Default::default).insert(key.to_string(), value);
+        self
     }
     pub fn bad_request(message: impl Into<String>) -> Self {
         Self::new(StatusCode::BAD_REQUEST, message)
@@ -43,7 +50,9 @@ pub type ApiResult<T> = Result<T, ApiError>;
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        (self.status, Json(json!({ "error": self.message }))).into_response()
+        let mut body = self.details.unwrap_or_default();
+        body.insert("error".into(), json!(self.message));
+        (self.status, Json(serde_json::Value::Object(body))).into_response()
     }
 }
 
