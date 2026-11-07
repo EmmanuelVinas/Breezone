@@ -11,7 +11,12 @@ use serde_json::{json, Value};
 
 /// Sync status and the list of Airzone Cloud installations (incl. the ones on other sites).
 pub async fn status(State(state): State<AppState>, user: AuthUser) -> ApiResult<Json<CloudStatus>> {
-    Ok(Json(cloud::status(&state, user.is_admin()).await?))
+    let mut status = cloud::status(&state, user.is_admin()).await?;
+    let access = crate::access::Access::of(&state.db, &user).await?;
+    if !access.is_admin() {
+        status.installations.retain(|i| i.installation_id.is_some_and(|id| access.can_view(id)));
+    }
+    Ok(Json(status))
 }
 
 /// Connects the Airzone account: imports now, then synchronises daily if `remember`.

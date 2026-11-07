@@ -1,5 +1,6 @@
 //! Installations, zones, history, batch control, discovery and activity feed.
 
+use crate::access::Access;
 use crate::airzone::AirzoneClient;
 use crate::auth::{AdminUser, AuthUser};
 use crate::db::{self, Event, Installation, Reading, ZoneMeta};
@@ -15,22 +16,28 @@ use axum::Json;
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-pub async fn status(State(state): State<AppState>, _user: AuthUser) -> Json<Vec<InstallationView>> {
-    Json(state.hub.snapshot().await)
+pub async fn status(State(state): State<AppState>, user: AuthUser) -> ApiResult<Json<Vec<InstallationView>>> {
+    let access = Access::of(&state.db, &user).await?;
+    Ok(Json(access.filter(state.hub.snapshot().await)))
 }
 
-pub async fn get_installation(State(state): State<AppState>, _user: AuthUser, Path(id): Path<i64>) -> ApiResult<Json<InstallationView>> {
-    state.hub.installation(id).await.map(Json).ok_or_else(|| ApiError::not_found("installation not found"))
+pub async fn get_installation(State(state): State<AppState>, user: AuthUser, Path(id): Path<i64>) -> ApiResult<Json<InstallationView>> {
+    let access = Access::of(&state.db, &user).await?;
+    access.view(id)?;
+    state.hub.installation(id).await.map(|i| Json(access.apply(i))).ok_or_else(|| ApiError::not_found("installation not found"))
 }
 
 /// Forces an immediate poll of the installation.
-pub async fn refresh_installation(State(state): State<AppState>, _user: AuthUser, Path(id): Path<i64>) -> ApiResult<Json<InstallationView>> {
+pub async fn refresh_installation(State(state): State<AppState>, user: AuthUser, Path(id): Path<i64>) -> ApiResult<Json<InstallationView>> {
+    let access = Access::of(&state.db, &user).await?;
+    access.view(id)?;
     state.hub.poll_one(id).await;
-    state.hub.installation(id).await.map(Json).ok_or_else(|| ApiError::not_found("installation not found"))
+    state.hub.installation(id).await.map(|i| Json(access.apply(i))).ok_or_else(|| ApiError::not_found("installation not found"))
 }
 
-pub async fn list_installations(State(state): State<AppState>, _user: AuthUser) -> ApiResult<Json<Vec<Installation>>> {
-    Ok(Json(db::list_installations(&state.db).await?))
+pub async fn list_installations(State(state): State<AppState>, user: AuthUser) -> ApiResult<Json<Vec<Installation>>> {
+    let access = Access::of(&state.db, &user).await?;
+    Ok(Json(db::list_installations(&state.db).await?.into_iter().filter(|i| access.can_view(i.id)).collect()))
 }
 
 #[derive(Deserialize)]
@@ -187,6 +194,7 @@ pub async fn control_zone(
     Path((id, system_id, zone_id)): Path<(i64, i64, i64)>,
     Json(cmd): Json<ZoneCommand>,
 ) -> ApiResult<Json<ZoneView>> {
+    Access::of(&state.db, &user).await?.control(id)?;
     Ok(Json(state.hub.control(id, system_id, zone_id, &cmd, &user.username).await?))
 }
 
@@ -202,10 +210,11 @@ pub struct MetaInput {
 
 pub async fn update_zone_meta(
     State(state): State<AppState>,
-    _user: AuthUser,
+    user: AuthUser,
     Path((id, system_id, zone_id)): Path<(i64, i64, i64)>,
     Json(req): Json<MetaInput>,
 ) -> ApiResult<Json<Option<ZoneView>>> {
+    Access::of(&state.db, &user).await?.control(id)?;
     db::installation_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("installation not found"))?;
     let clean = |s: Option<String>| s.map(|v| v.trim().chars().take(60).collect::<String>()).filter(|v| !v.is_empty());
     let meta = ZoneMeta {
@@ -231,10 +240,11 @@ fn default_hours() -> i64 {
 
 pub async fn zone_history(
     State(state): State<AppState>,
-    _user: AuthUser,
+    user: AuthUser,
     Path((id, system_id, zone_id)): Path<(i64, i64, i64)>,
     Query(q): Query<HistoryQuery>,
 ) -> ApiResult<Json<Vec<Reading>>> {
+    Access::of(&state.db, &user).await?.view(id)?;
     let hours = q.hours.clamp(1, 24 * 90);
     Ok(Json(db::readings(&state.db, id, system_id, zone_id, db::now() - hours * 3600).await?))
 }
@@ -249,6 +259,7 @@ pub async fn batch(State(state): State<AppState>, user: AuthUser, Json(req): Jso
     if req.actions.is_empty() || req.actions.len() > 100 {
         return Err(ApiError::bad_request("1 to 100 actions expected"));
     }
+    Access::of(&state.db, &user).await?.control_actions(&req.actions)?;
     let results: Vec<ActionResult> = routines::run_actions(&state.hub, &req.actions, &user.username).await;
     Ok(Json(json!({ "results": results })))
 }
@@ -309,6 +320,7 @@ fn default_limit() -> i64 {
     100
 }
 
-pub async fn events(State(state): State<AppState>, _user: AuthUser, Query(q): Query<EventsQuery>) -> ApiResult<Json<Vec<Event>>> {
-    Ok(Json(db::list_events(&state.db, q.limit.clamp(1, 500), q.before, q.installation_id).await?))
+pub async fn events(State(state): State<AppState>, user: AuthUser, Query(q): Query<EventsQuery>) -> ApiResult<Json<Vec<Event>>> {
+    let visible = Access::of(&state.db, &user).await?.visible();
+    Ok(Json(db::list_visible_events(&state.db, q.limit.clamp(1, 500), q.before, q.installation_id, visible.as_deref()).await?))
 }

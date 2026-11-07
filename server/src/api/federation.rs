@@ -294,8 +294,15 @@ async fn node_views(state: &AppState) -> ApiResult<Vec<NodeView>> {
         .collect())
 }
 
-pub async fn list_nodes(State(state): State<AppState>, _user: AuthUser) -> ApiResult<Json<Vec<NodeView>>> {
-    Ok(Json(node_views(&state).await?))
+pub async fn list_nodes(State(state): State<AppState>, user: AuthUser) -> ApiResult<Json<Vec<NodeView>>> {
+    let access = crate::access::Access::of(&state.db, &user).await?;
+    let mut nodes = node_views(&state).await?;
+    if !access.is_admin() {
+        for n in &mut nodes {
+            n.installations.retain(|i| access.can_view(i.id));
+        }
+    }
+    Ok(Json(nodes))
 }
 
 #[derive(Deserialize)]

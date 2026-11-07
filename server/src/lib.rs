@@ -2,6 +2,7 @@
 //! local API, with users, routines, history, an activity feed, a REST + WebSocket API for
 //! the mobile app, and the web UI served as static files.
 
+pub mod access;
 pub mod airzone;
 pub mod airzone_schedules;
 pub mod api;

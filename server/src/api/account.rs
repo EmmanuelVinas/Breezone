@@ -76,8 +76,10 @@ pub async fn logout(State(state): State<AppState>, Json(req): Json<RefreshReques
     Ok(StatusCode::NO_CONTENT)
 }
 
-pub async fn me(user: AuthUser) -> Json<Value> {
-    Json(json!({ "id": user.id, "username": user.username, "role": user.role, "session_id": user.session_id }))
+pub async fn me(State(state): State<AppState>, user: AuthUser) -> ApiResult<Json<Value>> {
+    // Installations this user can see and whether they can drive them (null: all, administrator).
+    let access = if user.is_admin() { None } else { Some(access_entries(&state, user.id).await?) };
+    Ok(Json(json!({ "id": user.id, "username": user.username, "role": user.role, "session_id": user.session_id, "access": access })))
 }
 
 #[derive(Deserialize)]
@@ -147,11 +149,55 @@ pub struct UserDetails {
     #[serde(flatten)]
     pub user: UserView,
     pub created_at: i64,
+    /// Installations a user (role "user") can see; administrators see everything.
+    pub access: Vec<AccessEntry>,
+}
+
+/// One installation given to a user.
+#[derive(Serialize, Deserialize, Clone)]
+pub struct AccessEntry {
+    pub installation_id: i64,
+    /// "read" | "control"
+    pub permission: String,
+}
+
+async fn access_entries(state: &AppState, user_id: i64) -> ApiResult<Vec<AccessEntry>> {
+    Ok(db::user_access(&state.db, user_id)
+        .await?
+        .into_iter()
+        .map(|(installation_id, permission)| AccessEntry { installation_id, permission })
+        .collect())
+}
+
+async fn user_details(state: &AppState, u: &db::User) -> ApiResult<UserDetails> {
+    Ok(UserDetails { user: u.into(), created_at: u.created_at, access: access_entries(state, u.id).await? })
+}
+
+/// Checks and stores the installations given to a user.
+async fn save_access(state: &AppState, user_id: i64, entries: &[AccessEntry]) -> ApiResult<()> {
+    let mut clean: Vec<(i64, String)> = vec![];
+    for e in entries {
+        if !["read", "control"].contains(&e.permission.as_str()) {
+            return Err(ApiError::bad_request("droit attendu : read ou control"));
+        }
+        db::installation_by_id(&state.db, e.installation_id)
+            .await?
+            .ok_or_else(|| ApiError::bad_request(format!("installation {} inconnue", e.installation_id)))?;
+        if !clean.iter().any(|(id, _)| *id == e.installation_id) {
+            clean.push((e.installation_id, e.permission.clone()));
+        }
+    }
+    db::set_user_access(&state.db, user_id, &clean).await?;
+    state.hub.access_changed(user_id);
+    Ok(())
 }
 
 pub async fn list_users(State(state): State<AppState>, _admin: AdminUser) -> ApiResult<Json<Vec<UserDetails>>> {
-    let users = db::list_users(&state.db).await?;
-    Ok(Json(users.iter().map(|u| UserDetails { user: u.into(), created_at: u.created_at }).collect()))
+    let mut out = vec![];
+    for u in db::list_users(&state.db).await? {
+        out.push(user_details(&state, &u).await?);
+    }
+    Ok(Json(out))
 }
 
 #[derive(Deserialize)]
@@ -160,6 +206,9 @@ pub struct NewUser {
     pub password: String,
     #[serde(default = "default_role")]
     pub role: String,
+    /// Installations given to the user (none by default).
+    #[serde(default)]
+    pub access: Vec<AccessEntry>,
 }
 
 fn default_role() -> String {
@@ -173,15 +222,16 @@ fn check_role(role: &str) -> ApiResult<()> {
     Ok(())
 }
 
-pub async fn create_user(State(state): State<AppState>, AdminUser(admin): AdminUser, Json(req): Json<NewUser>) -> ApiResult<(StatusCode, Json<UserView>)> {
+pub async fn create_user(State(state): State<AppState>, AdminUser(admin): AdminUser, Json(req): Json<NewUser>) -> ApiResult<(StatusCode, Json<UserDetails>)> {
     let username = req.username.trim();
     auth::validate_username(username)?;
     auth::validate_password(&req.password)?;
     check_role(&req.role)?;
     let hash = auth::hash_password(req.password).await?;
     let user = db::insert_user(&state.db, username, &hash, &req.role).await?;
+    save_access(&state, user.id, &req.access).await?;
     state.hub.log("auth", "info", None, Some(&admin.username), &format!("Utilisateur « {} » créé ({})", user.username, user.role), None).await;
-    Ok((StatusCode::CREATED, Json((&user).into())))
+    Ok((StatusCode::CREATED, Json(user_details(&state, &user).await?)))
 }
 
 #[derive(Deserialize)]
@@ -190,15 +240,22 @@ pub struct UserUpdate {
     pub role: Option<String>,
     #[serde(default)]
     pub password: Option<String>,
+    /// Replaces the installations given to the user (unchanged if absent).
+    #[serde(default)]
+    pub access: Option<Vec<AccessEntry>>,
 }
 
-pub async fn update_user(State(state): State<AppState>, AdminUser(admin): AdminUser, Path(id): Path<i64>, Json(req): Json<UserUpdate>) -> ApiResult<Json<UserView>> {
+pub async fn update_user(State(state): State<AppState>, AdminUser(admin): AdminUser, Path(id): Path<i64>, Json(req): Json<UserUpdate>) -> ApiResult<Json<UserDetails>> {
     let user = db::user_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("user not found"))?;
     if let Some(role) = &req.role {
         check_role(role)?;
         if !db::update_user_role_keeping_an_admin(&state.db, id, role).await? {
             return Err(ApiError::bad_request("cannot demote the last administrator"));
         }
+        state.hub.access_changed(id);
+    }
+    if let Some(access) = &req.access {
+        save_access(&state, id, access).await?;
     }
     if let Some(password) = req.password {
         auth::validate_password(&password)?;
@@ -209,7 +266,7 @@ pub async fn update_user(State(state): State<AppState>, AdminUser(admin): AdminU
     }
     state.hub.log("auth", "info", None, Some(&admin.username), &format!("Utilisateur « {} » modifié", user.username), None).await;
     let updated = db::user_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("user not found"))?;
-    Ok(Json((&updated).into()))
+    Ok(Json(user_details(&state, &updated).await?))
 }
 
 pub async fn delete_user(State(state): State<AppState>, AdminUser(admin): AdminUser, Path(id): Path<i64>) -> ApiResult<StatusCode> {

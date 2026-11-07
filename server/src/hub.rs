@@ -118,6 +118,8 @@ pub enum HubMessage {
     InstallationRemoved { id: i64 },
     Event { event: Event },
     RoutinesChanged,
+    /// The installations a user can see changed (handled by the server, not forwarded).
+    AccessChanged { user_id: i64 },
 }
 
 /// A command on one zone. Every field is optional; only the provided ones are applied.
@@ -609,6 +611,10 @@ impl Hub {
 
     pub fn routines_changed(&self) {
         self.send(HubMessage::RoutinesChanged);
+    }
+
+    pub fn access_changed(&self, user_id: i64) {
+        self.send(HubMessage::AccessChanged { user_id });
     }
 
     // -----------------------------------------------------------------------------------

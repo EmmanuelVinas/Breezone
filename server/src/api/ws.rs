@@ -10,7 +10,9 @@
 //! The server pings every 25 s (keeps Cloudflare Tunnel connections alive) and closes the
 //! socket as soon as the device session is revoked.
 
+use crate::access::Access;
 use crate::auth;
+use crate::hub::HubMessage;
 use crate::db;
 use crate::AppState;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
@@ -53,8 +55,9 @@ async fn session(socket: WebSocket, state: AppState) {
 
     // 2. Hello + initial snapshot. Subscribe first so no update is missed.
     let mut rx = state.hub.subscribe();
+    let Ok(mut access) = Access::of(&state.db, &user).await else { return };
     let hello = json!({ "type": "hello", "user": { "id": user.id, "username": user.username, "role": user.role } });
-    let snapshot = json!({ "type": "snapshot", "installations": state.hub.snapshot().await });
+    let snapshot = snapshot_for(&state, &access).await;
     if !send_json(&mut sink, &hello).await || !send_json(&mut sink, &snapshot).await {
         return;
     }
@@ -66,8 +69,24 @@ async fn session(socket: WebSocket, state: AppState) {
         tokio::select! {
             msg = rx.recv() => {
                 let value = match msg {
+                    // Only what this user can see.
+                    Ok(HubMessage::Installation { installation }) => {
+                        if !access.can_view(installation.id) {
+                            continue;
+                        }
+                        serde_json::to_value(HubMessage::Installation { installation: access.apply(installation) }).unwrap_or_default()
+                    }
+                    Ok(HubMessage::Event { event }) if !event.installation_id.map_or(access.is_admin(), |id| access.can_view(id)) => continue,
+                    Ok(HubMessage::AccessChanged { user_id }) => {
+                        if user_id != user.id {
+                            continue;
+                        }
+                        let Ok(a) = Access::of(&state.db, &user).await else { break };
+                        access = a;
+                        snapshot_for(&state, &access).await
+                    }
                     Ok(m) => serde_json::to_value(&m).unwrap_or_default(),
-                    Err(RecvError::Lagged(_)) => json!({ "type": "snapshot", "installations": state.hub.snapshot().await }),
+                    Err(RecvError::Lagged(_)) => snapshot_for(&state, &access).await,
                     Err(RecvError::Closed) => break,
                 };
                 if !send_json(&mut sink, &value).await {
@@ -95,4 +114,10 @@ async fn session(socket: WebSocket, state: AppState) {
         }
     }
     let _ = sink.close().await;
+}
+
+/// Installations the user can see, as a `snapshot` message.
+async fn snapshot_for(state: &AppState, access: &Access) -> Value {
+    let installations = access.filter(state.hub.snapshot().await);
+    json!({ "type": "snapshot", "installations": installations })
 }

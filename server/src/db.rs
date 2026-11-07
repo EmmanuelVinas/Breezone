@@ -528,6 +528,50 @@ pub async fn insert_event(
     .await
 }
 
+/// Installations a user (role 'user') can see: (installation id, "read" | "control").
+pub async fn user_access(db: &Db, user_id: i64) -> sqlx::Result<Vec<(i64, String)>> {
+    sqlx::query_as("SELECT installation_id, permission FROM user_installations WHERE user_id = ? ORDER BY installation_id")
+        .bind(user_id)
+        .fetch_all(db)
+        .await
+}
+
+/// Replaces the installations a user can see.
+pub async fn set_user_access(db: &Db, user_id: i64, access: &[(i64, String)]) -> sqlx::Result<()> {
+    let mut tx = db.begin().await?;
+    sqlx::query("DELETE FROM user_installations WHERE user_id = ?").bind(user_id).execute(&mut *tx).await?;
+    for (installation_id, permission) in access {
+        sqlx::query("INSERT INTO user_installations (user_id, installation_id, permission) VALUES (?, ?, ?)")
+            .bind(user_id)
+            .bind(installation_id)
+            .bind(permission)
+            .execute(&mut *tx)
+            .await?;
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Events, newest first. `visible`: only these installations (no system events); `None` = all.
+pub async fn list_visible_events(db: &Db, limit: i64, before_id: Option<i64>, installation_id: Option<i64>, visible: Option<&[i64]>) -> sqlx::Result<Vec<Event>> {
+    let Some(ids) = visible else { return list_events(db, limit, before_id, installation_id).await };
+    if ids.is_empty() {
+        return Ok(vec![]);
+    }
+    let list = serde_json::to_string(ids).unwrap_or_else(|_| "[]".into());
+    sqlx::query_as(
+        "SELECT * FROM events WHERE id < ? AND (? IS NULL OR installation_id = ?)
+         AND installation_id IN (SELECT value FROM json_each(?)) ORDER BY id DESC LIMIT ?",
+    )
+    .bind(before_id.unwrap_or(i64::MAX))
+    .bind(installation_id)
+    .bind(installation_id)
+    .bind(list)
+    .bind(limit)
+    .fetch_all(db)
+    .await
+}
+
 pub async fn list_events(db: &Db, limit: i64, before_id: Option<i64>, installation_id: Option<i64>) -> sqlx::Result<Vec<Event>> {
     sqlx::query_as(
         "SELECT * FROM events WHERE id < ? AND (? IS NULL OR installation_id = ?) ORDER BY id DESC LIMIT ?",

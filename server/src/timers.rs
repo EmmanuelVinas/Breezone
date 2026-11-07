@@ -25,6 +25,14 @@ pub enum Target {
 }
 
 impl Target {
+    /// Installation targeted (`None` for all installations).
+    pub fn installation_id(&self) -> Option<i64> {
+        match self {
+            Target::Zone { installation_id, .. } | Target::Group { installation_id, .. } | Target::Installation { installation_id } => Some(*installation_id),
+            Target::All => None,
+        }
+    }
+
     /// Zones targeted, in the current state of the installations.
     pub fn zones(&self, installations: &[InstallationView]) -> Vec<(i64, i64, i64)> {
         installations

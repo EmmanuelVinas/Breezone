@@ -254,7 +254,15 @@ async fn full_flow() {
     let (s, _) = env.call("POST", "/api/installations", Some(&marie), Some(json!({"name":"X","host":"1.2.3.4"}))).await;
     assert_eq!(s, StatusCode::FORBIDDEN);
     let (s, _) = env.call("PATCH", &format!("/api/installations/{inst}/zones/1/1"), Some(&marie), Some(json!({"on":true}))).await;
-    assert_eq!(s, StatusCode::OK, "regular users can drive zones");
+    assert_eq!(s, StatusCode::NOT_FOUND, "a new user sees no installation until one is given");
+    let (_, users) = env.call("GET", "/api/users", Some(&token), None).await;
+    let marie_id = users.as_array().unwrap().iter().find(|u| u["username"] == "marie").unwrap()["id"].as_i64().unwrap();
+    let (s, _) = env
+        .call("PUT", &format!("/api/users/{marie_id}"), Some(&token), Some(json!({"access":[{"installation_id": inst, "permission": "control"}]})))
+        .await;
+    assert_eq!(s, StatusCode::OK);
+    let (s, _) = env.call("PATCH", &format!("/api/installations/{inst}/zones/1/1"), Some(&marie), Some(json!({"on":true}))).await;
+    assert_eq!(s, StatusCode::OK, "regular users drive the installations given to them");
     let (s, _) = env.call("POST", "/api/auth/login", None, Some(json!({"username":"marie","password":"wrong-password"}))).await;
     assert_eq!(s, StatusCode::UNAUTHORIZED);
 
