@@ -43,13 +43,13 @@ curl -fsSL https://raw.githubusercontent.com/EmmanuelVinas/breezone/main/.env.sa
 docker compose up -d
 ```
 
-Open `http://<your-server>:8080`: the first page creates the administrator account, then offers to
+Open `http://<your-server>:8427`: the first page creates the administrator account, then offers to
 import your Airzone account (optional) or to search for WebServers on the network.
 
 Without compose:
 
 ```bash
-docker run -d --name breezone --restart unless-stopped -p 8080:8080 \
+docker run -d --name breezone --restart unless-stopped -p 8427:8427 \
   -v breezone_data:/data -e TZ=Europe/Paris ghcr.io/emmanuelvinas/breezone:latest
 ```
 
@@ -73,7 +73,7 @@ in the `breezone_data` volume; back it up with
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `BREEZONE_HTTP_PORT` | `8080` | Published port (compose) |
+| `BREEZONE_HTTP_PORT` | `8427` | Published port (compose) |
 | `BREEZONE_VERSION` | `latest` | Image tag (compose) |
 | `BREEZONE_SCAN_SUBNET` | server's /24 | Network scanned for WebServers (also settable in the UI) |
 | `BREEZONE_AIRZONE_HOSTS` | — | Installations created at first start (`Home=192.168.1.25,Office=192.168.1.40:3000`) |
@@ -88,7 +88,7 @@ in the `breezone_data` volume; back it up with
 ## Mobile app
 
 Android: Google Play (coming soon) or build it yourself. Add your server's address
-(`http://192.168.1.10:8080` at home, or your tunnel's `https://` address) and sign in; add one server
+(`http://192.168.1.10:8427` at home, or your tunnel's `https://` address) and sign in; add one server
 per site. The device session is kept in the Android Keystore / iOS Keychain: you sign in again only if
 it changes or if the device is revoked from the web UI.
 

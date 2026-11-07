@@ -347,7 +347,7 @@ function ShareDialog({
                 value={url}
                 placeholder={
                   identity.data?.public_url ??
-                  "https://breezone.mondomaine.fr ou http://192.168.1.20:8080"
+                  "https://breezone.mondomaine.fr ou http://192.168.1.20:8427"
                 }
                 onChange={(e) => setUrl(e.target.value)}
               />
@@ -586,7 +586,7 @@ export function AddNodeDialog({ onClose }: { onClose: () => void }) {
             <Input
               id="node-url-override"
               value={url}
-              placeholder="Celle du jeton, sinon par ex. http://192.168.1.20:8080"
+              placeholder="Celle du jeton, sinon par ex. http://192.168.1.20:8427"
               onChange={(e) => setUrl(e.target.value)}
             />
           </div>

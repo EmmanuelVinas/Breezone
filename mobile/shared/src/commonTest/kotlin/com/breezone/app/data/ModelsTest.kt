@@ -33,6 +33,6 @@ class ModelsTest {
     @Test
     fun normalizesServerUrls() {
         assertEquals("https://breezone.example.fr", normalizeUrl(" breezone.example.fr/ "))
-        assertEquals("http://192.168.1.10:8080", normalizeUrl("http://192.168.1.10:8080/"))
+        assertEquals("http://192.168.1.10:8427", normalizeUrl("http://192.168.1.10:8427/"))
     }
 }

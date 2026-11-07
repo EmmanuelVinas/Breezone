@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Android 17+: reaching a Breezone server on the local network (http://192.168.x.x:8080)
+    <!-- Android 17+: reaching a Breezone server on the local network (http://192.168.x.x:8427)
          requires this runtime permission (local network protection). -->
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
 
@@ -10,7 +10,7 @@
       allowBackup=false: the session lives in the Android Keystore and must never be restored on
       another device (the user then simply signs in again).
       usesCleartextTraffic=true: a Breezone server on the LAN is usually reached over plain HTTP
-      (http://192.168.x.x:8080); remote access goes through HTTPS (Cloudflare Tunnel).
+      (http://192.168.x.x:8427); remote access goes through HTTPS (Cloudflare Tunnel).
     -->
     <application
         android:name=".BreezoneApplication"

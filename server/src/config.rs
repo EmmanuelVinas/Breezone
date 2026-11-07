@@ -57,7 +57,7 @@ impl Config {
             .unwrap_or(chrono_tz::Europe::Paris);
         Self {
             bind: var("BREEZONE_BIND").unwrap_or_else(|| "0.0.0.0".into()),
-            port: num("BREEZONE_PORT", 8080),
+            port: num("BREEZONE_PORT", 8427),
             data_dir: var("BREEZONE_DATA_DIR").map(PathBuf::from).unwrap_or_else(|| "data".into()),
             web_dir: var("BREEZONE_WEB_DIR").map(PathBuf::from).unwrap_or_else(|| "web".into()),
             poll_interval_secs: num("BREEZONE_POLL_INTERVAL_SECS", 15).max(2),

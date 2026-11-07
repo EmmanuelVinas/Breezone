@@ -20,7 +20,7 @@
 	<string>1</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
-		<!-- A Breezone server on the LAN is reached over plain HTTP (http://192.168.x.x:8080). -->
+		<!-- A Breezone server on the LAN is reached over plain HTTP (http://192.168.x.x:8427). -->
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>

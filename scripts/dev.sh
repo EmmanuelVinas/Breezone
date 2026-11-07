@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Development without Docker: fake Airzone + Breezone server (cargo) + web UI (Vite, hot reload).
 #
-#   ./scripts/dev.sh            # http://localhost:5173 (Vite) → proxies /api to :8080
+#   ./scripts/dev.sh            # http://localhost:5173 (Vite) → proxies /api to :8427
 #   ./scripts/dev.sh --reset    # start from an empty database (data/dev)
 #   ./scripts/dev.sh --real     # no fake Airzone: use BREEZONE_* from .env (real WebServers)
 #   BREEZONE_DEV_PORT=8091 ./scripts/dev.sh   # server on another port (e.g. for the mobile E2E test)
@@ -41,7 +41,7 @@ PIDS=()
 cleanup() { kill "${PIDS[@]}" 2>/dev/null || true; }
 trap cleanup EXIT INT TERM
 
-DEV_PORT="${BREEZONE_DEV_PORT:-8080}"
+DEV_PORT="${BREEZONE_DEV_PORT:-8427}"
 export BREEZONE_PORT="${DEV_PORT}" BREEZONE_DATA_DIR="${DATA_DIR}" BREEZONE_WEB_DIR="${PROJECT_DIR}/web/dist"
 export BREEZONE_DEV_SERVER="http://localhost:${DEV_PORT}"
 if [ "${FAKE}" = "true" ]; then

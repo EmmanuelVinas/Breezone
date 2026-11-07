@@ -42,10 +42,10 @@ COPY --from=server /src/target/release/breezone-server /src/target/release/mock-
 COPY --from=web /web/dist /app/web
 ENV BREEZONE_DATA_DIR=/data \
     BREEZONE_WEB_DIR=/app/web \
-    BREEZONE_PORT=8080 \
+    BREEZONE_PORT=8427 \
     RUST_LOG=info,tower_http=warn,sqlx=warn
 USER breezone
 VOLUME /data
-EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s CMD wget -qO- http://127.0.0.1:8080/health >/dev/null || exit 1
+EXPOSE 8427
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s CMD wget -qO- http://127.0.0.1:8427/health >/dev/null || exit 1
 ENTRYPOINT ["breezone-server"]

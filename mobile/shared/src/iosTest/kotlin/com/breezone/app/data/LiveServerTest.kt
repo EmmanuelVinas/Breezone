@@ -22,7 +22,7 @@ import kotlin.time.Duration.Companion.seconds
 /**
  * End-to-end check of the mobile data layer against a Breezone **development** server:
  * `BREEZONE_DEV_PORT=8091 BREEZONE_ADMIN_USER=admin BREEZONE_ADMIN_PASSWORD=motdepasse1 ./scripts/dev.sh --reset`.
- * It uses a dedicated port so that it never touches a real instance (usually on :8080), and is
+ * It uses a dedicated port so that it never touches a real instance (usually on :8427), and is
  * skipped when no server answers there or when the test credentials are refused.
  */
 class LiveServerTest {

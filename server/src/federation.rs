@@ -442,10 +442,10 @@ mod tests {
 
     #[test]
     fn http_only_to_private_addresses() {
-        assert!(normalize_url("http://192.168.1.20:8080/").is_ok());
-        assert!(normalize_url("http://nas.local:8080").is_ok());
-        assert!(normalize_url("http://nas:8080").is_ok());
-        assert!(normalize_url("http://[fd00::1]:8080").is_ok());
+        assert!(normalize_url("http://192.168.1.20:8427/").is_ok());
+        assert!(normalize_url("http://nas.local:8427").is_ok());
+        assert!(normalize_url("http://nas:8427").is_ok());
+        assert!(normalize_url("http://[fd00::1]:8427").is_ok());
         assert!(normalize_url("https://breezone.example.org").is_ok());
         assert!(normalize_url("http://breezone.example.org").is_err());
         assert!(normalize_url("http://8.8.8.8").is_err());

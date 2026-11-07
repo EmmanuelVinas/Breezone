@@ -33,7 +33,7 @@ services:
     network_mode: host
     environment:
       TZ: Europe/Paris
-      BREEZONE_PORT: "8080"    # changez-le si le port 8080 est déjà pris sur le NAS
+      BREEZONE_PORT: "8427"    # changez-le si le port 8427 est déjà pris sur le NAS
     volumes:
       - breezone_data:/data
     mem_limit: 300m
@@ -47,18 +47,18 @@ télécharge l'image et démarre le conteneur (une minute environ).
 
 ## 3. Premier démarrage
 
-Ouvrez `http://192.168.1.20:8080` (l'IP de votre NAS) :
+Ouvrez `http://192.168.1.20:8427` (l'IP de votre NAS) :
 
 1. créez le compte administrateur ;
 2. connectez votre compte Airzone (facultatif) ou laissez Breezone rechercher les WebServers sur le
    réseau (*Réglages › Installations*).
 
 Si la page ne s'ouvre pas : **Panneau de configuration › Sécurité › Pare-feu**, autorisez le port
-`8080` (TCP) depuis votre réseau local.
+`8427` (TCP) depuis votre réseau local.
 
 ## 4. Application mobile
 
-Dans l'application, l'adresse du serveur est `http://192.168.1.20:8080` à la maison. Sur Android 17
+Dans l'application, l'adresse du serveur est `http://192.168.1.20:8427` à la maison. Sur Android 17
 et plus, acceptez l'autorisation « Appareils à proximité » (accès au réseau local) au premier
 lancement.
 
@@ -68,11 +68,11 @@ Deux solutions, sans ouvrir le port 3000 des WebServers (leur API n'a aucune aut
 
 - **Proxy inversé du NAS**, si vous avez déjà un nom de domaine et un certificat sur le NAS :
   **Panneau de configuration › Portail de connexion › Avancé › Proxy inversé › Créer** :
-  source `HTTPS` / `breezone.mondomaine.fr` / port `443`, destination `HTTP` / `localhost` / `8080`.
+  source `HTTPS` / `breezone.mondomaine.fr` / port `443`, destination `HTTP` / `localhost` / `8427`.
   Dans **En-tête personnalisé**, cliquez sur **Créer › WebSocket** (indispensable pour le temps réel).
 - **Cloudflare Tunnel**, sans ouvrir aucun port sur la box : ajoutez au projet le service
   `cloudflared` décrit dans le [docker-compose.yml](../docker-compose.yml) du dépôt, avec le jeton de
-  votre tunnel pointant vers `http://localhost:8080`.
+  votre tunnel pointant vers `http://localhost:8427`.
 
 ## 6. Mettre à jour
 
@@ -102,6 +102,6 @@ Hyper Backup.
 |----------|----------|
 | « Registry returned bad result » | Normal avec `ghcr.io` : n'utilisez pas l'onglet Registre, créez le projet (étape 2). |
 | Le téléchargement de l'image échoue (`denied`, `unauthorized`) | L'image n'est pas encore publique, ou le nom est mal saisi : `ghcr.io/emmanuelvinas/breezone` (en minuscules). |
-| Le conteneur redémarre en boucle, « address already in use » | Le port 8080 est pris : changez `BREEZONE_PORT` (ex. `8099`). |
+| Le conteneur redémarre en boucle, « address already in use » | Le port 8427 est pris : changez `BREEZONE_PORT` (ex. `8099`). |
 | Aucun WebServer trouvé | Vérifiez `network_mode: host` ; sinon indiquez le réseau dans *Réglages › Installations* (ex. `192.168.1.0/24`) ou l'adresse IP du WebServer. |
 | L'application Android affiche une erreur de réseau local | Autorisez « Appareils à proximité » dans *Paramètres › Applications › Breezone › Autorisations*. |

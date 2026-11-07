@@ -76,7 +76,7 @@
     <string name="add_server_title">Sign in to your server</string>
     <string name="add_server_title_setup">New server</string>
     <string name="add_server_title_reauth">Session expired on %1$s</string>
-    <string name="add_server_hint">Address of your Breezone server: its local IP (http://192.168.1.10:8080) or its public address through Cloudflare Tunnel.</string>
+    <string name="add_server_hint">Address of your Breezone server: its local IP (http://192.168.1.10:8427) or its public address through Cloudflare Tunnel.</string>
     <string name="add_server_hint_setup">This server has no account yet: you are about to create its administrator.</string>
     <string name="add_server_hint_reauth">Enter your password again.</string>
     <string name="add_server_url">Server address</string>

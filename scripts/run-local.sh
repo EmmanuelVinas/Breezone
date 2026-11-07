@@ -42,7 +42,7 @@ set -a
 source "${PROJECT_DIR}/.env"
 set +a
 
-BREEZONE_HTTP_PORT="${BREEZONE_HTTP_PORT:-8080}"
+BREEZONE_HTTP_PORT="${BREEZONE_HTTP_PORT:-8427}"
 PROFILES=()
 if [ "${DEMO}" = "true" ]; then
   PROFILES+=(--profile demo)

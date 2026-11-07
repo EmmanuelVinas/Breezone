@@ -41,13 +41,13 @@ curl -fsSL https://raw.githubusercontent.com/EmmanuelVinas/breezone/main/.env.sa
 docker compose up -d
 ```
 
-Ouvrez `http://<votre-serveur>:8080` : la première page crée le compte administrateur, puis propose
+Ouvrez `http://<votre-serveur>:8427` : la première page crée le compte administrateur, puis propose
 d'importer votre compte Airzone (facultatif) ou de rechercher les WebServers sur le réseau.
 
 Sans compose :
 
 ```bash
-docker run -d --name breezone --restart unless-stopped -p 8080:8080 \
+docker run -d --name breezone --restart unless-stopped -p 8427:8427 \
   -v breezone_data:/data -e TZ=Europe/Paris ghcr.io/emmanuelvinas/breezone:latest
 ```
 
@@ -73,7 +73,7 @@ dans [`.env.sample`](.env.sample).
 ## Application mobile
 
 Android : Google Play (bientôt) ou compilez-la vous-même. Saisissez l'adresse de votre serveur
-(`http://192.168.1.10:8080` à la maison, ou l'adresse `https://` de votre tunnel) puis vos identifiants ;
+(`http://192.168.1.10:8427` à la maison, ou l'adresse `https://` de votre tunnel) puis vos identifiants ;
 ajoutez un serveur par site. La session de l'appareil est conservée dans l'Android Keystore / le
 Keychain iOS : le mot de passe n'est redemandé que s'il change ou si l'appareil est révoqué depuis le web.
 
