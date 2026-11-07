@@ -84,6 +84,7 @@ export function SetpointDial({
       ref={ref}
       viewBox={`0 0 ${size} ${size}`}
       className={cn(
+        "setpoint-dial",
         "w-full max-w-[320px] touch-none select-none",
         dragging ? "cursor-grabbing" : "cursor-grab"
       )}

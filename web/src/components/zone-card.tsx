@@ -52,7 +52,14 @@ export function useSetpointDraft(zone: Zone) {
   return { value, setDraft, commit, nudge, pending: draft !== null }
 }
 
-export function ZoneCard({ zone }: { zone: Zone }) {
+export function ZoneCard({
+  zone,
+  readOnly = false,
+}: {
+  zone: Zone
+  /** The user can only look at this installation. */
+  readOnly?: boolean
+}) {
   const control = useZoneControl()
   const { value, nudge, pending } = useSetpointDraft(zone)
   const tone = zoneTone(zone)
@@ -110,6 +117,7 @@ export function ZoneCard({ zone }: { zone: Zone }) {
         <CommandIndicator zone={zone} className="ml-auto" />
         <Switch
           checked={zone.on}
+          disabled={readOnly}
           onCheckedChange={(on) => control.mutate({ zone, cmd: { on } })}
           aria-label={zone.on ? "Éteindre" : "Allumer"}
         />
@@ -136,6 +144,7 @@ export function ZoneCard({ zone }: { zone: Zone }) {
             size="icon"
             variant="ghost"
             className="size-8 rounded-xl"
+            disabled={readOnly}
             onClick={() => nudge(-(zone.step || 0.5))}
             aria-label="Baisser"
           >
@@ -153,6 +162,7 @@ export function ZoneCard({ zone }: { zone: Zone }) {
             size="icon"
             variant="ghost"
             className="size-8 rounded-xl"
+            disabled={readOnly}
             onClick={() => nudge(zone.step || 0.5)}
             aria-label="Monter"
           >

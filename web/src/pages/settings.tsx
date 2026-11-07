@@ -18,7 +18,12 @@ import {
   UserPlus,
 } from "lucide-react"
 import { toast } from "sonner"
-import type { Found, InstallationConfig, SyncReport } from "@/lib/api"
+import type {
+  AccessEntry,
+  Found,
+  InstallationConfig,
+  SyncReport,
+} from "@/lib/api"
 import { api, currentUser } from "@/lib/api"
 import { dateTime, relativeTime } from "@/lib/format"
 import { PageHeader } from "@/components/app-shell"
@@ -667,23 +672,105 @@ function CloudTab({ admin }: { admin: boolean }) {
 // Users
 // ---------------------------------------------------------------------------------------
 
+/** Installations a user can see, and whether they can drive them. */
+function AccessEditor({
+  value,
+  onChange,
+}: {
+  value: AccessEntry[]
+  onChange: (v: AccessEntry[]) => void
+}) {
+  const installations = useQuery({
+    queryKey: ["installations"],
+    queryFn: api.installations,
+  })
+  const list = installations.data ?? []
+  const level = (id: number) =>
+    value.find((a) => a.installation_id === id)?.permission ?? "none"
+  const set = (id: number, l: string) =>
+    onChange([
+      ...value.filter((a) => a.installation_id !== id),
+      ...(l === "none"
+        ? []
+        : [
+            { installation_id: id, permission: l as AccessEntry["permission"] },
+          ]),
+    ])
+  return (
+    <div className="grid gap-2">
+      {list.length === 0 && (
+        <p className="text-sm text-muted-foreground">Aucune installation.</p>
+      )}
+      {list.map((i) => (
+        <div
+          key={i.id}
+          className="flex flex-wrap items-center gap-3 rounded-xl border p-2.5 text-sm"
+        >
+          <span className="min-w-0 flex-1">
+            {i.name}
+            <span className="block text-xs text-muted-foreground">
+              {i.node_id !== null
+                ? "via un autre serveur Breezone"
+                : (i.location ?? `${i.host}:${i.port}`)}
+            </span>
+          </span>
+          <Select value={level(i.id)} onValueChange={(l) => set(i.id, l)}>
+            <SelectTrigger className="w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Aucun accès</SelectItem>
+              <SelectItem value="read">Lecture seule</SelectItem>
+              <SelectItem value="control">Lecture et pilotage</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      ))}
+      <p className="text-xs text-muted-foreground">
+        Les installations ajoutées plus tard ne sont données à personne :
+        revenez ici pour les attribuer.
+      </p>
+    </div>
+  )
+}
+
+function accessSummary(access: AccessEntry[]) {
+  if (access.length === 0) return "Aucune installation"
+  const control = access.filter((a) => a.permission === "control").length
+  const n = access.length
+  return `${n} installation${n > 1 ? "s" : ""}${control ? ` · ${control} en pilotage` : " · lecture seule"}`
+}
+
 function UsersTab() {
   const qc = useQueryClient()
   const me = currentUser()
   const users = useQuery({ queryKey: ["users"], queryFn: api.users })
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({ username: "", password: "", role: "user" })
+  const [newAccess, setNewAccess] = useState<AccessEntry[]>([])
+  const [editing, setEditing] = useState<{
+    id: number
+    username: string
+    access: AccessEntry[]
+  } | null>(null)
   const [reset, setReset] = useState<{ id: number; username: string } | null>(
     null
   )
   const [newPassword, setNewPassword] = useState("")
   const refresh = () => qc.invalidateQueries({ queryKey: ["users"] })
   const create = useMutation({
-    mutationFn: () => api.createUser(form.username, form.password, form.role),
+    mutationFn: () =>
+      api.createUser(
+        form.username,
+        form.password,
+        form.role,
+        form.role === "user" ? newAccess : []
+      ),
     onSuccess: () => {
       toast.success("Utilisateur créé")
       setOpen(false)
       setForm({ username: "", password: "", role: "user" })
+      setNewAccess([])
       refresh()
     },
     onError: (e) => toast.error(errorText(e)),
@@ -694,11 +781,12 @@ function UsersTab() {
       data,
     }: {
       id: number
-      data: { role?: string; password?: string }
+      data: { role?: string; password?: string; access?: AccessEntry[] }
     }) => api.updateUser(id, data),
     onSuccess: () => {
       toast.success("Utilisateur modifié")
       setReset(null)
+      setEditing(null)
       setNewPassword("")
       refresh()
     },
@@ -715,8 +803,9 @@ function UsersTab() {
       <CardHeader>
         <CardTitle>Utilisateurs</CardTitle>
         <CardDescription>
-          Les membres du foyer pilotent les zones et les programmations ; seuls
-          les administrateurs configurent le serveur.
+          Les administrateurs voient et pilotent tout, et configurent le
+          serveur. Un utilisateur ne voit que les installations que vous lui
+          donnez, en lecture seule ou avec le pilotage.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-2">
@@ -736,9 +825,27 @@ function UsersTab() {
                 )}
               </div>
               <div className="text-xs text-muted-foreground">
-                Créé le {dateTime(u.created_at)}
+                {u.role === "admin"
+                  ? "Toutes les installations"
+                  : accessSummary(u.access)}{" "}
+                · créé le {dateTime(u.created_at)}
               </div>
             </div>
+            {u.role === "user" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  setEditing({
+                    id: u.id,
+                    username: u.username,
+                    access: u.access,
+                  })
+                }
+              >
+                Installations
+              </Button>
+            )}
             <Select
               value={u.role}
               onValueChange={(role) =>
@@ -819,6 +926,16 @@ function UsersTab() {
                 </SelectContent>
               </Select>
             </div>
+            {form.role === "user" ? (
+              <div className="grid gap-2">
+                <Label>Installations</Label>
+                <AccessEditor value={newAccess} onChange={setNewAccess} />
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Un administrateur voit et pilote toutes les installations.
+              </p>
+            )}
           </div>
           <DialogFooter>
             <Button
@@ -828,6 +945,44 @@ function UsersTab() {
               }
             >
               Créer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={editing !== null}
+        onOpenChange={(o) => !o && setEditing(null)}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Installations de {editing?.username}</DialogTitle>
+            <DialogDescription>
+              Ce qu'il voit dans le web et l'application, et ce qu'il peut
+              piloter. Le changement s'applique aussitôt sur ses appareils.
+            </DialogDescription>
+          </DialogHeader>
+          {editing && (
+            <AccessEditor
+              value={editing.access}
+              onChange={(access) => setEditing({ ...editing, access })}
+            />
+          )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEditing(null)}>
+              Annuler
+            </Button>
+            <Button
+              onClick={() =>
+                editing &&
+                update.mutate({
+                  id: editing.id,
+                  data: { access: editing.access },
+                })
+              }
+              disabled={update.isPending}
+            >
+              Enregistrer
             </Button>
           </DialogFooter>
         </DialogContent>

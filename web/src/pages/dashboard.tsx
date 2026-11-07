@@ -172,7 +172,7 @@ function SystemModes({ inst }: { inst: Installation }) {
       z.modes.length > 0 &&
       all.findIndex((o) => o.is_master && o.system_id === z.system_id) === i
   )
-  if (!masters.length) return null
+  if (!masters.length || !inst.controllable) return null
   return (
     <div className="flex flex-wrap gap-3">
       {masters.map((m) => (
@@ -226,7 +226,15 @@ function SystemModes({ inst }: { inst: Installation }) {
   )
 }
 
-function ZoneGroup({ name, zones }: { name: string | null; zones: Zone[] }) {
+function ZoneGroup({
+  name,
+  zones,
+  readOnly,
+}: {
+  name: string | null
+  zones: Zone[]
+  readOnly: boolean
+}) {
   const power = useGroupPower()
   const on = zones.filter((z) => z.on).length
   return (
@@ -238,7 +246,7 @@ function ZoneGroup({ name, zones }: { name: string | null; zones: Zone[] }) {
             {on}/{zones.length} allumée{on > 1 ? "s" : ""}
           </span>
         </div>
-        <div className="flex gap-1">
+        <div className={cn("flex gap-1", readOnly && "hidden")}>
           <Button
             size="sm"
             variant="ghost"
@@ -263,7 +271,11 @@ function ZoneGroup({ name, zones }: { name: string | null; zones: Zone[] }) {
       </div>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {zones.map((z) => (
-          <ZoneCard key={`${z.system_id}-${z.zone_id}`} zone={z} />
+          <ZoneCard
+            key={`${z.system_id}-${z.zone_id}`}
+            zone={z}
+            readOnly={readOnly}
+          />
         ))}
       </div>
     </section>
@@ -411,6 +423,7 @@ export function DashboardPage() {
                     key={g.name ?? "_"}
                     name={g.name}
                     zones={g.zones}
+                    readOnly={!selected.controllable}
                   />
                 ))
               )}

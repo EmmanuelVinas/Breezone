@@ -302,7 +302,13 @@ export type Session = {
   current: boolean
 }
 
-export type UserDetails = User & { created_at: number }
+/** One installation given to a user (administrators see everything). */
+export type AccessEntry = {
+  installation_id: number
+  permission: "read" | "control"
+}
+
+export type UserDetails = User & { created_at: number; access: AccessEntry[] }
 
 export type CloudInstallation = {
   cloud_id: string
@@ -582,10 +588,22 @@ export const api = {
   revokeSession: (id: number) => request<void>("DELETE", `/api/sessions/${id}`),
 
   users: () => request<UserDetails[]>("GET", "/api/users"),
-  createUser: (username: string, password: string, role: string) =>
-    request<User>("POST", "/api/users", { username, password, role }),
-  updateUser: (id: number, data: { role?: string; password?: string }) =>
-    request<User>("PUT", `/api/users/${id}`, data),
+  createUser: (
+    username: string,
+    password: string,
+    role: string,
+    access: AccessEntry[] = []
+  ) =>
+    request<UserDetails>("POST", "/api/users", {
+      username,
+      password,
+      role,
+      access,
+    }),
+  updateUser: (
+    id: number,
+    data: { role?: string; password?: string; access?: AccessEntry[] }
+  ) => request<UserDetails>("PUT", `/api/users/${id}`, data),
   deleteUser: (id: number) => request<void>("DELETE", `/api/users/${id}`),
 
   status: () => request<Installation[]>("GET", "/api/status"),

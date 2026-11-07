@@ -37,6 +37,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -384,6 +390,19 @@ function LinkDialog({
                 <NodeStateBadge state={n.status.state} />
               </div>
             ))}
+            {(nodes.data ?? [])
+              .filter((n) => n.status.state === "pending")
+              .map((n) => (
+                <Alert key={`pending-${n.id}`}>
+                  <TriangleAlert />
+                  <AlertTitle>En attente d'acceptation</AlertTitle>
+                  <AlertDescription>
+                    « {n.name} » doit encore accepter votre demande : sur ce
+                    serveur-là, Réglages › Partages › Accepter. Ses
+                    installations apparaîtront ensuite ici.
+                  </AlertDescription>
+                </Alert>
+              ))}
             <Button
               variant="outline"
               className="justify-self-start"
@@ -540,6 +559,7 @@ export function InstallationMap({
   })
   const [editing, setEditing] = useState<string | null>(openFor ?? null)
   const [linkingLocal, setLinkingLocal] = useState<number | null>(null)
+  const [addingNode, setAddingNode] = useState(false)
 
   const list = cloud.data?.installations ?? []
   const all = configs.data ?? []
@@ -637,9 +657,40 @@ export function InstallationMap({
         )}
       </CardContent>
       <CardFooter>
-        <Button variant="outline" onClick={onAdd}>
-          <Plus /> Ajouter une installation hors Airzone
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline">
+              <Plus /> Ajouter une installation hors Airzone
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-80">
+            <DropdownMenuItem onSelect={onAdd} className="items-start">
+              <Network className="mt-0.5" />
+              <span>
+                <span className="font-medium">WebServer sur ce réseau</span>
+                <span className="block text-xs text-muted-foreground">
+                  Ce serveur le pilote directement (adresse IP).
+                </span>
+              </span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() => setAddingNode(true)}
+              className="items-start"
+            >
+              <Server className="mt-0.5" />
+              <span>
+                <span className="font-medium">
+                  Via un autre serveur Breezone
+                </span>
+                <span className="block text-xs text-muted-foreground">
+                  Une installation d'un autre site, pilotée par le serveur
+                  Breezone de ce site (jeton d'invitation).
+                </span>
+              </span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        {addingNode && <AddNodeDialog onClose={() => setAddingNode(false)} />}
       </CardFooter>
       {current && (
         <LinkDialog

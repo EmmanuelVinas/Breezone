@@ -586,6 +586,13 @@ function SharesCard() {
                       : ` Il n'a pas accepté le partage réciproque.`)}
                 </p>
               )}
+              {s.reciprocal && s.status === "active" && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {s.remote_shares_back
+                    ? `« ${s.remote_name ?? "?"} » vous partage aussi ses installations (Réglages › Nœuds).`
+                    : `« ${s.remote_name ?? "?"} » ne partage pas ses installations en retour. Pour les voir ici : sur ce serveur-là, Réglages › Partages › Nouveau partage, puis ajoutez le jeton dans Réglages › Nœuds.`}
+                </p>
+              )}
               {s.reverse && (
                 <p className="mt-1 text-xs text-muted-foreground">
                   En retour de l'invitation de « {s.remote_name} ».

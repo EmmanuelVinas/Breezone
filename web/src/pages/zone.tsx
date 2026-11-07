@@ -495,12 +495,32 @@ export function ZonePage() {
             </p>
           </div>
         </div>
-        {zone && <EditZone key={`${zone.name}-${zone.group}`} zone={zone} />}
+        {zone && installation?.controllable && (
+          <EditZone key={`${zone.name}-${zone.group}`} zone={zone} />
+        )}
       </div>
       {status.isLoading ? (
         <Skeleton className="h-96 rounded-3xl" />
       ) : zone ? (
-        <ZoneDetail zone={zone} />
+        <>
+          {!installation?.controllable && (
+            <p className="mb-4 rounded-2xl border p-3 text-sm text-muted-foreground">
+              Lecture seule : vous pouvez consulter cette installation, pas la
+              piloter.
+            </p>
+          )}
+          {/* A disabled fieldset disables every control of the zone at once. */}
+          <fieldset
+            disabled={!installation?.controllable}
+            className={cn(
+              "contents",
+              !installation?.controllable &&
+                "[&_.setpoint-dial]:pointer-events-none"
+            )}
+          >
+            <ZoneDetail zone={zone} />
+          </fieldset>
+        </>
       ) : (
         <p className="text-muted-foreground">Zone introuvable.</p>
       )}
