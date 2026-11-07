@@ -238,7 +238,7 @@ class Hub(
         runCatching { api.status() }.onSuccess { list -> updateServer(serverId) { it.copy(installations = list) } }
     }
 
-    /** Installation shared read-only by another Breezone server: commands are not sent. */
+    /** Installation this user can only look at (read-only access, or shared read-only by its node): commands are not sent. */
     private fun readOnly(serverId: String, zones: List<Zone>): Installation? =
         server(serverId)?.installations?.firstOrNull { inst -> !inst.controllable && zones.any { it.installationId == inst.id } }
 
