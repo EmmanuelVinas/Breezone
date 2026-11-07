@@ -160,6 +160,13 @@ export type BreezoneNode = {
   installations: { id: number; name: string }[]
   /** A certificate failing the usual HTTPS checks was trusted for this server. */
   certificate_pinned: boolean
+  /** Installations this server shares with us, and whether they are shown here. */
+  offered: {
+    remote_id: number
+    name: string
+    location: string | null
+    included: boolean
+  }[]
 }
 
 /** HTTPS certificate presented by another server, to review before trusting it. */
@@ -663,6 +670,10 @@ export const api = {
   trustNodeCertificate: (id: number, fingerprint: string) =>
     request<BreezoneNode>("PUT", `/api/nodes/${id}/certificate`, {
       fingerprint,
+    }),
+  setNodeInstallations: (id: number, included: number[]) =>
+    request<BreezoneNode>("PUT", `/api/nodes/${id}/installations`, {
+      included,
     }),
   untrustNodeCertificate: (id: number) =>
     request<BreezoneNode>("DELETE", `/api/nodes/${id}/certificate`),

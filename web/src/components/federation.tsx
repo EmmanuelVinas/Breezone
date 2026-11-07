@@ -589,7 +589,7 @@ function SharesCard() {
               {s.reciprocal && s.status === "active" && (
                 <p className="mt-1 text-xs text-muted-foreground">
                   {s.remote_shares_back
-                    ? `« ${s.remote_name ?? "?"} » vous partage aussi ses installations (Réglages › Nœuds).`
+                    ? `« ${s.remote_name ?? "?"} » vous partage aussi ses installations : choisissez celles à afficher dans Réglages › Nœuds.`
                     : `« ${s.remote_name ?? "?"} » ne partage pas ses installations en retour. Pour les voir ici : sur ce serveur-là, Réglages › Partages › Nouveau partage, puis ajoutez le jeton dans Réglages › Nœuds.`}
                 </p>
               )}
@@ -942,6 +942,18 @@ function NodeRow({ node }: { node: BreezoneNode }) {
     onSuccess: invalidate,
     onError: (e) => toast.error(errorText(e)),
   })
+  // Which of the installations it shares are shown on this server.
+  const [picking, setPicking] = useState<Set<number> | null>(null)
+  const pick = useMutation({
+    mutationFn: (included: number[]) =>
+      api.setNodeInstallations(node.id, included),
+    onSuccess: () => {
+      setPicking(null)
+      invalidate()
+      toast.success("Installations affichées mises à jour")
+    },
+    onError: (e) => toast.error(errorText(e)),
+  })
   // Certificate refused by the usual checks: review it, then trust it.
   const [review, setReview] = useState<CertificateInfo | null>(null)
   const inspect = useMutation({
@@ -1060,6 +1072,22 @@ function NodeRow({ node }: { node: BreezoneNode }) {
             Examiner le certificat
           </Button>
         )}
+        {node.offered.length > 0 && picking === null && (
+          <Button
+            variant="outline"
+            onClick={() =>
+              setPicking(
+                new Set(
+                  node.offered.filter((o) => o.included).map((o) => o.remote_id)
+                )
+              )
+            }
+          >
+            Choisir les installations (
+            {node.offered.filter((o) => o.included).length}/
+            {node.offered.length})
+          </Button>
+        )}
         {node.certificate_pinned && s.state !== "certificate" && (
           <Confirm
             title="Rétablir la vérification HTTPS habituelle ?"
@@ -1072,6 +1100,50 @@ function NodeRow({ node }: { node: BreezoneNode }) {
           </Confirm>
         )}
       </div>
+      {picking && (
+        <div className="grid gap-2 rounded-2xl border p-3 text-sm">
+          <p className="text-muted-foreground">
+            Installations que « {node.name} » partage avec ce serveur : cochez
+            celles à afficher ici. Celles qu'il partagera plus tard seront
+            affichées jusqu'à ce que vous les décochiez.
+          </p>
+          {node.offered.map((o) => (
+            <label
+              key={o.remote_id}
+              className="flex items-center gap-3 rounded-xl border p-2.5"
+            >
+              <Checkbox
+                checked={picking.has(o.remote_id)}
+                onCheckedChange={(v) => {
+                  const next = new Set(picking)
+                  if (v === true) next.add(o.remote_id)
+                  else next.delete(o.remote_id)
+                  setPicking(next)
+                }}
+              />
+              <span className="flex-1">{o.name}</span>
+              {o.location && (
+                <span className="text-xs text-muted-foreground">
+                  {o.location}
+                </span>
+              )}
+            </label>
+          ))}
+          <div className="flex justify-end gap-2">
+            <Button size="sm" variant="ghost" onClick={() => setPicking(null)}>
+              Annuler
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => pick.mutate([...picking])}
+              disabled={pick.isPending}
+            >
+              {pick.isPending && <Loader2 className="animate-spin" />}
+              Enregistrer
+            </Button>
+          </div>
+        </div>
+      )}
       {review && (
         <CertificateReview
           certificate={review}
