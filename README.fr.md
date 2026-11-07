@@ -31,7 +31,9 @@ petit serveur auto-hébergé qui l'utilise, avec une interface web et une applic
 - **Plusieurs sites sans VPN** : chaque site a son serveur Breezone ; un serveur peut partager certaines
   installations avec un autre (invitation à usage unique, acceptation, requêtes signées, lecture ou
   pilotage, révocable) — voir [Relier deux sites](docs/federation.md).
-- **Utilisateurs et appareils** : administrateurs et membres, sessions révocables par appareil.
+- **Utilisateurs et appareils** : administrateurs et utilisateurs ; chaque utilisateur ne voit que
+  les installations qu'on lui donne, en lecture seule ou avec le pilotage ; sessions révocables par
+  appareil.
 - **Import facultatif du compte Airzone** (lecture seule) : noms, ville, groupes de zones ; les WebServers
   sont retrouvés sur le réseau par leur adresse MAC.
 - **Léger** : une image d'environ 20 Mo, quelques Mo de RAM — tient sur n'importe quel NAS ou Raspberry Pi.

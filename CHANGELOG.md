@@ -6,6 +6,19 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Per-user access: a user only sees the installations an administrator gives them, read-only or
+  with control (web, app and live updates); new installations are given to nobody. Existing users
+  keep access to every current installation.
+- "Add an installation outside Airzone" also offers an installation of another Breezone server.
+
+### Changed
+
+- Read-only installations show their controls disabled in the web UI.
+- A reciprocal share tells whether the other server shares back, and how to fix it if not.
+- Linking an installation through another server shows when that server still has to accept.
+
 ## [0.3.0] - 2026-11-07
 
 ### Added

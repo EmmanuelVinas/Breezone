@@ -33,7 +33,8 @@ self-hosted server that talks to it, with a web UI and an Android / iOS app.
 - **Several sites without VPN**: each site runs its own Breezone; a server can share some of its
   installations with another one (single-use invitation, approval, signed requests, read-only or
   control, revocable) — see [Linking two sites](docs/federation.md) (in French).
-- **Users and devices**: administrators and members, sessions revocable per device.
+- **Users and devices**: administrators and users; each user only sees the installations given to
+  them, read-only or with control; sessions revocable per device.
 - **Optional Airzone account import** (read-only): installation names, city, zone groups; WebServers
   are found on the network by their MAC address.
 - **Tiny**: one ~20 MB image, a few MB of RAM — fits on any NAS or Raspberry Pi.

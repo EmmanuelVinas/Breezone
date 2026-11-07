@@ -16,7 +16,7 @@ un nouveau avec le refresh token de l’appareil.
 | POST | `/api/auth/login` | `{username, password, device_name?}` → `TokenPair` (verrou 15 min après 5 échecs) |
 | POST | `/api/auth/refresh` | `{refresh_token}` → nouveau `TokenPair` ; l'ancien refresh token reste valable 120 s |
 | POST | `/api/auth/logout` | `{refresh_token}` → révoque l'appareil |
-| GET 🔒 | `/api/me` | Utilisateur courant |
+| GET 🔒 | `/api/me` | Utilisateur courant, avec `access` : installations visibles (`null` pour un administrateur) |
 | PUT 🔒 | `/api/me/password` | `{current_password, new_password}` — déconnecte les autres appareils |
 | GET 🔒 | `/api/sessions` | Appareils connectés (`current` = celui-ci) |
 | DELETE 🔒 | `/api/sessions/{id}` | Déconnecte un appareil (immédiat, WebSocket compris) |
@@ -27,10 +27,17 @@ un nouveau avec le refresh token de l’appareil.
 
 | Méthode | Chemin | Description |
 |---------|--------|-------------|
-| GET | `/api/users` | Liste |
-| POST | `/api/users` | `{username, password, role: "admin"\|"user"}` |
-| PUT | `/api/users/{id}` | `{role?, password?}` — un nouveau mot de passe déconnecte l'utilisateur partout |
+| GET | `/api/users` | Liste, avec `access:[{installation_id, permission:"read"\|"control"}]` |
+| POST | `/api/users` | `{username, password, role: "admin"\|"user", access?}` |
+| PUT | `/api/users/{id}` | `{role?, password?, access?}` — un nouveau mot de passe déconnecte l'utilisateur partout ; `access` remplace les installations données |
 | DELETE | `/api/users/{id}` | Impossible pour soi-même ou le dernier administrateur |
+
+Un administrateur voit et pilote toutes les installations. Un utilisateur (`role: "user"`) ne voit
+que celles de son `access` : les autres sont absentes de toutes les réponses et du WebSocket (404 si
+on les demande), une installation en `read` est envoyée avec `controllable: false` et ses commandes
+répondent 403. Les minuteries et routines ne peuvent viser que des installations pilotables par
+l'utilisateur (la cible « toutes » est réservée aux administrateurs). Une installation ajoutée
+ensuite (à la main, depuis le compte Airzone ou via un autre nœud) n'est donnée à personne.
 
 ## Installations et zones
 
