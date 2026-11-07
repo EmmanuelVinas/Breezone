@@ -6,6 +6,27 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-07
+
+### Added
+
+- Secure pairing between Breezone servers: single-use invitation valid 15 minutes, access request
+  to accept in Settings › Shares, every request signed with the server's Ed25519 key (time window
+  and replay protection).
+- Visual acknowledgement of commands (pending, applied, failed) in the web UI and the app.
+- Synology NAS installation guide.
+
+### Changed
+
+- Invitations from 0.1.0 (`bz1.`) are no longer accepted: existing links between servers are
+  removed on upgrade and must be paired again.
+
+### Fixed
+
+- Setpoint briefly jumping back to its previous value after a change.
+- Zone names and settings kept from another WebServer when an installation is pointed at a new one.
+- Android 17: request the local network permission needed to reach the WebServer.
+
 ## [0.1.0] - 2026-11-06
 
 ### Added
@@ -24,5 +45,6 @@ All notable changes are documented here. The format follows
 - Project renamed from FreeZone to Breezone (former `FREEZONE_*` variables and `freezone.db` are
   still recognised).
 
-[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/EmmanuelVinas/breezone/releases/tag/v0.1.0

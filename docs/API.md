@@ -104,31 +104,46 @@ Administration (jeton utilisateur) :
 | Méthode | Chemin | Description |
 |---------|--------|-------------|
 | GET 🔒 / PUT 👑 | `/api/node` | Ce serveur : `{node_id, name, public_url}` ; PUT `{name, public_url}` |
-| GET 👑 | `/api/shares` | Partages exposés : `[{id, label, permission, installations:[{id,name}], expires_at, expired, remote_name, last_seen, last_address, connected}]` |
-| POST 👑 | `/api/shares` | `{label, installation_ids, permission:"read"\|"control", expires_in_days?, url?}` → `{share, token}` (jeton affiché une seule fois) |
+| GET 👑 | `/api/shares` | Partages exposés : `[{id, label, permission, installations:[{id,name}], status, pairing_expires_at, pairing_expired, requested_at, expires_at, expired, remote_name, last_seen, last_address, connected}]` |
+| POST 👑 | `/api/shares` | `{label, installation_ids, permission:"read"\|"control", expires_in_days?, url?}` → `{share, token}` (jeton à usage unique, valable 15 minutes, affiché une seule fois) |
+| POST 👑 | `/api/shares/{id}/approve` | Accepte la demande d'accès d'un partage `pending` → `active` |
 | PUT 👑 | `/api/shares/{id}` | Idem sans `url` : change installations, droit, validité (même clé) |
-| DELETE 👑 | `/api/shares/{id}` | Révoque : la clé cesse de fonctionner immédiatement |
+| DELETE 👑 | `/api/shares/{id}` | Révoque (ou refuse une demande) : le nœud perd l'accès immédiatement |
 | GET 🔒 | `/api/nodes` | Nœuds consommés : `[{id, name, url, status:{state, last_seen, last_error, latency_ms, permission}, installations}]` |
-| POST 👑 | `/api/nodes` | `{token, url?}` : ajoute un nœud depuis son jeton, crée ses installations |
+| POST 👑 | `/api/nodes` | `{token, url?}` : s'appaire au nœud avec son jeton ; il reste `pending` jusqu'à acceptation |
 | PUT 👑 | `/api/nodes/{id}` | `{url}` : change l'adresse du nœud |
 | POST 🔒 | `/api/nodes/{id}/refresh` | Interroge le nœud maintenant |
 | DELETE 👑 | `/api/nodes/{id}` | Retire le nœud et ses installations |
 
-`state` d'un nœud : `online | offline | revoked | expired | error | unknown`.
+`state` d'un nœud : `online | pending | offline | revoked | expired | error | unknown`.
 
-Jeton d'invitation : `bz1.<base64url(JSON {v:1, node_id, name, url, key})>`. HTTP n'est accepté que
-vers une adresse locale (IP privée, `*.local`, nom sans point) ; sinon `https://`.
+`status` d'un partage : `invited` (jeton pas encore utilisé) → `pending` (demande d'accès reçue) → `active`.
 
-Entre serveurs (`Authorization: Bearer bzk_…`, la clé du partage) — limité aux installations du partage :
+Jeton d'invitation : `bz2.<base64url(JSON {v:2, node_id, name, url, code})>`. Le code est à usage unique
+et expire après 15 minutes ; il ne donne aucun accès par lui-même. Les jetons `bz1.` (ancienne version)
+sont refusés. HTTP n'est accepté que vers une adresse locale (IP privée, `*.local`, nom sans point) ;
+sinon `https://`.
+
+Chaque serveur possède une clé Ed25519 (stockée chiffrée). Toute requête entre serveurs est signée :
+
+| En-tête | Contenu |
+|---------|---------|
+| `X-Breezone-Node` | `node_id` du serveur appelant |
+| `X-Breezone-Timestamp` | Heure Unix (secondes), tolérance ±300 s |
+| `X-Breezone-Nonce` | Valeur aléatoire, refusée si déjà vue (rejeu) |
+| `X-Breezone-Signature` | Signature Ed25519 (base64url) de `METHODE\nchemin\ntimestamp\nnonce\nsha256hex(corps)` |
+
+Routes entre serveurs — limitées aux installations du partage :
 
 | Méthode | Chemin | Description |
 |---------|--------|-------------|
-| POST | `/api/federation/hello` | `{node_id, name}` du serveur appelant → `FedSnapshot` |
+| POST | `/api/federation/pair` | `{code, node_id, name, public_key}` signé avec la clé présentée → `{status:"pending", node_id, name}` ; le code est consommé |
 | GET | `/api/federation/installations` | `FedSnapshot` : `{node_id, name, permission, installations:[{id, name, location, mac, connection, zones (format Airzone), meta}]}` |
 | PATCH | `/api/federation/installations/{id}/zones/{system_id}/{zone_id}` | `ZoneCommand` (droit `control`), en-tête `X-Breezone-Actor` pour le journal → installation à jour |
 
 Le serveur consommateur interroge chaque nœud à son rythme de lecture (une requête par nœud) et
-garde sa propre copie de l'historique.
+garde sa propre copie de l'historique. Tant que le partage n'est pas accepté, ces routes répondent
+403 ; une signature invalide, un rejeu ou un partage révoqué donnent 401.
 
 ## Minuteries
 
