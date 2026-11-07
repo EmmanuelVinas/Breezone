@@ -62,6 +62,14 @@ Breezone.
 
 ![Installations jointes en local et via Atelier](images/web/settings-installations.webp)
 
+## Choisir les installations affichées
+
+Le serveur qui partage décide **ce qu'il partage** ; celui qui reçoit décide **ce qu'il affiche**.
+Dans **Réglages › Nœuds**, **Choisir les installations** liste tout ce que l'autre serveur vous
+partage : décochez celles que vous ne voulez pas voir ici (tableau de bord, application, accès des
+utilisateurs). Une installation qu'il partagera plus tard est affichée jusqu'à ce que vous la
+décochiez.
+
 ## Partage réciproque
 
 Pour que **chaque site voie l'autre**, cochez **Partage réciproque** en créant l'invitation (étape 1).

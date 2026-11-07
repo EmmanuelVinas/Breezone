@@ -116,10 +116,11 @@ Administration (jeton utilisateur) :
 | POST 👑 | `/api/shares/{id}/approve` | Accepte la demande d'accès d'un partage `pending` → `active` |
 | PUT 👑 | `/api/shares/{id}` | Idem sans `url` : change installations, droit, validité (même clé) |
 | DELETE 👑 | `/api/shares/{id}` | Révoque (ou refuse une demande) : le nœud perd l'accès immédiatement |
-| GET 🔒 | `/api/nodes` | Nœuds consommés : `[{id, name, url, status:{state, last_seen, last_error, latency_ms, permission}, installations}]` |
+| GET 🔒 | `/api/nodes` | Nœuds consommés : `[{id, name, url, status:{state, last_seen, last_error, latency_ms, permission}, installations, offered:[{remote_id, name, location, included}], certificate_pinned}]` |
 | POST 👑 | `/api/nodes` | `{token, url?, reciprocal?:{installation_ids, permission, url?}, certificate?}` : s'appaire au nœud avec son jeton ; il reste `pending` jusqu'à acceptation. `reciprocal` (jeton réciproque seulement) crée en retour un partage lié à la clé de l'autre nœud |
 | PUT 👑 | `/api/nodes/{id}` | `{url}` : change l'adresse du nœud |
 | POST 🔒 | `/api/nodes/{id}/refresh` | Interroge le nœud maintenant |
+| PUT 👑 | `/api/nodes/{id}/installations` | `{included:[remote_id]}` : installations partagées par ce nœud à afficher ici (les autres sont masquées ; celles qu'il partagera ensuite sont affichées) |
 | GET 👑 | `/api/nodes/{id}/certificate` | Certificat HTTPS présenté : `{pinned, certificate:{fingerprint, subject, names, issuer, not_before, not_after, self_signed}}` |
 | PUT 👑 | `/api/nodes/{id}/certificate` | `{fingerprint}` : fait confiance à ce certificat (doit être celui présenté, sinon 409) ; seul lui est ensuite accepté |
 | DELETE 👑 | `/api/nodes/{id}/certificate` | Rétablit la vérification HTTPS habituelle |

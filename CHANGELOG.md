@@ -6,6 +6,11 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Choose which of the installations another server shares are shown on this one (Settings ›
+  Nodes); installations it shares later are shown until excluded.
+
 ## [0.4.0] - 2026-11-07
 
 ### Added
