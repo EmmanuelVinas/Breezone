@@ -52,12 +52,7 @@ export type Zone = {
 }
 
 export type NodeState =
-  | "online"
-  | "offline"
-  | "revoked"
-  | "expired"
-  | "error"
-  | "unknown"
+  "online" | "offline" | "revoked" | "expired" | "error" | "pending" | "unknown"
 
 export type NodeRef = { id: number; name: string; state: NodeState }
 
@@ -111,6 +106,11 @@ export type Share = {
   last_seen: number | null
   last_address: string | null
   connected: boolean
+  /** "invited": code not used yet · "pending": a server asks for access · "active" */
+  status: "invited" | "pending" | "active"
+  pairing_expires_at: number | null
+  pairing_expired: boolean
+  requested_at: number | null
 }
 
 export type ShareInput = {
@@ -157,7 +157,12 @@ export type Action = ZoneCommand & {
 }
 
 export type TimerTarget =
-  | { kind: "zone"; installation_id: number; system_id: number; zone_id: number }
+  | {
+      kind: "zone"
+      installation_id: number
+      system_id: number
+      zone_id: number
+    }
   | { kind: "group"; installation_id: number; group: string }
   | { kind: "installation"; installation_id: number }
   | { kind: "all" }
@@ -573,6 +578,8 @@ export const api = {
   updateShare: (id: number, data: ShareInput) =>
     request<Share>("PUT", `/api/shares/${id}`, data),
   deleteShare: (id: number) => request<void>("DELETE", `/api/shares/${id}`),
+  approveShare: (id: number) =>
+    request<Share>("POST", `/api/shares/${id}/approve`),
   nodes: () => request<BreezoneNode[]>("GET", "/api/nodes"),
   addNode: (token: string, url?: string | null) =>
     request<BreezoneNode>("POST", "/api/nodes", { token, url }),
@@ -674,7 +681,10 @@ export const api = {
       { enabled }
     ),
   deleteAirzoneSchedule: (cloudId: string, id: string) =>
-    request<SchedulesState>("DELETE", `/api/airzone/schedules/${cloudId}/${id}`),
+    request<SchedulesState>(
+      "DELETE",
+      `/api/airzone/schedules/${cloudId}/${id}`
+    ),
   runRoutine: (id: number) =>
     request<{ results: ActionResult[] }>("POST", `/api/routines/${id}/run`),
 

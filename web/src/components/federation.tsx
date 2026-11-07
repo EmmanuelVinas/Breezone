@@ -54,6 +54,7 @@ const NODE_STATE: Record<NodeState, { label: string; tone: string }> = {
   revoked: { label: "Clé révoquée", tone: "bg-destructive" },
   expired: { label: "Partage expiré", tone: "bg-warning" },
   error: { label: "Erreur", tone: "bg-destructive" },
+  pending: { label: "En attente d'acceptation", tone: "bg-warning" },
   unknown: { label: "En attente", tone: "bg-muted-foreground" },
 }
 
@@ -221,8 +222,11 @@ function ShareDialog({
             <DialogTitle>Jeton d'invitation · {label}</DialogTitle>
             <DialogDescription>
               Sur l'autre serveur Breezone : Réglages › Nœuds › Ajouter, puis
-              collez ce jeton (ou scannez le QR code avec l'application). Il ne
-              sera plus affiché : seule son empreinte est conservée ici.
+              collez ce jeton (ou scannez le QR code avec l'application). Il est
+              utilisable <strong>une seule fois</strong>, pendant{" "}
+              <strong>15 minutes</strong>, et ne contient aucune clé d'accès.
+              Vous devrez ensuite <strong>accepter la demande</strong> ici, dans
+              « À qui ce serveur est partagé ».
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-center rounded-2xl bg-white p-4">
@@ -389,6 +393,14 @@ function SharesCard() {
     },
     onError: (e) => toast.error(errorText(e)),
   })
+  const approve = useMutation({
+    mutationFn: api.approveShare,
+    onSuccess: (s) => {
+      qc.invalidateQueries({ queryKey: ["shares"] })
+      toast.success(`Accès accordé au serveur « ${s.remote_name ?? "?"} »`)
+    },
+    onError: (e) => toast.error(errorText(e)),
+  })
   return (
     <Card className="rounded-3xl">
       <CardHeader>
@@ -420,23 +432,56 @@ function SharesCard() {
                 )}
                 <Badge variant="outline">{permissionLabel(s.permission)}</Badge>
                 {s.expired && <Badge variant="destructive">Expiré</Badge>}
+                {s.status === "invited" && (
+                  <Badge variant="secondary">Invitation non utilisée</Badge>
+                )}
+                {s.status === "pending" && (
+                  <Badge className="bg-warning text-black">
+                    Demande d'accès
+                  </Badge>
+                )}
               </div>
               <div className="text-xs text-muted-foreground">
                 {s.installations.map((i) => i.name).join(", ") ||
                   "Aucune installation"}
               </div>
+              {s.status === "pending" && (
+                <p className="mt-1 text-sm">
+                  Le serveur <strong>« {s.remote_name} »</strong> demande
+                  l'accès
+                  {s.last_address ? ` depuis ${s.last_address}` : ""}
+                  {s.requested_at ? ` (${relativeTime(s.requested_at)})` : ""}.
+                  Acceptez seulement si c'est bien vous qui venez d'utiliser
+                  l'invitation.
+                </p>
+              )}
               <div className="text-xs text-muted-foreground">
-                {s.connected
-                  ? "Connecté maintenant"
-                  : s.last_seen
-                    ? `Dernière connexion ${relativeTime(s.last_seen)}`
-                    : "Jamais connecté"}
+                {s.status === "invited"
+                  ? s.pairing_expires_at && !s.pairing_expired
+                    ? `Invitation valable jusqu'à ${dateTime(s.pairing_expires_at)}`
+                    : "Invitation expirée : supprimez-la et créez-en une nouvelle"
+                  : s.status === "pending"
+                    ? "En attente de votre réponse"
+                    : s.connected
+                      ? "Connecté maintenant"
+                      : s.last_seen
+                        ? `Dernière connexion ${relativeTime(s.last_seen)}`
+                        : "Jamais connecté"}
                 {s.last_address && ` · depuis ${s.last_address}`}
                 {s.expires_at &&
                   !s.expired &&
                   ` · expire le ${dateTime(s.expires_at)}`}
               </div>
             </div>
+            {s.status === "pending" && (
+              <Button
+                size="sm"
+                onClick={() => approve.mutate(s.id)}
+                disabled={approve.isPending}
+              >
+                Accepter
+              </Button>
+            )}
             <Button
               size="sm"
               variant="ghost"
@@ -445,12 +490,16 @@ function SharesCard() {
               Modifier
             </Button>
             <Confirm
-              title={`Révoquer « ${s.label} » ?`}
+              title={
+                s.status === "pending"
+                  ? `Refuser la demande de « ${s.remote_name} » ?`
+                  : `Révoquer « ${s.label} » ?`
+              }
               description="L'autre serveur perd l'accès à ces installations immédiatement."
               onConfirm={() => revoke.mutate(s.id)}
             >
               <Button size="sm" variant="ghost" className="text-destructive">
-                Révoquer
+                {s.status === "pending" ? "Refuser" : "Révoquer"}
               </Button>
             </Confirm>
           </div>
@@ -502,7 +551,7 @@ export function AddNodeDialog({ onClose }: { onClose: () => void }) {
       qc.invalidateQueries({ queryKey: ["status"] })
       qc.invalidateQueries({ queryKey: ["cloud"] })
       toast.success(
-        `Serveur « ${n.name} » ajouté : ${n.installations.length} installation(s)`
+        `Serveur « ${n.name} » ajouté : acceptez la demande sur ce serveur pour voir ses installations`
       )
       onClose()
     },
@@ -515,8 +564,10 @@ export function AddNodeDialog({ onClose }: { onClose: () => void }) {
           <DialogTitle>Ajouter un serveur Breezone</DialogTitle>
           <DialogDescription>
             Sur le serveur de l'autre site : Réglages › Partages › Nouveau
-            partage. Collez ici le jeton obtenu. Ses installations apparaîtront
-            ici, jointes par son intermédiaire.
+            partage. Collez ici le jeton obtenu (valable 15 minutes, une seule
+            fois), puis acceptez la demande sur ce serveur-là. Ses installations
+            apparaîtront alors ici. Les deux serveurs se reconnaissent ensuite
+            par une signature : aucune clé ne circule.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
@@ -526,7 +577,7 @@ export function AddNodeDialog({ onClose }: { onClose: () => void }) {
               id="node-token"
               className="min-h-24 rounded-xl border bg-transparent px-3 py-2 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
               value={token}
-              placeholder="bz1.…"
+              placeholder="bz2.…"
               onChange={(e) => setToken(e.target.value)}
             />
           </div>
@@ -546,7 +597,7 @@ export function AddNodeDialog({ onClose }: { onClose: () => void }) {
           </Button>
           <Button
             onClick={() => add.mutate()}
-            disabled={add.isPending || !token.trim().startsWith("bz1.")}
+            disabled={add.isPending || !token.trim().startsWith("bz2.")}
           >
             {add.isPending && <Loader2 className="animate-spin" />} Ajouter
           </Button>
