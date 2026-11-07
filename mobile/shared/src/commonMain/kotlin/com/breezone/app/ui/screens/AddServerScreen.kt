@@ -22,6 +22,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -223,6 +224,20 @@ fun AddServerScreen(reauthServerId: String?, canGoBack: Boolean, onBack: () -> U
         }
         if (existing != null) {
             TextButton(onClick = { hub.removeServer(existing.id); onDone() }) { Text(stringResource(Res.string.add_server_forget)) }
+        } else if (!needsSetup) {
+            // Built-in demonstration: try the app without a server (also used by store reviews).
+            OutlinedButton(
+                onClick = {
+                    scope.launch {
+                        hub.startDemo(getString(Res.string.demo_label))
+                        onDone()
+                    }
+                },
+                enabled = !busy,
+                modifier = Modifier.fillMaxWidth().height(54.dp),
+                shape = RoundedCornerShape(16.dp),
+            ) { Text(stringResource(Res.string.add_server_demo)) }
+            Muted(stringResource(Res.string.add_server_demo_hint))
         }
     }
 }

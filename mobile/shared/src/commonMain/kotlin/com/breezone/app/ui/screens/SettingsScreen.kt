@@ -39,6 +39,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.breezone.app.APP_VERSION
 import com.breezone.app.data.CloudStatus
 import com.breezone.app.data.Hub
 import com.breezone.app.data.Live
@@ -54,7 +55,6 @@ import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 
-private const val APP_VERSION = "0.1.0"
 
 @Composable
 fun SettingsScreen(onAddServer: () -> Unit, onReauth: (String) -> Unit) {

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -60,6 +61,17 @@ fun HomeScreen(onOpenInstallation: (serverId: String, installationId: Long) -> U
     val remote = servers.flatMap { it.remote }.distinctBy { it.cloudId }.filter { it.name.lowercase() !in allNames }
     val loading = servers.isNotEmpty() && servers.none { it.loaded } && servers.none { it.authRequired }
     val live = servers.isNotEmpty() && servers.filterNot { it.authRequired }.all { it.live == Live.Live }
+    // Error of a server whose installations are shown but whose live channel fails.
+    val liveProblem = servers.firstOrNull { it.loaded && it.live != Live.Live && it.error != null }?.let { "${it.account.label} : ${it.error}" }
+    var showLiveProblem by remember { mutableStateOf(false) }
+    if (showLiveProblem && liveProblem != null) {
+        AlertDialog(
+            onDismissRequest = { showLiveProblem = false },
+            confirmButton = { TextButton(onClick = { showLiveProblem = false }) { Text(stringResource(Res.string.common_ok)) } },
+            title = { Text(stringResource(Res.string.live_unavailable)) },
+            text = { Text(liveProblem) },
+        )
+    }
     val expired = servers.filter { it.authRequired }
     val empty = servers.isEmpty() || (!loading && servers.all { it.loaded && it.installations.isEmpty() } && remote.isEmpty())
 
@@ -72,13 +84,26 @@ fun HomeScreen(onOpenInstallation: (serverId: String, installationId: Long) -> U
             Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(Res.string.home_title), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
                 if (servers.isNotEmpty()) {
-                    StatusDot(online = live, unknown = !live && servers.any { it.live == Live.Connecting })
-                    Spacer(Modifier.size(6.dp))
-                    Text(
-                        stringResource(if (live) Res.string.live_on else Res.string.live_connecting),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Fz.colors.muted,
-                    )
+                    // Installations loaded but no live channel: say why instead of "connecting…".
+                    val blocked = !live && liveProblem != null
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable(enabled = blocked) { showLiveProblem = true },
+                    ) {
+                        StatusDot(online = live, unknown = !live && !blocked && servers.any { it.live == Live.Connecting })
+                        Spacer(Modifier.size(6.dp))
+                        Text(
+                            stringResource(
+                                when {
+                                    live -> Res.string.live_on
+                                    blocked -> Res.string.live_unavailable
+                                    else -> Res.string.live_connecting
+                                },
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Fz.colors.muted,
+                        )
+                    }
                 }
             }
         }

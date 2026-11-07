@@ -8,6 +8,9 @@ All notable changes are documented here. The format follows
 
 ### Added
 
+- App: built-in demo (« Try the demo » on the first screen): a simulated home and workshop, with
+  live updates, history and routines, without any server nor Airzone hardware.
+
 - App: Spanish translation (French, English and Spanish, following the phone's language; per-app
   language in Android 13+ and iOS settings).
 - App: a server whose HTTPS certificate fails the usual checks can be trusted after reviewing it
@@ -15,8 +18,12 @@ All notable changes are documented here. The format follows
 
 ### Changed
 
+- App: the version shown in Settings comes from the build (it showed 0.1.0).
 - App: explicit connection errors (invalid certificate, unknown address, refused connection, no
   answer, no network) instead of the raw system message.
+- When live updates (WebSocket) are blocked, typically by a reverse proxy without the WebSocket
+  headers, the server says so in the activity feed and the app shows « Live updates unavailable »
+  with the reason instead of « Connecting… ».
 
 ## [0.4.1] - 2026-11-07
 

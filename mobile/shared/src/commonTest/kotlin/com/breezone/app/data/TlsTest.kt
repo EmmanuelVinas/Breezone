@@ -48,6 +48,7 @@ class TlsTest {
         assertEquals(NetworkProblem.UnknownHost, classify(Exception("Unable to resolve host \"nope.example\"")))
         assertEquals(NetworkProblem.Refused, classify(Exception("Failed to connect to /192.168.1.20:8427")))
         assertEquals(NetworkProblem.Timeout, classify(Exception("Connect timeout has expired")))
+        assertEquals(NetworkProblem.LiveBlocked, classify(Exception("Handshake exception, expected status code 101 but was 400")))
         assertEquals(null, classify(Exception("something else")))
     }
 }

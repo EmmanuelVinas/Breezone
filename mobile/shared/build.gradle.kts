@@ -8,6 +8,20 @@ plugins {
     alias(libs.plugins.kotlinxSerialization)
 }
 
+// App version shown in Settings, generated from breezone.versionName (mobile/gradle.properties).
+val generatedVersionDir = layout.buildDirectory.dir("generated/breezone/commonMain/kotlin")
+val generateAppVersion by tasks.registering {
+    val version = providers.gradleProperty("breezone.versionName")
+    val out = generatedVersionDir
+    inputs.property("version", version)
+    outputs.dir(out)
+    doLast {
+        val file = out.get().file("com/breezone/app/AppVersion.kt").asFile
+        file.parentFile.mkdirs()
+        file.writeText("package com.breezone.app\n\n/** Generated from mobile/gradle.properties. */\nconst val APP_VERSION = \"${version.get()}\"\n")
+    }
+}
+
 kotlin {
     listOf(
         iosArm64(),
@@ -36,6 +50,7 @@ kotlin {
     }
 
     sourceSets {
+        commonMain { kotlin.srcDir(generateAppVersion.map { generatedVersionDir.get() }) }
         all {
             languageSettings.optIn("kotlin.time.ExperimentalTime")
         }
@@ -65,6 +80,8 @@ kotlin {
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.datetime)
             implementation(libs.ktor.client.core)
+            // In-app demonstration server (store review, trying the app without hardware).
+            implementation(libs.ktor.client.mock)
             implementation(libs.ktor.client.content.negotiation)
             implementation(libs.ktor.serialization.kotlinx.json)
 

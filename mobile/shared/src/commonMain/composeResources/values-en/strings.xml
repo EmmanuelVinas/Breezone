@@ -266,4 +266,24 @@
     <string name="cert_fingerprint">SHA-256 fingerprint</string>
     <string name="cert_warning">Trust this certificate only if you know why it is not valid (for instance a NAS certificate that does not cover this name). Compare the fingerprint with the one Breezone shows on the web or your browser shows. The app will then accept only this exact certificate for this server.</string>
     <string name="cert_trust">Trust this certificate</string>
+    <string name="live_unavailable">Live updates unavailable</string>
+    <string name="error_live_proxy">%1$s does not pass live updates through (WebSocket). If Breezone is behind a reverse proxy (Synology NAS, nginx…), add the WebSocket headers to it. Data is reloaded regularly meanwhile.</string>
+    <string name="add_server_demo">Try the demo</string>
+    <string name="add_server_demo_hint">A simulated home and workshop, with no server nor Airzone hardware. Nothing leaves the phone.</string>
+    <string name="demo_label">Demo</string>
+    <string name="demo_unavailable">Not available in the demo</string>
+    <string name="demo_home">Home</string>
+    <string name="demo_workshop">Workshop</string>
+    <string name="demo_group_upstairs">Upstairs</string>
+    <string name="demo_group_ground">Ground floor</string>
+    <string name="demo_zone_living">Living room</string>
+    <string name="demo_zone_office">Office</string>
+    <string name="demo_zone_bedroom1">Bedroom 1</string>
+    <string name="demo_zone_bedroom2">Bedroom 2</string>
+    <string name="demo_zone_dressing">Dressing room</string>
+    <string name="demo_zone_openspace">Open space</string>
+    <string name="demo_zone_meeting">Meeting room</string>
+    <string name="demo_zone_reception">Reception</string>
+    <string name="demo_routine_leaving">Leaving home</string>
+    <string name="demo_routine_evening">Evening</string>
 </resources>

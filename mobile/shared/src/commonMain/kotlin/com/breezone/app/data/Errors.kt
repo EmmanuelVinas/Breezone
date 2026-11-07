@@ -3,6 +3,7 @@ package com.breezone.app.data
 import com.breezone.app.resources.Res
 import com.breezone.app.resources.error_certificate
 import com.breezone.app.resources.error_certificate_changed
+import com.breezone.app.resources.error_live_proxy
 import com.breezone.app.resources.error_offline
 import com.breezone.app.resources.error_refused
 import com.breezone.app.resources.error_timeout
@@ -10,7 +11,7 @@ import com.breezone.app.resources.error_unknown_host
 import org.jetbrains.compose.resources.getString
 
 /** Network failures that can be explained to the user. */
-enum class NetworkProblem { Certificate, UnknownHost, Refused, Timeout, Offline }
+enum class NetworkProblem { Certificate, UnknownHost, Refused, Timeout, Offline, LiveBlocked }
 
 /**
  * Recognises the cause of a network failure from the platform exception (OkHttp on Android,
@@ -23,6 +24,9 @@ fun classify(e: Throwable): NetworkProblem? {
     return when {
         any("certificate", "not verified", "trust anchor", "certpath", "sslpeerunverified", "sslhandshake", "code=-1202", "code=-1201", "code=-1203", "code=-1204", "code=-1205", "code=-1206", "code=-1200") ->
             NetworkProblem.Certificate
+        // The WebSocket handshake answered something else than 101: usually a reverse proxy
+        // that does not forward the WebSocket headers.
+        any("expected status code 101", "expected http 101", "101 response", "websocket upgrade", "code=-1011") -> NetworkProblem.LiveBlocked
         any("unknownhost", "unable to resolve host", "no address associated", "nodename nor servname", "code=-1003") -> NetworkProblem.UnknownHost
         any("code=-1009", "network is unreachable", "enetunreach", "not connected to the internet") -> NetworkProblem.Offline
         any("connection refused", "econnrefused", "code=-1004", "failed to connect") -> NetworkProblem.Refused
@@ -42,6 +46,7 @@ suspend fun explain(e: Throwable, url: String): String? {
         NetworkProblem.Refused -> getString(Res.string.error_refused, host)
         NetworkProblem.Timeout -> getString(Res.string.error_timeout, host)
         NetworkProblem.Offline -> getString(Res.string.error_offline)
+        NetworkProblem.LiveBlocked -> getString(Res.string.error_live_proxy, host)
         null -> null
     }
 }

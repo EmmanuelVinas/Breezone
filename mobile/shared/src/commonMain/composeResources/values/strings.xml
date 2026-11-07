@@ -275,4 +275,24 @@
     <string name="cert_fingerprint">Empreinte SHA-256</string>
     <string name="cert_warning">Faites confiance à ce certificat seulement si vous savez pourquoi il n’est pas valide (par exemple un certificat du NAS qui ne couvre pas ce nom). Comparez l’empreinte avec celle affichée par Breezone sur le web ou par votre navigateur. L’application n’acceptera ensuite que ce certificat précis pour ce serveur.</string>
     <string name="cert_trust">Faire confiance à ce certificat</string>
+    <string name="live_unavailable">Temps réel indisponible</string>
+    <string name="error_live_proxy">%1$s ne transmet pas le temps réel (WebSocket). Si Breezone est derrière un proxy inversé (NAS Synology, nginx…), ajoutez-y les en-têtes WebSocket. Les données sont rechargées régulièrement en attendant.</string>
+    <string name="add_server_demo">Essayer la démo</string>
+    <string name="add_server_demo_hint">Une maison et un atelier simulés, sans serveur ni matériel Airzone. Rien ne quitte le téléphone.</string>
+    <string name="demo_label">Démonstration</string>
+    <string name="demo_unavailable">Indisponible en démonstration</string>
+    <string name="demo_home">Maison</string>
+    <string name="demo_workshop">Atelier</string>
+    <string name="demo_group_upstairs">Étage</string>
+    <string name="demo_group_ground">Rez-de-chaussée</string>
+    <string name="demo_zone_living">Salon</string>
+    <string name="demo_zone_office">Bureau</string>
+    <string name="demo_zone_bedroom1">Chambre 1</string>
+    <string name="demo_zone_bedroom2">Chambre 2</string>
+    <string name="demo_zone_dressing">Dressing</string>
+    <string name="demo_zone_openspace">Open space</string>
+    <string name="demo_zone_meeting">Salle de réunion</string>
+    <string name="demo_zone_reception">Accueil</string>
+    <string name="demo_routine_leaving">Je pars</string>
+    <string name="demo_routine_evening">Soirée</string>
 </resources>

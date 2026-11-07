@@ -212,7 +212,9 @@ class BreezoneApi(
     }
 
     /** Push channel: emits every message of the server WebSocket until it closes. */
-    fun live(): Flow<JsonObject> = callbackFlow {
+    fun live(): Flow<JsonObject> = if (base == DEMO_URL) DemoServer.live() else wsLive()
+
+    private fun wsLive(): Flow<JsonObject> = callbackFlow {
         val wsUrl = base.replaceFirst("https://", "wss://").replaceFirst("http://", "ws://") + "/api/ws"
         val token = token()
         val job = launch {

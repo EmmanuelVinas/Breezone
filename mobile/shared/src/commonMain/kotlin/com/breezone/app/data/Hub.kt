@@ -64,6 +64,9 @@ class Hub(
     val messages: SharedFlow<String> = _messages
 
     private val apis = mutableMapOf<String, BreezoneApi>()
+    /** Answers the requests of the built-in demonstration server (see `Demo.kt`). */
+    private val demoHttp by lazy { demoHttpClient() }
+    private fun httpFor(account: ServerAccount) = if (isDemo(account.url)) demoHttp else http
     private val jobs = mutableMapOf<String, Job>()
     val discovery = BreezoneDiscovery(http)
 
@@ -125,6 +128,20 @@ class Hub(
         return account
     }
 
+    /**
+     * Adds the built-in demonstration server (simulated installations, nothing leaves the
+     * phone): to try the app without a server, and for store reviews.
+     */
+    suspend fun startDemo(label: String): ServerAccount {
+        _servers.value.firstOrNull { isDemo(it.account.url) }?.let { return it.account }
+        val pair = BreezoneDiscovery(demoHttp).login(DEMO_URL, "demo", "demo")
+        val account = ServerAccount(id = "demo", url = DEMO_URL, label = label, username = pair.user.username, refreshToken = pair.refreshToken)
+        _servers.update { it + ServerState(account, user = pair.user) }
+        persist()
+        start(account, pair)
+        return account
+    }
+
     /** Signs out of a server and forgets it. */
     fun removeServer(id: String) {
         val api = apis.remove(id)
@@ -143,7 +160,7 @@ class Hub(
     // -------------------------------------------------------------------------------------
 
     private fun start(account: ServerAccount, pair: TokenPair? = null) {
-        val api = BreezoneApi(http, account) { rotated -> updateAccount(account.id) { it.copy(refreshToken = rotated) } }
+        val api = BreezoneApi(httpFor(account), account) { rotated -> updateAccount(account.id) { it.copy(refreshToken = rotated) } }
         pair?.let(api::seed)
         apis[account.id] = api
         jobs[account.id] = scope.launch { follow(account.id, api) }
