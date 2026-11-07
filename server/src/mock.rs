@@ -60,6 +60,15 @@ pub fn preset(name: &str) -> Vec<ZoneData> {
 /// MAC address of the default fake WebServer.
 pub const MOCK_MAC: &str = "A8:03:2A:00:FE:ED";
 
+/// MAC address of a preset's WebServer: "bureau" is the « Atelier » installation of the fake
+/// Airzone Cloud account, so that two fake sites never look like the same WebServer.
+pub fn preset_mac(name: &str) -> &'static str {
+    match name {
+        "bureau" => "AA:BB:CC:DD:EE:FF",
+        _ => MOCK_MAC,
+    }
+}
+
 pub fn router(state: MockState) -> Router {
     router_with_mac(state, MOCK_MAC)
 }

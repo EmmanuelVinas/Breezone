@@ -19,13 +19,13 @@ async fn main() -> anyhow::Result<()> {
     let state = Arc::new(Mutex::new(mock::preset(&preset)));
     mock::spawn_simulation(state.clone(), Duration::from_secs(5));
     if let Some(cloud_port) = std::env::var("MOCK_CLOUD_PORT").ok().and_then(|p| p.parse::<u16>().ok()) {
-        let cloud = mock::cloud_router(mock::cloud_account("A8:03:2A:00:FE:ED"));
+        let cloud = mock::cloud_router(mock::cloud_account(mock::MOCK_MAC));
         let cloud_listener = tokio::net::TcpListener::bind(("0.0.0.0", cloud_port)).await?;
         tracing::info!("mock Airzone Cloud on http://0.0.0.0:{cloud_port} ({} / {})", mock::MOCK_CLOUD_EMAIL, mock::MOCK_CLOUD_PASSWORD);
         tokio::spawn(async move { axum::serve(cloud_listener, cloud).await });
     }
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", port)).await?;
     tracing::info!("mock Airzone WebServer « {preset} » on http://0.0.0.0:{port}/api/v1/hvac");
-    axum::serve(listener, mock::router(state)).await?;
+    axum::serve(listener, mock::router_with_mac(state, mock::preset_mac(&preset))).await?;
     Ok(())
 }
