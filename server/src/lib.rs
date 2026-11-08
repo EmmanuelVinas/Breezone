@@ -115,9 +115,10 @@ pub fn app(state: AppState) -> Router {
         .with_state(state)
 }
 
-/// Starts the poller, the routine scheduler and the maintenance task.
+/// Starts the poller, the live links to other nodes, the routine scheduler and the maintenance task.
 pub fn spawn_background(state: &AppState) {
     tokio::spawn(state.hub.clone().run_poller());
+    tokio::spawn(state.hub.clone().run_node_links());
     tokio::spawn(state.hub.clone().run_maintenance());
     tokio::spawn(cloud::run_auto_sync(state.clone()));
     tokio::spawn(airzone_schedules::run_sync(state.clone()));

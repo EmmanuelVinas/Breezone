@@ -20,6 +20,16 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{broadcast, RwLock};
 
+/// Pause before the next try of the live link to a node that does not answer, after `failures`
+/// failed tries in a row: 10 s, then 1, 2 and 4 min, then every 5 min until it comes back.
+/// There is no rush: the node shows as unreachable meanwhile, and nothing is lost.
+fn node_retry_secs(failures: u32) -> u64 {
+    match failures {
+        0 | 1 => 10,
+        n => (60u64 << (n - 2).min(3)).min(300),
+    }
+}
+
 /// Consecutive poll failures before an installation is reported offline.
 const OFFLINE_AFTER_FAILURES: u32 = 2;
 
@@ -425,6 +435,8 @@ struct NodeState {
     persisted_at: i64,
     /// Installations the node shares with this one (last answer), shown or not.
     offered: Vec<OfferedInstallation>,
+    /// The live link (long polling, see [`Hub::run_node_links`]) works: no periodic read needed.
+    watching: bool,
 }
 
 /// An installation another node shares with this one.
@@ -447,7 +459,7 @@ impl NodeState {
             latency_ms: None,
             permission: node.permission.clone(),
         };
-        Self { node, client, status, failures: 0, persisted_at: 0, offered: vec![] }
+        Self { node, client, status, failures: 0, persisted_at: 0, offered: vec![], watching: false }
     }
 
     fn reference(&self) -> NodeRef {
@@ -645,8 +657,9 @@ impl Hub {
             let state = self.state.read().await;
             state.values().filter(|s| s.inst.enabled && s.node_id().is_none()).map(|s| s.inst.id).collect()
         };
-        // One request per node, for all the installations it exposes.
-        let node_ids: Vec<i64> = self.nodes.read().await.keys().copied().collect();
+        // One request per node, for all the installations it exposes; nodes followed live by
+        // their link need none.
+        let node_ids: Vec<i64> = self.nodes.read().await.iter().filter(|(_, n)| !n.watching).map(|(id, _)| *id).collect();
         let polls = ids.into_iter().map(|id| {
             let hub = self.clone();
             async move { hub.poll_one(id).await }
@@ -755,14 +768,7 @@ impl Hub {
             None => return,
         };
         // Commands sent while the snapshot is in flight make its values stale (see poll_one).
-        let commands: HashMap<i64, u64> = self
-            .state
-            .read()
-            .await
-            .values()
-            .filter(|s| s.node_id() == Some(node_id))
-            .map(|s| (s.inst.id, s.commands))
-            .collect();
+        let commands = self.node_commands(node_id).await;
         let started = Instant::now();
         let result = match client {
             Some(c) => c.snapshot().await,
@@ -992,6 +998,118 @@ impl Hub {
             changed = true;
         }
         Ok(changed)
+    }
+
+    /// Keeps one live link per node (started for new nodes, stopped for removed ones). A link
+    /// survives both servers going down: it retries until the other one answers again, and
+    /// starts again with this server.
+    pub async fn run_node_links(self: Arc<Self>) {
+        // Aborted on drop: stopping this task stops every link.
+        struct Link(tokio::task::JoinHandle<()>);
+        impl Drop for Link {
+            fn drop(&mut self) {
+                self.0.abort();
+            }
+        }
+        let mut links: HashMap<i64, Link> = HashMap::new();
+        let mut ticker = tokio::time::interval(Duration::from_secs(5));
+        loop {
+            ticker.tick().await;
+            let ids: Vec<i64> = self.nodes.read().await.keys().copied().collect();
+            links.retain(|id, link| ids.contains(id) && !link.0.is_finished());
+            for id in ids {
+                links.entry(id).or_insert_with(|| Link(tokio::spawn(self.clone().node_link(id))));
+            }
+        }
+    }
+
+    /// Follows one node: asks for its content "once it changes" in a loop (long polling over the
+    /// signed API). Nodes that cannot wait (up to 0.5.x) are left to the periodic poller.
+    async fn node_link(self: Arc<Self>, node_id: i64) {
+        let mut since: Option<String> = None;
+        let mut failures: u32 = 0;
+        let mut latency: u64 = 0;
+        loop {
+            let (client, name) = match self.nodes.read().await.get(&node_id) {
+                Some(n) => (n.client.clone(), n.node.name.clone()),
+                None => return,
+            };
+            // Unreadable key: the poller reports it; check again later.
+            let Some(client) = client else {
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                continue;
+            };
+            let commands = self.node_commands(node_id).await;
+            let started = Instant::now();
+            match client.watch(since.as_deref(), self.cfg.node_watch_secs).await {
+                // Nothing new during the wait: the node is alive, its content unchanged.
+                Ok(None) => {
+                    failures = 0;
+                    self.node_alive(node_id, latency).await;
+                }
+                Ok(Some(snap)) => {
+                    failures = 0;
+                    let Some(revision) = snap.revision.clone() else {
+                        // Older node: periodic reads (by the poller), and a new try later on in
+                        // case it was updated.
+                        self.set_watching(node_id, false).await;
+                        tokio::time::sleep(Duration::from_secs(600)).await;
+                        continue;
+                    };
+                    // An immediate answer measures the round trip; a waited one does not.
+                    if since.as_deref() != Some(revision.as_str()) || started.elapsed() < Duration::from_secs(2) {
+                        latency = started.elapsed().as_millis() as u64;
+                    }
+                    self.set_watching(node_id, true).await;
+                    // A command sent while waiting may make this content stale: read again at once.
+                    let stale = self.node_commands(node_id).await != commands;
+                    self.node_ok(node_id, &name, snap, latency, &commands).await;
+                    since = if stale { None } else { Some(revision) };
+                }
+                Err(e) => {
+                    self.set_watching(node_id, false).await;
+                    self.node_failed(node_id, &name, e).await;
+                    since = None;
+                    failures += 1;
+                    let pause = node_retry_secs(failures).min(self.cfg.node_retry_max_secs.max(1));
+                    tokio::time::sleep(Duration::from_secs(pause)).await;
+                }
+            }
+        }
+    }
+
+    /// The node answered "nothing new": still online, nothing else to update.
+    async fn node_alive(&self, node_id: i64, latency: u64) {
+        let now = db::now();
+        let persist = {
+            let mut nodes = self.nodes.write().await;
+            let Some(n) = nodes.get_mut(&node_id) else { return };
+            n.failures = 0;
+            n.status.state = "online";
+            n.status.last_seen = Some(now);
+            n.status.last_error = None;
+            n.status.latency_ms = Some(latency);
+            let persist = now - n.persisted_at >= 60;
+            if persist {
+                n.persisted_at = now;
+            }
+            persist
+        };
+        if persist {
+            if let Err(e) = db::set_node_seen(&self.db, node_id, None, None, None).await {
+                tracing::error!("cannot store node state: {e}");
+            }
+        }
+    }
+
+    async fn node_commands(&self, node_id: i64) -> HashMap<i64, u64> {
+        self.state.read().await.values().filter(|s| s.node_id() == Some(node_id)).map(|s| (s.inst.id, s.commands)).collect()
+    }
+
+    async fn set_watching(&self, node_id: i64, watching: bool) {
+        if let Some(n) = self.nodes.write().await.get_mut(&node_id) {
+            n.watching = watching;
+        }
     }
 
     /// Background poller.
@@ -1294,5 +1412,11 @@ mod tests {
     fn describes_commands_in_french() {
         let cmd = ZoneCommand { on: Some(false), setpoint: Some(19.5), ..Default::default() };
         assert_eq!(cmd.describe(), "éteinte, consigne 19.5°");
+    }
+
+    #[test]
+    fn retries_a_node_that_does_not_answer_less_and_less_often() {
+        let pauses: Vec<u64> = (1..=7).map(node_retry_secs).collect();
+        assert_eq!(pauses, [10, 60, 120, 240, 300, 300, 300]);
     }
 }

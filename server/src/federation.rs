@@ -49,6 +49,9 @@ const SETTING_NODE_NAME: &str = "node.name";
 const SETTING_PUBLIC_URL: &str = "node.public_url";
 /// Header carrying the user who sent a command through a node (for the activity feed).
 pub const ACTOR_HEADER: &str = "x-breezone-actor";
+/// Longest a node holds a "tell me when it changes" read open (long polling) before answering
+/// "nothing new" (304, no body). Below the 60 s read timeout of common reverse proxies (Synology).
+pub const WATCH_SECS: u64 = 45;
 
 // ---------------------------------------------------------------------------------------
 // Identity of this node
@@ -250,6 +253,24 @@ pub struct FedSnapshot {
     /// "read" | "control"
     pub permission: String,
     pub installations: Vec<FedInstallation>,
+    /// Fingerprint of the content, to wait for the next change (`?since=`). Absent from nodes up
+    /// to 0.5.x, which do not support waiting: they are read periodically instead.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revision: Option<String>,
+}
+
+impl FedSnapshot {
+    /// Fingerprint of what matters to the reading node: the "last seen" times change at every
+    /// read of the WebServers and are left out, so only real changes give a new revision.
+    pub fn compute_revision(&self) -> String {
+        let mut stable = self.clone();
+        stable.revision = None;
+        for inst in &mut stable.installations {
+            inst.connection.last_seen = None;
+        }
+        let json = serde_json::to_vec(&stable).expect("serializable snapshot");
+        hex::encode(&Sha256::digest(&json)[..12])
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -382,8 +403,35 @@ impl NodeClient {
 
     /// Sends a signed request (path relative to the node URL, e.g. `/api/federation/installations`).
     async fn send<T: serde::de::DeserializeOwned>(&self, method: reqwest::Method, path: &str, body: Option<Vec<u8>>, actor: Option<&str>) -> Result<T, NodeError> {
+        self.send_with(method, path, body, actor, None).await
+    }
+
+    async fn send_with<T: serde::de::DeserializeOwned>(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        body: Option<Vec<u8>>,
+        actor: Option<&str>,
+        timeout: Option<std::time::Duration>,
+    ) -> Result<T, NodeError> {
+        let resp = self.request(method, path, body, actor, timeout).await?;
+        Self::decode(resp).await
+    }
+
+    /// Sends a signed request; network and certificate failures become [`NodeError`]s.
+    async fn request(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        body: Option<Vec<u8>>,
+        actor: Option<&str>,
+        timeout: Option<std::time::Duration>,
+    ) -> Result<reqwest::Response, NodeError> {
         let body = body.unwrap_or_default();
         let mut req = self.http.request(method.clone(), format!("{}{path}", self.url));
+        if let Some(timeout) = timeout {
+            req = req.timeout(timeout);
+        }
         for (name, value) in signed_headers(&self.key, &self.node_id, method.as_str(), path, &body) {
             req = req.header(name, value);
         }
@@ -393,14 +441,17 @@ impl NodeClient {
         if !body.is_empty() {
             req = req.header(reqwest::header::CONTENT_TYPE, "application/json").body(body);
         }
-        let resp = req.send().await.map_err(|e| {
+        req.send().await.map_err(|e| {
             let text = describe(&e);
             if text.starts_with("certificat") {
                 NodeError::Certificate(text)
             } else {
                 NodeError::Unreachable(text)
             }
-        })?;
+        })
+    }
+
+    async fn decode<T: serde::de::DeserializeOwned>(resp: reqwest::Response) -> Result<T, NodeError> {
         let status = resp.status();
         if !status.is_success() {
             let body: serde_json::Value = resp.json().await.unwrap_or_default();
@@ -425,6 +476,24 @@ impl NodeClient {
 
     pub async fn snapshot(&self) -> Result<FedSnapshot, NodeError> {
         self.send(reqwest::Method::GET, "/api/federation/installations", None, None).await
+    }
+
+    /// Like [`Self::snapshot`], but the node answers only when its content differs from `since`,
+    /// or `None` ("nothing new", a few bytes) after `wait_secs` (at most [`WATCH_SECS`]). Without
+    /// `since`, it answers
+    /// at once.
+    pub async fn watch(&self, since: Option<&str>, wait_secs: u64) -> Result<Option<FedSnapshot>, NodeError> {
+        let wait = wait_secs.clamp(1, WATCH_SECS);
+        let path = match since {
+            Some(since) => format!("/api/federation/installations?wait={wait}&since={since}"),
+            None => "/api/federation/installations".to_string(),
+        };
+        let timeout = std::time::Duration::from_secs(wait + 15);
+        let resp = self.request(reqwest::Method::GET, &path, None, None, Some(timeout)).await?;
+        if resp.status() == reqwest::StatusCode::NOT_MODIFIED {
+            return Ok(None);
+        }
+        Self::decode(resp).await.map(Some)
     }
 
     pub async fn control(&self, remote_id: i64, system_id: i64, zone_id: i64, cmd: &ZoneCommand, actor: &str) -> Result<FedInstallation, NodeError> {

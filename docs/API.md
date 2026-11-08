@@ -170,11 +170,16 @@ Routes entre serveurs — limitées aux installations du partage :
 | Méthode | Chemin | Description |
 |---------|--------|-------------|
 | POST | `/api/federation/pair` | `{code, node_id, name, public_key, shares_back_from?}` signé avec la clé présentée → `{status:"pending", node_id, name, public_key}` ; le code est consommé. `shares_back_from` (adresse du demandeur) n'est retenu que si l'invitation est réciproque : à l'acceptation, ce nœud ajoute le demandeur comme nœud |
-| GET | `/api/federation/installations` | `FedSnapshot` : `{node_id, name, permission, installations:[{id, name, location, mac, connection, zones (format Airzone), meta}]}` |
+| GET | `/api/federation/installations?wait=&since=` | `FedSnapshot` : `{node_id, name, permission, installations:[{id, name, location, mac, connection, zones (format Airzone), meta}], revision}`. Avec `since` (la `revision` déjà reçue) et `wait` (secondes, 45 au plus), la réponse attend qu'une installation partagée change ; sans changement à la fin de l'attente : `304`, sans contenu |
 | PATCH | `/api/federation/installations/{id}/zones/{system_id}/{zone_id}` | `ZoneCommand` (droit `control`), en-tête `X-Breezone-Actor` pour le journal → installation à jour |
 
-Le serveur consommateur interroge chaque nœud à son rythme de lecture (une requête par nœud) et
-garde sa propre copie de l'historique. Tant que le partage n'est pas accepté, ces routes répondent
+Le serveur consommateur suit chaque nœud en direct : il redemande l'état « depuis la dernière
+révision » dès qu'il reçoit une réponse (longue attente, comme un GitLab Runner). Au repos, un
+échange de quelques centaines d'octets toutes les 45 s ; l'état complet ne circule qu'à chaque
+changement. Si le nœud ne répond pas, nouvel essai après 10 s, puis 1, 2 et 4 min, puis toutes les 5 min jusqu'à son retour ;
+au démarrage, chaque serveur rouvre le lien vers tous ses nœuds. Un nœud qui ne connaît pas
+l'attente (jusqu'à 0.5.x, sans `revision`) est lu au rythme de lecture des WebServers. Le
+consommateur garde sa propre copie de l'historique. Tant que le partage n'est pas accepté, ces routes répondent
 403 ; une signature invalide, un rejeu ou un partage révoqué donnent 401.
 
 ## Minuteries

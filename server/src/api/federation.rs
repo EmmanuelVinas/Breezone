@@ -9,11 +9,11 @@ use crate::auth::{hash_token, AdminUser, AuthUser};
 use crate::db::{self, Share};
 use crate::error::{ApiError, ApiResult};
 use crate::federation::{self, FedInstallation, FedSnapshot, Identity, Invitation, NodeClient, PairRequest, PairResponse, ACTOR_HEADER};
-use crate::hub::{NodeStatus, ZoneCommand};
+use crate::hub::{HubMessage, NodeStatus, ZoneCommand};
 use crate::tls;
 use crate::AppState;
 use axum::body::Bytes;
-use axum::extract::{ConnectInfo, FromRequest, Path, Request, State};
+use axum::extract::{ConnectInfo, FromRequest, Path, Query, Request, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::Json;
 use serde::{Deserialize, Serialize};
@@ -666,12 +666,15 @@ fn client_address(headers: &HeaderMap) -> Option<String> {
 
 async fn fed_snapshot(state: &AppState, auth: &ShareAuth) -> ApiResult<FedSnapshot> {
     let me = federation::identity(&state.db).await?;
-    Ok(FedSnapshot {
+    let mut snap = FedSnapshot {
         node_id: me.node_id,
         name: me.name,
         permission: auth.share.permission.clone(),
         installations: state.hub.federated(&auth.installation_ids).await,
-    })
+        revision: None,
+    };
+    snap.revision = Some(snap.compute_revision());
+    Ok(snap)
 }
 
 /// A node uses an invitation code: it proves it holds the key it presents (the request is signed
@@ -717,9 +720,53 @@ pub async fn pair(State(state): State<AppState>, signed: Signed) -> ApiResult<Js
     Ok(Json(PairResponse { status: "pending".into(), node_id: me.node_id, name: me.name, public_key: Some(federation::public_key_text(&key)) }))
 }
 
-pub async fn installations(State(state): State<AppState>, auth: ShareAuth) -> ApiResult<Json<FedSnapshot>> {
+#[derive(Deserialize)]
+pub struct WatchQuery {
+    /// Seconds to wait for a change (long polling), at most [`federation::WATCH_SECS`].
+    wait: Option<u64>,
+    /// Revision the reading node already has: answer only once the content differs.
+    since: Option<String>,
+}
+
+/// What this node shares with the calling one. With `?wait=&since=`, the answer waits until a
+/// shared installation changes (or the wait ends), so the other node follows it live.
+pub async fn installations(State(state): State<AppState>, Query(q): Query<WatchQuery>, auth: ShareAuth) -> ApiResult<axum::response::Response> {
+    use axum::response::IntoResponse;
     db::touch_share(&state.db, auth.share.id, None, None, auth.address.as_deref()).await?;
-    Ok(Json(fed_snapshot(&state, &auth).await?))
+    // Subscribed before reading, so that no change slips between the read and the wait.
+    let mut changes = state.hub.subscribe();
+    let mut snap = fed_snapshot(&state, &auth).await?;
+    let wait = q.wait.unwrap_or(0).min(federation::WATCH_SECS);
+    if wait == 0 || q.since.is_none() || q.since != snap.revision {
+        return Ok(Json(snap).into_response());
+    }
+    let deadline = tokio::time::sleep(std::time::Duration::from_secs(wait));
+    tokio::pin!(deadline);
+    loop {
+        let relevant = tokio::select! {
+            _ = &mut deadline => break,
+            msg = changes.recv() => match msg {
+                Ok(HubMessage::Installation { installation }) => auth.installation_ids.contains(&installation.id),
+                Ok(HubMessage::InstallationRemoved { id }) => auth.installation_ids.contains(&id),
+                Ok(_) => false,
+                // Missed messages: re-read to be sure.
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => true,
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+            },
+        };
+        if relevant {
+            snap = fed_snapshot(&state, &auth).await?;
+            if q.since != snap.revision {
+                return Ok(Json(snap).into_response());
+            }
+        }
+    }
+    // Nothing new: a few bytes instead of the whole content (the other node keeps what it has).
+    let snap = fed_snapshot(&state, &auth).await?;
+    if q.since != snap.revision {
+        return Ok(Json(snap).into_response());
+    }
+    Ok(StatusCode::NOT_MODIFIED.into_response())
 }
 
 pub async fn control(State(state): State<AppState>, Path((id, system_id, zone_id)): Path<(i64, i64, i64)>, auth: ShareAuth) -> ApiResult<Json<FedInstallation>> {

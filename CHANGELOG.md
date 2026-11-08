@@ -8,6 +8,11 @@ All notable changes are documented here. The format follows
 
 ### Added
 
+- Federation: a server follows the installations another server shares with it **live** (long
+  polling over the signed API): a change there shows here within a second, instead of at the next
+  read. At rest, a few hundred bytes every 45 s; the full state only travels when something changes.
+  The link reopens by itself when either server comes back (retries after 10 s, then 1, 2 and 4 min, then every 5 min; and at start);
+  servers up to 0.5.x keep being read periodically.
 - Web: the version of the Breezone server, at the bottom of the side bar and in the account menu.
 
 ### Changed
