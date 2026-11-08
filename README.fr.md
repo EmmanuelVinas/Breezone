@@ -14,11 +14,6 @@ petit serveur auto-hébergé qui l'utilise, avec une interface web et une applic
 > ni approuvé ni soutenu par elle. « Airzone » est une marque de son propriétaire, citée uniquement pour
 > indiquer la compatibilité.
 
-<picture>
-  <source media="(prefers-color-scheme: light)" srcset="docs/images/web/dashboard-light.webp">
-  <img alt="Tableau de bord de Breezone : deux installations et leurs zones" src="docs/images/web/dashboard.webp">
-</picture>
-
 ## Fonctions
 
 - **Zones** : marche/arrêt, consigne, mode (chaud, froid, ventilation, déshumidification, auto),
@@ -40,6 +35,13 @@ petit serveur auto-hébergé qui l'utilise, avec une interface web et une applic
 
 ## Aperçu
 
+### Interface web
+
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/web/dashboard-light.webp">
+  <img alt="Tableau de bord de Breezone : deux installations et leurs zones" src="docs/images/web/dashboard.webp">
+</picture>
+
 | | |
 |---|---|
 | ![Zone : consigne, mode, ventilation et historique](docs/images/web/zone.webp) | ![Programmations Airzone](docs/images/web/schedules.webp) |
@@ -48,6 +50,12 @@ petit serveur auto-hébergé qui l'utilise, avec une interface web et une applic
 | **Routines** : minuteries et scènes | **Scène** dont certaines actions attendent |
 | ![Journal d'activité](docs/images/web/activity.webp) | ![Installations : compte Airzone et accès](docs/images/web/settings-installations.webp) |
 | **Activité** en temps réel | **Installations** : sur ce réseau ou via un autre site |
+
+### Application mobile
+
+| Installations | Zones par étage | Une zone | Programmations Airzone |
+|:---:|:---:|:---:|:---:|
+| <img src="docs/images/mobile/fr/1-installations.jpg" width="200" alt="Vos installations"> | <img src="docs/images/mobile/fr/2-installation.jpg" width="200" alt="Les zones d'une installation, par étage"> | <img src="docs/images/mobile/fr/3-zone.jpg" width="200" alt="Une zone : consigne, marche/arrêt, mode"> | <img src="docs/images/mobile/fr/4-schedules.jpg" width="200" alt="Les programmations Airzone d'une installation"> |
 
 ## Installation (Docker)
 
@@ -113,10 +121,6 @@ plusieurs serveurs.
 
 **Liens Google Play et App Store : bientôt disponibles.** En attendant, compilez-la depuis
 [`mobile/`](mobile).
-
-| Installations | Zones par étage | Une zone | Programmations Airzone |
-|:---:|:---:|:---:|:---:|
-| <img src="docs/images/mobile/fr/1-installations.jpg" width="200" alt="Vos installations"> | <img src="docs/images/mobile/fr/2-installation.jpg" width="200" alt="Les zones d'une installation, par étage"> | <img src="docs/images/mobile/fr/3-zone.jpg" width="200" alt="Une zone : consigne, marche/arrêt, mode"> | <img src="docs/images/mobile/fr/4-schedules.jpg" width="200" alt="Les programmations Airzone d'une installation"> |
 
 Saisissez l'adresse de votre serveur (`http://192.168.1.10:8427` à la maison, ou l'adresse `https://`
 de votre tunnel) puis vos identifiants ; ajoutez un serveur par site. La session de l'appareil est

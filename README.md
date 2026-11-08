@@ -17,11 +17,6 @@ self-hosted server that talks to it, with a web UI and an Android / iOS app.
 > Airzone** (Corporación Empresarial Altra S.L.). "Airzone" is a trademark of its owner, used here only
 > to describe compatibility.
 
-<picture>
-  <source media="(prefers-color-scheme: light)" srcset="docs/images/web/dashboard-light.webp">
-  <img alt="Breezone dashboard: two installations and their zones" src="docs/images/web/dashboard.webp">
-</picture>
-
 ## Features
 
 - **Zones**: on/off, setpoint, mode (heat, cool, fan, dry, auto), fan speed, sleep; groups (floors)
@@ -41,6 +36,13 @@ self-hosted server that talks to it, with a web UI and an Android / iOS app.
 
 ## Screenshots
 
+### Web UI
+
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/web/dashboard-light.webp">
+  <img alt="Breezone dashboard: two installations and their zones" src="docs/images/web/dashboard.webp">
+</picture>
+
 | | |
 |---|---|
 | ![Zone: setpoint, mode, fan speed and history](docs/images/web/zone.webp) | ![Airzone schedules](docs/images/web/schedules.webp) |
@@ -51,6 +53,12 @@ self-hosted server that talks to it, with a web UI and an Android / iOS app.
 | Real-time **activity** | **Installations**: on this network or through another site |
 
 The web UI is in French for now; English is on the [roadmap](docs/ROADMAP.md).
+
+### Mobile app
+
+| Installations | Zones by floor | A zone | Airzone schedules |
+|:---:|:---:|:---:|:---:|
+| <img src="docs/images/mobile/en/1-installations.jpg" width="200" alt="Your installations"> | <img src="docs/images/mobile/en/2-installation.jpg" width="200" alt="Zones of an installation, by floor"> | <img src="docs/images/mobile/en/3-zone.jpg" width="200" alt="A zone: setpoint, on/off, mode"> | <img src="docs/images/mobile/en/4-schedules.jpg" width="200" alt="Airzone schedules of an installation"> |
 
 ## Install (Docker)
 
@@ -127,10 +135,6 @@ An Android and iOS app (English, French, Spanish) to drive your installations fr
 modes, routines and Airzone schedules of each installation, live updates, several servers.
 
 **Google Play and App Store links: coming soon.** Until then, build it yourself from [`mobile/`](mobile).
-
-| Installations | Zones by floor | A zone | Airzone schedules |
-|:---:|:---:|:---:|:---:|
-| <img src="docs/images/mobile/en/1-installations.jpg" width="200" alt="Your installations"> | <img src="docs/images/mobile/en/2-installation.jpg" width="200" alt="Zones of an installation, by floor"> | <img src="docs/images/mobile/en/3-zone.jpg" width="200" alt="A zone: setpoint, on/off, mode"> | <img src="docs/images/mobile/en/4-schedules.jpg" width="200" alt="Airzone schedules of an installation"> |
 
 Add your server's address (`http://192.168.1.10:8427` at home, or your tunnel's `https://` address)
 and sign in; add one server per site. The device session is kept in the Android Keystore / iOS
