@@ -1,19 +1,13 @@
 package com.breezone.app.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -21,7 +15,6 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -32,25 +25,18 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.breezone.app.data.CommandStatus
 import com.breezone.app.data.Hub
+import com.breezone.app.data.installation
 import com.breezone.app.data.Installation
 import com.breezone.app.data.Mode
 import com.breezone.app.data.Zone
@@ -83,20 +69,9 @@ fun InstallationScreen(serverId: String, installationId: Long, onBack: () -> Uni
     val hub = koinInject<Hub>()
     val servers by hub.servers.collectAsState()
     val commandStatus by hub.commandStatus.collectAsState()
-    val inst = servers.firstOrNull { it.account.id == serverId }?.installations?.firstOrNull { it.id == installationId }
+    val inst = servers.installation(serverId, installationId)
 
     var tab by rememberSaveable { mutableIntStateOf(0) }
-    // The section bar hides while scrolling down and comes back as soon as the list goes up.
-    var barVisible by rememberSaveable { mutableStateOf(true) }
-    val hideOnScroll = remember {
-        object : NestedScrollConnection {
-            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                if (available.y < -SCROLL_SLOP) barVisible = false else if (available.y > SCROLL_SLOP) barVisible = true
-                return Offset.Zero
-            }
-        }
-    }
-
     Scaffold(
         topBar = {
             FzTopBar(
@@ -111,7 +86,7 @@ fun InstallationScreen(serverId: String, installationId: Long, onBack: () -> Uni
                             // Online needs no words: the dot says it. Offline is worth spelling out.
                             if (!connection.online && connection.state != "unknown") {
                                 Spacer(Modifier.size(6.dp))
-                                Text(stringResource(Res.string.connection_offline), fontSize = 12.sp, color = Fz.colors.muted)
+                                Caption(stringResource(Res.string.connection_offline))
                             }
                         }
                     }
@@ -120,24 +95,15 @@ fun InstallationScreen(serverId: String, installationId: Long, onBack: () -> Uni
         },
         bottomBar = {
             if (inst != null) {
-                AnimatedVisibility(
-                    visible = barVisible,
-                    enter = expandVertically(expandFrom = Alignment.Top),
-                    exit = shrinkVertically(shrinkTowards = Alignment.Top),
-                ) {
-                    NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
-                        SECTIONS.forEachIndexed { i, (label, icon) ->
-                            NavigationBarItem(
-                                selected = tab == i,
-                                onClick = {
-                                    tab = i
-                                    barVisible = true
-                                },
-                                icon = { Icon(icon, null) },
-                                label = { Text(stringResource(label)) },
-                                colors = fzNavigationColors(),
-                            )
-                        }
+                NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+                    SECTIONS.forEachIndexed { i, (label, icon) ->
+                        NavigationBarItem(
+                            selected = tab == i,
+                            onClick = { tab = i },
+                            icon = { Icon(icon, null) },
+                            label = { Text(stringResource(label)) },
+                            colors = fzNavigationColors(),
+                        )
                     }
                 }
             }
@@ -147,34 +113,18 @@ fun InstallationScreen(serverId: String, installationId: Long, onBack: () -> Uni
             Muted(stringResource(Res.string.installation_not_found), Modifier.padding(padding).padding(24.dp))
             return@Scaffold
         }
-        // The lists run under the section bar and always keep room for it, shown or not: their length
-        // does not change when it hides, so a scroll goes to the end in one go. Floating buttons
-        // follow the bar.
-        val content = Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()).nestedScroll(hideOnScroll)
-        val space = SectionSpace(
-            list = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + SECTION_BAR_HEIGHT,
-            fab = padding.calculateBottomPadding(),
-        )
+        // The section bar stays in place: the lists end above it.
+        val content = Modifier.fillMaxSize().padding(padding)
         when (tab) {
-            0 -> InstallationZones(serverId, inst, commandStatus, onOpenZone, space, content)
-            1 -> InstallationRoutines(serverId, inst, space, content)
-            else -> InstallationSchedules(serverId, inst, space, content)
+            0 -> InstallationZones(serverId, inst, commandStatus, onOpenZone, content)
+            1 -> InstallationRoutines(serverId, inst, content)
+            else -> InstallationSchedules(serverId, inst, content)
         }
     }
 }
 
-/** Height of the Material 3 navigation bar. */
-private val SECTION_BAR_HEIGHT = 80.dp
-
-/** Room a section keeps at the bottom: under its list, and under its floating button. */
-@Immutable
-data class SectionSpace(val list: Dp, val fab: Dp)
-
-/** Padding of a section list: 16 dp around, plus the room for the section bar. */
-fun SectionSpace.listPadding() = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp + list)
-
-/** Scroll distance (px per frame) above which the section bar hides or shows. */
-private const val SCROLL_SLOP = 6f
+/** Padding of the list of a section. */
+val SectionListPadding = PaddingValues(16.dp)
 
 private val SECTIONS = listOf(
     Res.string.installation_tab_zones to FzIcons.Thermometer,
@@ -188,7 +138,6 @@ private fun InstallationZones(
     inst: Installation,
     commandStatus: Map<String, CommandStatus>,
     onOpenZone: (Zone) -> Unit,
-    space: SectionSpace,
     modifier: Modifier = Modifier,
 ) {
     val hub = koinInject<Hub>()
@@ -202,7 +151,7 @@ private fun InstallationZones(
     LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = 160.dp),
             modifier = modifier,
-            contentPadding = space.listPadding(),
+            contentPadding = SectionListPadding,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -229,7 +178,7 @@ private fun InstallationZones(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(group ?: stringResource(Res.string.installation_group_default), style = MaterialTheme.typography.titleMedium)
-                                Text(pluralStringResource(Res.plurals.installation_group_on, on, on, zones.size), fontSize = 12.sp, color = Fz.colors.muted)
+                                Caption(pluralStringResource(Res.plurals.installation_group_on, on, on, zones.size))
                             }
                             TextButton(onClick = { hub.setPower(serverId, zones, true, group) }, enabled = on < zones.size) {
                                 Text(stringResource(Res.string.installation_all_on))
@@ -261,7 +210,7 @@ private fun InstallationZones(
 private fun SystemModes(masters: List<Zone>, labelled: Boolean, onMode: (Zone, Mode) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         masters.forEach { master ->
-            if (labelled) Text(stringResource(Res.string.installation_system, master.systemId.toInt()), fontSize = 12.sp, color = Fz.colors.muted)
+            if (labelled) Caption(stringResource(Res.string.installation_system, master.systemId.toInt()))
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 master.modes.forEach { mode ->
                     val selected = master.mode == mode
@@ -271,7 +220,7 @@ private fun SystemModes(masters: List<Zone>, labelled: Boolean, onMode: (Zone, M
                         onClick = { if (!selected) onMode(master, mode) },
                         label = { Text(mode.label()) },
                         leadingIcon = { Icon(mode.icon, null, Modifier.size(16.dp), tint = if (selected) color else Fz.colors.muted) },
-                        shape = RoundedCornerShape(14.dp),
+                        shape = Fz.shapes.button,
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = color.copy(alpha = 0.16f),
                             selectedLabelColor = color,

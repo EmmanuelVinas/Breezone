@@ -2,9 +2,9 @@
 
 **Control your Airzone heating and air conditioning locally. No cloud required.**
 
-[![CI](https://github.com/EmmanuelVinas/breezone/actions/workflows/ci.yml/badge.svg)](https://github.com/EmmanuelVinas/breezone/actions/workflows/ci.yml)
-[![License: PolyForm Noncommercial](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue)](LICENSE.md)
-[![Image](https://img.shields.io/badge/image-ghcr.io%2Femmanuelvinas%2Fbreezone-2496ED?logo=docker&logoColor=white)](https://github.com/EmmanuelVinas/breezone/pkgs/container/breezone)
+![CI](https://github.com/EmmanuelVinas/breezone/actions/workflows/ci.yml/badge.svg)
+![License: PolyForm Noncommercial](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue)
+![Image](https://img.shields.io/badge/image-ghcr.io%2Femmanuelvinas%2Fbreezone-2496ED?logo=docker&logoColor=white)
 
 🌐 [breezone.cloud](https://breezone.cloud) · 🇫🇷 [Lire en français](README.fr.md)
 
@@ -20,18 +20,18 @@ self-hosted server that talks to it, with a web UI and an Android / iOS app.
 ## Features
 
 - **Zones**: on/off, setpoint, mode (heat, cool, fan, dry, auto), fan speed, sleep; groups (floors)
-  with group on/off.
-- **Schedules**: the schedules of the Airzone app, created and edited from Breezone, run by Airzone.
+with group on/off.
+- **Schedules**: the schedules of the  app, created and edited from Breezone, run by Airzone.
 - **Routines**: scenes started on demand, run by your server (each step can wait, e.g. "switch the
-  living room off now, the bedrooms in 2 hours"), and timers ("in 2 hours, switch everything off").
+living room off now, the bedrooms in 2 hours"), and timers ("in 2 hours, switch everything off").
 - **History** (temperature, setpoint, humidity) and a real-time **activity feed**.
 - **Several sites without VPN**: each site runs its own Breezone; a server can share some of its
-  installations with another one (single-use invitation, approval, signed requests, read-only or
-  control, revocable) — see [Linking two sites](docs/federation.md) (in French).
+installations with another one (single-use invitation, approval, signed requests, read-only or
+control, revocable) — see [Linking two sites](docs/federation.md) (in French).
 - **Users and devices**: administrators and users; each user only sees the installations given to
-  them, read-only or with control; sessions revocable per device.
+them, read-only or with control; sessions revocable per device.
 - **Optional Airzone account import** (read-only): installation names, city, zone groups; WebServers
-  are found on the network by their MAC address.
+are found on the network by their MAC address.
 - **Tiny**: one ~20 MB image, a few MB of RAM — fits on any NAS or Raspberry Pi.
 
 ## Screenshots
@@ -39,26 +39,33 @@ self-hosted server that talks to it, with a web UI and an Android / iOS app.
 ### Web UI
 
 <picture>
+
   <source media="(prefers-color-scheme: light)" srcset="docs/images/web/dashboard-light.webp">
+
   <img alt="Breezone dashboard: two installations and their zones" src="docs/images/web/dashboard.webp">
+
 </picture>
 
-| | |
-|---|---|
-| ![Zone: setpoint, mode, fan speed and history](docs/images/web/zone.webp) | ![Airzone schedules](docs/images/web/schedules.webp) |
-| **Zone**: setpoint, mode, fan speed, sleep and history | **Schedules** of the Airzone account, editable here |
-| ![Routines: timers and scenes](docs/images/web/routines.webp) | ![Scene editor](docs/images/web/scene-editor.webp) |
-| **Routines**: timers and scenes | **Scene** with delayed actions |
-| ![Activity feed](docs/images/web/activity.webp) | ![Installations: Airzone account and access](docs/images/web/settings-installations.webp) |
-| Real-time **activity** | **Installations**: on this network or through another site |
+
+|                                                                           |                                                                                           |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| ![Zone: setpoint, mode, fan speed and history](docs/images/web/zone.webp) | ![Airzone schedules](docs/images/web/schedules.webp)                                      |
+| **Zone**: setpoint, mode, fan speed, sleep and history                    | **Schedules** of the Airzone account, editable here                                       |
+| ![Routines: timers and scenes](docs/images/web/routines.webp)             | ![Scene editor](docs/images/web/scene-editor.webp)                                        |
+| **Routines**: timers and scenes                                           | **Scene** with delayed actions                                                            |
+| ![Activity feed](docs/images/web/activity.webp)                           | ![Installations: Airzone account and access](docs/images/web/settings-installations.webp) |
+| Real-time **activity**                                                    | **Installations**: on this network or through another site                                |
+
 
 The web UI is in French for now; English is on the [roadmap](docs/ROADMAP.md).
 
 ### Mobile app
 
-| Installations | Zones by floor | A zone | Airzone schedules |
-|:---:|:---:|:---:|:---:|
+
+| Installations                                                                              | Zones by floor                                                                                            | A zone                                                                                        | Airzone schedules                                                                                        |
+| :------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------------------: |
 | <img src="docs/images/mobile/en/1-installations.jpg" width="200" alt="Your installations"> | <img src="docs/images/mobile/en/2-installation.jpg" width="200" alt="Zones of an installation, by floor"> | <img src="docs/images/mobile/en/3-zone.jpg" width="200" alt="A zone: setpoint, on/off, mode"> | <img src="docs/images/mobile/en/4-schedules.jpg" width="200" alt="Airzone schedules of an installation"> |
+
 
 ## Install (Docker)
 
@@ -115,24 +122,26 @@ in the `breezone_data` volume; back it up with
 
 ### Settings
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `BREEZONE_HTTP_PORT` | `8427` | Published port (compose) |
-| `BREEZONE_VERSION` | `latest` | Image tag (compose) |
-| `BREEZONE_SCAN_SUBNET` | server's /24 | Network scanned for WebServers (also settable in the UI) |
-| `BREEZONE_AIRZONE_HOSTS` | — | Installations created at first start (`Home=192.168.1.25,Office=192.168.1.40:3000`) |
-| `BREEZONE_ADMIN_USER` / `BREEZONE_ADMIN_PASSWORD` | — | Administrator created at first start (otherwise from the web page) |
-| `BREEZONE_POLL_INTERVAL_SECS` | `15` | WebServer polling period |
-| `BREEZONE_HISTORY_RETENTION_DAYS` / `BREEZONE_EVENTS_RETENTION_DAYS` | `90` / `30` | Retention |
-| `BREEZONE_ACCESS_TOKEN_TTL_SECS` / `BREEZONE_REFRESH_TOKEN_TTL_DAYS` | `900` / `365` | Token lifetimes (device sessions are sliding) |
-| `BREEZONE_JWT_SECRET` | generated in `/data/jwt.secret` | Signing secret |
-| `TZ` | `Europe/Paris` | Time zone |
-| `RUST_LOG` | `info,…` | Log level |
+
+| Variable                                                             | Default                         | Purpose                                                                             |
+| -------------------------------------------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------- |
+| `BREEZONE_HTTP_PORT`                                                 | `8427`                          | Published port (compose)                                                            |
+| `BREEZONE_VERSION`                                                   | `latest`                        | Image tag (compose)                                                                 |
+| `BREEZONE_SCAN_SUBNET`                                               | server's /24                    | Network scanned for WebServers (also settable in the UI)                            |
+| `BREEZONE_AIRZONE_HOSTS`                                             | —                               | Installations created at first start (`Home=192.168.1.25,Office=192.168.1.40:3000`) |
+| `BREEZONE_ADMIN_USER` / `BREEZONE_ADMIN_PASSWORD`                    | —                               | Administrator created at first start (otherwise from the web page)                  |
+| `BREEZONE_POLL_INTERVAL_SECS`                                        | `15`                            | WebServer polling period                                                            |
+| `BREEZONE_HISTORY_RETENTION_DAYS` / `BREEZONE_EVENTS_RETENTION_DAYS` | `90` / `30`                     | Retention                                                                           |
+| `BREEZONE_ACCESS_TOKEN_TTL_SECS` / `BREEZONE_REFRESH_TOKEN_TTL_DAYS` | `900` / `365`                   | Token lifetimes (device sessions are sliding)                                       |
+| `BREEZONE_JWT_SECRET`                                                | generated in `/data/jwt.secret` | Signing secret                                                                      |
+| `TZ`                                                                 | `Europe/Paris`                  | Time zone                                                                           |
+| `RUST_LOG`                                                           | `info,…`                        | Log level                                                                           |
+
 
 ## Mobile app
 
 An Android and iOS app (English, French, Spanish) to drive your installations from your phone: zones,
-modes, routines and Airzone schedules of each installation, live updates, several servers.
+modes, routines and  schedules of each installation, live updates, several servers.
 
 **Google Play and App Store links: coming soon.** Until then, build it yourself from [`mobile/`](mobile).
 
@@ -150,21 +159,23 @@ yet? « Try the demo » on the first screen opens a simulated home.
                                                  └─ Airzone Cloud (optional: import, schedules)
 ```
 
-| Folder | Content |
-|--------|---------|
-| [`server/`](server) | Rust server (axum, sqlx/SQLite): API, Airzone polling, routines, timers, auth, federation, a fake Airzone for demos and tests |
-| [`web/`](web) | Web UI: React 19, Vite, Tailwind 4, shadcn/ui |
-| [`mobile/`](mobile) | Compose Multiplatform app (Android and iOS) |
-| [`docs/API.md`](docs/API.md) | API reference (in French) |
-| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Roadmap (in French) |
+
+| Folder                               | Content                                                                                                                       |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| [`server/`](server)                  | Rust server (axum, sqlx/SQLite): API, Airzone polling, routines, timers, auth, federation, a fake Airzone for demos and tests |
+| [`web/`](web)                        | Web UI: React 19, Vite, Tailwind 4, shadcn/ui                                                                                 |
+| [`mobile/`](mobile)                  | Compose Multiplatform app (Android and iOS)                                                                                   |
+| [`docs/API.md`](docs/API.md)         | API reference (in French)                                                                                                     |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Roadmap (in French)                                                                                                           |
+
 
 Airzone APIs used:
 
 - **Local** (WebServer, port 3000): `POST /api/v1/hvac` to read, `PUT /api/v1/hvac` to write,
-  `POST /api/v1/webserver`. The mode can only be written on the master zone of a system; Breezone
-  handles it.
+`POST /api/v1/webserver`. The mode can only be written on the master zone of a system; Breezone
+handles it.
 - **Airzone Cloud** (optional, with your account): import of the organisation (read-only) and the
-  schedules of the Airzone app (the local API has none).
+schedules of the Airzone app (the local API has none).
 
 Thanks to [`aioairzone`](https://github.com/Noltari/aioairzone) and
 [`aioairzone-cloud`](https://github.com/Noltari/aioairzone-cloud) for documenting these APIs.
@@ -172,7 +183,7 @@ Thanks to [`aioairzone`](https://github.com/Noltari/aioairzone) and
 ## Contributing
 
 Bug reports, ideas and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Try it
-without hardware: `./scripts/run-local.sh --demo` starts a fake Airzone WebServer and a fake Airzone
+without hardware: `./scripts/run-local.sh --demo` starts a fake Airzone WebServer and a fake 
 Cloud. Security issues: see [SECURITY.md](SECURITY.md).
 
 ## License

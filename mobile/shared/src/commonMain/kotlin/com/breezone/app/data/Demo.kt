@@ -245,7 +245,7 @@ object DemoServer {
             // /api/installations/{id}/zones/{sys}/{zone}[/history]
             parts.size >= 6 && parts[1] == "installations" && parts[3] == "zones" -> {
                 val (inst, sys, zone) = Triple(parts[2].toLong(), parts[4].toLong(), parts[5].toLong())
-                val z = installations?.firstOrNull { it.id == inst }?.zones?.firstOrNull { it.systemId == sys && it.zoneId == zone }
+                val z = installations?.firstOrNull { it.id == inst }?.zone(sys, zone)
                     ?: return@withLock json("""{"error":"zone not found"}""", HttpStatusCode.NotFound)
                 if (parts.size == 7 && parts[6] == "history") {
                     val hours = request.url.parameters["hours"]?.toIntOrNull() ?: 24

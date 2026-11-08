@@ -51,6 +51,10 @@ data class ServerState(
     val error: String? = null,
 )
 
+/** Installation [installationId] of server [serverId]. */
+fun List<ServerState>.installation(serverId: String, installationId: Long): Installation? =
+    firstOrNull { it.account.id == serverId }?.installations?.firstOrNull { it.id == installationId }
+
 private const val SERVERS_KEY = "servers"
 
 /**
@@ -351,7 +355,7 @@ class Hub(
                 throw e
             } catch (e: Exception) {
                 setStatus(serverId, zones, CommandStatus.Error)
-                _messages.tryEmit(getString(Res.string.common_failure, e.message.orEmpty()))
+                notifyFailure(e)
                 resync(serverId)
             }
         }
@@ -360,6 +364,22 @@ class Hub(
     fun notify(message: String) {
         _messages.tryEmit(message)
     }
+
+    /** Shows the usual "failure: …" message for [e]. */
+    suspend fun notifyFailure(e: Throwable) = notify(getString(Res.string.common_failure, e.message.orEmpty()))
+
+    /** Runs [block]; a failure is shown as a message and gives null. Cancellation goes through. */
+    suspend fun <T> attempt(block: suspend () -> T): T? = try {
+        block()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        notifyFailure(e)
+        null
+    }
+
+    /** [attempt] in [scope], for one-shot actions started from the UI. */
+    fun launchAttempt(scope: CoroutineScope, block: suspend () -> Unit) = scope.launch { attempt(block) }
 }
 
 /** Acknowledgement of a command sent to a zone. */

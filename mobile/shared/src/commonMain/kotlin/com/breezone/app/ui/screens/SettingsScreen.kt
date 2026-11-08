@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -35,8 +34,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.breezone.app.APP_VERSION
@@ -79,29 +78,27 @@ fun SettingsScreen(onAddServer: () -> Unit, onReauth: (String) -> Unit) {
                     Spacer(Modifier.size(10.dp))
                     Column(Modifier.weight(1f)) {
                         Text(s.account.label, style = MaterialTheme.typography.titleSmall)
-                        Text(
+                        Caption(
                             stringResource(
                                 if (s.user?.isAdmin == true) Res.string.settings_server_user_admin else Res.string.settings_server_user,
                                 s.account.username,
                                 s.account.url,
                             ),
-                            fontSize = 12.sp,
-                            color = Fz.colors.muted,
                             maxLines = 1,
                         )
-                        if (s.authRequired) Text(stringResource(Res.string.settings_session_expired), fontSize = 12.sp, color = Fz.colors.warning)
-                        s.serverVersion?.let { Text(stringResource(Res.string.settings_server_version, it), fontSize = 12.sp, color = Fz.colors.muted) }
+                        if (s.authRequired) Caption(stringResource(Res.string.settings_session_expired), color = Fz.colors.warning)
+                        s.serverVersion?.let { Caption(stringResource(Res.string.settings_server_version, it)) }
                         when {
-                            s.update == UpdateNeeded.App -> Text(stringResource(Res.string.update_app_text), fontSize = 12.sp, color = Fz.colors.warning)
-                            s.update == UpdateNeeded.Server -> Text(stringResource(Res.string.update_server_text, s.serverVersion ?: "?"), fontSize = 12.sp, color = Fz.colors.warning)
-                            s.appUpdateAvailable -> Text(stringResource(Res.string.update_app_available), fontSize = 12.sp, color = Fz.colors.muted)
+                            s.update == UpdateNeeded.App -> Caption(stringResource(Res.string.update_app_text), color = Fz.colors.warning)
+                            s.update == UpdateNeeded.Server -> Caption(stringResource(Res.string.update_server_text, s.serverVersion ?: "?"), color = Fz.colors.warning)
+                            s.appUpdateAvailable -> Caption(stringResource(Res.string.update_app_available))
                         }
                     }
                     if (s.authRequired) TextButton(onClick = { onReauth(s.account.id) }) { Text(stringResource(Res.string.settings_reconnect)) }
                     TextButton(onClick = { removing = s }) { Text(stringResource(Res.string.settings_remove), color = MaterialTheme.colorScheme.error) }
                 }
             }
-            OutlinedButton(onClick = onAddServer, shape = RoundedCornerShape(14.dp)) {
+            OutlinedButton(onClick = onAddServer, shape = Fz.shapes.button) {
                 Icon(FzIcons.Plus, null, Modifier.size(16.dp))
                 Spacer(Modifier.size(6.dp))
                 Text(stringResource(Res.string.settings_add_server))
@@ -119,17 +116,15 @@ fun SettingsScreen(onAddServer: () -> Unit, onReauth: (String) -> Unit) {
     }
 
     removing?.let { s ->
-        AlertDialog(
-            onDismissRequest = { removing = null },
-            title = { Text(stringResource(Res.string.settings_remove_title, s.account.label)) },
-            text = { Text(stringResource(Res.string.settings_remove_text)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    hub.removeServer(s.account.id)
-                    removing = null
-                }) { Text(stringResource(Res.string.settings_remove)) }
+        ConfirmDialog(
+            title = stringResource(Res.string.settings_remove_title, s.account.label),
+            text = stringResource(Res.string.settings_remove_text),
+            confirm = stringResource(Res.string.settings_remove),
+            onConfirm = {
+                hub.removeServer(s.account.id)
+                removing = null
             },
-            dismissButton = { TextButton(onClick = { removing = null }) { Text(stringResource(Res.string.common_cancel)) } },
+            onDismiss = { removing = null },
         )
     }
 }
@@ -172,12 +167,12 @@ private fun AirzoneAccount(hub: Hub, server: ServerState, showServer: Boolean) {
                 Icon(if (c.reachable) FzIcons.House else FzIcons.CloudOff, null, Modifier.size(16.dp), tint = Fz.colors.muted)
                 Spacer(Modifier.size(8.dp))
                 Text(c.name, Modifier.weight(1f), fontSize = 14.sp)
-                Text(stringResource(if (c.reachable) Res.string.cloud_driven else Res.string.cloud_not_reached), fontSize = 12.sp, color = Fz.colors.muted)
+                Caption(stringResource(if (c.reachable) Res.string.cloud_driven else Res.string.cloud_not_reached))
             }
         }
         if (admin) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { connecting = true }, shape = RoundedCornerShape(14.dp)) {
+                Button(onClick = { connecting = true }, shape = Fz.shapes.button) {
                     Text(stringResource(if (s?.email == null) Res.string.cloud_connect else Res.string.cloud_reconnect))
                 }
                 if (s?.autoSync == true) {
@@ -195,7 +190,7 @@ private fun AirzoneAccount(hub: Hub, server: ServerState, showServer: Boolean) {
                             }
                         },
                         enabled = !busy,
-                        shape = RoundedCornerShape(14.dp),
+                        shape = Fz.shapes.button,
                     ) {
                         if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp) else Text(stringResource(Res.string.cloud_sync))
                     }
@@ -222,17 +217,11 @@ private fun AirzoneAccount(hub: Hub, server: ServerState, showServer: Boolean) {
                         { email = it },
                         label = { Text(stringResource(Res.string.cloud_email)) },
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
                         modifier = Modifier.fillMaxWidth(),
+                        shape = Fz.shapes.field,
                     )
-                    OutlinedTextField(
-                        password,
-                        { password = it },
-                        label = { Text(stringResource(Res.string.cloud_password)) },
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    PasswordField(password, { password = it }, stringResource(Res.string.cloud_password))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(remember, { remember = it })
                         Text(stringResource(Res.string.cloud_remember), fontSize = 13.sp)

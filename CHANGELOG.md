@@ -6,6 +6,13 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- App: the section bar of an installation stays visible (it no longer hides while scrolling), the
+  lists end right above it.
+- App: the setpoint in the routine and schedule editors follows the limits of the chosen zones; the
+  Airzone password can be shown while typing it.
+
 ## [0.6.0] - 2026-11-08
 
 ### Added

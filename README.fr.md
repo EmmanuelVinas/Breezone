@@ -17,20 +17,20 @@ petit serveur auto-hébergé qui l'utilise, avec une interface web et une applic
 ## Fonctions
 
 - **Zones** : marche/arrêt, consigne, mode (chaud, froid, ventilation, déshumidification, auto),
-  ventilation, veille ; groupes (étages) avec marche/arrêt de groupe.
-- **Programmations** : celles de l'application Airzone, créées et modifiées depuis Breezone, exécutées
-  par Airzone.
+ventilation, veille ; groupes (étages) avec marche/arrêt de groupe.
+- **Programmations** :  créées et modifiées depuis Breezone, exécutées
+par Airzone.
 - **Routines** : scènes lancées à la demande et exécutées par votre serveur (chaque étape peut attendre :
-  « éteindre le salon maintenant, les chambres dans 2 h »), et minuteries (« dans 2 h, tout éteindre »).
+« éteindre le salon maintenant, les chambres dans 2 h »), et minuteries (« dans 2 h, tout éteindre »).
 - **Historique** (température, consigne, humidité) et **journal d'activité** en temps réel.
 - **Plusieurs sites sans VPN** : chaque site a son serveur Breezone ; un serveur peut partager certaines
-  installations avec un autre (invitation à usage unique, acceptation, requêtes signées, lecture ou
-  pilotage, révocable) — voir [Relier deux sites](docs/federation.md).
+installations avec un autre (invitation à usage unique, acceptation, requêtes signées, lecture ou
+pilotage, révocable) — voir [Relier deux sites](docs/federation.md).
 - **Utilisateurs et appareils** : administrateurs et utilisateurs ; chaque utilisateur ne voit que
-  les installations qu'on lui donne, en lecture seule ou avec le pilotage ; sessions révocables par
-  appareil.
+les installations qu'on lui donne, en lecture seule ou avec le pilotage ; sessions révocables par
+appareil.
 - **Import facultatif du compte Airzone** (lecture seule) : noms, ville, groupes de zones ; les WebServers
-  sont retrouvés sur le réseau par leur adresse MAC.
+sont retrouvés sur le réseau par leur adresse MAC.
 - **Léger** : une image d'environ 20 Mo, quelques Mo de RAM — tient sur n'importe quel NAS ou Raspberry Pi.
 
 ## Aperçu
@@ -38,24 +38,31 @@ petit serveur auto-hébergé qui l'utilise, avec une interface web et une applic
 ### Interface web
 
 <picture>
+
   <source media="(prefers-color-scheme: light)" srcset="docs/images/web/dashboard-light.webp">
+
   <img alt="Tableau de bord de Breezone : deux installations et leurs zones" src="docs/images/web/dashboard.webp">
+
 </picture>
 
-| | |
-|---|---|
-| ![Zone : consigne, mode, ventilation et historique](docs/images/web/zone.webp) | ![Programmations Airzone](docs/images/web/schedules.webp) |
-| **Zone** : consigne, mode, ventilation, veille et historique | **Programmations** du compte Airzone, modifiables ici |
-| ![Routines : minuteries et scènes](docs/images/web/routines.webp) | ![Éditeur de scène](docs/images/web/scene-editor.webp) |
-| **Routines** : minuteries et scènes | **Scène** dont certaines actions attendent |
-| ![Journal d'activité](docs/images/web/activity.webp) | ![Installations : compte Airzone et accès](docs/images/web/settings-installations.webp) |
-| **Activité** en temps réel | **Installations** : sur ce réseau ou via un autre site |
+
+|                                                                                |                                                                                         |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| ![Zone : consigne, mode, ventilation et historique](docs/images/web/zone.webp) | ![Programmations Airzone](docs/images/web/schedules.webp)                               |
+| **Zone** : consigne, mode, ventilation, veille et historique                   | **Programmations** du compte Airzone, modifiables ici                                   |
+| ![Routines : minuteries et scènes](docs/images/web/routines.webp)              | ![Éditeur de scène](docs/images/web/scene-editor.webp)                                  |
+| **Routines** : minuteries et scènes                                            | **Scène** dont certaines actions attendent                                              |
+| ![Journal d'activité](docs/images/web/activity.webp)                           | ![Installations : compte Airzone et accès](docs/images/web/settings-installations.webp) |
+| **Activité** en temps réel                                                     | **Installations** : sur ce réseau ou via un autre site                                  |
+
 
 ### Application mobile
 
-| Installations | Zones par étage | Une zone | Programmations Airzone |
-|:---:|:---:|:---:|:---:|
+
+| Installations                                                                             | Zones par étage                                                                                                | Une zone                                                                                               | Programmations Airzone                                                                                            |
+| :-----------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------------------------: | :------------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------------------: |
 | <img src="docs/images/mobile/fr/1-installations.jpg" width="200" alt="Vos installations"> | <img src="docs/images/mobile/fr/2-installation.jpg" width="200" alt="Les zones d'une installation, par étage"> | <img src="docs/images/mobile/fr/3-zone.jpg" width="200" alt="Une zone : consigne, marche/arrêt, mode"> | <img src="docs/images/mobile/fr/4-schedules.jpg" width="200" alt="Les programmations Airzone d'une installation"> |
+
 
 ## Installation (Docker)
 
@@ -116,7 +123,7 @@ dans [`.env.sample`](.env.sample).
 ## Application mobile
 
 Une application Android et iOS (français, anglais, espagnol) pour piloter vos installations depuis le
-téléphone : zones, modes, routines et programmations Airzone de chaque installation, temps réel,
+téléphone : zones, modes, routines et programmations  de chaque installation, temps réel,
 plusieurs serveurs.
 
 **Liens Google Play et App Store : bientôt disponibles.** En attendant, compilez-la depuis
@@ -131,7 +138,7 @@ si l'appareil est révoqué depuis le web. Pas encore de serveur ? « Essayer la
 ## Contribuer
 
 Signalements, idées et pull requests sont les bienvenus : voir [CONTRIBUTING.md](CONTRIBUTING.md).
-Essai sans matériel : `./scripts/run-local.sh --demo` lance un faux WebServer et un faux compte Airzone.
+Essai sans matériel : `./scripts/run-local.sh --demo` lance un faux WebServer et un faux compte.  
 Failles de sécurité : voir [SECURITY.md](SECURITY.md).
 
 ## Licence

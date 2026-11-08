@@ -46,6 +46,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.breezone.app.data.Hub
+import com.breezone.app.data.installation
+import com.breezone.app.data.zone
 import com.breezone.app.data.Mode
 import com.breezone.app.data.Reading
 import com.breezone.app.data.Zone
@@ -70,8 +72,7 @@ import org.koin.compose.koinInject
 fun ZoneScreen(serverId: String, installationId: Long, systemId: Long, zoneId: Long, onBack: () -> Unit) {
     val hub = koinInject<Hub>()
     val servers by hub.servers.collectAsState()
-    val server = servers.firstOrNull { it.account.id == serverId }
-    val zone = server?.installations?.firstOrNull { it.id == installationId }?.zones?.firstOrNull { it.systemId == systemId && it.zoneId == zoneId }
+    val zone = servers.installation(serverId, installationId)?.zone(systemId, zoneId)
 
     Scaffold(topBar = { FzTopBar(zone?.name ?: stringResource(Res.string.zone_title), zone?.group, onBack) }) { padding ->
         if (zone == null) {
@@ -173,7 +174,7 @@ private fun ZoneControls(zone: Zone, send: (ZoneCommand) -> Unit) {
 @Composable
 private fun Tile(label: String, value: String, modifier: Modifier) {
     Column(modifier.clip(RoundedCornerShape(18.dp)).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)).padding(12.dp)) {
-        Text(label, fontSize = 12.sp, color = Fz.colors.muted)
+        Caption(label)
         Text(value, style = TempStyle, fontSize = 20.sp)
     }
 }

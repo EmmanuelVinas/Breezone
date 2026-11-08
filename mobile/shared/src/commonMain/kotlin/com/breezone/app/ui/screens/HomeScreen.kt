@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -118,7 +117,7 @@ fun HomeScreen(onOpenInstallation: (serverId: String, installationId: Long) -> U
                     Text(stringResource(Res.string.home_reauth_title, s.account.label), style = MaterialTheme.typography.titleSmall)
                 }
                 Muted(stringResource(Res.string.home_reauth_text))
-                Button(onClick = { onReauth(s.account.id) }, shape = RoundedCornerShape(14.dp)) {
+                Button(onClick = { onReauth(s.account.id) }, shape = Fz.shapes.button) {
                     Text(stringResource(Res.string.home_reauth_button))
                 }
             }

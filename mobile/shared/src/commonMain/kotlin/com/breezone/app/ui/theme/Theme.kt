@@ -87,8 +87,18 @@ private val LightScheme = lightColorScheme(
 
 val LocalFzColors = staticCompositionLocalOf { DarkFz }
 
+/** Corner shapes shared by the screens. */
+object FzShapes {
+    /** Text fields, large buttons and framed blocks of forms. */
+    val field = RoundedCornerShape(16.dp)
+
+    /** Regular buttons. */
+    val button = RoundedCornerShape(14.dp)
+}
+
 object Fz {
     val colors: FzColors @Composable get() = LocalFzColors.current
+    val shapes = FzShapes
 }
 
 private val FzTypography = Typography().let { t ->

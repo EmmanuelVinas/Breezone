@@ -97,12 +97,24 @@ fun formatTemp(value: Double?, digits: Int = 1): String {
     return "$text°"
 }
 
-fun clampSetpoint(zone: Zone, value: Double): Double {
-    val min = zone.minTemp ?: 15.0
-    val max = zone.maxTemp ?: 30.0
-    val step = if (zone.step > 0) zone.step else 0.5
-    return ((value / step).roundToLong() * step).coerceIn(min, max)
+/** Setpoint range and step accepted by every zone of a set (15–30° by 0.5 when they say nothing). */
+data class SetpointLimits(val min: Double, val max: Double, val step: Double) {
+    fun clamp(value: Double): Double = ((value / step).roundToLong() * step).coerceIn(min, max)
+
+    companion object {
+        private val DEFAULT = SetpointLimits(15.0, 30.0, 0.5)
+
+        fun of(zones: List<Zone>): SetpointLimits {
+            if (zones.isEmpty()) return DEFAULT
+            val min = zones.maxOf { it.minTemp ?: DEFAULT.min }
+            val max = zones.minOf { it.maxTemp ?: DEFAULT.max }
+            val step = zones.maxOf { if (it.step > 0) it.step else DEFAULT.step }
+            return if (min <= max) SetpointLimits(min, max, step) else DEFAULT
+        }
+    }
 }
+
+fun clampSetpoint(zone: Zone, value: Double): Double = SetpointLimits.of(listOf(zone)).clamp(value)
 
 fun nowSeconds() = Clock.System.now().epochSeconds
 

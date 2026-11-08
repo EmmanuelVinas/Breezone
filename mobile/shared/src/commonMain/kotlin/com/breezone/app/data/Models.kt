@@ -252,3 +252,6 @@ data class AirzoneScheduleInput(
     val zones: List<ScheduleZone>,
     val action: ZoneCommand,
 )
+
+/** The zone [zoneId] of system [systemId] in this installation. */
+fun Installation.zone(systemId: Long, zoneId: Long): Zone? = zones.firstOrNull { it.systemId == systemId && it.zoneId == zoneId }
