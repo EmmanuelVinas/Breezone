@@ -26,5 +26,13 @@
 - **Graphiques** comme dans l'application Airzone : confort jour par jour, mini-courbes sur les cartes,
   qualité d'air, consommation.
 - **Entre serveurs** : WebSocket au lieu de la lecture périodique.
+- **Autres marques** (étude web du 2026-11-08, rien de testé sur un appareil réel) :
+  1. Mitsubishi Electric (Kumo / Comfort) : API locale de l'adaptateur Wi-Fi, non documentée mais
+     suivie par pykumo et Home Assistant ; le cloud ne sert qu'aux identifiants.
+  2. Midea et ses marques : contrôle local (midea-local), un appel unique au cloud pour la clé des
+     appareils V3 ; la plus large couverture pour l'effort.
+  3. Daikin : API locale fragile, selon l'adaptateur et le firmware (supprimée à partir de 2.8.0).
+  4. Passerelles Intesis (Fujitsu, Toshiba, Hitachi…) : fiables, sans cloud, mais matériel payant.
+  5. Samsung, LG : écartés, cloud seulement.
 - **Plus tard** : notifications (perte de connexion, alertes, piles), profil météo + Tempo,
   programmations Airzone par dates, HTTPS local clé en main.

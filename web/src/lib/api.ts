@@ -551,7 +551,17 @@ function deviceName() {
 
 const enc = encodeURIComponent
 
+/** `GET /api/version`: the server software and the API it speaks (see docs/API.md). */
+export type ServerVersion = {
+  name: string
+  version: string
+  api_version: number
+  min_client_api: number
+}
+
 export const api = {
+  version: () =>
+    request<ServerVersion>("GET", "/api/version", undefined, false),
   setupStatus: () =>
     request<{ needs_setup: boolean }>("GET", "/api/setup", undefined, false),
   setup: async (username: string, password: string) => {

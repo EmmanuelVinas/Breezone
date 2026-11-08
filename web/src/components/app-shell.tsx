@@ -10,7 +10,7 @@ import {
   Sun,
   Timer,
 } from "lucide-react"
-import { useQueryClient } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import type { LiveState } from "@/hooks/use-live"
 import { api, currentUser } from "@/lib/api"
 import { cn } from "@/lib/utils"
@@ -59,6 +59,15 @@ function LiveIndicator({ state }: { state: LiveState }) {
   )
 }
 
+/** Version of the Breezone server this interface comes from (it changes only on an update). */
+function useServerVersion() {
+  return useQuery({
+    queryKey: ["server-version"],
+    queryFn: api.version,
+    staleTime: Infinity,
+  }).data?.version
+}
+
 export function AppShell({
   live,
   children,
@@ -70,6 +79,7 @@ export function AppShell({
   const user = currentUser()
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const version = useServerVersion()
   const dark =
     theme === "dark" ||
     (theme === "system" &&
@@ -105,8 +115,13 @@ export function AppShell({
             </NavLink>
           ))}
         </nav>
-        <div className="mt-auto px-3">
+        <div className="mt-auto flex flex-col gap-1.5 px-3">
           <LiveIndicator state={live} />
+          {version && (
+            <span className="text-xs text-muted-foreground/70">
+              Breezone {version}
+            </span>
+          )}
         </div>
       </aside>
 
@@ -154,6 +169,14 @@ export function AppShell({
                 <DropdownMenuItem onClick={logout} variant="destructive">
                   <LogOut /> Se déconnecter
                 </DropdownMenuItem>
+                {version && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                      Serveur Breezone {version}
+                    </div>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

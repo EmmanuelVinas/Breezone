@@ -123,10 +123,19 @@ in the `breezone_data` volume; back it up with
 
 ## Mobile app
 
-Android: Google Play (coming soon) or build it yourself. Add your server's address
-(`http://192.168.1.10:8427` at home, or your tunnel's `https://` address) and sign in; add one server
-per site. The device session is kept in the Android Keystore / iOS Keychain: you sign in again only if
-it changes or if the device is revoked from the web UI.
+An Android and iOS app (English, French, Spanish) to drive your installations from your phone: zones,
+modes, routines and Airzone schedules of each installation, live updates, several servers.
+
+**Google Play and App Store links: coming soon.** Until then, build it yourself from [`mobile/`](mobile).
+
+| Installations | Zones by floor | A zone | Airzone schedules |
+|:---:|:---:|:---:|:---:|
+| <img src="docs/images/mobile/en/1-installations.jpg" width="200" alt="Your installations"> | <img src="docs/images/mobile/en/2-installation.jpg" width="200" alt="Zones of an installation, by floor"> | <img src="docs/images/mobile/en/3-zone.jpg" width="200" alt="A zone: setpoint, on/off, mode"> | <img src="docs/images/mobile/en/4-schedules.jpg" width="200" alt="Airzone schedules of an installation"> |
+
+Add your server's address (`http://192.168.1.10:8427` at home, or your tunnel's `https://` address)
+and sign in; add one server per site. The device session is kept in the Android Keystore / iOS
+Keychain: you sign in again only if it changes or if the device is revoked from the web UI. No server
+yet? « Try the demo » on the first screen opens a simulated home.
 
 ## How it works
 

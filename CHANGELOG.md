@@ -6,6 +6,10 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Web: the version of the Breezone server, at the bottom of the side bar and in the account menu.
+
 ### Changed
 
 - App: the Zones / Routines / Schedules sections of an installation are a bottom bar that hides while

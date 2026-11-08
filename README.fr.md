@@ -107,10 +107,22 @@ dans [`.env.sample`](.env.sample).
 
 ## Application mobile
 
-Android : Google Play (bientôt) ou compilez-la vous-même. Saisissez l'adresse de votre serveur
-(`http://192.168.1.10:8427` à la maison, ou l'adresse `https://` de votre tunnel) puis vos identifiants ;
-ajoutez un serveur par site. La session de l'appareil est conservée dans l'Android Keystore / le
-Keychain iOS : le mot de passe n'est redemandé que s'il change ou si l'appareil est révoqué depuis le web.
+Une application Android et iOS (français, anglais, espagnol) pour piloter vos installations depuis le
+téléphone : zones, modes, routines et programmations Airzone de chaque installation, temps réel,
+plusieurs serveurs.
+
+**Liens Google Play et App Store : bientôt disponibles.** En attendant, compilez-la depuis
+[`mobile/`](mobile).
+
+| Installations | Zones par étage | Une zone | Programmations Airzone |
+|:---:|:---:|:---:|:---:|
+| <img src="docs/images/mobile/fr/1-installations.jpg" width="200" alt="Vos installations"> | <img src="docs/images/mobile/fr/2-installation.jpg" width="200" alt="Les zones d'une installation, par étage"> | <img src="docs/images/mobile/fr/3-zone.jpg" width="200" alt="Une zone : consigne, marche/arrêt, mode"> | <img src="docs/images/mobile/fr/4-schedules.jpg" width="200" alt="Les programmations Airzone d'une installation"> |
+
+Saisissez l'adresse de votre serveur (`http://192.168.1.10:8427` à la maison, ou l'adresse `https://`
+de votre tunnel) puis vos identifiants ; ajoutez un serveur par site. La session de l'appareil est
+conservée dans l'Android Keystore / le Keychain iOS : le mot de passe n'est redemandé que s'il change ou
+si l'appareil est révoqué depuis le web. Pas encore de serveur ? « Essayer la démo », sur le premier
+écran, ouvre une maison simulée.
 
 ## Contribuer
 
