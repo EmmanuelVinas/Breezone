@@ -4,7 +4,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -67,7 +66,7 @@ private fun zoneKey(installationId: Long, systemId: Long, zoneId: Long) = "$inst
 
 /** Routines touching an installation, shown in its "Routines" tab. */
 @Composable
-fun InstallationRoutines(serverId: String, inst: Installation, modifier: Modifier = Modifier) {
+fun InstallationRoutines(serverId: String, inst: Installation, space: SectionSpace, modifier: Modifier = Modifier) {
     val hub = koinInject<Hub>()
     val scope = rememberCoroutineScope()
     var routines by remember { mutableStateOf<List<Routine>?>(null) }
@@ -87,7 +86,7 @@ fun InstallationRoutines(serverId: String, inst: Installation, modifier: Modifie
     Box(modifier.fillMaxSize()) {
         LazyColumn(
             Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
+            contentPadding = space.listPadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item(key = "hint", contentType = "hint") { Muted(stringResource(Res.string.routines_installation_hint)) }
@@ -120,7 +119,7 @@ fun InstallationRoutines(serverId: String, inst: Installation, modifier: Modifie
         if (inst.controllable) {
             FloatingActionButton(
                 onClick = { creating = true },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp),
+                modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = space.fab).padding(20.dp),
                 containerColor = MaterialTheme.colorScheme.primary,
             ) { Icon(FzIcons.Plus, stringResource(Res.string.routines_new)) }
         }

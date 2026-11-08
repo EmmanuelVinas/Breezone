@@ -9,8 +9,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -29,41 +32,43 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.breezone.app.data.CommandStatus
 import com.breezone.app.data.Hub
-import com.breezone.app.data.commandKey
-import com.breezone.app.ui.labelRes
-import org.jetbrains.compose.resources.getString
 import com.breezone.app.data.Installation
 import com.breezone.app.data.Mode
 import com.breezone.app.data.Zone
 import com.breezone.app.data.ZoneCommand
+import com.breezone.app.data.commandKey
 import com.breezone.app.resources.*
 import com.breezone.app.ui.color
-import com.breezone.app.ui.installationPlace
 import com.breezone.app.ui.components.StatusDot
 import com.breezone.app.ui.components.ZoneCard
 import com.breezone.app.ui.groupZones
-import com.breezone.app.ui.icons.FzIcons
-import com.breezone.app.ui.systemModePlacement
 import com.breezone.app.ui.icon
+import com.breezone.app.ui.icons.FzIcons
+import com.breezone.app.ui.installationPlace
 import com.breezone.app.ui.label
+import com.breezone.app.ui.labelRes
+import com.breezone.app.ui.systemModePlacement
 import com.breezone.app.ui.theme.Fz
+import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
@@ -142,14 +147,31 @@ fun InstallationScreen(serverId: String, installationId: Long, onBack: () -> Uni
             Muted(stringResource(Res.string.installation_not_found), Modifier.padding(padding).padding(24.dp))
             return@Scaffold
         }
-        val content = Modifier.fillMaxSize().padding(padding).nestedScroll(hideOnScroll)
+        // The lists run under the section bar and always keep room for it, shown or not: their length
+        // does not change when it hides, so a scroll goes to the end in one go. Floating buttons
+        // follow the bar.
+        val content = Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()).nestedScroll(hideOnScroll)
+        val space = SectionSpace(
+            list = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + SECTION_BAR_HEIGHT,
+            fab = padding.calculateBottomPadding(),
+        )
         when (tab) {
-            0 -> InstallationZones(serverId, inst, commandStatus, onOpenZone, content)
-            1 -> InstallationRoutines(serverId, inst, content)
-            else -> InstallationSchedules(serverId, inst, content)
+            0 -> InstallationZones(serverId, inst, commandStatus, onOpenZone, space, content)
+            1 -> InstallationRoutines(serverId, inst, space, content)
+            else -> InstallationSchedules(serverId, inst, space, content)
         }
     }
 }
+
+/** Height of the Material 3 navigation bar. */
+private val SECTION_BAR_HEIGHT = 80.dp
+
+/** Room a section keeps at the bottom: under its list, and under its floating button. */
+@Immutable
+data class SectionSpace(val list: Dp, val fab: Dp)
+
+/** Padding of a section list: 16 dp around, plus the room for the section bar. */
+fun SectionSpace.listPadding() = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp + list)
 
 /** Scroll distance (px per frame) above which the section bar hides or shows. */
 private const val SCROLL_SLOP = 6f
@@ -166,6 +188,7 @@ private fun InstallationZones(
     inst: Installation,
     commandStatus: Map<String, CommandStatus>,
     onOpenZone: (Zone) -> Unit,
+    space: SectionSpace,
     modifier: Modifier = Modifier,
 ) {
     val hub = koinInject<Hub>()
@@ -179,7 +202,7 @@ private fun InstallationZones(
     LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = 160.dp),
             modifier = modifier,
-            contentPadding = PaddingValues(16.dp),
+            contentPadding = space.listPadding(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {

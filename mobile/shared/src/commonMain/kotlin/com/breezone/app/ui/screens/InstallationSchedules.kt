@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -78,7 +77,7 @@ private const val NAME_MAX = 11
 
 /** Schedules of the Airzone account for one installation, shown in its "Schedules" tab. */
 @Composable
-fun InstallationSchedules(serverId: String, inst: Installation, modifier: Modifier = Modifier) {
+fun InstallationSchedules(serverId: String, inst: Installation, space: SectionSpace, modifier: Modifier = Modifier) {
     val hub = koinInject<Hub>()
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf<SchedulesState?>(null) }
@@ -110,7 +109,7 @@ fun InstallationSchedules(serverId: String, inst: Installation, modifier: Modifi
     Box(modifier.fillMaxSize()) {
         LazyColumn(
             Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
+            contentPadding = space.listPadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item(key = "hint", contentType = "hint") { Muted(stringResource(Res.string.schedules_hint)) }
@@ -143,7 +142,7 @@ fun InstallationSchedules(serverId: String, inst: Installation, modifier: Modifi
         if (inst.controllable && s?.account == true && cloudId != null) {
             FloatingActionButton(
                 onClick = { creating = true },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp),
+                modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = space.fab).padding(20.dp),
                 containerColor = MaterialTheme.colorScheme.primary,
             ) { Icon(FzIcons.Plus, stringResource(Res.string.schedules_new)) }
         }
