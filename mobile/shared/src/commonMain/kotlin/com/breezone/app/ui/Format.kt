@@ -153,6 +153,30 @@ fun groupZones(zones: List<Zone>): List<Pair<String?, List<Zone>>> {
     return groups.map { it.key to it.value }
 }
 
+/** Where each system's mode selector goes (see [systemModePlacement]). */
+data class ModePlacement(
+    /** Master zones whose system lies entirely in one group, by group name. */
+    val byGroup: Map<String?, List<Zone>>,
+    /** Master zones of systems spanning several groups: shown in the installation header. */
+    val header: List<Zone>,
+    val systems: Int,
+)
+
+/**
+ * The master zone of each system (it carries the system's mode), placed on the row of the group
+ * holding all the system's zones, or in the header when the system spans several groups.
+ */
+fun systemModePlacement(zones: List<Zone>): ModePlacement {
+    val masters = zones.filter { it.isMaster && it.modes.isNotEmpty() }.distinctBy { it.systemId }
+    val byGroup = linkedMapOf<String?, MutableList<Zone>>()
+    val header = mutableListOf<Zone>()
+    masters.forEach { m ->
+        val groups = zones.filter { it.systemId == m.systemId }.map { it.group }.distinct()
+        if (groups.size == 1) byGroup.getOrPut(groups.first()) { mutableListOf() }.add(m) else header.add(m)
+    }
+    return ModePlacement(byGroup, header, masters.size)
+}
+
 /** A stable hue per installation name (colored cards like the official app). */
 fun hueOf(seed: String): Float {
     var h = 0

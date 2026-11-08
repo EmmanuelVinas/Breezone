@@ -11,6 +11,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
+import io.ktor.http.encodeURLPathPart
 import io.ktor.http.isSuccess
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
@@ -25,6 +26,8 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import com.breezone.app.resources.Res
+import com.breezone.app.resources.error_app_too_old
+import com.breezone.app.resources.error_server_too_old
 import com.breezone.app.resources.error_invalid_credentials
 import com.breezone.app.resources.error_not_breezone
 import com.breezone.app.resources.error_session_expired
@@ -46,16 +49,33 @@ private fun errorMessage(body: String, status: HttpStatusCode): String =
     runCatching { FzJson.parseToJsonElement(body).jsonObject["error"]?.toString()?.trim('"') }.getOrNull()
         ?: status.description
 
+/** The localized explanation of a version mismatch. */
+suspend fun incompatible(update: UpdateNeeded, serverVersion: String?) = IncompatibleException(
+    update,
+    serverVersion,
+    when (update) {
+        UpdateNeeded.App -> getString(Res.string.error_app_too_old)
+        UpdateNeeded.Server -> getString(Res.string.error_server_too_old, serverVersion ?: "?")
+    },
+)
+
+/** Throws [IncompatibleException] when the app and the server cannot work together. */
+suspend fun checkCompatible(health: Health) {
+    updateNeeded(health)?.let { throw incompatible(it, health.version) }
+}
+
 /** Calls that do not need an account (onboarding). */
 class BreezoneDiscovery(private val http: HttpClient) {
     /** Checks that `url` is a Breezone server; returns whether it still needs its first setup. */
     suspend fun probe(url: String): SetupStatus {
         val base = normalizeUrl(url)
-        val health = http.request("$base/health")
-        if (!health.status.isSuccess() || !health.bodyAsText().contains("\"ok\"")) {
-            throw ApiException(health.status.value, getString(Res.string.error_not_breezone))
+        val response = http.request("$base/health") { header(CLIENT_API_HEADER, CLIENT_API) }
+        val health = runCatching { FzJson.decodeFromString(Health.serializer(), response.bodyAsText()) }.getOrNull()
+        if (!response.status.isSuccess() || health?.status != "ok") {
+            throw ApiException(response.status.value, getString(Res.string.error_not_breezone))
         }
-        return FzJson.decodeFromString(http.request("$base/api/setup").bodyAsText())
+        checkCompatible(health)
+        return FzJson.decodeFromString(http.request("$base/api/setup") { header(CLIENT_API_HEADER, CLIENT_API) }.bodyAsText())
     }
 
     suspend fun login(url: String, username: String, password: String, setup: Boolean = false): TokenPair {
@@ -63,6 +83,7 @@ class BreezoneDiscovery(private val http: HttpClient) {
         val path = if (setup) "/api/setup" else "/api/auth/login"
         val response = http.request("$base$path") {
             method = HttpMethod.Post
+            header(CLIENT_API_HEADER, CLIENT_API)
             contentType(ContentType.Application.Json)
             setBody(
                 buildJsonObject {
@@ -73,6 +94,7 @@ class BreezoneDiscovery(private val http: HttpClient) {
             )
         }
         val body = response.bodyAsText()
+        if (response.status == HttpStatusCode.UpgradeRequired) throw incompatible(UpdateNeeded.App, null)
         if (!response.status.isSuccess()) {
             val msg = errorMessage(body, response.status)
             throw ApiException(
@@ -120,6 +142,7 @@ class BreezoneApi(
         if (!forceRefresh && current != null && now() < accessExpiresAt) return current
         val refresh = refreshToken ?: throw AuthRequiredException(getString(Res.string.error_session_expired))
         val response = http.request("$base/api/auth/refresh") {
+            header(CLIENT_API_HEADER, CLIENT_API)
             method = HttpMethod.Post
             contentType(ContentType.Application.Json)
             setBody(buildJsonObject { put("refresh_token", refresh) }.toString())
@@ -140,6 +163,7 @@ class BreezoneApi(
         val response = http.request("$base$path") {
             this.method = method
             header("Authorization", "Bearer ${token()}")
+            header(CLIENT_API_HEADER, CLIENT_API)
             if (body != null) {
                 contentType(ContentType.Application.Json)
                 setBody(body)
@@ -150,6 +174,7 @@ class BreezoneApi(
             return send(method, path, body, retry = false)
         }
         if (response.status == HttpStatusCode.Unauthorized) throw AuthRequiredException(getString(Res.string.error_session_expired))
+        if (response.status == HttpStatusCode.UpgradeRequired) throw incompatible(UpdateNeeded.App, null)
         return response
     }
 
@@ -166,6 +191,10 @@ class BreezoneApi(
     }
 
     private fun zonePath(z: Zone) = "/api/installations/${z.installationId}/zones/${z.systemId}/${z.zoneId}"
+
+    /** Versions of the server, checked at every (re)connection. */
+    suspend fun health(): Health =
+        FzJson.decodeFromString(Health.serializer(), http.request("$base/health") { header(CLIENT_API_HEADER, CLIENT_API) }.bodyAsText())
 
     suspend fun me(): User = call<User>(HttpMethod.Get, "/api/me").also { user = it }
     suspend fun status(): List<Installation> = call(HttpMethod.Get, "/api/status")
@@ -185,6 +214,21 @@ class BreezoneApi(
 
     suspend fun deleteRoutine(id: Long) = callUnit(HttpMethod.Delete, "/api/routines/$id")
     suspend fun runRoutine(id: Long): RunResult = call(HttpMethod.Post, "/api/routines/$id/run")
+    suspend fun schedules(): SchedulesState = call(HttpMethod.Get, "/api/airzone/schedules")
+    suspend fun createSchedule(input: AirzoneScheduleInput): SchedulesState =
+        call(HttpMethod.Post, "/api/airzone/schedules", FzJson.encodeToString(AirzoneScheduleInput.serializer(), input))
+
+    suspend fun updateSchedule(s: AirzoneSchedule, input: AirzoneScheduleInput): SchedulesState =
+        call(HttpMethod.Put, schedulePath(s), FzJson.encodeToString(AirzoneScheduleInput.serializer(), input.copy(cloudId = null)))
+
+    suspend fun setScheduleEnabled(s: AirzoneSchedule, enabled: Boolean): SchedulesState =
+        call(HttpMethod.Put, "${schedulePath(s)}/enabled", buildJsonObject { put("enabled", enabled) }.toString())
+
+    suspend fun deleteSchedule(s: AirzoneSchedule): SchedulesState = call(HttpMethod.Delete, schedulePath(s))
+
+    private fun schedulePath(s: AirzoneSchedule) =
+        "/api/airzone/schedules/${s.cloudId.encodeURLPathPart()}/${s.id.encodeURLPathPart()}"
+
     suspend fun cloud(): CloudStatus = call(HttpMethod.Get, "/api/cloud")
     suspend fun cloudConnect(email: String, password: String, remember: Boolean): CloudResult =
         call(
@@ -218,7 +262,7 @@ class BreezoneApi(
         val wsUrl = base.replaceFirst("https://", "wss://").replaceFirst("http://", "ws://") + "/api/ws"
         val token = token()
         val job = launch {
-            http.webSocket(wsUrl) {
+            http.webSocket(wsUrl, request = { header(CLIENT_API_HEADER, CLIENT_API) }) {
                 send(Frame.Text(buildJsonObject { put("type", "auth"); put("token", token) }.toString()))
                 for (frame in incoming) {
                     if (frame is Frame.Text) {

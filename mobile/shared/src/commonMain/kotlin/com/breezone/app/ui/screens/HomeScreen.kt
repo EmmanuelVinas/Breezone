@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.breezone.app.data.CloudInstallation
 import com.breezone.app.data.Hub
+import com.breezone.app.data.UpdateNeeded
 import com.breezone.app.data.Live
 import com.breezone.app.resources.*
 import com.breezone.app.ui.components.InstallationCard
@@ -45,6 +46,7 @@ import org.koin.compose.koinInject
 
 private const val TYPE_HEADER = "header"
 private const val TYPE_REAUTH = "reauth"
+private const val TYPE_UPDATE = "update"
 private const val TYPE_LOADING = "loading"
 private const val TYPE_INSTALLATION = "installation"
 private const val TYPE_REMOTE = "remote"
@@ -73,6 +75,7 @@ fun HomeScreen(onOpenInstallation: (serverId: String, installationId: Long) -> U
         )
     }
     val expired = servers.filter { it.authRequired }
+    val outdated = servers.filter { it.update != null }
     val empty = servers.isEmpty() || (!loading && servers.all { it.loaded && it.installations.isEmpty() } && remote.isEmpty())
 
     LazyColumn(
@@ -118,6 +121,22 @@ fun HomeScreen(onOpenInstallation: (serverId: String, installationId: Long) -> U
                 Button(onClick = { onReauth(s.account.id) }, shape = RoundedCornerShape(14.dp)) {
                     Text(stringResource(Res.string.home_reauth_button))
                 }
+            }
+        }
+        items(outdated, key = { "update-${it.account.id}" }, contentType = { TYPE_UPDATE }) { s ->
+            SectionCard {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(FzIcons.TriangleAlert, null, tint = Fz.colors.warning, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.size(8.dp))
+                    Text(
+                        stringResource(if (s.update == UpdateNeeded.App) Res.string.update_app_title else Res.string.update_server_title, s.account.label),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                }
+                Muted(
+                    if (s.update == UpdateNeeded.App) stringResource(Res.string.update_app_text)
+                    else stringResource(Res.string.update_server_text, s.serverVersion ?: "?"),
+                )
             }
         }
         if (loading) {

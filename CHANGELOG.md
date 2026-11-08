@@ -8,6 +8,15 @@ All notable changes are documented here. The format follows
 
 ### Added
 
+- API versions: `/health` announces `api_version` and `min_client_api`; the app sends its own in the
+  `Breezone-Api` header and asks to update the app or the server when they are too far apart (clients
+  without the header are still served).
+- App: each installation has **Zones**, **Routines** and **Schedules** tabs; the Airzone schedules of
+  the installation can be viewed, switched on or off, created, edited and deleted from the app. The
+  separate « Routines » tab is gone.
+- Web and app: the mode selector of a system sits on the row of its group when all its zones belong to
+  that group (in the installation header otherwise).
+
 - App: built-in demo (« Try the demo » on the first screen): a simulated home and workshop, with
   live updates, history and routines, without any server nor Airzone hardware.
   The demo account `https://breezone.cloud` / `demo` / `demo` opens it too (store reviews); no request

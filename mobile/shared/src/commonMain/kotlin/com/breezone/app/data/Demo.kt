@@ -6,6 +6,8 @@ import com.breezone.app.resources.demo_group_upstairs
 import com.breezone.app.resources.demo_home
 import com.breezone.app.resources.demo_routine_evening
 import com.breezone.app.resources.demo_routine_leaving
+import com.breezone.app.resources.demo_schedule_night
+import com.breezone.app.resources.demo_schedule_wake
 import com.breezone.app.resources.demo_unavailable
 import com.breezone.app.resources.demo_workshop
 import com.breezone.app.resources.demo_zone_bedroom1
@@ -36,7 +38,9 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.jetbrains.compose.resources.getString
 import kotlin.math.PI
@@ -74,6 +78,8 @@ object DemoServer {
     private var installations: List<Installation>? = null
     private var routines = mutableListOf<Routine>()
     private var nextRoutineId = 3L
+    private var schedules = mutableListOf<AirzoneSchedule>()
+    private var nextScheduleId = 3L
     private val user = User(1, "demo", "admin")
 
     private fun now() = Clock.System.now().epochSeconds
@@ -118,6 +124,18 @@ object DemoServer {
             Routine(2, getString(Res.string.demo_routine_evening), actions = listOf(
                 Action(1, 1, 1, on = true, setpoint = 21.0), Action(1, 1, 3, on = true, setpoint = 19.0),
             )),
+        )
+        schedules = mutableListOf(
+            AirzoneSchedule(
+                cloudId = "demo-1", installation = list[0].name, installationId = 1, id = "1",
+                name = getString(Res.string.demo_schedule_wake), days = listOf(1, 2, 3, 4, 5), time = "06:30",
+                zones = listOf(ScheduleZone(1, 3), ScheduleZone(1, 4)), action = ZoneCommand(on = true, setpoint = 19.5),
+            ),
+            AirzoneSchedule(
+                cloudId = "demo-1", installation = list[0].name, installationId = 1, id = "2",
+                name = getString(Res.string.demo_schedule_night), days = (1..7).toList(), time = "23:00",
+                zones = listOf(ScheduleZone(1, 1), ScheduleZone(1, 2)), action = ZoneCommand(on = false),
+            ),
         )
         installations = list
         return list
@@ -207,7 +225,16 @@ object DemoServer {
             path == "/api/auth/logout" -> scope.respond("", HttpStatusCode.NoContent)
             path == "/api/me" -> ok(User.serializer(), user)
             path == "/api/status" -> ok(ListSerializer(Installation.serializer()), installations ?: list)
-            path == "/api/cloud" && request.method == HttpMethod.Get -> ok(CloudStatus.serializer(), CloudStatus())
+            path == "/api/cloud" && request.method == HttpMethod.Get -> ok(
+                CloudStatus.serializer(),
+                CloudStatus(
+                    email = "demo@breezone.cloud",
+                    lastSync = now(),
+                    installations = list.map {
+                        CloudInstallation("demo-${it.id}", it.name, it.location, it.zones.size.toLong(), it.id, reachable = true)
+                    },
+                ),
+            )
             path.startsWith("/api/cloud") -> unavailable()
             path == "/api/control/batch" -> {
                 val actions = FzJson.parseToJsonElement(body(request)).jsonObject["actions"]
@@ -260,7 +287,44 @@ object DemoServer {
                     else -> ok(Routine.serializer(), routines[index])
                 }
             }
+            path == "/api/airzone/schedules" && request.method == HttpMethod.Get -> scope.schedulesState()
+            path == "/api/airzone/schedules" && request.method == HttpMethod.Post -> {
+                val input = FzJson.decodeFromString(AirzoneScheduleInput.serializer(), body(request))
+                val inst = list.firstOrNull { "demo-${it.id}" == input.cloudId }
+                schedules += AirzoneSchedule(
+                    cloudId = input.cloudId.orEmpty(), installation = inst?.name.orEmpty(), installationId = inst?.id,
+                    id = (nextScheduleId++).toString(), name = input.name, enabled = input.enabled, days = input.days,
+                    time = input.time, zones = input.zones, action = input.action,
+                )
+                scope.schedulesState()
+            }
+            // /api/airzone/schedules/{cloud_id}/{id}[/enabled]
+            parts.size >= 5 && parts[1] == "airzone" && parts[2] == "schedules" -> {
+                val index = schedules.indexOfFirst { it.cloudId == parts[3] && it.id == parts[4] }
+                if (index < 0) return@withLock json("""{"error":"schedule not found"}""", HttpStatusCode.NotFound)
+                when {
+                    parts.size == 6 && parts[5] == "enabled" -> {
+                        val enabled = FzJson.parseToJsonElement(body(request)).jsonObject["enabled"]?.jsonPrimitive?.booleanOrNull ?: true
+                        schedules[index] = schedules[index].copy(enabled = enabled)
+                    }
+                    request.method == HttpMethod.Put -> {
+                        val input = FzJson.decodeFromString(AirzoneScheduleInput.serializer(), body(request))
+                        schedules[index] = schedules[index].copy(
+                            name = input.name, enabled = input.enabled, days = input.days, time = input.time,
+                            zones = input.zones, action = input.action,
+                        )
+                    }
+                    request.method == HttpMethod.Delete -> schedules.removeAt(index)
+                }
+                scope.schedulesState()
+            }
             else -> unavailable()
         }
     }
+
+    private fun MockRequestHandleScope.schedulesState() = respond(
+        FzJson.encodeToString(SchedulesState.serializer(), SchedulesState(lastSync = now(), account = true, schedules = schedules)),
+        HttpStatusCode.OK,
+        headersOf("Content-Type", "application/json"),
+    )
 }

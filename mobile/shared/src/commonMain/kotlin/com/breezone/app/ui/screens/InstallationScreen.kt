@@ -20,16 +20,23 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.breezone.app.data.CommandStatus
 import com.breezone.app.data.Hub
 import com.breezone.app.data.commandKey
 import com.breezone.app.ui.labelRes
@@ -44,6 +51,7 @@ import com.breezone.app.ui.installationPlace
 import com.breezone.app.ui.components.StatusDot
 import com.breezone.app.ui.components.ZoneCard
 import com.breezone.app.ui.groupZones
+import com.breezone.app.ui.systemModePlacement
 import com.breezone.app.ui.icon
 import com.breezone.app.ui.label
 import com.breezone.app.ui.theme.Fz
@@ -94,18 +102,47 @@ fun InstallationScreen(serverId: String, installationId: Long, onBack: () -> Uni
             Muted(stringResource(Res.string.installation_not_found), Modifier.padding(padding).padding(24.dp))
             return@Scaffold
         }
-        LazyVerticalGrid(
+        var tab by rememberSaveable { mutableIntStateOf(0) }
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            PrimaryTabRow(selectedTabIndex = tab, containerColor = MaterialTheme.colorScheme.background) {
+                listOf(Res.string.installation_tab_zones, Res.string.installation_tab_routines, Res.string.installation_tab_schedules)
+                    .forEachIndexed { i, label -> Tab(
+                        selected = tab == i,
+                        onClick = { tab = i },
+                        text = { Text(stringResource(label)) },
+                        selectedContentColor = MaterialTheme.colorScheme.primary,
+                        unselectedContentColor = Fz.colors.muted,
+                    ) }
+            }
+            when (tab) {
+                0 -> InstallationZones(serverId, inst, commandStatus, onOpenZone)
+                1 -> InstallationRoutines(serverId, inst)
+                else -> InstallationSchedules(serverId, inst)
+            }
+        }
+    }
+}
+
+@Composable
+private fun InstallationZones(serverId: String, inst: Installation, commandStatus: Map<String, CommandStatus>, onOpenZone: (Zone) -> Unit) {
+    val hub = koinInject<Hub>()
+    val modes = remember(inst.zones) { systemModePlacement(inst.zones) }
+    val labelled = modes.systems > 1
+    val onMode: (Zone, Mode) -> Unit = { master, mode ->
+        hub.control(serverId, master, ZoneCommand(mode = mode)) {
+            getString(Res.string.hub_mode_applied, getString(mode.labelRes).lowercase())
+        }
+    }
+    LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = 160.dp),
-            modifier = Modifier.fillMaxSize().padding(padding),
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item(key = TYPE_MODES, span = { GridItemSpan(maxLineSpan) }, contentType = TYPE_MODES) {
-                SystemModes(inst) { master, mode ->
-                    hub.control(serverId, master, ZoneCommand(mode = mode)) {
-                        getString(Res.string.hub_mode_applied, getString(mode.labelRes).lowercase())
-                    }
+            if (inst.controllable && modes.header.isNotEmpty()) {
+                item(key = TYPE_MODES, span = { GridItemSpan(maxLineSpan) }, contentType = TYPE_MODES) {
+                    SystemModes(modes.header, labelled, onMode)
                 }
             }
             if (inst.zones.isEmpty()) {
@@ -122,17 +159,22 @@ fun InstallationScreen(serverId: String, installationId: Long, onBack: () -> Uni
             groupZones(inst.zones).forEach { (group, zones) ->
                 item(key = "group-${group.orEmpty()}", span = { GridItemSpan(maxLineSpan) }, contentType = TYPE_GROUP) {
                     val on = zones.count { it.on }
-                    Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(group ?: stringResource(Res.string.installation_group_default), style = MaterialTheme.typography.titleMedium)
-                            Text(pluralStringResource(Res.plurals.installation_group_on, on, on, zones.size), fontSize = 12.sp, color = Fz.colors.muted)
+                    Column(Modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(group ?: stringResource(Res.string.installation_group_default), style = MaterialTheme.typography.titleMedium)
+                                Text(pluralStringResource(Res.plurals.installation_group_on, on, on, zones.size), fontSize = 12.sp, color = Fz.colors.muted)
+                            }
+                            TextButton(onClick = { hub.setPower(serverId, zones, true, group) }, enabled = on < zones.size) {
+                                Text(stringResource(Res.string.installation_all_on))
+                            }
+                            TextButton(onClick = { hub.setPower(serverId, zones, false, group) }, enabled = on > 0) {
+                                Text(stringResource(Res.string.installation_all_off))
+                            }
                         }
-                        TextButton(onClick = { hub.setPower(serverId, zones, true, group) }, enabled = on < zones.size) {
-                            Text(stringResource(Res.string.installation_all_on))
-                        }
-                        TextButton(onClick = { hub.setPower(serverId, zones, false, group) }, enabled = on > 0) {
-                            Text(stringResource(Res.string.installation_all_off))
-                        }
+                        // The mode of the systems lying entirely in this group.
+                        val masters = modes.byGroup[group].orEmpty()
+                        if (inst.controllable && masters.isNotEmpty()) SystemModes(masters, labelled, onMode)
                     }
                 }
                 items(zones, key = { "zone-${it.systemId}-${it.zoneId}" }, contentType = { TYPE_ZONE }) { zone ->
@@ -145,16 +187,15 @@ fun InstallationScreen(serverId: String, installationId: Long, onBack: () -> Uni
                     )
                 }
             }
-        }
     }
 }
 
-/** Mode of each system, set on its master zone. A handful of chips: plain Row, not lazy. */
+/** Mode of each given system, set on its master zone. A handful of chips: plain Row, not lazy. */
 @Composable
-private fun SystemModes(inst: Installation, onMode: (Zone, Mode) -> Unit) {
-    val masters = inst.zones.filter { it.isMaster && it.modes.isNotEmpty() }.distinctBy { it.systemId }
+private fun SystemModes(masters: List<Zone>, labelled: Boolean, onMode: (Zone, Mode) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         masters.forEach { master ->
+            if (labelled) Text(stringResource(Res.string.installation_system, master.systemId.toInt()), fontSize = 12.sp, color = Fz.colors.muted)
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 master.modes.forEach { mode ->
                     val selected = master.mode == mode

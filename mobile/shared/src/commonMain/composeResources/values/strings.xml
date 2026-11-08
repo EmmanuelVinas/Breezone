@@ -17,7 +17,6 @@
 
     <!-- Tabs -->
     <string name="tab_installations">Installations</string>
-    <string name="tab_routines">Routines</string>
     <string name="tab_settings">Réglages</string>
 
     <!-- Operation modes -->
@@ -162,9 +161,6 @@
     <string name="zone_history_empty">Pas encore assez de relevés : ils s’accumulent toutes les 5 minutes.</string>
 
     <!-- Routines -->
-    <string name="routines_title">Routines</string>
-    <string name="routines_subtitle">Scènes lancées à la demande, exécutées par votre serveur Breezone. Les programmations à heure fixe sont celles d’Airzone.</string>
-    <string name="routines_empty">Aucune scène pour l’instant.</string>
     <string name="routines_new">Nouvelle scène</string>
     <string name="routines_run">Lancer</string>
     <string name="routines_ran">« %1$s » exécutée</string>
@@ -179,14 +175,10 @@
         <item quantity="many">%1$d zones</item>
         <item quantity="other">%1$d zones</item>
     </plurals>
-    <string name="routines_next">prochaine %1$s</string>
     <string name="routines_last">dernière %1$s</string>
     <string name="routine_editor_edit">Modifier la scène</string>
     <string name="routine_editor_name">Nom</string>
     <string name="routine_editor_name_placeholder">Je pars</string>
-    <string name="routine_editor_scheduled">Programmée</string>
-    <string name="routine_editor_manual">Scène manuelle</string>
-    <string name="routine_editor_time">Heure</string>
     <string name="routine_editor_switch_on">Allumer</string>
     <string name="routine_editor_switch_off">Éteindre</string>
     <string name="routine_editor_setpoint">Consigne</string>
@@ -195,6 +187,39 @@
     <string name="routine_editor_zones">Zones</string>
     <string name="routine_editor_complex">Cette programmation contient des actions différentes selon les zones : modifiez ses actions depuis l’interface web. Le nom et l’horaire restent modifiables ici.</string>
     <string name="routine_editor_delete_confirm">Supprimer « %1$s » ?</string>
+
+    <!-- Installation tabs, schedules -->
+    <string name="installation_tab_zones">Zones</string>
+    <string name="installation_tab_routines">Routines</string>
+    <string name="installation_tab_schedules">Programmations</string>
+    <string name="installation_system">Système %1$d</string>
+    <string name="routines_installation_hint">Scènes lancées à la demande, exécutées par votre serveur Breezone.</string>
+    <string name="routines_installation_empty">Aucune scène pour cette installation.</string>
+    <string name="routine_editor_other_installations">Cette scène pilote aussi des zones d’autres installations : elles restent inchangées.</string>
+    <string name="schedules_hint">Programmations de votre compte Airzone : Airzone les exécute, même sans Breezone.</string>
+    <string name="schedules_empty">Aucune programmation pour cette installation.</string>
+    <string name="schedules_no_account">Connectez votre compte Airzone dans les réglages pour voir et modifier les programmations de cette installation.</string>
+    <string name="schedules_last_error">Dernière synchronisation avec Airzone en échec : %1$s</string>
+    <string name="schedules_new">Nouvelle programmation</string>
+    <string name="schedules_saved">Programmation enregistrée chez Airzone</string>
+    <string name="schedules_readonly">Modifiable uniquement dans l’application Airzone.</string>
+    <string name="schedules_zone">Zone %1$d</string>
+    <string name="schedule_editor_edit">Modifier la programmation</string>
+    <string name="schedule_editor_name_placeholder">Réveil</string>
+    <string name="schedule_editor_days">Jours</string>
+    <string name="schedule_editor_time">Heure</string>
+    <string name="schedule_editor_action">Action</string>
+    <string name="schedule_editor_mode">Mode</string>
+
+    <!-- Versions -->
+    <string name="error_app_too_old">Ce serveur demande une version plus récente de l’application Breezone : mettez-la à jour depuis le store.</string>
+    <string name="error_server_too_old">Ce serveur Breezone (version %1$s) est trop ancien pour cette application : mettez-le à jour.</string>
+    <string name="update_app_title">%1$s : application à mettre à jour</string>
+    <string name="update_app_text">Ce serveur demande une version plus récente de l’application. Mettez-la à jour depuis le store.</string>
+    <string name="update_server_title">%1$s : serveur à mettre à jour</string>
+    <string name="update_server_text">Le serveur (version %1$s) est trop ancien pour cette application. Mettez à jour son image Docker (ghcr.io/emmanuelvinas/breezone:latest).</string>
+    <string name="update_app_available">Une version plus récente de l’application apporte de nouvelles fonctions pour ce serveur.</string>
+    <string name="settings_server_version">Serveur Breezone %1$s</string>
 
     <!-- Settings -->
     <string name="settings_title">Réglages</string>
@@ -295,4 +320,6 @@
     <string name="demo_zone_reception">Accueil</string>
     <string name="demo_routine_leaving">Je pars</string>
     <string name="demo_routine_evening">Soirée</string>
+    <string name="demo_schedule_wake">Réveil</string>
+    <string name="demo_schedule_night">Nuit</string>
 </resources>

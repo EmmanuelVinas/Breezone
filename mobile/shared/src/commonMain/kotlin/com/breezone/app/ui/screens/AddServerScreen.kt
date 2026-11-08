@@ -47,6 +47,7 @@ import com.breezone.app.data.CertificateInfo
 import com.breezone.app.data.NetworkProblem
 import com.breezone.app.data.TlsTrust
 import com.breezone.app.data.classify
+import com.breezone.app.data.IncompatibleException
 import com.breezone.app.data.explain
 import com.breezone.app.data.DEMO_LOGIN_URL
 import com.breezone.app.data.isDemoLogin
@@ -113,7 +114,7 @@ fun AddServerScreen(reauthServerId: String?, canGoBack: Boolean, onBack: () -> U
             } catch (e: Exception) {
                 if (classify(e) == NetworkProblem.Certificate) review = TlsTrust.presented(url)
                 error = when {
-                    e is ApiException || e is AuthRequiredException -> e.message
+                    e is ApiException || e is AuthRequiredException || e is IncompatibleException -> e.message
                     localNetworkBlocked() -> getString(Res.string.add_server_error_local_network)
                     else -> explain(e, url)
                 } ?: e.message ?: getString(Res.string.add_server_error_unreachable)

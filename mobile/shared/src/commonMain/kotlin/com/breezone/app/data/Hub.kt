@@ -42,6 +42,12 @@ data class ServerState(
     val loaded: Boolean = false,
     /** The refresh token was refused or lost: the password must be typed again. */
     val authRequired: Boolean = false,
+    /** The app and this server are too far apart in version: which one must be updated. */
+    val update: UpdateNeeded? = null,
+    /** Version of the server software, as announced by `/health`. */
+    val serverVersion: String? = null,
+    /** The server speaks a newer API: still compatible, an app update would bring its new features. */
+    val appUpdateAvailable: Boolean = false,
     val error: String? = null,
 )
 
@@ -171,16 +177,23 @@ class Hub(
         while (true) {
             try {
                 updateServer(id) { it.copy(live = Live.Connecting) }
+                val health = api.health()
+                updateServer(id) { it.copy(serverVersion = health.version, appUpdateAvailable = appUpdateAvailable(health)) }
+                checkCompatible(health)
                 val user = api.user ?: api.me()
                 val installations = api.status()
                 val remote = runCatching { api.cloud().installations.filter { !it.reachable } }.getOrDefault(emptyList())
-                updateServer(id) { it.copy(user = user, installations = installations, remote = remote, loaded = true, error = null, authRequired = false) }
+                updateServer(id) { it.copy(user = user, installations = installations, remote = remote, loaded = true, error = null, authRequired = false, update = null) }
                 api.live().collect { msg ->
                     attempt = 0
                     handle(id, msg)
                 }
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: IncompatibleException) {
+                // Retrying will not help: wait for an update (checked again when the app comes back).
+                updateServer(id) { it.copy(update = e.update, live = Live.Offline, error = e.message) }
+                return
             } catch (e: AuthRequiredException) {
                 updateAccount(id) { it.copy(refreshToken = null) }
                 updateServer(id) { it.copy(authRequired = true, live = Live.Offline) }

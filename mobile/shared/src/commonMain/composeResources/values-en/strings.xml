@@ -16,7 +16,6 @@
 
     <!-- Tabs -->
     <string name="tab_installations">Installations</string>
-    <string name="tab_routines">Routines</string>
     <string name="tab_settings">Settings</string>
 
     <!-- Operation modes -->
@@ -158,9 +157,6 @@
     <string name="zone_history_empty">Not enough readings yet: one is recorded every 5 minutes.</string>
 
     <!-- Routines -->
-    <string name="routines_title">Routines</string>
-    <string name="routines_subtitle">Scenes started on demand, run by your Breezone server. Fixed-time schedules are the Airzone ones.</string>
-    <string name="routines_empty">No scene yet.</string>
     <string name="routines_new">New scene</string>
     <string name="routines_run">Run</string>
     <string name="routines_ran">“%1$s” done</string>
@@ -173,14 +169,10 @@
         <item quantity="one">%1$d zone</item>
         <item quantity="other">%1$d zones</item>
     </plurals>
-    <string name="routines_next">next %1$s</string>
     <string name="routines_last">last %1$s</string>
     <string name="routine_editor_edit">Edit scene</string>
     <string name="routine_editor_name">Name</string>
     <string name="routine_editor_name_placeholder">Leaving home</string>
-    <string name="routine_editor_scheduled">Scheduled</string>
-    <string name="routine_editor_manual">Manual scene</string>
-    <string name="routine_editor_time">Time</string>
     <string name="routine_editor_switch_on">Switch on</string>
     <string name="routine_editor_switch_off">Switch off</string>
     <string name="routine_editor_setpoint">Setpoint</string>
@@ -189,6 +181,39 @@
     <string name="routine_editor_zones">Zones</string>
     <string name="routine_editor_complex">This schedule has different actions per zone: edit its actions from the web interface. Its name and time can be changed here.</string>
     <string name="routine_editor_delete_confirm">Delete “%1$s”?</string>
+
+    <!-- Installation tabs, schedules -->
+    <string name="installation_tab_zones">Zones</string>
+    <string name="installation_tab_routines">Routines</string>
+    <string name="installation_tab_schedules">Schedules</string>
+    <string name="installation_system">System %1$d</string>
+    <string name="routines_installation_hint">Scenes started on demand, run by your Breezone server.</string>
+    <string name="routines_installation_empty">No scene for this installation yet.</string>
+    <string name="routine_editor_other_installations">This scene also drives zones of other installations: they are left unchanged.</string>
+    <string name="schedules_hint">Schedules of your Airzone account: Airzone runs them, even without Breezone.</string>
+    <string name="schedules_empty">No schedule for this installation.</string>
+    <string name="schedules_no_account">Connect your Airzone account in the settings to view and edit the schedules of this installation.</string>
+    <string name="schedules_last_error">Last sync with Airzone failed: %1$s</string>
+    <string name="schedules_new">New schedule</string>
+    <string name="schedules_saved">Schedule saved to Airzone</string>
+    <string name="schedules_readonly">Can only be edited in the Airzone app.</string>
+    <string name="schedules_zone">Zone %1$d</string>
+    <string name="schedule_editor_edit">Edit the schedule</string>
+    <string name="schedule_editor_name_placeholder">Wake up</string>
+    <string name="schedule_editor_days">Days</string>
+    <string name="schedule_editor_time">Time</string>
+    <string name="schedule_editor_action">Action</string>
+    <string name="schedule_editor_mode">Mode</string>
+
+    <!-- Versions -->
+    <string name="error_app_too_old">This server needs a newer version of the Breezone app: update it from the store.</string>
+    <string name="error_server_too_old">This Breezone server (version %1$s) is too old for this app: update it.</string>
+    <string name="update_app_title">%1$s: update the app</string>
+    <string name="update_app_text">This server needs a newer version of the app. Update it from the store.</string>
+    <string name="update_server_title">%1$s: update the server</string>
+    <string name="update_server_text">The server (version %1$s) is too old for this app. Update its Docker image (ghcr.io/emmanuelvinas/breezone:latest).</string>
+    <string name="update_app_available">A newer version of the app brings new features for this server.</string>
+    <string name="settings_server_version">Breezone server %1$s</string>
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>
@@ -286,4 +311,6 @@
     <string name="demo_zone_reception">Reception</string>
     <string name="demo_routine_leaving">Leaving home</string>
     <string name="demo_routine_evening">Evening</string>
+    <string name="demo_schedule_wake">Wake up</string>
+    <string name="demo_schedule_night">Night</string>
 </resources>

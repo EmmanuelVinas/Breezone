@@ -203,3 +203,52 @@ data class ServerAccount(
     /** HTTPS certificate trusted although it fails the usual checks (SHA-256), if any. */
     val certificate: String? = null,
 )
+
+/** Zone targeted by an Airzone schedule (the installation is the schedule's). */
+@Serializable
+data class ScheduleZone(val systemId: Long, val zoneId: Long)
+
+/** Second step of some Airzone schedules ("on at 7:00, off at 9:00"): shown, edited in the Airzone app. */
+@Serializable
+data class ScheduleEnd(val time: String, val action: ZoneCommand = ZoneCommand())
+
+/** A schedule of the Airzone app, mirrored from Airzone Cloud (Airzone runs it). */
+@Serializable
+data class AirzoneSchedule(
+    val cloudId: String,
+    val installation: String = "",
+    val installationId: Long? = null,
+    val id: String,
+    val name: String,
+    val enabled: Boolean = true,
+    val kind: String = "",
+    /** ISO days, 1 = Monday. */
+    val days: List<Int> = emptyList(),
+    val time: String? = null,
+    val zones: List<ScheduleZone> = emptyList(),
+    val action: ZoneCommand = ZoneCommand(),
+    val end: ScheduleEnd? = null,
+    /** False for the kinds Breezone cannot rewrite faithfully: edit them in the Airzone app. */
+    val editable: Boolean = true,
+    val note: String? = null,
+)
+
+@Serializable
+data class SchedulesState(
+    val lastSync: Long? = null,
+    val lastError: String? = null,
+    /** True when the server remembers an Airzone account (needed to read and edit schedules). */
+    val account: Boolean = false,
+    val schedules: List<AirzoneSchedule> = emptyList(),
+)
+
+@Serializable
+data class AirzoneScheduleInput(
+    val cloudId: String? = null,
+    val name: String,
+    val enabled: Boolean,
+    val days: List<Int>,
+    val time: String,
+    val zones: List<ScheduleZone>,
+    val action: ZoneCommand,
+)

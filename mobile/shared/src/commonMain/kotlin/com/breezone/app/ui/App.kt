@@ -31,13 +31,11 @@ import com.breezone.app.ui.icons.FzIcons
 import com.breezone.app.ui.screens.AddServerScreen
 import com.breezone.app.ui.screens.HomeScreen
 import com.breezone.app.ui.screens.InstallationScreen
-import com.breezone.app.ui.screens.RoutinesScreen
 import com.breezone.app.ui.screens.SettingsScreen
 import com.breezone.app.ui.screens.ZoneScreen
 import com.breezone.app.ui.theme.BreezoneTheme
 import com.breezone.app.resources.Res
 import com.breezone.app.resources.tab_installations
-import com.breezone.app.resources.tab_routines
 import com.breezone.app.resources.tab_settings
 import kotlinx.serialization.Serializable
 import org.jetbrains.compose.resources.StringResource
@@ -45,7 +43,6 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 
 @Serializable object HomeRoute
-@Serializable object RoutinesRoute
 @Serializable object SettingsRoute
 @Serializable data class AddServerRoute(val reauthServerId: String? = null)
 @Serializable data class InstallationRoute(val serverId: String, val installationId: Long)
@@ -55,7 +52,6 @@ private data class Tab(val route: Any, val label: StringResource, val icon: Imag
 
 private val TABS = listOf(
     Tab(HomeRoute, Res.string.tab_installations, FzIcons.House),
-    Tab(RoutinesRoute, Res.string.tab_routines, FzIcons.CalendarClock),
     Tab(SettingsRoute, Res.string.tab_settings, FzIcons.Settings),
 )
 
@@ -125,7 +121,6 @@ fun App() {
                     val r = entry.toRoute<ZoneRoute>()
                     ZoneScreen(r.serverId, r.installationId, r.systemId, r.zoneId, onBack = { nav.popBackStack() })
                 }
-                composable<RoutinesRoute> { RoutinesScreen() }
                 composable<SettingsRoute> {
                     SettingsScreen(
                         onAddServer = { nav.navigate(AddServerRoute()) },

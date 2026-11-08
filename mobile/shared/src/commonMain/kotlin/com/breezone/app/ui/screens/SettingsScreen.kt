@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.sp
 import com.breezone.app.APP_VERSION
 import com.breezone.app.data.CloudStatus
 import com.breezone.app.data.Hub
+import com.breezone.app.data.UpdateNeeded
 import com.breezone.app.data.Live
 import com.breezone.app.data.ServerState
 import com.breezone.app.data.SyncReport
@@ -89,6 +90,12 @@ fun SettingsScreen(onAddServer: () -> Unit, onReauth: (String) -> Unit) {
                             maxLines = 1,
                         )
                         if (s.authRequired) Text(stringResource(Res.string.settings_session_expired), fontSize = 12.sp, color = Fz.colors.warning)
+                        s.serverVersion?.let { Text(stringResource(Res.string.settings_server_version, it), fontSize = 12.sp, color = Fz.colors.muted) }
+                        when {
+                            s.update == UpdateNeeded.App -> Text(stringResource(Res.string.update_app_text), fontSize = 12.sp, color = Fz.colors.warning)
+                            s.update == UpdateNeeded.Server -> Text(stringResource(Res.string.update_server_text, s.serverVersion ?: "?"), fontSize = 12.sp, color = Fz.colors.warning)
+                            s.appUpdateAvailable -> Text(stringResource(Res.string.update_app_available), fontSize = 12.sp, color = Fz.colors.muted)
+                        }
                     }
                     if (s.authRequired) TextButton(onClick = { onReauth(s.account.id) }) { Text(stringResource(Res.string.settings_reconnect)) }
                     TextButton(onClick = { removing = s }) { Text(stringResource(Res.string.settings_remove), color = MaterialTheme.colorScheme.error) }
