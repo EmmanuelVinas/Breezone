@@ -20,6 +20,7 @@ import {
   MODE_TONE,
   formatTemp,
   groupZones,
+  systemModePlacement,
   installationAddress,
 } from "@/lib/format"
 import { useGroupPower, useZoneControl } from "@/hooks/use-zone-control"
@@ -163,21 +164,22 @@ function RemoteTile({ inst }: { inst: CloudInstallation }) {
   )
 }
 
-function SystemModes({ inst }: { inst: Installation }) {
+/** Mode selectors of the given systems (one master zone per system). */
+function SystemModes({
+  masters,
+  labelled,
+}: {
+  masters: Zone[]
+  /** Name each system ("Système 2"): the installation has several. */
+  labelled: boolean
+}) {
   const control = useZoneControl()
-  // One mode selector per system (the server reports one master zone per system).
-  const masters = inst.zones.filter(
-    (z, i, all) =>
-      z.is_master &&
-      z.modes.length > 0 &&
-      all.findIndex((o) => o.is_master && o.system_id === z.system_id) === i
-  )
-  if (!masters.length || !inst.controllable) return null
+  if (!masters.length) return null
   return (
     <div className="flex flex-wrap gap-3">
       {masters.map((m) => (
         <div key={m.system_id} className="flex items-center gap-2">
-          {masters.length > 1 && (
+          {labelled && (
             <span className="text-xs text-muted-foreground">
               Système {m.system_id}
             </span>
@@ -192,7 +194,7 @@ function SystemModes({ inst }: { inst: Installation }) {
                 {
                   onSuccess: () =>
                     toast.success(
-                      `Mode ${MODE_LABEL[v as Mode].toLowerCase()} appliqué${masters.length > 1 ? ` au système ${m.system_id}` : ""}`
+                      `Mode ${MODE_LABEL[v as Mode].toLowerCase()} appliqué${labelled ? ` au système ${m.system_id}` : ""}`
                     ),
                 }
               )
@@ -230,43 +232,56 @@ function ZoneGroup({
   name,
   zones,
   readOnly,
+  masters,
+  labelled,
 }: {
   name: string | null
   zones: Zone[]
   readOnly: boolean
+  /** Systems whose zones all belong to this group: their mode selector sits on its row. */
+  masters: Zone[]
+  labelled: boolean
 }) {
   const power = useGroupPower()
   const on = zones.filter((z) => z.on).length
   return (
     <section className="mb-8">
-      <div className="mb-3 flex items-center justify-between gap-3">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-baseline gap-3">
           <h2 className="text-lg font-semibold">{name ?? "Zones"}</h2>
           <span className="text-sm text-muted-foreground">
             {on}/{zones.length} allumée{on > 1 ? "s" : ""}
           </span>
         </div>
-        <div className={cn("flex gap-1", readOnly && "hidden")}>
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={on === zones.length}
-            onClick={() =>
-              power.mutate({ zones, on: true, label: name ?? undefined })
-            }
-          >
-            <Power /> Tout allumer
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={on === 0}
-            onClick={() =>
-              power.mutate({ zones, on: false, label: name ?? undefined })
-            }
-          >
-            <PowerOff /> Tout éteindre
-          </Button>
+        <div
+          className={cn(
+            "flex flex-wrap items-center gap-3",
+            readOnly && "hidden"
+          )}
+        >
+          <SystemModes masters={masters} labelled={labelled} />
+          <div className="flex gap-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={on === zones.length}
+              onClick={() =>
+                power.mutate({ zones, on: true, label: name ?? undefined })
+              }
+            >
+              <Power /> Tout allumer
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={on === 0}
+              onClick={() =>
+                power.mutate({ zones, on: false, label: name ?? undefined })
+              }
+            >
+              <PowerOff /> Tout éteindre
+            </Button>
+          </div>
         </div>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -328,6 +343,10 @@ export function DashboardPage() {
   const selected =
     installations.find((i) => i.id === selectedId) ?? installations[0]
   const groups = useMemo(() => groupZones(selected?.zones ?? []), [selected])
+  const modes = useMemo(
+    () => systemModePlacement(selected?.zones ?? []),
+    [selected]
+  )
 
   useEffect(() => {
     if (selected) localStorage.setItem(LAST_KEY, String(selected.id))
@@ -406,7 +425,12 @@ export function DashboardPage() {
                     </Button>
                   </div>
                 </div>
-                <SystemModes inst={selected} />
+                {selected.controllable && (
+                  <SystemModes
+                    masters={modes.header}
+                    labelled={modes.systems > 1}
+                  />
+                )}
               </div>
 
               {selected.zones.length === 0 ? (
@@ -424,6 +448,8 @@ export function DashboardPage() {
                     name={g.name}
                     zones={g.zones}
                     readOnly={!selected.controllable}
+                    masters={modes.byGroup.get(g.name) ?? []}
+                    labelled={modes.systems > 1}
                   />
                 ))
               )}

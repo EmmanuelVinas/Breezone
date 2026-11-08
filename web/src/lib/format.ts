@@ -114,6 +114,34 @@ export function groupZones(zones: Zone[]) {
   return groups
 }
 
+/**
+ * The master zone of each system (it carries the system's mode), and where its mode selector goes:
+ * on the row of the group holding all the system's zones, or in the installation header when the
+ * system spans several groups.
+ */
+export function systemModePlacement(zones: Zone[]) {
+  const masters = zones.filter(
+    (z, i, all) =>
+      z.is_master &&
+      z.modes.length > 0 &&
+      all.findIndex((o) => o.is_master && o.system_id === z.system_id) === i
+  )
+  const byGroup = new Map<string | null, Zone[]>()
+  const header: Zone[] = []
+  for (const m of masters) {
+    const groups = new Set(
+      zones.filter((z) => z.system_id === m.system_id).map((z) => z.group)
+    )
+    if (groups.size === 1) {
+      const [group] = groups
+      byGroup.set(group, [...(byGroup.get(group) ?? []), m])
+    } else {
+      header.push(m)
+    }
+  }
+  return { byGroup, header, systems: masters.length }
+}
+
 export function clampSetpoint(z: Zone, value: number) {
   const min = z.min_temp ?? 15
   const max = z.max_temp ?? 30
