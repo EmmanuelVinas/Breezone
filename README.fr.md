@@ -52,7 +52,7 @@ petit serveur auto-hébergé qui l'utilise, avec une interface web et une applic
 ## Installation (Docker)
 
 L'image est publiée sur GitHub Container Registry : `ghcr.io/emmanuelvinas/breezone`
-(`linux/amd64` et `linux/arm64`). Tags : `latest`, la version (`0.4.1`) et la série (`0.4`).
+(`linux/amd64` et `linux/arm64`). Tags : `latest`, la version (`0.5.0`) et la série (`0.5`).
 
 Créez un dossier `breezone` contenant ce `docker-compose.yml`, puis lancez `docker compose up -d` :
 
@@ -98,7 +98,7 @@ le [`docker-compose.yml` complet](docker-compose.yml) du dépôt contient un ser
 port 3000 des WebServers : leur API n'a aucune authentification.
 
 **Mise à jour.** `docker compose pull && docker compose up -d`. Pour rester sur une version précise,
-remplacez `latest` par son numéro (ex. `0.4.1`). Les données (base SQLite, secret de
+remplacez `latest` par son numéro (ex. `0.5.0`). Les données (base SQLite, secret de
 signature) sont dans le volume `breezone_data`. Sauvegarde :
 `docker run --rm -v breezone_data:/data -v "$PWD":/backup alpine tar czf /backup/breezone.tgz -C /data .`
 

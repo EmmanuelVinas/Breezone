@@ -242,7 +242,7 @@ volume `breezone_data`.
 
 Ou en SSH : `cd /volume1/docker/breezone && sudo docker compose pull && sudo docker compose up -d`.
 
-Pour rester sur une version précise, remplacez `latest` par son numéro (ex. `0.4.1`).
+Pour rester sur une version précise, remplacez `latest` par son numéro (ex. `0.5.0`).
 
 ## 7. Sauvegarder
 

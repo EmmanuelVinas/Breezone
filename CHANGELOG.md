@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-08
+
 ### Added
 
 - API versions: `/health` announces `api_version` and `min_client_api`; the app sends its own in the
@@ -132,7 +134,8 @@ All notable changes are documented here. The format follows
 - Project renamed from FreeZone to Breezone (former `FREEZONE_*` variables and `freezone.db` are
   still recognised).
 
-[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/EmmanuelVinas/breezone/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.2.1...v0.3.0
