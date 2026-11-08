@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-08
+
 ### Added
 
 - Federation: a server follows the installations another server shares with it **live** (long
@@ -149,7 +151,8 @@ All notable changes are documented here. The format follows
 - Project renamed from FreeZone to Breezone (former `FREEZONE_*` variables and `freezone.db` are
   still recognised).
 
-[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/EmmanuelVinas/breezone/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.3.0...v0.4.0
