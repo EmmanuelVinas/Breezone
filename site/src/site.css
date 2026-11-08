@@ -1,0 +1,51 @@
+/* Showcase site styles. Layout and look adapted from the MIT-licensed "Crypto" Next.js template
+   by GetNextJsTemplates (github.com/GetNextjsTemplates/crypto-tailwind-nextjs-free).
+   Built by site/build.sh into site/assets/site.css. */
+@import "tailwindcss";
+@source "../index.html";
+
+@theme {
+  --color-primary: #3cc6c9;
+  --color-secondary: #4f6fe8;
+  --color-accent: #f49a4a;
+  --color-body-bg: #040d26;
+  --color-darkmode: #0c1b44;
+  --color-border: #1b2b5c;
+  --color-lightblue: #8a9bca;
+  --color-lightsky: #ecf2ff;
+  --color-lightpurple: #b4c7ed;
+  --blur-390: 390px;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+@layer base {
+  html { scroll-behavior: smooth; }
+  body { @apply bg-body-bg text-white antialiased overflow-x-hidden; }
+  section { @apply py-16 sm:py-20 relative; }
+  /* Clip the glows sideways (they would widen the page on phones) but let them bleed vertically. */
+  section, footer { overflow-x: clip; }
+  h1 { @apply text-white font-bold text-4xl sm:text-6xl lg:text-7xl tracking-tight; }
+  h2 { @apply text-lightsky font-bold text-3xl sm:text-5xl tracking-tight text-balance; }
+  code { @apply rounded-md bg-white/10 px-1.5 py-0.5 text-[0.9em]; }
+}
+
+@utility container {
+  @apply mx-auto w-full max-w-7xl px-4 sm:px-6;
+}
+
+/* Soft colour glow behind a section, as in the template. */
+@utility glow {
+  @apply pointer-events-none absolute -z-0 rounded-full bg-linear-to-r from-primary/50 to-secondary/50 blur-390;
+}
+
+@utility btn-gradient {
+  @apply bg-linear-to-r from-primary to-secondary text-body-bg font-semibold transition-all duration-300 hover:from-secondary hover:to-primary hover:text-white;
+}
+
+/* Fade-in on scroll (replaces the template's AOS library). */
+.reveal { opacity: 0; transform: translateY(24px); transition: opacity .7s ease, transform .7s ease; }
+.reveal.shown { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } }
+
+details summary::-webkit-details-marker { display: none; }
+details[open] .chevron { transform: rotate(180deg); }

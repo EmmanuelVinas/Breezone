@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Breezone – votre clim et votre chauffage Airzone, pilotés depuis chez vous</title>
 <meta name="description" content="Breezone pilote vos installations de climatisation et de chauffage Airzone en local, depuis votre propre serveur : application Android et iOS, interface web, routines, plusieurs sites.">
+<meta name="theme-color" content="#040d26">
 <meta property="og:title" content="Breezone">
 <meta property="og:description" content="Votre clim et votre chauffage Airzone, pilotés depuis chez vous.">
 <meta property="og:image" content="https://breezone.cloud/assets/app/fr-FR/1-installations.jpg">
@@ -12,209 +13,252 @@
 <link rel="alternate" hreflang="fr" href="https://breezone.cloud/?lang=fr">
 <link rel="alternate" hreflang="en" href="https://breezone.cloud/?lang=en">
 <link rel="alternate" hreflang="es" href="https://breezone.cloud/?lang=es">
-<style>
-:root{
-  --bg:#0b1220;--bg2:#111a2c;--card:#141e33;--line:#24314d;--text:#eef2f8;--muted:#9aa8bf;
-  --teal:#3cc6c9;--blue:#4fa3e8;--orange:#f49a4a;--radius:22px;
-}
-*{box-sizing:border-box}
-html{scroll-behavior:smooth}
-body{overflow-x:hidden;margin:0;background:var(--bg);color:var(--text);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
-a{color:inherit}
-.wrap{max-width:1120px;margin:0 auto;padding:0 20px}
-header{position:sticky;top:0;z-index:10;background:rgba(11,18,32,.82);backdrop-filter:blur(12px);border-bottom:1px solid rgba(36,49,77,.6)}
-.nav{display:flex;align-items:center;gap:16px;height:64px}
-.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:20px;text-decoration:none}
-.brand img{width:32px;height:32px}
-.brand b{color:var(--teal);font-weight:700}
-.nav nav{margin-left:auto;display:flex;gap:22px;font-size:15px;color:var(--muted)}
-.nav nav a{text-decoration:none}.nav nav a:hover{color:var(--text)}
-.langs{display:flex;gap:4px;margin-left:12px}
-.langs button{background:none;border:1px solid var(--line);color:var(--muted);border-radius:999px;padding:4px 10px;font:inherit;font-size:13px;cursor:pointer}
-.langs button[aria-pressed=true]{background:var(--teal);border-color:var(--teal);color:#0b1220;font-weight:600}
-.hero{position:relative;overflow:hidden;padding:72px 0 40px}
-.hero:before,.hero:after{content:"";position:absolute;border-radius:50%;filter:blur(90px);opacity:.35;z-index:-1}
-.hero:before{width:520px;height:520px;background:var(--orange);top:-160px;right:-120px}
-.hero:after{width:480px;height:480px;background:var(--blue);bottom:-220px;left:-160px}
-.hero .wrap{display:grid;grid-template-columns:1.05fr .95fr;gap:40px;align-items:center}
-h1{overflow-wrap:anywhere;font-size:clamp(32px,5vw,56px);line-height:1.08;margin:0 0 18px;letter-spacing:-1px}
-h1 span{background:linear-gradient(90deg,var(--teal),var(--orange));-webkit-background-clip:text;background-clip:text;color:transparent}
-.lead{font-size:19px;color:var(--muted);max-width:560px;margin:0 0 28px}
-.ctas{display:flex;flex-wrap:wrap;gap:12px}
-.btn{display:inline-flex;align-items:center;gap:10px;padding:13px 20px;border-radius:14px;font-weight:600;text-decoration:none;border:1px solid var(--line);background:var(--card)}
-.btn.primary{background:var(--teal);border-color:var(--teal);color:#0b1220}
-.btn small{display:block;font-weight:500;font-size:12px;opacity:.75;line-height:1.1}
-.btn .two{line-height:1.2}
-.btn svg{width:22px;height:22px;flex:none}
-.soon{opacity:.8;cursor:default}
-.phones{display:flex;justify-content:center;gap:18px;transform:rotate(-4deg)}
-.phone{width:min(230px,42vw);border-radius:34px;padding:8px;background:#05080f;border:1px solid #2a3654;box-shadow:0 30px 80px rgba(0,0,0,.55)}
-.phone img{display:block;width:100%;height:auto;border-radius:27px}
-.phone.back{margin-top:60px}
-section{padding:72px 0}
-section h2{font-size:clamp(28px,3.4vw,38px);margin:0 0 10px;letter-spacing:-.5px}
-section .sub{color:var(--muted);margin:0 0 36px;max-width:720px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:22px}
-.card h3{margin:12px 0 6px;font-size:18px}
-.card p{margin:0;color:var(--muted);font-size:15px}
-.icon{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:rgba(60,198,201,.12);color:var(--teal)}
-.icon svg{width:22px;height:22px}
-.icon.o{background:rgba(244,154,74,.12);color:var(--orange)}
-.icon.b{background:rgba(79,163,232,.12);color:var(--blue)}
-.shots{display:flex;gap:18px;overflow-x:auto;padding:8px 2px 18px;scroll-snap-type:x mandatory}
-.shots figure{margin:0;flex:none;scroll-snap-align:start;text-align:center}
-.shots .phone{width:220px}
-.shots figcaption{margin-top:12px;color:var(--muted);font-size:14px}
-.web{margin-top:36px;border-radius:var(--radius);overflow:hidden;border:1px solid var(--line);box-shadow:0 30px 80px rgba(0,0,0,.45)}
-.web img{display:block;width:100%;height:auto}
-.steps{counter-reset:s;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
-.step{counter-increment:s;position:relative;padding-top:58px}
-.step:before{content:counter(s);position:absolute;top:20px;left:22px;width:28px;height:28px;border-radius:50%;background:var(--teal);color:#0b1220;font-weight:700;display:grid;place-items:center;font-size:14px}
-.step code{background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:2px 6px;font-size:13px}
-.open{display:grid;grid-template-columns:1.2fr .8fr;gap:24px;align-items:center}
-.open ul{margin:0;padding-left:20px;color:var(--muted)}
-.open li{margin:6px 0}
-pre{margin:0;background:#05080f;border:1px solid var(--line);border-radius:16px;padding:18px;overflow-x:auto;font-size:13px;color:#cfe3f0}
-footer{border-top:1px solid var(--line);padding:32px 0 48px;color:var(--muted);font-size:14px}
-footer .wrap{display:flex;flex-wrap:wrap;gap:16px 28px;align-items:center}
-footer nav{display:flex;gap:18px;margin-left:auto}
-footer p{margin:0;flex-basis:100%;font-size:13px}
-@media (max-width:860px){
-  .hero .wrap,.open{grid-template-columns:1fr}
-  .nav nav{display:none}
-  .phones{transform:none;margin-top:12px}
-  .phone.back{margin-top:30px}
-  section{padding:56px 0}
-}
-</style>
+<link rel="stylesheet" href="assets/site.css">
 </head>
-<body>
-<header>
-  <div class="wrap nav">
-    <a class="brand" href="#top"><img src="assets/logo.svg" alt=""><span>Bree<b>zone</b></span></a>
-    <nav>
-      <a href="#features" data-i18n="nav_features">Fonctions</a>
-      <a href="#apps" data-i18n="nav_apps">Applications</a>
-      <a href="#start" data-i18n="nav_start">Démarrer</a>
-      <a href="https://github.com/EmmanuelVinas/Breezone">GitHub</a>
+<body class="font-sans">
+
+<!-- Header: transparent over the hero, solid once the page scrolls. -->
+<header id="header" class="fixed inset-x-0 top-0 z-40 py-5 transition-all duration-300">
+  <div class="container flex items-center gap-6">
+    <a href="#top" class="flex items-center gap-2.5 text-xl font-bold">
+      <img src="assets/logo.svg" alt="" class="size-9"><span>Bree<span class="text-primary">zone</span></span>
+    </a>
+    <nav class="ml-auto hidden items-center gap-8 text-white/70 lg:flex">
+      <a href="#features" class="hover:text-primary" data-i18n="nav_features">Fonctions</a>
+      <a href="#apps" class="hover:text-primary" data-i18n="nav_apps">Applications</a>
+      <a href="#start" class="hover:text-primary" data-i18n="nav_start">Démarrer</a>
+      <a href="#faq" class="hover:text-primary" data-i18n="nav_faq">Questions</a>
     </nav>
-    <div class="langs" role="group" aria-label="Langue">
-      <button data-lang="fr">FR</button><button data-lang="en">EN</button><button data-lang="es">ES</button>
+    <div class="ml-auto flex items-center gap-1 rounded-full border border-white/15 p-1 text-sm lg:ml-0" role="group" aria-label="Langue">
+      <button class="lang-btn rounded-full px-2.5 py-1 text-white/70 aria-pressed:bg-primary aria-pressed:font-semibold aria-pressed:text-body-bg" data-lang="fr">FR</button>
+      <button class="lang-btn rounded-full px-2.5 py-1 text-white/70 aria-pressed:bg-primary aria-pressed:font-semibold aria-pressed:text-body-bg" data-lang="en">EN</button>
+      <button class="lang-btn rounded-full px-2.5 py-1 text-white/70 aria-pressed:bg-primary aria-pressed:font-semibold aria-pressed:text-body-bg" data-lang="es">ES</button>
     </div>
+    <a href="https://github.com/EmmanuelVinas/Breezone" class="btn-gradient hidden rounded-lg px-5 py-2.5 lg:block">GitHub</a>
+    <button id="menu-open" class="p-2 lg:hidden" aria-label="Menu" aria-controls="menu" aria-expanded="false">
+      <span class="block h-0.5 w-6 bg-white"></span><span class="mt-1.5 block h-0.5 w-6 bg-white"></span><span class="mt-1.5 block h-0.5 w-6 bg-white"></span>
+    </button>
   </div>
+  <nav id="menu" class="mx-4 mt-4 hidden sm:mx-6 flex-col gap-1 rounded-2xl bg-darkmode p-4 text-white/80 lg:hidden">
+    <a href="#features" class="rounded-lg px-3 py-2 hover:bg-white/5" data-i18n="nav_features">Fonctions</a>
+    <a href="#apps" class="rounded-lg px-3 py-2 hover:bg-white/5" data-i18n="nav_apps">Applications</a>
+    <a href="#start" class="rounded-lg px-3 py-2 hover:bg-white/5" data-i18n="nav_start">Démarrer</a>
+    <a href="#faq" class="rounded-lg px-3 py-2 hover:bg-white/5" data-i18n="nav_faq">Questions</a>
+    <a href="https://github.com/EmmanuelVinas/Breezone" class="btn-gradient mt-2 rounded-lg px-3 py-2 text-center">GitHub</a>
+  </nav>
 </header>
 
 <main id="top">
-<section class="hero">
-  <div class="wrap">
-    <div>
-      <h1 data-i18n-html="hero_title">Votre clim et votre chauffage Airzone, <span>pilotés depuis chez vous</span></h1>
-      <p class="lead" data-i18n="hero_lead">Breezone pilote vos installations Airzone en local, depuis votre propre serveur : une application Android et iOS, une interface web, des routines et plusieurs sites dans une seule application.</p>
-      <div class="ctas">
+
+<!-- Hero -->
+<section class="pt-32 pb-20 lg:pt-40">
+  <div class="glow inset-x-0 top-0 h-full w-full opacity-70"></div>
+  <div class="container relative z-10 grid items-center gap-14 lg:grid-cols-12">
+    <div class="text-center lg:col-span-7 lg:text-start">
+      <p class="mb-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-sm text-lightpurple">
+        <span class="size-2 rounded-full bg-primary"></span><span data-i18n="hero_badge">Android · iOS · Web · Serveur auto-hébergé</span>
+      </p>
+      <h1 class="mb-6 leading-[1.05] lg:text-6xl xl:text-7xl text-balance" data-i18n-html="hero_title">Votre clim et votre chauffage Airzone, <span class="bg-linear-to-r from-primary to-accent bg-clip-text text-transparent">pilotés depuis chez vous</span></h1>
+      <p class="mx-auto mb-10 max-w-xl text-lg text-lightpurple lg:mx-0" data-i18n="hero_lead">Breezone pilote vos installations Airzone en local, depuis votre propre serveur : une application Android et iOS, une interface web, des routines et plusieurs sites dans une seule application.</p>
+      <div class="flex flex-wrap justify-center gap-4 lg:justify-start">
         <!-- Replace with a link to https://play.google.com/store/apps/details?id=com.breezone.app once published. -->
-        <span class="btn primary soon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3.6 2.3 13.3 12l-9.7 9.7c-.4-.2-.6-.6-.6-1.1V3.4c0-.5.2-.9.6-1.1Zm10.8 10.8 2.5 2.5-11.4 6.5 8.9-9Zm3.6-3.1 2.7 1.5c.8.5.8 1.6 0 2.1L18 15.1 15.1 12 18 9.9ZM5.5 1.9l11.4 6.5-2.5 2.5-8.9-9Z"/></svg><span class="two"><small data-i18n="soon">Bientôt sur</small>Google Play</span></span>
-        <span class="btn soon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.4 12.6c0-2.7 2.2-4 2.3-4-1.3-1.9-3.3-2.1-4-2.2-1.7-.2-3.3 1-4.2 1-.9 0-2.2-1-3.6-1-1.9 0-3.6 1.1-4.6 2.8-2 3.4-.5 8.4 1.4 11.2.9 1.4 2 2.9 3.5 2.8 1.4-.1 1.9-.9 3.6-.9 1.7 0 2.1.9 3.6.9 1.5 0 2.4-1.4 3.3-2.7 1-1.5 1.5-3 1.5-3.1-.1 0-2.8-1.1-2.8-4.8ZM13.7 4.6c.8-.9 1.3-2.2 1.1-3.5-1.1 0-2.5.8-3.3 1.7-.7.8-1.4 2.1-1.2 3.4 1.3.1 2.6-.7 3.4-1.6Z"/></svg><span class="two"><small data-i18n="soon">Bientôt sur</small>App Store</span></span>
-        <a class="btn" href="https://github.com/EmmanuelVinas/Breezone"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5a11.5 11.5 0 0 0-3.6 22.4c.6.1.8-.2.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0C17.2 4.9 18.2 5.2 18.2 5.2c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.9 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A11.5 11.5 0 0 0 12 .5Z"/></svg><span class="two"><small data-i18n="hero_server">Le serveur</small>GitHub</span></a>
+        <span class="btn-gradient inline-flex cursor-default items-center gap-3 rounded-xl px-6 py-3.5">
+          <svg viewBox="0 0 24 24" fill="currentColor" class="size-6"><path d="M3.6 2.3 13.3 12l-9.7 9.7c-.4-.2-.6-.6-.6-1.1V3.4c0-.5.2-.9.6-1.1Zm10.8 10.8 2.5 2.5-11.4 6.5 8.9-9Zm3.6-3.1 2.7 1.5c.8.5.8 1.6 0 2.1L18 15.1 15.1 12 18 9.9ZM5.5 1.9l11.4 6.5-2.5 2.5-8.9-9Z"/></svg>
+          <span class="text-start leading-tight"><small class="block text-xs font-medium opacity-75" data-i18n="soon">Bientôt sur</small>Google Play</span>
+        </span>
+        <span class="inline-flex cursor-default items-center gap-3 rounded-xl border border-white/15 bg-white/5 px-6 py-3.5 font-semibold">
+          <svg viewBox="0 0 24 24" fill="currentColor" class="size-6"><path d="M16.4 12.6c0-2.7 2.2-4 2.3-4-1.3-1.9-3.3-2.1-4-2.2-1.7-.2-3.3 1-4.2 1-.9 0-2.2-1-3.6-1-1.9 0-3.6 1.1-4.6 2.8-2 3.4-.5 8.4 1.4 11.2.9 1.4 2 2.9 3.5 2.8 1.4-.1 1.9-.9 3.6-.9 1.7 0 2.1.9 3.6.9 1.5 0 2.4-1.4 3.3-2.7 1-1.5 1.5-3 1.5-3.1-.1 0-2.8-1.1-2.8-4.8ZM13.7 4.6c.8-.9 1.3-2.2 1.1-3.5-1.1 0-2.5.8-3.3 1.7-.7.8-1.4 2.1-1.2 3.4 1.3.1 2.6-.7 3.4-1.6Z"/></svg>
+          <span class="text-start leading-tight"><small class="block text-xs font-medium opacity-75" data-i18n="soon">Bientôt sur</small>App Store</span>
+        </span>
       </div>
     </div>
-    <div class="phones">
-      <div class="phone"><img data-shot="1-installations" src="assets/app/fr-FR/1-installations.jpg" alt="" width="540" height="1200"></div>
-      <div class="phone back"><img data-shot="3-zone" src="assets/app/fr-FR/3-zone.jpg" alt="" width="540" height="1200"></div>
+    <div class="relative mx-auto flex items-start justify-center gap-5 lg:col-span-5 lg:-rotate-6">
+      <div class="w-[44vw] max-w-60 rounded-[2.2rem] bg-black p-2 shadow-2xl shadow-black/60 ring-1 ring-white/15"><img data-shot="1-installations" src="assets/app/fr-FR/1-installations.jpg" alt="" width="540" height="1200" class="h-auto w-full rounded-[1.8rem]"></div>
+      <div class="mt-16 w-[44vw] max-w-60 rounded-[2.2rem] bg-black p-2 shadow-2xl shadow-black/60 ring-1 ring-white/15"><img data-shot="3-zone" src="assets/app/fr-FR/3-zone.jpg" alt="" width="540" height="1200" class="h-auto w-full rounded-[1.8rem]"></div>
     </div>
   </div>
 </section>
 
-<section id="features">
-  <div class="wrap">
-    <h2 data-i18n="features_title">Tout votre confort, au même endroit</h2>
-    <p class="sub" data-i18n="features_sub">Breezone dialogue avec votre WebServer Airzone par son API locale. Vos commandes partent de chez vous et arrivent tout de suite.</p>
-    <div class="grid">
-      <div class="card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/></svg></div><h3 data-i18n="f_zones">Chaque zone, finement</h3><p data-i18n="f_zones_t">Marche/arrêt, consigne, mode (chaud, froid, ventilation, déshumidification), vitesse de ventilation et veille, avec un accusé de réception pour chaque commande.</p></div>
-      <div class="card"><div class="icon o"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5 12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z"/><path d="M9 21v-6h6v6"/></svg></div><h3 data-i18n="f_floors">Étages et groupes</h3><p data-i18n="f_floors_t">Vos zones rangées par étage ou par pièce : tout allumer ou tout éteindre d'un geste.</p></div>
-      <div class="card"><div class="icon b"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M5 3 2 6M22 6l-3-3"/></svg></div><h3 data-i18n="f_routines">Routines</h3><p data-i18n="f_routines_t">Des scènes lancées à la demande, avec des étapes différées : « éteindre le salon maintenant, les chambres dans 2 heures ».</p></div>
-      <div class="card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div><h3 data-i18n="f_schedules">Programmations Airzone</h3><p data-i18n="f_schedules_t">Les programmations de votre compte Airzone, consultées et modifiées depuis Breezone.</p></div>
-      <div class="card"><div class="icon o"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg></div><h3 data-i18n="f_history">Historique</h3><p data-i18n="f_history_t">Température, consigne et humidité de chaque zone sur 24 heures, 7 ou 30 jours, et un journal d'activité en temps réel.</p></div>
-      <div class="card"><div class="icon b"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="7" rx="2"/><rect x="2" y="14" width="20" height="7" rx="2"/><path d="M6 6.5h.01M6 17.5h.01"/></svg></div><h3 data-i18n="f_sites">Plusieurs sites, sans VPN</h3><p data-i18n="f_sites_t">Maison, bureau, résidence secondaire : chaque site a son serveur, reliés entre eux par un appairage sécurisé et signé.</p></div>
-      <div class="card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg></div><h3 data-i18n="f_users">Toute la famille</h3><p data-i18n="f_users_t">Des comptes pour chacun, avec des droits par installation : lecture seule ou pilotage.</p></div>
-      <div class="card"><div class="icon o"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div><h3 data-i18n="f_privacy">Vos données restent chez vous</h3><p data-i18n="f_privacy_t">Pas de publicité, pas de statistiques, pas de suivi. L'application ne parle qu'à votre serveur.</p></div>
+<!-- Platforms strip (the template's logo carousel) -->
+<section class="py-8 sm:py-10">
+  <div class="container relative z-10 flex flex-wrap items-center justify-center gap-x-10 gap-y-4 text-lg font-semibold text-white/40">
+    <span>Android</span><span>iOS</span><span>Web</span><span>Docker</span><span>Synology</span><span>Raspberry Pi</span><span>Intel · AMD · ARM</span>
+  </div>
+</section>
+
+<!-- How it works (the template's "Work" cards) -->
+<section id="start" class="scroll-mt-20">
+  <div class="glow inset-x-0 top-1/4 h-3/4 w-full opacity-40"></div>
+  <div class="container relative z-10">
+    <div class="reveal mx-auto mb-20 max-w-2xl text-center">
+      <p class="mb-4 font-semibold tracking-widest text-primary uppercase" data-i18n="start_kicker">Démarrer</p>
+      <h2 class="mb-4" data-i18n="start_title">Démarrer en trois étapes</h2>
+      <p class="text-lg text-lightpurple" data-i18n="start_sub">Il faut un WebServer Airzone et une machine allumée chez vous : un NAS, un Raspberry Pi ou un petit serveur.</p>
+    </div>
+    <div class="grid gap-x-6 gap-y-20 md:grid-cols-3">
+      <div class="reveal relative rounded-2xl border border-darkmode bg-darkmode p-8 pt-14 text-center transition duration-300 hover:scale-105 hover:border-primary">
+        <div class="absolute -top-9 left-1/2 flex size-18 -translate-x-1/2 items-center justify-center rounded-full bg-linear-to-r from-primary to-secondary text-2xl font-bold text-body-bg">1</div>
+        <h3 class="mb-3 text-2xl font-semibold text-white/90" data-i18n="s1">Installez le serveur</h3>
+        <p class="text-white/60" data-i18n-html="s1_t">Une image Docker de quelques Mo (<code>ghcr.io/emmanuelvinas/breezone</code>), avec un guide pas à pas pour les NAS Synology.</p>
+      </div>
+      <div class="reveal relative rounded-2xl border border-darkmode bg-darkmode p-8 pt-14 text-center transition duration-300 hover:scale-105 hover:border-primary">
+        <div class="absolute -top-9 left-1/2 flex size-18 -translate-x-1/2 items-center justify-center rounded-full bg-linear-to-r from-primary to-secondary text-2xl font-bold text-body-bg">2</div>
+        <h3 class="mb-3 text-2xl font-semibold text-white/90" data-i18n="s2">Ajoutez vos installations</h3>
+        <p class="text-white/60" data-i18n="s2_t">Connectez votre compte Airzone pour tout importer (noms, ville, groupes de zones), ou laissez Breezone trouver vos WebServers sur le réseau.</p>
+      </div>
+      <div class="reveal relative rounded-2xl border border-darkmode bg-darkmode p-8 pt-14 text-center transition duration-300 hover:scale-105 hover:border-primary">
+        <div class="absolute -top-9 left-1/2 flex size-18 -translate-x-1/2 items-center justify-center rounded-full bg-linear-to-r from-primary to-secondary text-2xl font-bold text-body-bg">3</div>
+        <h3 class="mb-3 text-2xl font-semibold text-white/90" data-i18n="s3">Pilotez de partout</h3>
+        <p class="text-white/60" data-i18n="s3_t">Depuis l'application mobile ou le navigateur, à la maison comme à distance par l'adresse HTTPS de votre serveur.</p>
+      </div>
     </div>
   </div>
 </section>
 
-<section id="apps" style="background:var(--bg2)">
-  <div class="wrap">
-    <h2 data-i18n="apps_title">Une application mobile, une interface web</h2>
-    <p class="sub" data-i18n="apps_sub">L'application Android et iOS en français, anglais et espagnol, et l'interface web de votre serveur, sur ordinateur comme sur tablette.</p>
-    <div class="shots">
-      <figure><div class="phone"><img data-shot="1-installations" src="assets/app/fr-FR/1-installations.jpg" alt="" loading="lazy" width="540" height="1200"></div><figcaption data-i18n="cap1">Vos installations</figcaption></figure>
-      <figure><div class="phone"><img data-shot="2-installation" src="assets/app/fr-FR/2-installation.jpg" alt="" loading="lazy" width="540" height="1200"></div><figcaption data-i18n="cap2">Les zones par étage</figcaption></figure>
-      <figure><div class="phone"><img data-shot="3-zone" src="assets/app/fr-FR/3-zone.jpg" alt="" loading="lazy" width="540" height="1200"></div><figcaption data-i18n="cap3">Consigne et mode</figcaption></figure>
-      <figure><div class="phone"><img data-shot="4-routines" src="assets/app/fr-FR/4-routines.jpg" alt="" loading="lazy" width="540" height="1200"></div><figcaption data-i18n="cap4">Routines</figcaption></figure>
+<!-- Features -->
+<section id="features" class="scroll-mt-20">
+  <div class="glow -left-1/4 top-0 h-full w-full opacity-30"></div>
+  <div class="container relative z-10">
+    <div class="reveal mx-auto mb-14 max-w-2xl text-center">
+      <p class="mb-4 font-semibold tracking-widest text-primary uppercase" data-i18n="nav_features">Fonctions</p>
+      <h2 class="mb-6" data-i18n="features_title">Tout votre confort, au même endroit</h2>
+      <p class="text-lg text-lightpurple" data-i18n="features_sub">Breezone dialogue avec votre WebServer Airzone par son API locale. Vos commandes partent de chez vous et arrivent tout de suite.</p>
     </div>
-    <div class="web"><img src="assets/web-dashboard.webp" alt="" loading="lazy" width="2560" height="1680"></div>
-  </div>
-</section>
-
-<section id="start">
-  <div class="wrap">
-    <h2 data-i18n="start_title">Démarrer en trois étapes</h2>
-    <p class="sub" data-i18n="start_sub">Il faut un WebServer Airzone et une machine allumée chez vous : un NAS, un Raspberry Pi ou un petit serveur.</p>
-    <div class="steps">
-      <div class="card step"><h3 data-i18n="s1">Installez le serveur</h3><p data-i18n-html="s1_t">Une image Docker de quelques Mo (<code>ghcr.io/emmanuelvinas/breezone</code>), avec un guide pas à pas pour les NAS Synology.</p></div>
-      <div class="card step"><h3 data-i18n="s2">Ajoutez vos installations</h3><p data-i18n="s2_t">Connectez votre compte Airzone pour tout importer (noms, ville, groupes de zones), ou laissez Breezone trouver vos WebServers sur le réseau.</p></div>
-      <div class="card step"><h3 data-i18n="s3">Pilotez de partout</h3><p data-i18n="s3_t">Depuis l'application mobile ou le navigateur, à la maison comme à distance par l'adresse HTTPS de votre serveur.</p></div>
+    <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      <div class="reveal flex flex-col gap-3 rounded-2xl bg-darkmode p-7"><div class="w-fit rounded-full bg-linear-to-r from-primary to-secondary p-3.5 text-body-bg"><svg class="size-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/></svg></div><h3 class="text-lg font-medium text-white/90" data-i18n="f_zones">Chaque zone, finement</h3><p class="text-sm text-white/50" data-i18n="f_zones_t">Marche/arrêt, consigne, mode (chaud, froid, ventilation, déshumidification), vitesse de ventilation et veille, avec un accusé de réception pour chaque commande.</p></div>
+      <div class="reveal flex flex-col gap-3 rounded-2xl bg-darkmode p-7"><div class="w-fit rounded-full bg-linear-to-r from-primary to-secondary p-3.5 text-body-bg"><svg class="size-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5 12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z"/><path d="M9 21v-6h6v6"/></svg></div><h3 class="text-lg font-medium text-white/90" data-i18n="f_floors">Étages et groupes</h3><p class="text-sm text-white/50" data-i18n="f_floors_t">Vos zones rangées par étage ou par pièce : tout allumer ou tout éteindre d'un geste.</p></div>
+      <div class="reveal flex flex-col gap-3 rounded-2xl bg-darkmode p-7"><div class="w-fit rounded-full bg-linear-to-r from-primary to-secondary p-3.5 text-body-bg"><svg class="size-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M5 3 2 6M22 6l-3-3"/></svg></div><h3 class="text-lg font-medium text-white/90" data-i18n="f_routines">Routines</h3><p class="text-sm text-white/50" data-i18n="f_routines_t">Des scènes lancées à la demande, avec des étapes différées : « éteindre le salon maintenant, les chambres dans 2 heures ».</p></div>
+      <div class="reveal flex flex-col gap-3 rounded-2xl bg-darkmode p-7"><div class="w-fit rounded-full bg-linear-to-r from-primary to-secondary p-3.5 text-body-bg"><svg class="size-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div><h3 class="text-lg font-medium text-white/90" data-i18n="f_schedules">Programmations Airzone</h3><p class="text-sm text-white/50" data-i18n="f_schedules_t">Les programmations de votre compte Airzone, consultées et modifiées depuis Breezone.</p></div>
+      <div class="reveal flex flex-col gap-3 rounded-2xl bg-darkmode p-7"><div class="w-fit rounded-full bg-linear-to-r from-primary to-secondary p-3.5 text-body-bg"><svg class="size-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg></div><h3 class="text-lg font-medium text-white/90" data-i18n="f_history">Historique</h3><p class="text-sm text-white/50" data-i18n="f_history_t">Température, consigne et humidité de chaque zone sur 24 heures, 7 ou 30 jours, et un journal d'activité en temps réel.</p></div>
+      <div class="reveal flex flex-col gap-3 rounded-2xl bg-darkmode p-7"><div class="w-fit rounded-full bg-linear-to-r from-primary to-secondary p-3.5 text-body-bg"><svg class="size-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="7" rx="2"/><rect x="2" y="14" width="20" height="7" rx="2"/><path d="M6 6.5h.01M6 17.5h.01"/></svg></div><h3 class="text-lg font-medium text-white/90" data-i18n="f_sites">Plusieurs sites, sans VPN</h3><p class="text-sm text-white/50" data-i18n="f_sites_t">Maison, bureau, résidence secondaire : chaque site a son serveur, reliés entre eux par un appairage sécurisé et signé.</p></div>
+      <div class="reveal flex flex-col gap-3 rounded-2xl bg-darkmode p-7"><div class="w-fit rounded-full bg-linear-to-r from-primary to-secondary p-3.5 text-body-bg"><svg class="size-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg></div><h3 class="text-lg font-medium text-white/90" data-i18n="f_users">Toute la famille</h3><p class="text-sm text-white/50" data-i18n="f_users_t">Des comptes pour chacun, avec des droits par installation : lecture seule ou pilotage.</p></div>
+      <div class="reveal flex flex-col gap-3 rounded-2xl bg-darkmode p-7"><div class="w-fit rounded-full bg-linear-to-r from-primary to-secondary p-3.5 text-body-bg"><svg class="size-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div><h3 class="text-lg font-medium text-white/90" data-i18n="f_privacy">Vos données restent chez vous</h3><p class="text-sm text-white/50" data-i18n="f_privacy_t">Pas de publicité, pas de statistiques, pas de suivi. L'application ne parle qu'à votre serveur.</p></div>
     </div>
   </div>
 </section>
 
-<section id="story">
-  <div class="wrap">
-    <h2 data-i18n="story_title">La genèse du projet</h2>
-    <p class="sub" data-i18n="story_t">Breezone est né de cette publication d'Airzone, et de l'envie de piloter son installation depuis chez soi, avec un serveur que l'on maîtrise. Le WebServer Airzone dispose d'une API locale documentée : Breezone s'appuie dessus.</p>
-    <a class="btn" href="https://x.com/Airzone_es/status/2118657713622192444" rel="noopener"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.8 2.5h3.4l-7.4 8.5 8.7 11.5h-6.8l-5.3-7-6.1 7H.9l7.9-9.1L.5 2.5h7l4.8 6.4 5.5-6.4Zm-1.2 18h1.9L6.6 4.4h-2l12 16.1Z"/></svg><span class="two"><small data-i18n="story_link">La publication d'Airzone sur</small>X</span></a>
+<!-- Apps (the template's "Trade" block, then the screenshots) -->
+<section id="apps" class="scroll-mt-20">
+  <div class="glow top-1/2 hidden h-full w-full opacity-30 lg:block"></div>
+  <div class="container relative z-10">
+    <div class="grid items-center gap-12 lg:grid-cols-2">
+      <div class="reveal overflow-hidden rounded-2xl shadow-2xl shadow-black/60 ring-1 ring-white/10"><img src="assets/web-dashboard.webp" alt="" loading="lazy" width="2560" height="1680" class="h-auto w-full"></div>
+      <div class="reveal flex flex-col gap-7 text-center sm:text-start">
+        <h2 data-i18n="apps_title">Une application mobile, une interface web</h2>
+        <p class="text-lg text-lightblue" data-i18n="apps_sub">L'application Android et iOS en français, anglais et espagnol, et l'interface web de votre serveur, sur ordinateur comme sur tablette.</p>
+        <div class="grid grid-cols-4 divide-x divide-white/10 text-sm text-white/70">
+          <div class="flex flex-col items-center gap-2"><svg viewBox="0 0 24 24" fill="currentColor" class="size-9 text-primary"><path d="M3.6 2.3 13.3 12l-9.7 9.7c-.4-.2-.6-.6-.6-1.1V3.4c0-.5.2-.9.6-1.1Zm10.8 10.8 2.5 2.5-11.4 6.5 8.9-9Zm3.6-3.1 2.7 1.5c.8.5.8 1.6 0 2.1L18 15.1 15.1 12 18 9.9ZM5.5 1.9l11.4 6.5-2.5 2.5-8.9-9Z"/></svg>Android</div>
+          <div class="flex flex-col items-center gap-2"><svg viewBox="0 0 24 24" fill="currentColor" class="size-9 text-primary"><path d="M16.4 12.6c0-2.7 2.2-4 2.3-4-1.3-1.9-3.3-2.1-4-2.2-1.7-.2-3.3 1-4.2 1-.9 0-2.2-1-3.6-1-1.9 0-3.6 1.1-4.6 2.8-2 3.4-.5 8.4 1.4 11.2.9 1.4 2 2.9 3.5 2.8 1.4-.1 1.9-.9 3.6-.9 1.7 0 2.1.9 3.6.9 1.5 0 2.4-1.4 3.3-2.7 1-1.5 1.5-3 1.5-3.1-.1 0-2.8-1.1-2.8-4.8ZM13.7 4.6c.8-.9 1.3-2.2 1.1-3.5-1.1 0-2.5.8-3.3 1.7-.7.8-1.4 2.1-1.2 3.4 1.3.1 2.6-.7 3.4-1.6Z"/></svg>iOS</div>
+          <div class="flex flex-col items-center gap-2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-9 text-primary"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z"/></svg>Web</div>
+          <div class="flex flex-col items-center gap-2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-9 text-primary"><rect x="2" y="3" width="20" height="7" rx="2"/><rect x="2" y="14" width="20" height="7" rx="2"/><path d="M6 6.5h.01M6 17.5h.01"/></svg>Docker</div>
+        </div>
+      </div>
+    </div>
+    <div class="mt-20 flex snap-x snap-mandatory gap-6 overflow-x-auto pb-4 lg:justify-center">
+      <figure class="reveal w-56 flex-none snap-start text-center"><div class="rounded-[2.2rem] bg-black p-2 ring-1 ring-white/15"><img data-shot="1-installations" src="assets/app/fr-FR/1-installations.jpg" alt="" loading="lazy" width="540" height="1200" class="h-auto w-full rounded-[1.8rem]"></div><figcaption class="mt-3 text-sm text-lightblue" data-i18n="cap1">Vos installations</figcaption></figure>
+      <figure class="reveal w-56 flex-none snap-start text-center"><div class="rounded-[2.2rem] bg-black p-2 ring-1 ring-white/15"><img data-shot="2-installation" src="assets/app/fr-FR/2-installation.jpg" alt="" loading="lazy" width="540" height="1200" class="h-auto w-full rounded-[1.8rem]"></div><figcaption class="mt-3 text-sm text-lightblue" data-i18n="cap2">Les zones par étage</figcaption></figure>
+      <figure class="reveal w-56 flex-none snap-start text-center"><div class="rounded-[2.2rem] bg-black p-2 ring-1 ring-white/15"><img data-shot="3-zone" src="assets/app/fr-FR/3-zone.jpg" alt="" loading="lazy" width="540" height="1200" class="h-auto w-full rounded-[1.8rem]"></div><figcaption class="mt-3 text-sm text-lightblue" data-i18n="cap3">Consigne et mode</figcaption></figure>
+      <figure class="reveal w-56 flex-none snap-start text-center"><div class="rounded-[2.2rem] bg-black p-2 ring-1 ring-white/15"><img data-shot="4-routines" src="assets/app/fr-FR/4-routines.jpg" alt="" loading="lazy" width="540" height="1200" class="h-auto w-full rounded-[1.8rem]"></div><figcaption class="mt-3 text-sm text-lightblue" data-i18n="cap4">Routines</figcaption></figure>
+    </div>
   </div>
 </section>
 
-<section style="background:var(--bg2)">
-  <div class="wrap open">
-    <div>
-      <h2 data-i18n="open_title">Un code ouvert, un serveur à vous</h2>
-      <ul>
-        <li data-i18n="open_1">Code source disponible sur GitHub, licence PolyForm Noncommercial.</li>
-        <li data-i18n="open_2">Serveur en Rust, léger : quelques Mo de mémoire.</li>
-        <li data-i18n="open_3">Image Docker pour processeurs Intel, AMD et ARM.</li>
-        <li data-i18n="open_4">Accès à distance par un proxy inversé ou un Cloudflare Tunnel, sans ouvrir l'API des WebServers.</li>
+<!-- Story band (the template's "Simple" block) -->
+<section id="story" class="bg-linear-to-r from-primary/10 to-secondary/10">
+  <div class="container relative z-10 mx-auto max-w-3xl text-center">
+    <h2 class="reveal mb-6" data-i18n="story_title">La genèse du projet</h2>
+    <p class="reveal mb-10 text-lg text-lightpurple" data-i18n="story_t">Breezone est né de cette publication d'Airzone, et de l'envie de piloter son installation depuis chez soi, avec un serveur que l'on maîtrise. Le WebServer Airzone dispose d'une API locale documentée : Breezone s'appuie dessus.</p>
+    <a href="https://x.com/Airzone_es/status/2118657713622192444" rel="noopener" class="btn-gradient reveal inline-flex items-center gap-3 rounded-xl px-8 py-4 text-lg">
+      <svg viewBox="0 0 24 24" fill="currentColor" class="size-5"><path d="M17.8 2.5h3.4l-7.4 8.5 8.7 11.5h-6.8l-5.3-7-6.1 7H.9l7.9-9.1L.5 2.5h7l4.8 6.4 5.5-6.4Zm-1.2 18h1.9L6.6 4.4h-2l12 16.1Z"/></svg>
+      <span data-i18n="story_link">Lire la publication d'Airzone</span>
+    </a>
+  </div>
+</section>
+
+<!-- Open source -->
+<section>
+  <div class="container relative z-10 grid items-center gap-10 lg:grid-cols-2">
+    <div class="reveal">
+      <h2 class="mb-6" data-i18n="open_title">Un code ouvert, un serveur à vous</h2>
+      <ul class="space-y-3 text-lightpurple">
+        <li class="flex gap-3"><span class="mt-2 size-2 flex-none rounded-full bg-primary"></span><span data-i18n="open_1">Code source disponible sur GitHub, licence PolyForm Noncommercial.</span></li>
+        <li class="flex gap-3"><span class="mt-2 size-2 flex-none rounded-full bg-primary"></span><span data-i18n="open_2">Serveur en Rust, léger : quelques Mo de mémoire.</span></li>
+        <li class="flex gap-3"><span class="mt-2 size-2 flex-none rounded-full bg-primary"></span><span data-i18n="open_3">Image Docker pour processeurs Intel, AMD et ARM.</span></li>
+        <li class="flex gap-3"><span class="mt-2 size-2 flex-none rounded-full bg-primary"></span><span data-i18n="open_4">Accès à distance par un proxy inversé ou un Cloudflare Tunnel, sans ouvrir l'API des WebServers.</span></li>
       </ul>
     </div>
-<pre>docker run -d --name breezone \
+<pre class="reveal overflow-x-auto rounded-2xl border border-border bg-black/40 p-6 text-sm leading-relaxed text-lightsky"><span class="text-primary">docker</span> run -d --name breezone \
   --restart unless-stopped --network host \
   -v breezone_data:/data -e TZ=Europe/Paris \
   ghcr.io/emmanuelvinas/breezone:latest</pre>
   </div>
 </section>
+
+<!-- FAQ -->
+<section id="faq" class="scroll-mt-20">
+  <div class="glow -right-1/3 top-1/4 h-2/3 w-2/3 opacity-30"></div>
+  <div class="container relative z-10 max-w-4xl">
+    <div class="reveal mb-12 text-center">
+      <h2 class="mb-5" data-i18n="faq_title">Questions fréquentes</h2>
+      <p class="mx-auto max-w-2xl text-lg text-lightblue" data-i18n="faq_sub">Ce qu'il faut savoir avant d'installer Breezone.</p>
+    </div>
+    <div class="space-y-4">
+      <details class="reveal group rounded-2xl bg-darkmode px-6 py-5"><summary class="flex cursor-pointer items-center justify-between gap-4 text-lg font-medium text-lightpurple md:text-xl"><span data-i18n="q1">Breezone est-il une application officielle Airzone ?</span><svg class="chevron size-6 flex-none text-primary transition" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></summary><p class="pt-4 text-lightblue" data-i18n="a1">Non. Breezone est un projet indépendant, sans lien avec Airzone. Il s'appuie sur l'API locale documentée du WebServer Airzone.</p></details>
+      <details class="reveal group rounded-2xl bg-darkmode px-6 py-5"><summary class="flex cursor-pointer items-center justify-between gap-4 text-lg font-medium text-lightpurple md:text-xl"><span data-i18n="q2">De quel matériel ai-je besoin ?</span><svg class="chevron size-6 flex-none text-primary transition" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></summary><p class="pt-4 text-lightblue" data-i18n="a2">Un WebServer Airzone sur votre réseau, et une machine qui reste allumée et fait tourner Docker : un NAS (Synology ou autre), un Raspberry Pi ou un mini-PC.</p></details>
+      <details class="reveal group rounded-2xl bg-darkmode px-6 py-5"><summary class="flex cursor-pointer items-center justify-between gap-4 text-lg font-medium text-lightpurple md:text-xl"><span data-i18n="q3">Puis-je piloter mon installation à distance ?</span><svg class="chevron size-6 flex-none text-primary transition" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></summary><p class="pt-4 text-lightblue" data-i18n="a3">Oui, en publiant votre serveur Breezone en HTTPS, par le proxy inversé de votre NAS ou un Cloudflare Tunnel. L'API des WebServers reste dans votre réseau.</p></details>
+      <details class="reveal group rounded-2xl bg-darkmode px-6 py-5"><summary class="flex cursor-pointer items-center justify-between gap-4 text-lg font-medium text-lightpurple md:text-xl"><span data-i18n="q4">Combien ça coûte ?</span><svg class="chevron size-6 flex-none text-primary transition" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></summary><p class="pt-4 text-lightblue" data-i18n="a4">Rien : Breezone est gratuit pour un usage personnel et non commercial (licence PolyForm Noncommercial).</p></details>
+      <details class="reveal group rounded-2xl bg-darkmode px-6 py-5"><summary class="flex cursor-pointer items-center justify-between gap-4 text-lg font-medium text-lightpurple md:text-xl"><span data-i18n="q5">Où vont mes données ?</span><svg class="chevron size-6 flex-none text-primary transition" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></summary><p class="pt-4 text-lightblue" data-i18n="a5">Elles restent sur votre serveur. L'application mobile ne parle qu'à lui, sans publicité ni statistiques. Le compte Airzone n'est utilisé que si vous le connectez, pour l'import et les programmations.</p></details>
+      <details class="reveal group rounded-2xl bg-darkmode px-6 py-5"><summary class="flex cursor-pointer items-center justify-between gap-4 text-lg font-medium text-lightpurple md:text-xl"><span data-i18n="q6">Puis-je essayer sans installer de serveur ?</span><svg class="chevron size-6 flex-none text-primary transition" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></summary><p class="pt-4 text-lightblue" data-i18n="a6">Oui : l'application mobile contient une démonstration, accessible dès le premier écran.</p></details>
+    </div>
+  </div>
+</section>
 </main>
 
-<footer>
-  <div class="wrap">
-    <a class="brand" href="#top"><img src="assets/logo.svg" alt=""><span>Bree<b>zone</b></span></a>
-    <nav>
-      <a href="privacy.html" data-i18n="privacy">Confidentialité</a>
-      <a href="https://github.com/EmmanuelVinas/Breezone">GitHub</a>
-      <a href="https://github.com/EmmanuelVinas/Breezone/issues" data-i18n="contact">Contact</a>
-    </nav>
-    <p data-i18n="disclaimer">Breezone est un projet indépendant, sans lien avec Airzone (Corporación Empresarial Altra S.L.). « Airzone » est une marque de son propriétaire, citée uniquement pour indiquer la compatibilité.</p>
+<footer class="relative pt-16">
+  <div class="glow -left-1/2 top-0 hidden h-full w-full opacity-30 lg:block"></div>
+  <div class="container relative z-10 grid gap-10 pb-14 sm:grid-cols-2 lg:grid-cols-12">
+    <div class="sm:col-span-2 lg:col-span-6">
+      <a href="#top" class="mb-4 flex items-center gap-2.5 text-xl font-bold"><img src="assets/logo.svg" alt="" class="size-9"><span>Bree<span class="text-primary">zone</span></span></a>
+      <p class="max-w-md text-sm leading-7 text-white/60" data-i18n="footer_t">Votre clim et votre chauffage Airzone, pilotés depuis votre propre serveur.</p>
+    </div>
+    <div class="lg:col-span-3">
+      <p class="mb-6 text-lg font-medium" data-i18n="footer_links">Liens</p>
+      <ul class="space-y-4 text-sm text-white/60">
+        <li><a href="#features" class="hover:text-primary" data-i18n="nav_features">Fonctions</a></li>
+        <li><a href="#start" class="hover:text-primary" data-i18n="nav_start">Démarrer</a></li>
+        <li><a href="privacy.html" class="hover:text-primary" data-i18n="privacy">Confidentialité</a></li>
+      </ul>
+    </div>
+    <div class="lg:col-span-3">
+      <p class="mb-6 text-lg font-medium" data-i18n="footer_project">Projet</p>
+      <ul class="space-y-4 text-sm text-white/60">
+        <li><a href="https://github.com/EmmanuelVinas/Breezone" class="hover:text-primary">GitHub</a></li>
+        <li><a href="https://github.com/EmmanuelVinas/Breezone/issues" class="hover:text-primary" data-i18n="contact">Contact</a></li>
+        <li><a href="https://github.com/EmmanuelVinas/Breezone/blob/main/docs/install-synology.md" class="hover:text-primary" data-i18n="footer_synology">Guide Synology</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="relative z-10 border-t border-lightblue/30 px-4 py-8 text-center text-xs leading-6 text-white/50">
+    <p class="mx-auto max-w-3xl" data-i18n="disclaimer">Breezone est un projet indépendant, sans lien avec Airzone (Corporación Empresarial Altra S.L.). « Airzone » est une marque de son propriétaire, citée uniquement pour indiquer la compatibilité.</p>
+    <p class="mt-2"><span data-i18n="credit">Design inspiré du modèle</span> <a href="https://github.com/GetNextjsTemplates/crypto-tailwind-nextjs-free" class="underline hover:text-primary">Crypto de GetNextJsTemplates</a> (MIT).</p>
   </div>
 </footer>
 
 <script>
-// Texts of the page; French is in the HTML. The language follows the browser, ?lang= or the buttons.
+// Texts of the page; French is in the HTML. The language follows ?lang=, the saved choice or the browser.
+const GRAD = 'class="bg-linear-to-r from-primary to-accent bg-clip-text text-transparent"';
 const T = {
   en: {
-    nav_features: "Features", nav_apps: "Apps", nav_start: "Get started",
-    hero_title: 'Your Airzone heating and cooling, <span>driven from home</span>',
+    nav_features: "Features", nav_apps: "Apps", nav_start: "Get started", nav_faq: "FAQ",
+    hero_badge: "Android · iOS · Web · Self-hosted server",
+    hero_title: `Your Airzone heating and cooling, <span ${GRAD}>driven from home</span>`,
     hero_lead: "Breezone controls your Airzone installations locally, from your own server: an Android and iOS app, a web interface, routines and several sites in a single app.",
-    soon: "Coming soon on", hero_server: "The server",
+    soon: "Coming soon on",
+    start_kicker: "Get started", start_title: "Get started in three steps",
+    start_sub: "You need an Airzone WebServer and a machine running at home: a NAS, a Raspberry Pi or a small server.",
+    s1: "Install the server", s1_t: "A Docker image of a few MB (<code>ghcr.io/emmanuelvinas/breezone</code>), with a step-by-step guide for Synology NAS.",
+    s2: "Add your installations", s2_t: "Connect your Airzone account to import everything (names, city, zone groups), or let Breezone find your WebServers on the network.",
+    s3: "Control from anywhere", s3_t: "From the mobile app or the browser, at home or remotely through your server's HTTPS address.",
     features_title: "All your comfort, in one place",
     features_sub: "Breezone talks to your Airzone WebServer through its local API. Your commands leave from your home and apply at once.",
     f_zones: "Every zone, finely", f_zones_t: "On/off, setpoint, mode (heat, cool, fan, dry), fan speed and sleep, with an acknowledgement for every command.",
@@ -228,23 +272,32 @@ const T = {
     apps_title: "A mobile app, a web interface",
     apps_sub: "The Android and iOS app in English, French and Spanish, and the web interface of your server, on a computer or a tablet.",
     cap1: "Your installations", cap2: "Zones by floor", cap3: "Setpoint and mode", cap4: "Routines",
-    start_title: "Get started in three steps",
-    start_sub: "You need an Airzone WebServer and a machine running at home: a NAS, a Raspberry Pi or a small server.",
-    s1: "Install the server", s1_t: "A Docker image of a few MB (<code>ghcr.io/emmanuelvinas/breezone</code>), with a step-by-step guide for Synology NAS.",
-    s2: "Add your installations", s2_t: "Connect your Airzone account to import everything (names, city, zone groups), or let Breezone find your WebServers on the network.",
-    s3: "Control from anywhere", s3_t: "From the mobile app or the browser, at home or remotely through your server's HTTPS address.",
-    story_title: "How it started", story_t: "Breezone was born from this Airzone post, and from the wish to control one's installation from home, with a server of one's own. The Airzone WebServer has a documented local API: Breezone builds on it.", story_link: "Airzone's post on",
+    story_title: "How it started", story_t: "Breezone was born from this Airzone post, and from the wish to control one's installation from home, with a server of one's own. The Airzone WebServer has a documented local API: Breezone builds on it.", story_link: "Read Airzone's post",
     open_title: "Open code, a server of your own",
     open_1: "Source code on GitHub, PolyForm Noncommercial license.", open_2: "Lightweight Rust server: a few MB of memory.",
     open_3: "Docker image for Intel, AMD and ARM processors.", open_4: "Remote access through a reverse proxy or a Cloudflare Tunnel, without exposing the WebServers' API.",
-    privacy: "Privacy", contact: "Contact",
+    faq_title: "Frequently asked questions", faq_sub: "What to know before installing Breezone.",
+    q1: "Is Breezone an official Airzone app?", a1: "No. Breezone is an independent project, not affiliated with Airzone. It builds on the documented local API of the Airzone WebServer.",
+    q2: "What hardware do I need?", a2: "An Airzone WebServer on your network, and a machine that stays on and runs Docker: a NAS (Synology or other), a Raspberry Pi or a mini PC.",
+    q3: "Can I control my installation remotely?", a3: "Yes, by publishing your Breezone server over HTTPS, through your NAS's reverse proxy or a Cloudflare Tunnel. The WebServers' API stays inside your network.",
+    q4: "How much does it cost?", a4: "Nothing: Breezone is free for personal, non-commercial use (PolyForm Noncommercial license).",
+    q5: "Where does my data go?", a5: "It stays on your server. The mobile app only talks to it, with no ads and no analytics. Your Airzone account is used only if you connect it, for importing and schedules.",
+    q6: "Can I try it without installing a server?", a6: "Yes: the mobile app includes a demo, available from the first screen.",
+    footer_t: "Your Airzone heating and cooling, driven from your own server.", footer_links: "Links", footer_project: "Project", footer_synology: "Synology guide",
+    privacy: "Privacy", contact: "Contact", credit: "Design inspired by the template",
     disclaimer: "Breezone is an independent project, not affiliated with Airzone (Corporación Empresarial Altra S.L.). “Airzone” is a trademark of its owner, used only to describe compatibility.",
   },
   es: {
-    nav_features: "Funciones", nav_apps: "Aplicaciones", nav_start: "Empezar",
-    hero_title: 'Su climatización Airzone, <span>controlada desde casa</span>',
+    nav_features: "Funciones", nav_apps: "Aplicaciones", nav_start: "Empezar", nav_faq: "Preguntas",
+    hero_badge: "Android · iOS · Web · Servidor propio",
+    hero_title: `Su climatización Airzone, <span ${GRAD}>controlada desde casa</span>`,
     hero_lead: "Breezone controla sus instalaciones Airzone en local, desde su propio servidor: una aplicación Android e iOS, una interfaz web, rutinas y varios sitios en una sola aplicación.",
-    soon: "Próximamente en", hero_server: "El servidor",
+    soon: "Próximamente en",
+    start_kicker: "Empezar", start_title: "Empezar en tres pasos",
+    start_sub: "Se necesita un WebServer Airzone y un equipo encendido en casa: un NAS, una Raspberry Pi o un pequeño servidor.",
+    s1: "Instale el servidor", s1_t: "Una imagen Docker de pocos MB (<code>ghcr.io/emmanuelvinas/breezone</code>), con una guía paso a paso para NAS Synology.",
+    s2: "Añada sus instalaciones", s2_t: "Conecte su cuenta Airzone para importarlo todo (nombres, ciudad, grupos de zonas), o deje que Breezone encuentre sus WebServers en la red.",
+    s3: "Controle desde cualquier lugar", s3_t: "Desde la aplicación móvil o el navegador, en casa o a distancia mediante la dirección HTTPS de su servidor.",
     features_title: "Todo su confort, en un solo lugar",
     features_sub: "Breezone se comunica con su WebServer Airzone mediante su API local. Sus órdenes salen de su casa y se aplican al instante.",
     f_zones: "Cada zona, al detalle", f_zones_t: "Encendido/apagado, consigna, modo (calor, frío, ventilación, deshumidificación), velocidad de ventilación y modo sueño, con confirmación de cada orden.",
@@ -258,16 +311,19 @@ const T = {
     apps_title: "Una aplicación móvil, una interfaz web",
     apps_sub: "La aplicación Android e iOS en español, francés e inglés, y la interfaz web de su servidor, en ordenador o en tableta.",
     cap1: "Sus instalaciones", cap2: "Zonas por planta", cap3: "Consigna y modo", cap4: "Rutinas",
-    start_title: "Empezar en tres pasos",
-    start_sub: "Se necesita un WebServer Airzone y un equipo encendido en casa: un NAS, una Raspberry Pi o un pequeño servidor.",
-    s1: "Instale el servidor", s1_t: "Una imagen Docker de pocos MB (<code>ghcr.io/emmanuelvinas/breezone</code>), con una guía paso a paso para NAS Synology.",
-    s2: "Añada sus instalaciones", s2_t: "Conecte su cuenta Airzone para importarlo todo (nombres, ciudad, grupos de zonas), o deje que Breezone encuentre sus WebServers en la red.",
-    s3: "Controle desde cualquier lugar", s3_t: "Desde la aplicación móvil o el navegador, en casa o a distancia mediante la dirección HTTPS de su servidor.",
-    story_title: "El origen del proyecto", story_t: "Breezone nació de esta publicación de Airzone, y de las ganas de controlar la instalación desde casa, con un servidor propio. El WebServer Airzone dispone de una API local documentada: Breezone se basa en ella.", story_link: "La publicación de Airzone en",
+    story_title: "El origen del proyecto", story_t: "Breezone nació de esta publicación de Airzone, y de las ganas de controlar la instalación desde casa, con un servidor propio. El WebServer Airzone dispone de una API local documentada: Breezone se basa en ella.", story_link: "Leer la publicación de Airzone",
     open_title: "Código abierto, un servidor suyo",
     open_1: "Código fuente en GitHub, licencia PolyForm Noncommercial.", open_2: "Servidor en Rust, ligero: pocos MB de memoria.",
     open_3: "Imagen Docker para procesadores Intel, AMD y ARM.", open_4: "Acceso remoto mediante un proxy inverso o un Cloudflare Tunnel, sin exponer la API de los WebServers.",
-    privacy: "Privacidad", contact: "Contacto",
+    faq_title: "Preguntas frecuentes", faq_sub: "Lo que hay que saber antes de instalar Breezone.",
+    q1: "¿Breezone es una aplicación oficial de Airzone?", a1: "No. Breezone es un proyecto independiente, sin relación con Airzone. Se basa en la API local documentada del WebServer Airzone.",
+    q2: "¿Qué equipo necesito?", a2: "Un WebServer Airzone en su red, y un equipo que permanezca encendido y ejecute Docker: un NAS (Synology u otro), una Raspberry Pi o un mini PC.",
+    q3: "¿Puedo controlar mi instalación a distancia?", a3: "Sí, publicando su servidor Breezone en HTTPS, mediante el proxy inverso de su NAS o un Cloudflare Tunnel. La API de los WebServers permanece en su red.",
+    q4: "¿Cuánto cuesta?", a4: "Nada: Breezone es gratuito para uso personal y no comercial (licencia PolyForm Noncommercial).",
+    q5: "¿Adónde van mis datos?", a5: "Se quedan en su servidor. La aplicación móvil solo habla con él, sin publicidad ni estadísticas. Su cuenta Airzone solo se usa si la conecta, para la importación y las programaciones.",
+    q6: "¿Puedo probarlo sin instalar un servidor?", a6: "Sí: la aplicación móvil incluye una demostración, accesible desde la primera pantalla.",
+    footer_t: "Su climatización Airzone, controlada desde su propio servidor.", footer_links: "Enlaces", footer_project: "Proyecto", footer_synology: "Guía Synology",
+    privacy: "Privacidad", contact: "Contacto", credit: "Diseño inspirado en la plantilla",
     disclaimer: "Breezone es un proyecto independiente, sin relación con Airzone (Corporación Empresarial Altra S.L.). «Airzone» es una marca de su propietario, citada únicamente para indicar la compatibilidad.",
   },
 };
@@ -282,7 +338,7 @@ function setLang(lang) {
   document.querySelectorAll("[data-i18n]").forEach(el => el.textContent = t[el.dataset.i18n]);
   document.querySelectorAll("[data-i18n-html]").forEach(el => el.innerHTML = t[el.dataset.i18nHtml]);
   document.querySelectorAll("[data-shot]").forEach(img => img.src = `assets/app/${SHOTS[lang]}/${img.dataset.shot}.jpg`);
-  document.querySelectorAll(".langs button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.lang === lang)));
+  document.querySelectorAll(".lang-btn").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.lang === lang)));
   try { localStorage.setItem("lang", lang); } catch (e) {}
 }
 
@@ -290,9 +346,39 @@ const asked = new URLSearchParams(location.search).get("lang");
 let saved = null;
 try { saved = localStorage.getItem("lang"); } catch (e) {}
 const browser = (navigator.language || "fr").slice(0, 2);
-const initial = [asked, saved, browser].find(l => l && SHOTS[l]) || "en";
-document.querySelectorAll(".langs button").forEach(b => b.addEventListener("click", () => setLang(b.dataset.lang)));
-setLang(initial);
+document.querySelectorAll(".lang-btn").forEach(b => b.addEventListener("click", () => setLang(b.dataset.lang)));
+setLang([asked, saved, browser].find(l => l && SHOTS[l]) || "en");
+
+// Header turns solid once the page scrolls.
+const header = document.getElementById("header");
+const solid = ["bg-body-bg/90", "backdrop-blur-md", "shadow-lg", "shadow-black/30", "py-3"];
+const onScroll = () => {
+  const s = window.scrollY > 10;
+  solid.forEach(c => header.classList.toggle(c, s));
+  header.classList.toggle("py-5", !s);
+};
+addEventListener("scroll", onScroll, { passive: true });
+onScroll();
+
+// Mobile menu.
+const menu = document.getElementById("menu"), menuButton = document.getElementById("menu-open");
+const toggleMenu = open => {
+  menu.classList.toggle("hidden", !open);
+  menu.classList.toggle("flex", open);
+  menuButton.setAttribute("aria-expanded", String(open));
+};
+menuButton.addEventListener("click", () => toggleMenu(menu.classList.contains("hidden")));
+menu.querySelectorAll("a").forEach(a => a.addEventListener("click", () => toggleMenu(false)));
+
+// Fade-in on scroll.
+if ("IntersectionObserver" in window) {
+  const io = new IntersectionObserver(entries => entries.forEach(e => {
+    if (e.isIntersecting) { e.target.classList.add("shown"); io.unobserve(e.target); }
+  }), { rootMargin: "0px 0px -10% 0px" });
+  document.querySelectorAll(".reveal").forEach(el => io.observe(el));
+} else {
+  document.querySelectorAll(".reveal").forEach(el => el.classList.add("shown"));
+}
 </script>
 </body>
 </html>

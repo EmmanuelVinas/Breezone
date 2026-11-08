@@ -36,3 +36,6 @@ scripts/private/
 
 # Store publishing kits (signing keys, passwords, console answers): kept local
 /mobile/docs/stores/
+
+# Showcase site: styles compiled by site/build.sh (and by the Pages workflow)
+/site/assets/site.css

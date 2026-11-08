@@ -1,0 +1,13 @@
+{
+  "name": "breezone-site",
+  "private": true,
+  "description": "Showcase site for breezone.cloud: static HTML, styles compiled by Tailwind.",
+  "scripts": {
+    "build": "tailwindcss -i src/site.css -o assets/site.css --minify",
+    "watch": "tailwindcss -i src/site.css -o assets/site.css --watch"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "4.3.4",
+    "tailwindcss": "4.3.4"
+  }
+}
