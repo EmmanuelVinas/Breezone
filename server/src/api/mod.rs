@@ -10,8 +10,10 @@ mod timers;
 mod ws;
 
 use crate::AppState;
+use axum::extract::Request;
 use axum::http::StatusCode;
-use axum::response::IntoResponse;
+use axum::middleware::{self, Next};
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, patch, post, put};
 use axum::{Json, Router};
 use serde_json::json;
@@ -87,14 +89,56 @@ pub fn router() -> Router<AppState> {
         .route("/api/ws", get(ws::handler))
         // Unknown API routes must not fall back to the web UI.
         .route("/api/{*rest}", axum::routing::any(api_not_found))
+        .layer(middleware::from_fn(client_api_guard))
+}
+
+/// Version of the HTTP API, raised on breaking changes only: new routes and new fields keep it
+/// (clients ignore unknown fields). Policy in `docs/API.md`, "Versions de l'API".
+pub const API_VERSION: u32 = 1;
+/// Oldest client API version still served. Raise it only when the older API is really dropped.
+pub const MIN_CLIENT_API: u32 = 1;
+/// Header carrying the API version of a client (the mobile app). Clients that do not send it are served.
+pub const CLIENT_API_HEADER: &str = "breezone-api";
+
+/// Refuses API calls from clients older than [`MIN_CLIENT_API`] with 426, so the app can ask for an update.
+async fn client_api_guard(request: Request, next: Next) -> Response {
+    let path = request.uri().path();
+    let too_old = path.starts_with("/api/")
+        && path != "/api/version"
+        && request
+            .headers()
+            .get(CLIENT_API_HEADER)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.trim().parse::<u32>().ok())
+            .is_some_and(|v| v < MIN_CLIENT_API);
+    if too_old {
+        return (
+            StatusCode::UPGRADE_REQUIRED,
+            Json(json!({
+                "error": "this app is too old for this server: update it",
+                "api_version": API_VERSION,
+                "min_client_api": MIN_CLIENT_API,
+            })),
+        )
+            .into_response();
+    }
+    next.run(request).await
+}
+
+fn versions() -> serde_json::Value {
+    json!({ "version": env!("CARGO_PKG_VERSION"), "api_version": API_VERSION, "min_client_api": MIN_CLIENT_API })
 }
 
 async fn health() -> impl IntoResponse {
-    Json(json!({ "status": "ok", "version": env!("CARGO_PKG_VERSION") }))
+    let mut body = versions();
+    body["status"] = json!("ok");
+    Json(body)
 }
 
 async fn version() -> impl IntoResponse {
-    Json(json!({ "name": "Breezone", "version": env!("CARGO_PKG_VERSION") }))
+    let mut body = versions();
+    body["name"] = json!("Breezone");
+    Json(body)
 }
 
 async fn api_not_found() -> impl IntoResponse {

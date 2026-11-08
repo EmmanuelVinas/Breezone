@@ -6,11 +6,28 @@ Authentification : `Authorization: Bearer <access_token>`. Le jeton d'accès dur
 un nouveau avec le refresh token de l’appareil.
 🔒 = authentifié, 👑 = administrateur.
 
+## Versions de l'API
+
+`/health` et `/api/version` annoncent `api_version` (version de l'API du serveur) et `min_client_api`
+(plus ancienne version de client encore servie). L'application envoie la sienne dans l'en-tête
+`Breezone-Api` ; un client plus ancien que `min_client_api` reçoit `426 Upgrade Required` sur `/api/*`.
+Sans cet en-tête (navigateur, scripts, anciennes applications), la requête est servie.
+
+Règles de compatibilité :
+- Ajouter une route ou un champ ne change pas `api_version` : les clients ignorent les champs inconnus,
+  et un champ absent garde sa valeur par défaut.
+- Un changement incompatible (champ retiré ou renommé, sens modifié) augmente `api_version`. Le serveur
+  continue de servir l'ancienne forme tant que possible ; `min_client_api` n'augmente que lorsqu'elle
+  est vraiment abandonnée.
+- L'application connaît la plus ancienne API serveur avec laquelle elle fonctionne : en dessous, elle
+  demande de mettre le serveur à jour ; au-dessus de la sienne, elle propose de se mettre à jour.
+- Un serveur qui n'annonce pas `api_version` (jusqu'à 0.4.x) parle l'API 1.
+
 ## Premier démarrage et sessions
 
 | Méthode | Chemin | Description |
 |---------|--------|-------------|
-| GET | `/health` | `{"status":"ok","version":"…"}` |
+| GET | `/health` | `{"status":"ok","version":"…","api_version":1,"min_client_api":1}` |
 | GET | `/api/setup` | `{"needs_setup": bool}` — vrai tant qu'aucun compte n'existe |
 | POST | `/api/setup` | `{username, password, device_name?}` → crée l'administrateur, renvoie un `TokenPair` |
 | POST | `/api/auth/login` | `{username, password, device_name?}` → `TokenPair` (verrou 15 min après 5 échecs) |
