@@ -13,6 +13,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -75,3 +76,13 @@ fun SectionTitle(text: String, icon: ImageVector? = null) {
 fun Muted(text: String, modifier: Modifier = Modifier) {
     Text(text, modifier = modifier, style = MaterialTheme.typography.bodyMedium, color = Fz.colors.muted)
 }
+
+/** Colors of the bottom navigation items: the selected label stays readable on the dark bar. */
+@Composable
+fun fzNavigationColors() = NavigationBarItemDefaults.colors(
+    indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+    selectedIconColor = MaterialTheme.colorScheme.primary,
+    selectedTextColor = MaterialTheme.colorScheme.primary,
+    unselectedIconColor = Fz.colors.muted,
+    unselectedTextColor = Fz.colors.muted,
+)

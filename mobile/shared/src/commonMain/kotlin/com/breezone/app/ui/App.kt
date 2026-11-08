@@ -5,7 +5,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -29,6 +28,7 @@ import androidx.navigation.toRoute
 import com.breezone.app.data.Hub
 import com.breezone.app.ui.icons.FzIcons
 import com.breezone.app.ui.screens.AddServerScreen
+import com.breezone.app.ui.screens.fzNavigationColors
 import com.breezone.app.ui.screens.HomeScreen
 import com.breezone.app.ui.screens.InstallationScreen
 import com.breezone.app.ui.screens.SettingsScreen
@@ -89,7 +89,7 @@ fun App() {
                                 },
                                 icon = { Icon(tab.icon, null) },
                                 label = { Text(stringResource(tab.label)) },
-                                colors = NavigationBarItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
+                                colors = fzNavigationColors(),
                             )
                         }
                     }

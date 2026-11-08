@@ -6,6 +6,12 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- App: the Zones / Routines / Schedules sections of an installation are a bottom bar that hides while
+  scrolling down; the latency is no longer shown (a green dot when connected, « Offline » otherwise);
+  the selected tab label is readable again.
+
 ## [0.5.0] - 2026-11-08
 
 ### Added

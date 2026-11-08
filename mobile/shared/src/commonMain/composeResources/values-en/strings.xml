@@ -67,7 +67,6 @@
     <string name="connection_online">Connected</string>
     <string name="connection_offline">Offline</string>
     <string name="connection_unknown">Waiting</string>
-    <string name="connection_latency">%1$d ms</string>
     <string name="live_on">Live</string>
     <string name="live_connecting">Connecting…</string>
 
