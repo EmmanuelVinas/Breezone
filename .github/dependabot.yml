@@ -15,6 +15,10 @@ updates:
     groups:
       web-minor:
         update-types: [minor, patch]
+    ignore:
+      # TypeScript 7: typescript-eslint 8 only accepts TypeScript < 6.1. Lift once it supports 7.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: gradle
     directory: /mobile
@@ -38,5 +42,6 @@ updates:
         update-types: [minor, patch]
     ignore:
       # Node: long-term support (even) versions only; odd versions are short-lived.
+      # Ranges, not "25.x": tags such as "25-alpine" carry no minor version.
       - dependency-name: node
-        versions: ["25.x", "27.x", "29.x", "31.x"]
+        versions: [">= 25, < 26", ">= 27, < 28", ">= 29, < 30", ">= 31, < 32"]
