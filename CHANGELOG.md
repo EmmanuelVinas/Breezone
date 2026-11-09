@@ -6,12 +6,19 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-09
+
 ### Changed
 
 - App: the section bar of an installation stays visible (it no longer hides while scrolling), the
   lists end right above it.
 - App: the setpoint in the routine and schedule editors follows the limits of the chosen zones; the
   Airzone password can be shown while typing it.
+- App: going back from an installation no longer shows two bottom bars during the animation (the
+  section bar switches in place, only the content slides); the home screen loader is the wavy
+  Material 3 Expressive one.
+- App (Android): the release build is shrunk, optimized and obfuscated by R8 (2 MB APK); exception
+  names stay readable in error messages.
 
 ## [0.6.0] - 2026-11-08
 
@@ -158,7 +165,8 @@ All notable changes are documented here. The format follows
 - Project renamed from FreeZone to Breezone (former `FREEZONE_*` variables and `freezone.db` are
   still recognised).
 
-[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/EmmanuelVinas/breezone/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/EmmanuelVinas/breezone/compare/v0.4.0...v0.4.1

@@ -19,18 +19,13 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -65,13 +60,18 @@ private const val TYPE_GROUP = "group"
 private const val TYPE_ZONE = "zone"
 
 @Composable
-fun InstallationScreen(serverId: String, installationId: Long, onBack: () -> Unit, onOpenZone: (Zone) -> Unit) {
+fun InstallationScreen(
+    serverId: String,
+    installationId: Long,
+    section: Int,
+    onBack: () -> Unit,
+    onOpenZone: (Zone) -> Unit,
+) {
     val hub = koinInject<Hub>()
     val servers by hub.servers.collectAsState()
     val commandStatus by hub.commandStatus.collectAsState()
     val inst = servers.installation(serverId, installationId)
 
-    var tab by rememberSaveable { mutableIntStateOf(0) }
     Scaffold(
         topBar = {
             FzTopBar(
@@ -93,29 +93,14 @@ fun InstallationScreen(serverId: String, installationId: Long, onBack: () -> Uni
                 },
             )
         },
-        bottomBar = {
-            if (inst != null) {
-                NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
-                    SECTIONS.forEachIndexed { i, (label, icon) ->
-                        NavigationBarItem(
-                            selected = tab == i,
-                            onClick = { tab = i },
-                            icon = { Icon(icon, null) },
-                            label = { Text(stringResource(label)) },
-                            colors = fzNavigationColors(),
-                        )
-                    }
-                }
-            }
-        },
     ) { padding ->
         if (inst == null) {
             Muted(stringResource(Res.string.installation_not_found), Modifier.padding(padding).padding(24.dp))
             return@Scaffold
         }
-        // The section bar stays in place: the lists end above it.
+        // The section bar (in App) stays in place: the lists end above it.
         val content = Modifier.fillMaxSize().padding(padding)
-        when (tab) {
+        when (section) {
             0 -> InstallationZones(serverId, inst, commandStatus, onOpenZone, content)
             1 -> InstallationRoutines(serverId, inst, content)
             else -> InstallationSchedules(serverId, inst, content)
@@ -126,7 +111,8 @@ fun InstallationScreen(serverId: String, installationId: Long, onBack: () -> Uni
 /** Padding of the list of a section. */
 val SectionListPadding = PaddingValues(16.dp)
 
-private val SECTIONS = listOf(
+/** Sections of an installation, shown in the bottom bar by App. */
+internal val INSTALLATION_SECTIONS = listOf(
     Res.string.installation_tab_zones to FzIcons.Thermometer,
     Res.string.installation_tab_routines to FzIcons.Sparkles,
     Res.string.installation_tab_schedules to FzIcons.CalendarClock,

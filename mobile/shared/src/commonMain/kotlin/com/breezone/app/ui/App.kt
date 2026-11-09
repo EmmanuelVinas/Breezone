@@ -1,5 +1,7 @@
 package com.breezone.app.ui
 
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -16,9 +18,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.navigation.NavBackStackEntry
+import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
+import androidx.navigation.NavHostController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -26,10 +32,12 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.breezone.app.data.Hub
+import com.breezone.app.data.installation
 import com.breezone.app.ui.icons.FzIcons
 import com.breezone.app.ui.screens.AddServerScreen
 import com.breezone.app.ui.screens.fzNavigationColors
 import com.breezone.app.ui.screens.HomeScreen
+import com.breezone.app.ui.screens.INSTALLATION_SECTIONS
 import com.breezone.app.ui.screens.InstallationScreen
 import com.breezone.app.ui.screens.SettingsScreen
 import com.breezone.app.ui.screens.ZoneScreen
@@ -65,6 +73,11 @@ fun App() {
         val backStack by nav.currentBackStackEntryAsState()
         val destination = backStack?.destination
         val showTabs = TABS.any { tab -> destination?.hasRoute(tab.route::class) == true }
+        // The section bar of an installation lives here too, not in the screen: during the
+        // navigation animation, only the content slides and the bottom bar switches in place.
+        val installationEntry = backStack?.takeIf { destination?.hasRoute<InstallationRoute>() == true }
+        val showSections = installationEntry != null && installationEntry.toRoute<InstallationRoute>()
+            .let { servers.installation(it.serverId, it.installationId) } != null
         // Computed once: the saved servers are loaded synchronously by the Hub.
         val start = remember { if (servers.isEmpty()) AddServerRoute() else HomeRoute }
 
@@ -75,31 +88,17 @@ fun App() {
         Scaffold(
             snackbarHost = { SnackbarHost(snackbar) },
             bottomBar = {
-                if (showTabs) {
-                    NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
-                        TABS.forEach { tab ->
-                            NavigationBarItem(
-                                selected = destination?.hasRoute(tab.route::class) == true,
-                                onClick = {
-                                    nav.navigate(tab.route) {
-                                        popUpTo(nav.graph.findStartDestination().id) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                },
-                                icon = { Icon(tab.icon, null) },
-                                label = { Text(stringResource(tab.label)) },
-                                colors = fzNavigationColors(),
-                            )
-                        }
-                    }
+                when {
+                    showTabs -> TabBar(nav, destination)
+                    showSections -> SectionBar(installationEntry!!)
                 }
             },
         ) { padding ->
             NavHost(
                 navController = nav,
                 startDestination = start,
-                modifier = Modifier.padding(bottom = if (showTabs) padding.calculateBottomPadding() else androidx.compose.ui.unit.Dp(0f)),
+                modifier = (if (showTabs || showSections) PaddingValues(bottom = padding.calculateBottomPadding()) else PaddingValues(0.dp))
+                    .let { bar -> Modifier.padding(bar).consumeWindowInsets(bar) },
             ) {
                 composable<HomeRoute> {
                     HomeScreen(
@@ -110,9 +109,11 @@ fun App() {
                 }
                 composable<InstallationRoute> { entry ->
                     val r = entry.toRoute<InstallationRoute>()
+                    val section by entry.savedStateHandle.getStateFlow(SECTION_KEY, 0).collectAsState()
                     InstallationScreen(
                         serverId = r.serverId,
                         installationId = r.installationId,
+                        section = section,
                         onBack = { nav.popBackStack() },
                         onOpenZone = { z -> nav.navigate(ZoneRoute(r.serverId, z.installationId, z.systemId, z.zoneId)) },
                     )
@@ -142,6 +143,46 @@ fun App() {
                     )
                 }
             }
+        }
+    }
+}
+
+/** Selected section of an installation, kept in its back stack entry. */
+private const val SECTION_KEY = "section"
+
+@Composable
+private fun TabBar(nav: NavHostController, destination: NavDestination?) {
+    NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+        TABS.forEach { tab ->
+            NavigationBarItem(
+                selected = destination?.hasRoute(tab.route::class) == true,
+                onClick = {
+                    nav.navigate(tab.route) {
+                        popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                },
+                icon = { Icon(tab.icon, null) },
+                label = { Text(stringResource(tab.label)) },
+                colors = fzNavigationColors(),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SectionBar(entry: NavBackStackEntry) {
+    val section by entry.savedStateHandle.getStateFlow(SECTION_KEY, 0).collectAsState()
+    NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+        INSTALLATION_SECTIONS.forEachIndexed { i, (label, icon) ->
+            NavigationBarItem(
+                selected = section == i,
+                onClick = { entry.savedStateHandle[SECTION_KEY] = i },
+                icon = { Icon(icon, null) },
+                label = { Text(stringResource(label)) },
+                colors = fzNavigationColors(),
+            )
         }
     }
 }

@@ -15,7 +15,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.CircularWavyProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -140,7 +141,7 @@ fun HomeScreen(onOpenInstallation: (serverId: String, installationId: Long) -> U
         }
         if (loading) {
             item(key = TYPE_LOADING, contentType = TYPE_LOADING) {
-                Row(Modifier.fillMaxWidth().padding(40.dp), horizontalArrangement = Arrangement.Center) { CircularProgressIndicator() }
+                Row(Modifier.fillMaxWidth().padding(40.dp), horizontalArrangement = Arrangement.Center) { LoadingWave() }
             }
         }
         servers.forEach { s ->
@@ -175,4 +176,11 @@ fun HomeScreen(onOpenInstallation: (serverId: String, installationId: Long) -> U
             dismissButton = { OutlinedButton(onClick = { remoteInfo = null }) { Text(stringResource(Res.string.common_close)) } },
         )
     }
+}
+
+/** Material 3 Expressive wavy loader, the one Android shows while installing an app. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun LoadingWave() {
+    CircularWavyProgressIndicator()
 }
