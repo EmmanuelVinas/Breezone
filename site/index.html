@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Breezone – votre clim et votre chauffage Airzone, pilotés depuis chez vous</title>
-<meta name="description" content="Breezone pilote vos installations de climatisation et de chauffage Airzone en local, depuis votre propre serveur : application Android et iOS, interface web, routines, plusieurs sites.">
+<title>Breezone – pilotage local de la clim et du chauffage, compatible Airzone</title>
+<meta name="description" content="Breezone pilote en local votre climatisation et votre chauffage, depuis votre propre serveur : application Android et iOS, interface web, routines, plusieurs sites. Compatible avec les WebServers Airzone ; projet indépendant, sans lien avec Airzone.">
 <meta name="theme-color" content="#040d26">
 <meta property="og:title" content="Breezone">
-<meta property="og:description" content="Votre clim et votre chauffage Airzone, pilotés depuis chez vous.">
+<meta property="og:description" content="Votre clim et votre chauffage pilotés depuis chez vous. Compatible Airzone, projet indépendant.">
 <meta property="og:image" content="https://breezone.cloud/assets/app/fr-FR/1-installations.jpg">
 <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
 <link rel="alternate" hreflang="fr" href="https://breezone.cloud/?lang=fr">
@@ -58,8 +58,8 @@
       <p class="mb-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-sm text-lightpurple">
         <span class="size-2 rounded-full bg-primary"></span><span data-i18n="hero_badge">Android · iOS · Web · Serveur auto-hébergé</span>
       </p>
-      <h1 class="mb-6 leading-[1.05] lg:text-6xl xl:text-7xl text-balance" data-i18n-html="hero_title">Votre clim et votre chauffage Airzone, <span class="bg-linear-to-r from-primary to-accent bg-clip-text text-transparent">pilotés depuis chez vous</span></h1>
-      <p class="mx-auto mb-10 max-w-xl text-lg text-lightpurple lg:mx-0" data-i18n="hero_lead">Breezone pilote vos installations Airzone en local, depuis votre propre serveur : une application Android et iOS, une interface web, des routines et plusieurs sites dans une seule application.</p>
+      <h1 class="mb-6 leading-[1.05] lg:text-6xl xl:text-7xl text-balance" data-i18n-html="hero_title">Votre clim et votre chauffage, <span class="bg-linear-to-r from-primary to-accent bg-clip-text text-transparent">pilotés depuis chez vous</span></h1>
+      <p class="mx-auto mb-10 max-w-xl text-lg text-lightpurple lg:mx-0" data-i18n="hero_lead">Compatible avec les installations Airzone, Breezone les pilote en local, depuis votre propre serveur : une application Android et iOS, une interface web, des routines et plusieurs sites dans une seule application.</p>
       <div class="flex flex-wrap justify-center gap-4 lg:justify-start">
         <!-- Replace with a link to https://play.google.com/store/apps/details?id=com.breezone.app once published. -->
         <span class="btn-gradient inline-flex cursor-default items-center gap-3 rounded-xl px-6 py-3.5">
@@ -219,7 +219,7 @@
   <div class="container relative z-10 grid gap-10 pb-14 sm:grid-cols-2 lg:grid-cols-12">
     <div class="sm:col-span-2 lg:col-span-6">
       <a href="#top" class="mb-4 flex items-center gap-2.5 text-xl font-bold"><img src="assets/logo.svg" alt="" class="size-9"><span>Bree<span class="text-primary">zone</span></span></a>
-      <p class="max-w-md text-sm leading-7 text-white/60" data-i18n="footer_t">Votre clim et votre chauffage Airzone, pilotés depuis votre propre serveur.</p>
+      <p class="max-w-md text-sm leading-7 text-white/60" data-i18n="footer_t">Votre clim et votre chauffage, pilotés depuis votre propre serveur.</p>
     </div>
     <div class="lg:col-span-3">
       <p class="mb-6 text-lg font-medium" data-i18n="footer_links">Liens</p>
@@ -238,6 +238,9 @@
       </ul>
     </div>
   </div>
+  <div class="container relative z-10 border-t border-white/10 py-6">
+    <p class="text-xs leading-6 text-white/40" data-i18n="footer_legal">Breezone est un projet indépendant, sans lien avec Airzone (Corporación Empresarial Altra S.L.) ni approuvé par elle. « Airzone » est une marque de son propriétaire, citée uniquement pour indiquer la compatibilité.</p>
+  </div>
 </footer>
 
 <script>
@@ -247,8 +250,8 @@ const T = {
   en: {
     nav_features: "Features", nav_apps: "Apps", nav_start: "Get started", nav_faq: "FAQ",
     hero_badge: "Android · iOS · Web · Self-hosted server",
-    hero_title: `Your Airzone heating and cooling, <span ${GRAD}>driven from home</span>`,
-    hero_lead: "Breezone controls your Airzone installations locally, from your own server: an Android and iOS app, a web interface, routines and several sites in a single app.",
+    hero_title: `Your heating and cooling, <span ${GRAD}>driven from home</span>`,
+    hero_lead: "Compatible with Airzone installations, Breezone controls them locally, from your own server: an Android and iOS app, a web interface, routines and several sites in a single app.",
     soon: "Coming soon on",
     start_kicker: "Get started", start_title: "Get started in three steps",
     start_sub: "You need an Airzone WebServer and a machine running at home: a NAS, a Raspberry Pi or a small server.",
@@ -279,14 +282,14 @@ const T = {
     q4: "How much does it cost?", a4: "Nothing: Breezone is free for personal, non-commercial use (PolyForm Noncommercial license).",
     q5: "Where does my data go?", a5: "It stays on your server. The mobile app only talks to it, with no ads and no analytics. Your Airzone account is used only if you connect it, for importing and schedules.",
     q6: "Can I try it without installing a server?", a6: "Yes: the mobile app includes a demo. Tap “Try the demo” on the first screen, or sign in with the address <code>https://breezone.cloud</code>, the user name <code>demo</code> and the password <code>demo</code>.",
-    footer_t: "Your Airzone heating and cooling, driven from your own server.", footer_links: "Links", footer_project: "Project", footer_synology: "Synology guide",
+    footer_t: "Your heating and cooling, driven from your own server.", footer_legal: "Breezone is an independent project, not affiliated with or endorsed by Airzone (Corporación Empresarial Altra S.L.). “Airzone” is a trademark of its owner, used only to indicate compatibility.", footer_links: "Links", footer_project: "Project", footer_synology: "Synology guide",
     privacy: "Privacy", contact: "Contact",
   },
   es: {
     nav_features: "Funciones", nav_apps: "Aplicaciones", nav_start: "Empezar", nav_faq: "Preguntas",
     hero_badge: "Android · iOS · Web · Servidor propio",
-    hero_title: `Su climatización Airzone, <span ${GRAD}>controlada desde casa</span>`,
-    hero_lead: "Breezone controla sus instalaciones Airzone en local, desde su propio servidor: una aplicación Android e iOS, una interfaz web, rutinas y varios sitios en una sola aplicación.",
+    hero_title: `Su climatización, <span ${GRAD}>controlada desde casa</span>`,
+    hero_lead: "Compatible con las instalaciones Airzone, Breezone las controla en local, desde su propio servidor: una aplicación Android e iOS, una interfaz web, rutinas y varios sitios en una sola aplicación.",
     soon: "Próximamente en",
     start_kicker: "Empezar", start_title: "Empezar en tres pasos",
     start_sub: "Se necesita un WebServer Airzone y un equipo encendido en casa: un NAS, una Raspberry Pi o un pequeño servidor.",
@@ -317,7 +320,7 @@ const T = {
     q4: "¿Cuánto cuesta?", a4: "Nada: Breezone es gratuito para uso personal y no comercial (licencia PolyForm Noncommercial).",
     q5: "¿Adónde van mis datos?", a5: "Se quedan en su servidor. La aplicación móvil solo habla con él, sin publicidad ni estadísticas. Su cuenta Airzone solo se usa si la conecta, para la importación y las programaciones.",
     q6: "¿Puedo probarlo sin instalar un servidor?", a6: "Sí: la aplicación móvil incluye una demostración. Toque «Probar la demo» en la primera pantalla, o conéctese con la dirección <code>https://breezone.cloud</code>, el usuario <code>demo</code> y la contraseña <code>demo</code>.",
-    footer_t: "Su climatización Airzone, controlada desde su propio servidor.", footer_links: "Enlaces", footer_project: "Proyecto", footer_synology: "Guía Synology",
+    footer_t: "Su climatización, controlada desde su propio servidor.", footer_legal: "Breezone es un proyecto independiente, sin relación con Airzone (Corporación Empresarial Altra S.L.) ni respaldado por ella. «Airzone» es una marca de su propietario, citada únicamente para indicar la compatibilidad.", footer_links: "Enlaces", footer_project: "Proyecto", footer_synology: "Guía Synology",
     privacy: "Privacidad", contact: "Contacto",
   },
 };
