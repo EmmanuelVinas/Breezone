@@ -24,6 +24,8 @@
   et distante avec bascule automatique, tests d'interface.
 - **Réorganiser ses zones** : changer l'ordre des zones et des groupes, déplacer une zone d'un groupe
   à l'autre, sur le web et dans l'application.
+- **Réglages réservés aux administrateurs** : seuls les administrateurs peuvent les modifier, sur le
+  web et dans l'application.
 - **Graphiques**  : confort jour par jour, mini-courbes sur les cartes,  
   qualité d'air, consommation.
 - **Autres marques**:
