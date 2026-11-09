@@ -1144,8 +1144,10 @@ impl Hub {
                         tokio::time::sleep(Duration::from_secs(600)).await;
                         continue;
                     };
-                    // An immediate answer measures the round trip; a waited one does not.
-                    if since.as_deref() != Some(revision.as_str()) || started.elapsed() < Duration::from_secs(2) {
+                    // Only an answer that did not wait measures the round trip: the first read
+                    // (no `since`), or one that came back at once. An answer sent because the
+                    // content changed during the wait would count the wait as latency.
+                    if since.is_none() || started.elapsed() < Duration::from_secs(2) {
                         latency = started.elapsed().as_millis() as u64;
                     }
                     self.set_watching(node_id, true).await;
@@ -1360,8 +1362,6 @@ impl Hub {
         self.zone(id, system_id, zone_id).await.ok_or_else(|| ApiError::not_found("zone not found"))
     }
 
-    /// Sends a command to the node exposing the installation; it validates and applies it.
-    #[allow(clippy::too_many_arguments)]
     /// Has the node owning an installation change its Airzone schedules.
     pub async fn schedule_remote(&self, node_id: i64, remote_id: i64, op: &crate::airzone_schedules::ScheduleOp, actor: &str) -> ApiResult<()> {
         let (client, node_name) = {
@@ -1381,6 +1381,8 @@ impl Hub {
         Ok(())
     }
 
+    /// Sends a command to the node exposing the installation; it validates and applies it.
+    #[allow(clippy::too_many_arguments)]
     async fn control_remote(&self, id: i64, node_id: i64, remote_id: i64, inst_name: &str, system_id: i64, zone_id: i64, cmd: &ZoneCommand, actor: &str) -> ApiResult<ZoneView> {
         let (client, node_name) = {
             let nodes = self.nodes.read().await;

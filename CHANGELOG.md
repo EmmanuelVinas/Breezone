@@ -6,6 +6,13 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.4] - 2026-11-09
+
+### Fixed
+
+- Installations reached through another Breezone server: the latency shown counted the wait of the
+  live link (up to 45 s) when the content changed meanwhile, e.g. « 14986 ms » for a fast network.
+
 ## [0.7.3] - 2026-11-09
 
 ### Fixed
@@ -215,7 +222,8 @@ All notable changes are documented here. The format follows
 - Project renamed from FreeZone to Breezone (former `FREEZONE_*` variables and `freezone.db` are
   still recognised).
 
-[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.7.3...HEAD
+[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.7.4...HEAD
+[0.7.4]: https://github.com/EmmanuelVinas/breezone/compare/v0.7.3...v0.7.4
 [0.7.3]: https://github.com/EmmanuelVinas/breezone/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/EmmanuelVinas/breezone/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/EmmanuelVinas/breezone/compare/v0.7.0...v0.7.1
