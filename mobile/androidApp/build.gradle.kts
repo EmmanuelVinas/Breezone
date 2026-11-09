@@ -56,12 +56,6 @@ android {
         }
     }
     buildTypes {
-        // TEMPORARY: R8 on the debug build to test obfuscation on a debug-signed device. Remove.
-        getByName("debug") {
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-        }
         getByName("release") {
             // R8: shrinks, optimizes and obfuscates the DEX (Play Console "DEX optimization").
             // The mapping file ships inside the AAB, so Play deobfuscates crash stack traces.
