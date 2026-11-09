@@ -452,7 +452,7 @@ pub async fn sync(state: &AppState) -> ApiResult<SchedulesState> {
         }
         Ok(errors) => {
             db::set_setting(&state.db, KEY_LAST_SYNC, &db::now().to_string()).await?;
-            db::set_setting(&state.db, KEY_LAST_ERROR, &crate::hub::join(&errors, " ; ").store()).await?;
+            db::set_setting(&state.db, KEY_LAST_ERROR, &crate::hub::join(errors, " ; ").store()).await?;
         }
         Err(e) => db::set_setting(&state.db, KEY_LAST_ERROR, &e.message.store()).await?,
     }
