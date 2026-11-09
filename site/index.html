@@ -111,6 +111,15 @@
         <p class="text-white/60" data-i18n="s3_t">Depuis l'application mobile ou le navigateur, à la maison comme à distance par l'adresse HTTPS de votre serveur.</p>
       </div>
     </div>
+    <div class="reveal mt-16 flex flex-wrap justify-center gap-4">
+      <a href="https://github.com/EmmanuelVinas/Breezone/blob/main/README.fr.md#installation-docker" data-i18n-href="install_url" rel="noopener" class="btn-gradient inline-flex items-center gap-3 rounded-xl px-6 py-3.5">
+        <svg viewBox="0 0 24 24" fill="currentColor" class="size-6"><path d="M12 .5a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17.3 4.7 18.3 5 18.3 5c.7 1.7.3 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .5Z"/></svg>
+        <span data-i18n="install_cta">Instructions d'installation sur GitHub</span>
+      </a>
+      <a href="https://github.com/EmmanuelVinas/Breezone/blob/main/docs/install-synology.md" rel="noopener" class="inline-flex items-center gap-3 rounded-xl border border-white/15 bg-white/5 px-6 py-3.5 font-semibold">
+        <span data-i18n="synology_cta">Guide pas à pas pour NAS Synology</span>
+      </a>
+    </div>
   </div>
 </section>
 
@@ -252,6 +261,8 @@ const T = {
     hero_title: `Your heating and cooling, <span ${GRAD}>driven from home</span>`,
     hero_lead: "Compatible with Airzone installations, Breezone controls them locally, from your own server: an Android and iOS app, a web interface, routines and several sites in a single app.",
     soon: "Coming soon on", get_it: "Get it on",
+    install_cta: "Installation instructions on GitHub", synology_cta: "Step-by-step guide for Synology NAS (in French)",
+    install_url: "https://github.com/EmmanuelVinas/Breezone/blob/main/README.md#install-docker",
     start_kicker: "Get started", start_title: "Get started in three steps",
     start_sub: "You need an Airzone WebServer and a machine running at home: a NAS, a Raspberry Pi or a small server.",
     s1: "Install the server", s1_t: "A Docker image of a few MB (<code>ghcr.io/emmanuelvinas/breezone</code>), with a step-by-step guide for Synology NAS.",
@@ -290,6 +301,8 @@ const T = {
     hero_title: `Su climatización, <span ${GRAD}>controlada desde casa</span>`,
     hero_lead: "Compatible con las instalaciones Airzone, Breezone las controla en local, desde su propio servidor: una aplicación Android e iOS, una interfaz web, rutinas y varios sitios en una sola aplicación.",
     soon: "Próximamente en", get_it: "Disponible en",
+    install_cta: "Instrucciones de instalación en GitHub", synology_cta: "Guía paso a paso para NAS Synology (en francés)",
+    install_url: "https://github.com/EmmanuelVinas/Breezone/blob/main/README.md#install-docker",
     start_kicker: "Empezar", start_title: "Empezar en tres pasos",
     start_sub: "Se necesita un WebServer Airzone y un equipo encendido en casa: un NAS, una Raspberry Pi o un pequeño servidor.",
     s1: "Instale el servidor", s1_t: "Una imagen Docker de pocos MB (<code>ghcr.io/emmanuelvinas/breezone</code>), con una guía paso a paso para NAS Synology.",
@@ -326,6 +339,7 @@ const T = {
 const FR = {};
 document.querySelectorAll("[data-i18n]").forEach(el => FR[el.dataset.i18n] = el.textContent);
 document.querySelectorAll("[data-i18n-html]").forEach(el => FR[el.dataset.i18nHtml] = el.innerHTML);
+document.querySelectorAll("[data-i18n-href]").forEach(el => FR[el.dataset.i18nHref] = el.getAttribute("href"));
 const SHOTS = { fr: "fr-FR", en: "en-US", es: "es-ES" };
 
 function setLang(lang) {
@@ -333,6 +347,7 @@ function setLang(lang) {
   document.documentElement.lang = lang;
   document.querySelectorAll("[data-i18n]").forEach(el => el.textContent = t[el.dataset.i18n]);
   document.querySelectorAll("[data-i18n-html]").forEach(el => el.innerHTML = t[el.dataset.i18nHtml]);
+  document.querySelectorAll("[data-i18n-href]").forEach(el => el.setAttribute("href", t[el.dataset.i18nHref]));
   document.querySelectorAll("[data-shot]").forEach(img => img.src = `assets/app/${SHOTS[lang]}/${img.dataset.shot}.jpg`);
   document.querySelectorAll(".lang-btn").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.lang === lang)));
   try { localStorage.setItem("lang", lang); } catch (e) {}
