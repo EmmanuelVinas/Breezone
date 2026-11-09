@@ -10,21 +10,21 @@ import du compte Airzone, recherche réseau.
 et modifiables depuis Breezone.
 - **Plusieurs sites** : appairage signé entre serveurs, partages réciproques, certificats acceptés après
 vérification, choix des installations affichées, suivi en direct qui se rétablit seul après une panne.
-- **Utilisateurs** : accès par installation, en lecture seule ou en pilotage.
+- **Utilisateurs** : accès par installation, en lecture seule ou en pilotage ; réglages du serveur
+réservés aux administrateurs, qui choisissent ce que chaque utilisateur peut modifier (zones,
+routines, programmations).
 - **Versions d'API** : l'application signale qu'elle ou le serveur doit être mis à jour.
 - **Interface web** et **application Android / iOS** (français, anglais, espagnol ; démo intégrée ;
-routines et programmations par installation).
+routines et programmations par installation) ; langue du web choisie dans le profil, messages du
+serveur dans la langue de chacun.
 - **Diffusion** : guide Synology, site breezone.cloud, kit de publication Google Play.
 
 ## À venir
 
-- **Langue** : choix dans le profil, web traduit (aujourd'hui en français seulement).
 - **Application mobile** : scan du QR code d'appairage, minuteries et scènes avec délai, adresse locale
 et distante avec bascule automatique, tests d'interface.
 - **Réorganiser ses zones** : changer l'ordre des zones et des groupes, déplacer une zone d'un groupe
 à l'autre, sur le web et dans l'application.
-- **Réglages réservés aux administrateurs** : seuls les administrateurs peuvent les modifier, sur le
-web et dans l'application.
 - **Graphiques**  : confort jour par jour, mini-courbes sur les cartes,  
 qualité d'air, consommation.
 - **Autres marques**:

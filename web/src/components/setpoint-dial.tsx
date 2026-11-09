@@ -2,6 +2,7 @@ import { useRef, useState } from "react"
 import type { Zone } from "@/lib/api"
 import { clampSetpoint, formatTemp } from "@/lib/format"
 import { cn } from "@/lib/utils"
+import { t } from "@/lib/i18n"
 
 const START = 135 // degrees, 0 = east, clockwise (SVG coordinates)
 const SWEEP = 270
@@ -102,7 +103,7 @@ export function SetpointDial({
       aria-valuemin={min}
       aria-valuemax={max}
       aria-valuenow={value}
-      aria-label="Consigne"
+      aria-label={t("Consigne")}
       tabIndex={0}
       onKeyDown={(e) => {
         const step = zone.step || 0.5
@@ -170,7 +171,7 @@ export function SetpointDial({
         textAnchor="middle"
         className="fill-muted-foreground text-[13px] tracking-widest uppercase"
       >
-        Consigne
+        {t("Consigne")}
       </text>
       <text
         x={c}
@@ -178,7 +179,7 @@ export function SetpointDial({
         textAnchor="middle"
         className="tabular fill-foreground text-[64px] font-semibold"
       >
-        {value.toFixed(1).replace(".", ",")}°
+        {formatTemp(value)}
       </text>
       <text
         x={c}
@@ -186,7 +187,7 @@ export function SetpointDial({
         textAnchor="middle"
         className="fill-muted-foreground text-[14px]"
       >
-        Ambiante {formatTemp(room)}
+        {t("Ambiante {temp}", { temp: formatTemp(room) })}
       </text>
     </svg>
   )

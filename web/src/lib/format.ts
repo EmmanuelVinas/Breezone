@@ -9,15 +9,16 @@ import {
   Sparkles,
 } from "lucide-react"
 import type { Mode, Zone } from "@/lib/api"
+import { lang, locale, t } from "@/lib/i18n"
 
 export const MODE_LABEL: Record<Mode, string> = {
-  stop: "Arrêt",
-  cooling: "Froid",
-  heating: "Chaud",
-  fan: "Ventilation",
-  dry: "Déshumidification",
-  aux_heating: "Appoint",
-  auto: "Auto",
+  stop: t("Arrêt"),
+  cooling: t("Froid"),
+  heating: t("Chaud"),
+  fan: t("Ventilation"),
+  dry: t("Déshumidification"),
+  aux_heating: t("Appoint"),
+  auto: t("Auto"),
 }
 
 export const MODE_ICON: Record<Mode, LucideIcon> = {
@@ -44,20 +45,21 @@ export const MODE_TONE: Record<
   auto: { text: "text-primary", bg: "bg-primary/15", ring: "ring-primary/40" },
 }
 
-export const DAY_SHORT = ["L", "M", "M", "J", "V", "S", "D"]
 export const DAY_LABEL = [
-  "Lundi",
-  "Mardi",
-  "Mercredi",
-  "Jeudi",
-  "Vendredi",
-  "Samedi",
-  "Dimanche",
+  t("Lundi"),
+  t("Mardi"),
+  t("Mercredi"),
+  t("Jeudi"),
+  t("Vendredi"),
+  t("Samedi"),
+  t("Dimanche"),
 ]
+export const DAY_SHORT = DAY_LABEL.map((d) => d.charAt(0))
 
 export function formatTemp(v: number | null | undefined, digits = 1) {
   if (v === null || v === undefined) return "–"
-  return `${v.toFixed(digits).replace(".", ",")}°`
+  const n = v.toFixed(digits)
+  return `${lang() === "en" ? n : n.replace(".", ",")}°`
 }
 
 export function zoneKey(z: {
@@ -74,27 +76,27 @@ export function zoneTone(z: Zone) {
   return MODE_TONE[z.mode]
 }
 
-const rtf = new Intl.RelativeTimeFormat("fr", { numeric: "auto" })
+const rtf = new Intl.RelativeTimeFormat(locale(), { numeric: "auto" })
 
 export function relativeTime(ts: number | null | undefined) {
-  if (!ts) return "jamais"
+  if (!ts) return t("jamais")
   const diff = ts - Date.now() / 1000
   const abs = Math.abs(diff)
-  if (abs < 45) return diff < 0 ? "à l'instant" : "dans un instant"
+  if (abs < 45) return diff < 0 ? t("à l'instant") : t("dans un instant")
   if (abs < 3600) return rtf.format(Math.round(diff / 60), "minute")
   if (abs < 86400) return rtf.format(Math.round(diff / 3600), "hour")
   return rtf.format(Math.round(diff / 86400), "day")
 }
 
 export function dateTime(ts: number) {
-  return new Date(ts * 1000).toLocaleString("fr-FR", {
+  return new Date(ts * 1000).toLocaleString(locale(), {
     dateStyle: "short",
     timeStyle: "short",
   })
 }
 
 export function time(ts: number) {
-  return new Date(ts * 1000).toLocaleTimeString("fr-FR", {
+  return new Date(ts * 1000).toLocaleTimeString(locale(), {
     hour: "2-digit",
     minute: "2-digit",
   })
@@ -155,5 +157,5 @@ export function installationAddress(i: {
   port: number
   node?: { name: string }
 }) {
-  return i.node ? `via ${i.node.name}` : `${i.host}:${i.port}`
+  return i.node ? t("via {name}", { name: i.node.name }) : `${i.host}:${i.port}`
 }

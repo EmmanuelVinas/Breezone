@@ -55,7 +55,6 @@ private const val TYPE_EMPTY = "empty"
 @Composable
 fun HomeScreen(onOpenInstallation: (serverId: String, installationId: Long) -> Unit, onReauth: (String) -> Unit, onAddServer: () -> Unit) {
     val hub = koinInject<Hub>()
-    // In-memory StateFlow of the Hub: collectAsState is the right tool (no background producer).
     val servers by hub.servers.collectAsState()
     var remoteInfo by remember { mutableStateOf<CloudInstallation?>(null) }
     val multi = servers.size > 1
@@ -178,7 +177,6 @@ fun HomeScreen(onOpenInstallation: (serverId: String, installationId: Long) -> U
     }
 }
 
-/** Material 3 Expressive wavy loader, the one Android shows while installing an app. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun LoadingWave() {

@@ -7,6 +7,7 @@
 
 use crate::db::{self, Db, RoutineRow};
 use crate::error::{ApiError, ApiResult};
+use crate::i18n::Text;
 use crate::hub::{Hub, ZoneCommand};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -87,7 +88,7 @@ pub fn to_view(row: &RoutineRow) -> RoutineView {
 #[derive(Debug, Clone, Serialize)]
 pub struct ActionResult {
     pub ok: bool,
-    pub error: Option<String>,
+    pub error: Option<Text>,
 }
 
 /// Runs a list of actions sequentially and returns one result per action.
@@ -110,7 +111,9 @@ pub async fn run_routine(hub: &Hub, db: &Db, row: &RoutineRow, actor: &str) -> A
     for a in delayed {
         let target = crate::timers::Target::Zone { installation_id: a.installation_id, system_id: a.system_id, zone_id: a.zone_id };
         let delay = a.delay_minutes.unwrap_or(0);
-        let label = format!("{} — {} : {}", row.name, target.describe(&installations), a.command.describe());
+        let (target, command) = (target.describe(&installations), a.command.describe());
+        let label = crate::text!("{0} — {1} : {2}", "{0} — {1}: {2}", "{0} — {1}: {2}", row.name, target.arg(), command.arg()).store();
+        let target = crate::timers::Target::Zone { installation_id: a.installation_id, system_id: a.system_id, zone_id: a.zone_id };
         let run_at = db::now() + delay * 60;
         if let Err(e) = db::insert_timer(db, &label, run_at, &json!(target).to_string(), &json!(a.command).to_string(), &format!("{actor} · routine « {} »", row.name)).await {
             tracing::error!("cannot plan delayed action: {e}");
@@ -119,11 +122,30 @@ pub async fn run_routine(hub: &Hub, db: &Db, row: &RoutineRow, actor: &str) -> A
     db::set_routine_last_run(db, row.id, db::now()).await?;
     let failed = results.iter().filter(|r| !r.ok).count();
     let (level, message) = if failed == 0 {
-        ("info", format!("Routine « {} » exécutée ({} action(s))", row.name, results.len()))
+        (
+            "info",
+            crate::text!(
+                "Routine « {0} » exécutée ({1} action(s))",
+                "Routine “{0}” run ({1} action(s))",
+                "Rutina «{0}» ejecutada ({1} acción(es))",
+                row.name,
+                results.len()
+            ),
+        )
     } else {
-        ("warn", format!("Routine « {} » exécutée avec {failed} échec(s) sur {}", row.name, results.len()))
+        (
+            "warn",
+            crate::text!(
+                "Routine « {0} » exécutée avec {1} échec(s) sur {2}",
+                "Routine “{0}” run with {1} failure(s) out of {2}",
+                "Rutina «{0}» ejecutada con {1} fallo(s) de {2}",
+                row.name,
+                failed,
+                results.len()
+            ),
+        )
     };
-    hub.log("routine", level, None, Some(actor), &message, Some(json!({ "routine_id": row.id, "results": results }))).await;
+    hub.log("routine", level, None, Some(actor), message, Some(json!({ "routine_id": row.id, "results": results }))).await;
     hub.routines_changed();
     Ok(results)
 }

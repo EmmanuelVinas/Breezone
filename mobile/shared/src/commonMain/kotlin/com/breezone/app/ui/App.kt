@@ -82,7 +82,6 @@ fun App() {
         val start = remember { if (servers.isEmpty()) AddServerRoute() else HomeRoute }
 
         LaunchedEffect(Unit) { hub.messages.collect { snackbar.showSnackbar(it) } }
-        // Coming back to the app: reconnect the push channels that dropped in background.
         LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { hub.refresh() }
 
         Scaffold(
@@ -147,7 +146,6 @@ fun App() {
     }
 }
 
-/** Selected section of an installation, kept in its back stack entry. */
 private const val SECTION_KEY = "section"
 
 @Composable

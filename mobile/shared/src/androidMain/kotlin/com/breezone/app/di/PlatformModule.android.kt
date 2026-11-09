@@ -27,7 +27,6 @@ actual val platformModule = module {
         OkHttp.create {
             config {
                 connectTimeout(10, TimeUnit.SECONDS)
-                // The server pings the WebSocket every 25 s.
                 readTimeout(70, TimeUnit.SECONDS)
                 sslSocketFactory(tls.socketFactory, trust)
                 hostnameVerifier(PinningHostnameVerifier)

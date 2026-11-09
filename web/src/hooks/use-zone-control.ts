@@ -3,6 +3,7 @@ import { toast } from "sonner"
 import type { Installation, Zone, ZoneCommand } from "@/lib/api"
 import { api } from "@/lib/api"
 import { setCommandStatus } from "@/lib/command-status"
+import { t, tn } from "@/lib/i18n"
 
 type Target = Pick<Zone, "installation_id" | "system_id" | "zone_id">
 
@@ -39,7 +40,7 @@ export function useZoneControl() {
     onError: (err, { zone }, ctx) => {
       setCommandStatus([zone], "error")
       if (ctx?.previous) qc.setQueryData(["status"], ctx.previous)
-      toast.error("Commande refusée", {
+      toast.error(t("Commande refusée"), {
         description: err instanceof Error ? err.message : String(err),
       })
     },
@@ -94,19 +95,31 @@ export function useGroupPower() {
       )
       const failed = res.results.filter((r) => !r.ok).length
       const ok = zones.length - failed
-      const what = on ? "allumée" : "éteinte"
+      const prefix = label ? t("{label} : ", { label }) : ""
       if (failed)
         toast.warning(
-          `${label ? `${label} : ` : ""}${ok} zone(s) ${what}(s), ${failed} sans réponse`
+          prefix +
+            (on
+              ? t("{ok} zone(s) allumée(s), {failed} sans réponse", {
+                  ok,
+                  failed,
+                })
+              : t("{ok} zone(s) éteinte(s), {failed} sans réponse", {
+                  ok,
+                  failed,
+                }))
         )
       else
         toast.success(
-          `${label ? `${label} : ` : ""}${ok} zone${ok > 1 ? "s" : ""} ${what}${ok > 1 ? "s" : ""}`
+          prefix +
+            (on
+              ? tn(ok, "{n} zone allumée", "{n} zones allumées")
+              : tn(ok, "{n} zone éteinte", "{n} zones éteintes"))
         )
     },
     onError: (err, { zones }) => {
       setCommandStatus(zones, "error")
-      toast.error("Échec", {
+      toast.error(t("Échec"), {
         description: err instanceof Error ? err.message : String(err),
       })
       qc.invalidateQueries({ queryKey: ["status"] })

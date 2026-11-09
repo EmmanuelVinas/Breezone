@@ -101,7 +101,6 @@ fun Caption(text: String, modifier: Modifier = Modifier, color: Color = Fz.color
     Text(text, modifier = modifier, fontSize = 12.sp, color = color, maxLines = maxLines)
 }
 
-/** Text button with a small leading icon. */
 @Composable
 fun IconTextButton(icon: ImageVector, text: String, onClick: () -> Unit, color: Color = Color.Unspecified) {
     TextButton(onClick = onClick) {
@@ -111,7 +110,6 @@ fun IconTextButton(icon: ImageVector, text: String, onClick: () -> Unit, color: 
     }
 }
 
-/** Yes / cancel question before an action that cannot be undone. */
 @Composable
 fun ConfirmDialog(title: String, confirm: String, onConfirm: () -> Unit, onDismiss: () -> Unit, text: String? = null) {
     AlertDialog(
@@ -123,7 +121,6 @@ fun ConfirmDialog(title: String, confirm: String, onConfirm: () -> Unit, onDismi
     )
 }
 
-/** Password field with a button to show what was typed. */
 @Composable
 fun PasswordField(
     value: String,

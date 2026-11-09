@@ -25,27 +25,29 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { t } from "@/lib/i18n"
+import { useProfileLanguage } from "@/hooks/use-rights"
 
 const NAV = [
-  { to: "/", label: "Installations", icon: LayoutGrid, end: true },
+  { to: "/", label: t("Installations"), icon: LayoutGrid, end: true },
   {
     to: "/programmations",
-    label: "Programmations",
+    label: t("Programmations"),
     icon: CalendarClock,
     end: false,
   },
-  { to: "/routines", label: "Routines", icon: Timer, end: false },
-  { to: "/activity", label: "Activité", icon: Activity, end: false },
-  { to: "/settings", label: "Réglages", icon: Settings, end: false },
+  { to: "/routines", label: t("Routines"), icon: Timer, end: false },
+  { to: "/activity", label: t("Activité"), icon: Activity, end: false },
+  { to: "/settings", label: t("Réglages"), icon: Settings, end: false },
 ]
 
 function LiveIndicator({ state }: { state: LiveState }) {
   const label =
     state === "live"
-      ? "Temps réel"
+      ? t("Temps réel")
       : state === "connecting"
-        ? "Connexion…"
-        : "Reconnexion…"
+        ? t("Connexion…")
+        : t("Reconnexion…")
   return (
     <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
       <span
@@ -80,6 +82,7 @@ export function AppShell({
   const navigate = useNavigate()
   const qc = useQueryClient()
   const version = useServerVersion()
+  useProfileLanguage()
   const dark =
     theme === "dark" ||
     (theme === "system" &&
@@ -138,7 +141,7 @@ export function AppShell({
               variant="ghost"
               size="icon"
               onClick={() => setTheme(dark ? "light" : "dark")}
-              aria-label="Changer de thème"
+              aria-label={t("Changer de thème")}
             >
               {dark ? <Sun /> : <Moon />}
             </Button>
@@ -157,23 +160,25 @@ export function AppShell({
                 <DropdownMenuLabel>
                   {user?.username}
                   <div className="text-xs font-normal text-muted-foreground">
-                    {user?.role === "admin" ? "Administrateur" : "Utilisateur"}
+                    {user?.role === "admin"
+                      ? t("Administrateur")
+                      : t("Utilisateur")}
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => navigate("/settings?tab=account")}
                 >
-                  <Settings /> Mon compte
+                  <Settings /> {t("Mon compte")}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={logout} variant="destructive">
-                  <LogOut /> Se déconnecter
+                  <LogOut /> {t("Se déconnecter")}
                 </DropdownMenuItem>
                 {version && (
                   <>
                     <DropdownMenuSeparator />
                     <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                      Serveur Breezone {version}
+                      {t("Serveur Breezone {version}", { version })}
                     </div>
                   </>
                 )}

@@ -6,6 +6,17 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Users: an administrator chooses what each user may change on the installations they drive:
+  zone names and groups, routines, Airzone schedules (everything allowed by default, as before).
+  Driving, running a routine and switching a schedule on or off stay possible; the web and the app
+  hide what is not allowed. Server settings stay reserved to administrators.
+- Languages: the web UI is in French, English and Spanish, chosen in the profile (My account ›
+  Language; automatic follows the browser). The server writes its messages (errors, activity feed,
+  connection and synchronisation states) in the language of each reader: the web and the app send
+  theirs; the activity feed is stored in the three languages.
+
 ## [0.6.1] - 2026-11-09
 
 ### Changed

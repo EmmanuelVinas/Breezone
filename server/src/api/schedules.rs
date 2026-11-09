@@ -18,14 +18,18 @@ fn visible(mut list: SchedulesState, access: &Access) -> SchedulesState {
     list
 }
 
-/// Editing a schedule needs control over the Breezone installation linked to it.
-async fn may_edit(state: &AppState, user: &AuthUser, cloud_id: &str) -> ApiResult<Access> {
+/// Switching a schedule on or off needs control over the Breezone installation linked to it;
+/// creating, changing or deleting one (`edit`) also needs the right to edit schedules.
+async fn may_change(state: &AppState, user: &AuthUser, cloud_id: &str, edit: bool) -> ApiResult<Access> {
     let access = Access::of(&state.db, user).await?;
     if !access.is_admin() {
         let linked = db::list_installations(&state.db).await?.into_iter().find(|i| i.cloud_id.as_deref() == Some(cloud_id));
         match linked {
             Some(i) => access.control(i.id)?,
             None => return Err(ApiError::not_found("installation not found")),
+        }
+        if edit {
+            access.edit_schedules()?;
         }
     }
     Ok(access)
@@ -43,7 +47,7 @@ pub async fn sync(State(state): State<AppState>, user: AuthUser) -> ApiResult<Js
 
 pub async fn create(State(state): State<AppState>, user: AuthUser, Json(input): Json<ScheduleInput>) -> ApiResult<Json<SchedulesState>> {
     let cloud_id = input.cloud_id.clone().unwrap_or_default();
-    let access = may_edit(&state, &user, &cloud_id).await?;
+    let access = may_change(&state, &user, &cloud_id, true).await?;
     Ok(Json(visible(airzone_schedules::create(&state, &input, &user.username).await?, &access)))
 }
 
@@ -53,7 +57,7 @@ pub async fn update(
     Path((cloud_id, id)): Path<(String, String)>,
     Json(input): Json<ScheduleInput>,
 ) -> ApiResult<Json<SchedulesState>> {
-    let access = may_edit(&state, &user, &cloud_id).await?;
+    let access = may_change(&state, &user, &cloud_id, true).await?;
     Ok(Json(visible(airzone_schedules::update(&state, &cloud_id, &id, &input, &user.username).await?, &access)))
 }
 
@@ -68,11 +72,11 @@ pub async fn set_enabled(
     Path((cloud_id, id)): Path<(String, String)>,
     Json(input): Json<EnabledInput>,
 ) -> ApiResult<Json<SchedulesState>> {
-    let access = may_edit(&state, &user, &cloud_id).await?;
+    let access = may_change(&state, &user, &cloud_id, false).await?;
     Ok(Json(visible(airzone_schedules::set_enabled(&state, &cloud_id, &id, input.enabled, &user.username).await?, &access)))
 }
 
 pub async fn delete(State(state): State<AppState>, user: AuthUser, Path((cloud_id, id)): Path<(String, String)>) -> ApiResult<Json<SchedulesState>> {
-    let access = may_edit(&state, &user, &cloud_id).await?;
+    let access = may_change(&state, &user, &cloud_id, true).await?;
     Ok(Json(visible(airzone_schedules::delete(&state, &cloud_id, &id, &user.username).await?, &access)))
 }

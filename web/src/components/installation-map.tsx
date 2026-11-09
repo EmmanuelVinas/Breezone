@@ -60,6 +60,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { t, tn } from "@/lib/i18n"
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
@@ -81,7 +82,7 @@ function AirzoneBox({ c }: { c: CloudInstallation | null }) {
   if (!c)
     return (
       <div className="rounded-2xl border border-dashed p-3 text-sm text-muted-foreground">
-        Absente du compte Airzone
+        {t("Absente du compte Airzone")}
       </div>
     )
   return (
@@ -96,7 +97,7 @@ function AirzoneBox({ c }: { c: CloudInstallation | null }) {
             <MapPin className="size-3" /> {c.location}
           </span>
         )}
-        <span>{c.zones} zones</span>
+        <span>{tn(c.zones, "{n} zone", "{n} zones")}</span>
         {c.ws_ids[0] && <span>MAC {c.ws_ids[0]}</span>}
       </div>
     </div>
@@ -114,7 +115,7 @@ function AccessBox({
   if (!live && !config)
     return (
       <div className="flex items-center gap-2 rounded-2xl border border-dashed p-3 text-sm text-muted-foreground">
-        <CloudOff className="size-4" /> Non jointe
+        <CloudOff className="size-4" /> {t("Non jointe")}
       </div>
     )
   const viaNode = live?.node
@@ -128,11 +129,12 @@ function AccessBox({
       <div className="flex items-center gap-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
         {viaNode ? (
           <>
-            <Server className="size-3.5" /> Via le serveur « {viaNode.name} »
+            <Server className="size-3.5" />{" "}
+            {t("Via le serveur « {name} »", { name: viaNode.name })}
           </>
         ) : (
           <>
-            <Network className="size-3.5" /> Réseau de ce serveur
+            <Network className="size-3.5" /> {t("Réseau de ce serveur")}
           </>
         )}
       </div>
@@ -211,7 +213,7 @@ function LinkDialog({
     mutationFn: (id: number) => api.linkCloud(id, inst.cloud_id),
     onSuccess: () => {
       refresh()
-      toast.success(`« ${inst.name} » est reliée`)
+      toast.success(t("« {name} » est reliée", { name: inst.name }))
       onClose()
     },
     onError: (e) => toast.error(errorText(e)),
@@ -220,7 +222,7 @@ function LinkDialog({
     mutationFn: (id: number) => api.linkCloud(id, null),
     onSuccess: () => {
       refresh()
-      toast.success("Lien retiré")
+      toast.success(t("Lien retiré"))
       onClose()
     },
     onError: (e) => toast.error(errorText(e)),
@@ -245,20 +247,20 @@ function LinkDialog({
       {
         id: "existing",
         icon: Link2,
-        title: "Déjà pilotée ici",
-        text: "C'est une installation déjà présente sur ce serveur",
+        title: t("Déjà pilotée ici"),
+        text: t("C'est une installation déjà présente sur ce serveur"),
       },
       {
         id: "local",
         icon: Network,
-        title: "Réseau de ce serveur",
-        text: "Son WebServer est sur le même réseau",
+        title: t("Réseau de ce serveur"),
+        text: t("Son WebServer est sur le même réseau"),
       },
       {
         id: "node",
         icon: Server,
-        title: "Autre serveur Breezone",
-        text: "Elle est sur un autre site, avec son propre serveur",
+        title: t("Autre serveur Breezone"),
+        text: t("Elle est sur un autre site, avec son propre serveur"),
       },
     ]
 
@@ -266,11 +268,20 @@ function LinkDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Relier « {inst.name} »</DialogTitle>
+          <DialogTitle>
+            {t("Relier « {name} »", { name: inst.name })}
+          </DialogTitle>
           <DialogDescription>
-            Comment ce serveur joint-il cette installation de votre compte
-            Airzone
-            {inst.ws_ids.length > 0 && <> (WebServer {inst.ws_ids[0]})</>} ?
+            {inst.ws_ids.length > 0
+              ? t(
+                  "Comment ce serveur joint-il cette installation de votre compte Airzone (WebServer {mac}) ?",
+                  {
+                    mac: inst.ws_ids[0],
+                  }
+                )
+              : t(
+                  "Comment ce serveur joint-il cette installation de votre compte Airzone ?"
+                )}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-2 sm:grid-cols-3">
@@ -296,49 +307,53 @@ function LinkDialog({
         {way === "existing" &&
           (candidates.length ? (
             <div className="grid gap-2">
-              <Label>Installation de ce serveur</Label>
+              <Label>{t("Installation de ce serveur")}</Label>
               <Select value={existing} onValueChange={setExisting}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Choisir" />
+                  <SelectValue placeholder={t("Choisir")} />
                 </SelectTrigger>
                 <SelectContent>
                   {candidates.map((i) => (
                     <SelectItem key={i.id} value={String(i.id)}>
                       {i.name} ·{" "}
                       {i.node_id !== null
-                        ? `via un autre serveur`
+                        ? t("via un autre serveur")
                         : `${i.host}:${i.port}`}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                Refusé si son WebServer (adresse MAC) n'est pas celui de cette
-                installation.
+                {t(
+                  "Refusé si son WebServer (adresse MAC) n'est pas celui de cette installation."
+                )}
               </p>
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Aucune installation libre sur ce serveur : choisissez une autre
-              façon.
+              {t(
+                "Aucune installation libre sur ce serveur : choisissez une autre façon."
+              )}
             </p>
           ))}
 
         {way === "local" && (
           <div className="grid grid-cols-[1fr_6rem] gap-3">
             <div className="grid gap-2">
-              <Label htmlFor="lk-host">Adresse du WebServer</Label>
+              <Label htmlFor="lk-host">{t("Adresse du WebServer")}</Label>
               <Input
                 id="lk-host"
                 value={host}
                 placeholder={
-                  subnet ? `vide = recherche sur ${subnet}` : "192.168.1.25"
+                  subnet
+                    ? t("vide = recherche sur {subnet}", { subnet })
+                    : "192.168.1.25"
                 }
                 onChange={(e) => setHost(e.target.value)}
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="lk-port">Port</Label>
+              <Label htmlFor="lk-port">{t("Port")}</Label>
               <Input
                 id="lk-port"
                 type="number"
@@ -348,8 +363,9 @@ function LinkDialog({
             </div>
             {!subnet && !host.trim() && (
               <p className="col-span-2 text-xs text-warning">
-                Le réseau du serveur n'est pas défini : indiquez l'adresse du
-                WebServer, ou définissez le réseau en haut de la page.
+                {t(
+                  "Le réseau du serveur n'est pas défini : indiquez l'adresse du WebServer, ou définissez le réseau en haut de la page."
+                )}
               </p>
             )}
             {result && (
@@ -359,7 +375,7 @@ function LinkDialog({
               >
                 {result.attached ? <CheckCircle2 /> : <TriangleAlert />}
                 <AlertTitle>
-                  {result.attached ? "Installation jointe" : "Non jointe"}
+                  {result.attached ? t("Installation jointe") : t("Non jointe")}
                 </AlertTitle>
                 <AlertDescription>{result.message}</AlertDescription>
               </Alert>
@@ -370,9 +386,9 @@ function LinkDialog({
         {way === "node" && (
           <div className="grid gap-3">
             <p className="text-sm text-muted-foreground">
-              Sur le serveur Breezone de ce site : Réglages › Partages › Nouveau
-              partage, puis ajoutez son jeton ici. Ses installations sont
-              reliées automatiquement (même WebServer).
+              {t(
+                "Sur le serveur Breezone de ce site : Réglages › Partages › Nouveau partage, puis ajoutez son jeton ici. Ses installations sont reliées automatiquement (même WebServer)."
+              )}
             </p>
             {(nodes.data ?? []).map((n) => (
               <div
@@ -395,11 +411,14 @@ function LinkDialog({
               .map((n) => (
                 <Alert key={`pending-${n.id}`}>
                   <TriangleAlert />
-                  <AlertTitle>En attente d'acceptation</AlertTitle>
+                  <AlertTitle>{t("En attente d'acceptation")}</AlertTitle>
                   <AlertDescription>
-                    « {n.name} » doit encore accepter votre demande : sur ce
-                    serveur-là, Réglages › Partages › Accepter. Ses
-                    installations apparaîtront ensuite ici.
+                    {t(
+                      "« {name} » doit encore accepter votre demande : sur ce serveur-là, Réglages › Partages › Accepter. Ses installations apparaîtront ensuite ici.",
+                      {
+                        name: n.name,
+                      }
+                    )}
                   </AlertDescription>
                 </Alert>
               ))}
@@ -408,7 +427,7 @@ function LinkDialog({
               className="justify-self-start"
               onClick={() => setAddingNode(true)}
             >
-              <Plus /> Ajouter un serveur Breezone
+              <Plus /> {t("Ajouter un serveur Breezone")}
             </Button>
           </div>
         )}
@@ -421,21 +440,22 @@ function LinkDialog({
               onClick={() => unlink.mutate(linked.id)}
               disabled={unlink.isPending}
             >
-              <Unlink /> Délier
+              <Unlink /> {t("Délier")}
             </Button>
           ) : (
             <span />
           )}
           <div className="flex gap-2">
             <Button variant="ghost" onClick={onClose}>
-              Fermer
+              {t("Fermer")}
             </Button>
             {way === "existing" && (
               <Button
                 onClick={() => link.mutate(Number(existing))}
                 disabled={!existing || link.isPending}
               >
-                {link.isPending && <Loader2 className="animate-spin" />} Relier
+                {link.isPending && <Loader2 className="animate-spin" />}{" "}
+                {t("Relier")}
               </Button>
             )}
             {way === "local" && (
@@ -444,7 +464,7 @@ function LinkDialog({
                 disabled={attach.isPending}
               >
                 {attach.isPending && <Loader2 className="animate-spin" />}{" "}
-                Chercher et relier
+                {t("Chercher et relier")}
               </Button>
             )}
           </div>
@@ -472,7 +492,7 @@ function LinkToCloudDialog({
     mutationFn: () => api.linkCloud(config.id, cloudId),
     onSuccess: () => {
       refresh()
-      toast.success(`« ${config.name} » est reliée`)
+      toast.success(t("« {name} » est reliée", { name: config.name }))
       onClose()
     },
     onError: (e) => toast.error(errorText(e)),
@@ -481,15 +501,19 @@ function LinkToCloudDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Relier « {config.name} » à Airzone</DialogTitle>
+          <DialogTitle>
+            {t("Relier « {name} » à Airzone", { name: config.name })}
+          </DialogTitle>
           <DialogDescription>
-            À quelle installation de votre compte Airzone correspond-elle ?
+            {t(
+              "À quelle installation de votre compte Airzone correspond-elle ?"
+            )}
           </DialogDescription>
         </DialogHeader>
         {free.length ? (
           <Select value={cloudId} onValueChange={setCloudId}>
             <SelectTrigger>
-              <SelectValue placeholder="Choisir" />
+              <SelectValue placeholder={t("Choisir")} />
             </SelectTrigger>
             <SelectContent>
               {free.map((c) => (
@@ -502,18 +526,18 @@ function LinkToCloudDialog({
           </Select>
         ) : (
           <p className="text-sm text-muted-foreground">
-            Toutes les installations du compte Airzone sont déjà reliées.
+            {t("Toutes les installations du compte Airzone sont déjà reliées.")}
           </p>
         )}
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
-            Fermer
+            {t("Fermer")}
           </Button>
           <Button
             onClick={() => link.mutate()}
             disabled={!cloudId || link.isPending}
           >
-            Relier
+            {t("Relier")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -543,7 +567,7 @@ export function InstallationMap({
     mutationFn: api.deleteInstallation,
     onSuccess: () => {
       refresh()
-      toast.success("Installation supprimée")
+      toast.success(t("Installation supprimée"))
     },
     onError: (e) => toast.error(errorText(e)),
   })
@@ -577,21 +601,21 @@ export function InstallationMap({
   return (
     <Card className="rounded-3xl">
       <CardHeader>
-        <CardTitle>Vos installations</CardTitle>
+        <CardTitle>{t("Vos installations")}</CardTitle>
         <CardDescription>
-          À gauche, votre compte Airzone ; à droite, comment ce serveur joint
-          chaque installation : sur son propre réseau, ou par le serveur
-          Breezone d'un autre site.
+          {t(
+            "À gauche, votre compte Airzone ; à droite, comment ce serveur joint chaque installation : sur son propre réseau, ou par le serveur Breezone d'un autre site."
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3">
         <div className="hidden grid-cols-[1fr_4rem_1fr_7rem] gap-3 px-1 text-xs font-medium tracking-wide text-muted-foreground uppercase md:grid">
           <span className="inline-flex items-center gap-1.5">
-            <Cloud className="size-3.5" /> Compte Airzone
+            <Cloud className="size-3.5" /> {t("Compte Airzone")}
           </span>
           <span />
           <span className="inline-flex items-center gap-1.5">
-            <Network className="size-3.5" /> Joint par ce serveur
+            <Network className="size-3.5" /> {t("Joint par ce serveur")}
           </span>
         </div>
         {list.map((c) => {
@@ -612,7 +636,7 @@ export function InstallationMap({
                 variant={joined ? "ghost" : "default"}
                 onClick={() => setEditing(c.cloud_id)}
               >
-                <Link2 /> {joined ? "Modifier" : "Relier"}
+                <Link2 /> {joined ? t("Modifier") : t("Relier")}
               </Button>
             </div>
           )
@@ -632,16 +656,22 @@ export function InstallationMap({
                   variant="ghost"
                   onClick={() => setLinkingLocal(i.id)}
                 >
-                  <Link2 /> Relier
+                  <Link2 /> {t("Relier")}
                 </Button>
               )}
               {i.node_id === null && (
                 <Confirm
-                  title={`Supprimer « ${i.name} » ?`}
-                  description="Son historique et ses réglages Breezone seront supprimés. Le WebServer n'est pas modifié."
+                  title={t("Supprimer « {name} » ?", { name: i.name })}
+                  description={t(
+                    "Son historique et ses réglages Breezone seront supprimés. Le WebServer n'est pas modifié."
+                  )}
                   onConfirm={() => remove.mutate(i.id)}
                 >
-                  <Button size="icon" variant="ghost" aria-label="Supprimer">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    aria-label={t("Supprimer")}
+                  >
                     <Trash2 />
                   </Button>
                 </Confirm>
@@ -651,8 +681,9 @@ export function InstallationMap({
         ))}
         {!list.length && !all.length && (
           <p className="text-sm text-muted-foreground">
-            Aucune installation : connectez votre compte Airzone (onglet «
-            Compte Airzone »), ou ajoutez-en une.
+            {t(
+              "Aucune installation : connectez votre compte Airzone (onglet « Compte Airzone »), ou ajoutez-en une."
+            )}
           </p>
         )}
       </CardContent>
@@ -660,16 +691,18 @@ export function InstallationMap({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline">
-              <Plus /> Ajouter une installation hors Airzone
+              <Plus /> {t("Ajouter une installation hors Airzone")}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-80">
             <DropdownMenuItem onSelect={onAdd} className="items-start">
               <Network className="mt-0.5" />
               <span>
-                <span className="font-medium">WebServer sur ce réseau</span>
+                <span className="font-medium">
+                  {t("WebServer sur ce réseau")}
+                </span>
                 <span className="block text-xs text-muted-foreground">
-                  Ce serveur le pilote directement (adresse IP).
+                  {t("Ce serveur le pilote directement (adresse IP).")}
                 </span>
               </span>
             </DropdownMenuItem>
@@ -680,11 +713,12 @@ export function InstallationMap({
               <Server className="mt-0.5" />
               <span>
                 <span className="font-medium">
-                  Via un autre serveur Breezone
+                  {t("Via un autre serveur Breezone")}
                 </span>
                 <span className="block text-xs text-muted-foreground">
-                  Une installation d'un autre site, pilotée par le serveur
-                  Breezone de ce site (jeton d'invitation).
+                  {t(
+                    "Une installation d'un autre site, pilotée par le serveur Breezone de ce site (jeton d'invitation)."
+                  )}
                 </span>
               </span>
             </DropdownMenuItem>

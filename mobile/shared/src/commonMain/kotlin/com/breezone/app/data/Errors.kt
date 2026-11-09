@@ -10,7 +10,6 @@ import com.breezone.app.resources.error_timeout
 import com.breezone.app.resources.error_unknown_host
 import org.jetbrains.compose.resources.getString
 
-/** Network failures that can be explained to the user. */
 enum class NetworkProblem { Certificate, UnknownHost, Refused, Timeout, Offline, LiveBlocked }
 
 /**
@@ -35,7 +34,6 @@ fun classify(e: Throwable): NetworkProblem? {
     }
 }
 
-/** Explains a network failure towards `url`, or null when the cause is not recognised. */
 suspend fun explain(e: Throwable, url: String): String? {
     val host = normalizeUrl(url).substringAfter("://").substringBefore('/')
     return when (classify(e)) {

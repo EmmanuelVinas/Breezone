@@ -38,7 +38,7 @@ pub async fn setup(State(state): State<AppState>, Json(req): Json<Credentials>) 
     auth::validate_password(&req.password)?;
     let hash = auth::hash_password(req.password.clone()).await?;
     let user = db::insert_first_admin(&state.db, username, &hash).await?.ok_or_else(|| ApiError::conflict("Breezone is already set up"))?;
-    state.hub.log("auth", "info", None, Some(&user.username), "Compte administrateur créé", None).await;
+    state.hub.log("auth", "info", None, Some(&user.username), crate::text!("Compte administrateur créé", "Administrator account created", "Cuenta de administrador creada"), None).await;
     let device = req.device_name.as_deref().unwrap_or("Navigateur");
     Ok(Json(state.auth.open_session(&state.db, &user, device).await?))
 }
@@ -58,12 +58,12 @@ pub async fn login(State(state): State<AppState>, Json(req): Json<Credentials>) 
     };
     state.auth.record_login(username, valid);
     let Some(user) = user.filter(|_| valid) else {
-        state.hub.log("auth", "warn", None, Some(username), "Échec de connexion", None).await;
+        state.hub.log("auth", "warn", None, Some(username), crate::text!("Échec de connexion", "Failed sign-in", "Inicio de sesión fallido"), None).await;
         return Err(ApiError::unauthorized("invalid username or password"));
     };
     let device = req.device_name.as_deref().unwrap_or("Appareil inconnu");
     let pair = state.auth.open_session(&state.db, &user, device).await?;
-    state.hub.log("auth", "info", None, Some(&user.username), &format!("Connexion depuis « {device} »"), None).await;
+    state.hub.log("auth", "info", None, Some(&user.username), crate::text!("Connexion depuis « {0} »", "Signed in from “{0}”", "Inicio de sesión desde «{0}»", device), None).await;
     Ok(Json(pair))
 }
 
@@ -79,7 +79,35 @@ pub async fn logout(State(state): State<AppState>, Json(req): Json<RefreshReques
 pub async fn me(State(state): State<AppState>, user: AuthUser) -> ApiResult<Json<Value>> {
     // Installations this user can see and whether they can drive them (null: all, administrator).
     let access = if user.is_admin() { None } else { Some(access_entries(&state, user.id).await?) };
-    Ok(Json(json!({ "id": user.id, "username": user.username, "role": user.role, "session_id": user.session_id, "access": access })))
+    let row = db::user_by_id(&state.db, user.id).await?;
+    let rights = row.as_ref().map_or(db::UserRights::NONE, |u| u.rights());
+    let language = row.and_then(|u| u.language);
+    Ok(Json(json!({
+        "id": user.id,
+        "username": user.username,
+        "role": user.role,
+        "session_id": user.session_id,
+        "access": access,
+        "rights": rights,
+        "language": language,
+    })))
+}
+
+#[derive(Deserialize)]
+pub struct LanguageChange {
+    /// "fr" | "en" | "es", or null to follow the browser.
+    pub language: Option<String>,
+}
+
+pub async fn change_language(State(state): State<AppState>, user: AuthUser, Json(req): Json<LanguageChange>) -> ApiResult<StatusCode> {
+    let language = match req.language.as_deref() {
+        None | Some("") => None,
+        Some(code) => Some(crate::i18n::Lang::parse(code).filter(|l| l.code() == code).ok_or_else(|| {
+            ApiError::bad_request(crate::text!("langue attendue : fr, en ou es", "language expected: fr, en or es", "idioma esperado: fr, en o es"))
+        })?),
+    };
+    db::update_user_language(&state.db, user.id, language.map(|l| l.code())).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[derive(Deserialize)]
@@ -98,7 +126,7 @@ pub async fn change_password(State(state): State<AppState>, user: AuthUser, Json
     let hash = auth::hash_password(req.new_password).await?;
     db::update_user_password(&state.db, user.id, &hash).await?;
     db::delete_user_sessions(&state.db, user.id, Some(user.session_id)).await?;
-    state.hub.log("auth", "info", None, Some(&user.username), "Mot de passe modifié", None).await;
+    state.hub.log("auth", "info", None, Some(&user.username), crate::text!("Mot de passe modifié", "Password changed", "Contraseña cambiada"), None).await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -136,7 +164,7 @@ pub async fn delete_session(State(state): State<AppState>, user: AuthUser, Path(
         return Err(ApiError::not_found("session not found"));
     }
     db::delete_session(&state.db, id).await?;
-    state.hub.log("auth", "info", None, Some(&user.username), &format!("Appareil « {} » déconnecté", session.device_name), None).await;
+    state.hub.log("auth", "info", None, Some(&user.username), crate::text!("Appareil « {0} » déconnecté", "Device “{0}” signed out", "Dispositivo «{0}» desconectado", session.device_name), None).await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -151,6 +179,8 @@ pub struct UserDetails {
     pub created_at: i64,
     /// Installations a user (role "user") can see; administrators see everything.
     pub access: Vec<AccessEntry>,
+    /// What the user may change besides driving (all true for an administrator).
+    pub rights: db::UserRights,
 }
 
 /// One installation given to a user.
@@ -170,7 +200,7 @@ async fn access_entries(state: &AppState, user_id: i64) -> ApiResult<Vec<AccessE
 }
 
 async fn user_details(state: &AppState, u: &db::User) -> ApiResult<UserDetails> {
-    Ok(UserDetails { user: u.into(), created_at: u.created_at, access: access_entries(state, u.id).await? })
+    Ok(UserDetails { user: u.into(), created_at: u.created_at, access: access_entries(state, u.id).await?, rights: u.rights() })
 }
 
 /// Checks and stores the installations given to a user.
@@ -182,7 +212,7 @@ async fn save_access(state: &AppState, user_id: i64, entries: &[AccessEntry]) ->
         }
         db::installation_by_id(&state.db, e.installation_id)
             .await?
-            .ok_or_else(|| ApiError::bad_request(format!("installation {} inconnue", e.installation_id)))?;
+            .ok_or_else(|| ApiError::bad_request(crate::text!("installation {0} inconnue", "unknown installation {0}", "instalación {0} desconocida", e.installation_id)))?;
         if !clean.iter().any(|(id, _)| *id == e.installation_id) {
             clean.push((e.installation_id, e.permission.clone()));
         }
@@ -209,6 +239,9 @@ pub struct NewUser {
     /// Installations given to the user (none by default).
     #[serde(default)]
     pub access: Vec<AccessEntry>,
+    /// What the user may change besides driving (everything by default).
+    #[serde(default)]
+    pub rights: db::UserRights,
 }
 
 fn default_role() -> String {
@@ -230,7 +263,11 @@ pub async fn create_user(State(state): State<AppState>, AdminUser(admin): AdminU
     let hash = auth::hash_password(req.password).await?;
     let user = db::insert_user(&state.db, username, &hash, &req.role).await?;
     save_access(&state, user.id, &req.access).await?;
-    state.hub.log("auth", "info", None, Some(&admin.username), &format!("Utilisateur « {} » créé ({})", user.username, user.role), None).await;
+    if req.rights != db::UserRights::default() {
+        db::update_user_rights(&state.db, user.id, &req.rights).await?;
+    }
+    let user = db::user_by_id(&state.db, user.id).await?.ok_or_else(|| ApiError::not_found("user not found"))?;
+    state.hub.log("auth", "info", None, Some(&admin.username), crate::text!("Utilisateur « {0} » créé ({1})", "User “{0}” created ({1})", "Usuario «{0}» creado ({1})", user.username, user.role), None).await;
     Ok((StatusCode::CREATED, Json(user_details(&state, &user).await?)))
 }
 
@@ -243,6 +280,9 @@ pub struct UserUpdate {
     /// Replaces the installations given to the user (unchanged if absent).
     #[serde(default)]
     pub access: Option<Vec<AccessEntry>>,
+    /// Replaces what the user may change besides driving (unchanged if absent).
+    #[serde(default)]
+    pub rights: Option<db::UserRights>,
 }
 
 pub async fn update_user(State(state): State<AppState>, AdminUser(admin): AdminUser, Path(id): Path<i64>, Json(req): Json<UserUpdate>) -> ApiResult<Json<UserDetails>> {
@@ -257,6 +297,10 @@ pub async fn update_user(State(state): State<AppState>, AdminUser(admin): AdminU
     if let Some(access) = &req.access {
         save_access(&state, id, access).await?;
     }
+    if let Some(rights) = &req.rights {
+        db::update_user_rights(&state.db, id, rights).await?;
+        state.hub.access_changed(id);
+    }
     if let Some(password) = req.password {
         auth::validate_password(&password)?;
         let hash = auth::hash_password(password).await?;
@@ -264,7 +308,7 @@ pub async fn update_user(State(state): State<AppState>, AdminUser(admin): AdminU
         // A password reset signs the user out everywhere.
         db::delete_user_sessions(&state.db, id, None).await?;
     }
-    state.hub.log("auth", "info", None, Some(&admin.username), &format!("Utilisateur « {} » modifié", user.username), None).await;
+    state.hub.log("auth", "info", None, Some(&admin.username), crate::text!("Utilisateur « {0} » modifié", "User “{0}” changed", "Usuario «{0}» modificado", user.username), None).await;
     let updated = db::user_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("user not found"))?;
     Ok(Json(user_details(&state, &updated).await?))
 }
@@ -277,6 +321,6 @@ pub async fn delete_user(State(state): State<AppState>, AdminUser(admin): AdminU
     if !db::delete_user_keeping_an_admin(&state.db, id).await? {
         return Err(ApiError::bad_request("cannot delete the last administrator"));
     }
-    state.hub.log("auth", "info", None, Some(&admin.username), &format!("Utilisateur « {} » supprimé", user.username), None).await;
+    state.hub.log("auth", "info", None, Some(&admin.username), crate::text!("Utilisateur « {0} » supprimé", "User “{0}” deleted", "Usuario «{0}» eliminado", user.username), None).await;
     Ok(StatusCode::NO_CONTENT)
 }

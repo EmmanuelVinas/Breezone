@@ -27,9 +27,9 @@ pub async fn get(State(state): State<AppState>, user: AuthUser, Path(id): Path<i
 
 pub async fn create(State(state): State<AppState>, user: AuthUser, Json(input): Json<RoutineInput>) -> ApiResult<(StatusCode, Json<RoutineView>)> {
     let (name, actions) = routines::validate(&input)?;
-    Access::of(&state.db, &user).await?.control_actions(&input.actions)?;
+    Access::of(&state.db, &user).await?.edit_routine(&input.actions)?;
     let row = db::insert_routine(&state.db, &name, input.enabled, 0, None, &actions).await?;
-    state.hub.log("routine", "info", None, Some(&user.username), &format!("Routine « {name} » créée"), None).await;
+    state.hub.log("routine", "info", None, Some(&user.username), crate::text!("Routine « {0} » créée", "Routine “{0}” created", "Rutina «{0}» creada", name), None).await;
     state.hub.routines_changed();
     Ok((StatusCode::CREATED, Json(routines::to_view(&row))))
 }
@@ -38,10 +38,10 @@ pub async fn update(State(state): State<AppState>, user: AuthUser, Path(id): Pat
     let before = db::routine_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("routine not found"))?;
     let (name, actions) = routines::validate(&input)?;
     let access = Access::of(&state.db, &user).await?;
-    access.control_actions(&routines::to_view(&before).actions)?;
-    access.control_actions(&input.actions)?;
+    access.edit_routine(&routines::to_view(&before).actions)?;
+    access.edit_routine(&input.actions)?;
     db::update_routine(&state.db, id, &name, input.enabled, 0, None, &actions).await?;
-    state.hub.log("routine", "info", None, Some(&user.username), &format!("Routine « {name} » modifiée"), None).await;
+    state.hub.log("routine", "info", None, Some(&user.username), crate::text!("Routine « {0} » modifiée", "Routine “{0}” changed", "Rutina «{0}» modificada", name), None).await;
     state.hub.routines_changed();
     let row = db::routine_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("routine not found"))?;
     Ok(Json(routines::to_view(&row)))
@@ -49,9 +49,9 @@ pub async fn update(State(state): State<AppState>, user: AuthUser, Path(id): Pat
 
 pub async fn delete(State(state): State<AppState>, user: AuthUser, Path(id): Path<i64>) -> ApiResult<StatusCode> {
     let row = db::routine_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("routine not found"))?;
-    Access::of(&state.db, &user).await?.control_actions(&routines::to_view(&row).actions)?;
+    Access::of(&state.db, &user).await?.edit_routine(&routines::to_view(&row).actions)?;
     db::delete_routine(&state.db, id).await?;
-    state.hub.log("routine", "info", None, Some(&user.username), &format!("Routine « {} » supprimée", row.name), None).await;
+    state.hub.log("routine", "info", None, Some(&user.username), crate::text!("Routine « {0} » supprimée", "Routine “{0}” deleted", "Rutina «{0}» eliminada", row.name), None).await;
     state.hub.routines_changed();
     Ok(StatusCode::NO_CONTENT)
 }

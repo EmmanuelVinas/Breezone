@@ -1,6 +1,7 @@
 //! SQLite persistence (sqlx). Migrations are embedded in the binary.
 
-use serde::Serialize;
+use crate::i18n::Text;
+use serde::{Deserialize, Serialize};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 use sqlx::{FromRow, SqlitePool};
 use std::path::Path;
@@ -39,12 +40,67 @@ pub struct User {
     pub password_hash: String,
     pub role: String,
     pub created_at: i64,
+    #[serde(skip)]
+    pub edit_zones: bool,
+    #[serde(skip)]
+    pub edit_routines: bool,
+    #[serde(skip)]
+    pub edit_schedules: bool,
+    /// Language chosen in the profile ("fr" | "en" | "es"); `None` follows the browser.
+    pub language: Option<String>,
 }
 
 impl User {
     pub fn is_admin(&self) -> bool {
         self.role == "admin"
     }
+
+    /// What this user may change besides driving (everything for an administrator).
+    pub fn rights(&self) -> UserRights {
+        if self.is_admin() {
+            UserRights::default()
+        } else {
+            UserRights { zones: self.edit_zones, routines: self.edit_routines, schedules: self.edit_schedules }
+        }
+    }
+}
+
+/// What a user (role "user") may change on the installations they control, on top of driving
+/// them. Everything is allowed by default.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UserRights {
+    /// Zone names and groups.
+    pub zones: bool,
+    /// Create, change and delete routines (running them only needs control).
+    pub routines: bool,
+    /// Create, change and delete Airzone schedules (switching one on or off only needs control).
+    pub schedules: bool,
+}
+
+impl Default for UserRights {
+    fn default() -> Self {
+        Self { zones: true, routines: true, schedules: true }
+    }
+}
+
+impl UserRights {
+    pub const NONE: UserRights = UserRights { zones: false, routines: false, schedules: false };
+}
+
+pub async fn update_user_language(db: &Db, id: i64, language: Option<&str>) -> sqlx::Result<()> {
+    sqlx::query("UPDATE users SET language = ? WHERE id = ?").bind(language).bind(id).execute(db).await?;
+    Ok(())
+}
+
+pub async fn update_user_rights(db: &Db, id: i64, rights: &UserRights) -> sqlx::Result<()> {
+    sqlx::query("UPDATE users SET edit_zones = ?, edit_routines = ?, edit_schedules = ? WHERE id = ?")
+        .bind(rights.zones)
+        .bind(rights.routines)
+        .bind(rights.schedules)
+        .bind(id)
+        .execute(db)
+        .await?;
+    Ok(())
 }
 
 pub async fn count_users(db: &Db) -> sqlx::Result<i64> {
@@ -493,7 +549,8 @@ pub async fn delete_routine(db: &Db, id: i64) -> sqlx::Result<()> {
 // Events (activity feed)
 // ---------------------------------------------------------------------------------------
 
-#[derive(Debug, Clone, FromRow, Serialize)]
+/// An entry of the activity feed; its message is serialized in the reader's language.
+#[derive(Debug, Clone, Serialize)]
 pub struct Event {
     pub id: i64,
     pub ts: i64,
@@ -501,8 +558,33 @@ pub struct Event {
     pub level: String,
     pub installation_id: Option<i64>,
     pub actor: Option<String>,
-    pub message: String,
+    pub message: Text,
     pub data: Option<String>,
+}
+
+#[derive(FromRow)]
+struct EventRow {
+    id: i64,
+    ts: i64,
+    kind: String,
+    level: String,
+    installation_id: Option<i64>,
+    actor: Option<String>,
+    message: String,
+    message_en: Option<String>,
+    message_es: Option<String>,
+    data: Option<String>,
+}
+
+impl From<EventRow> for Event {
+    fn from(r: EventRow) -> Event {
+        let message = Text {
+            en: r.message_en.unwrap_or_else(|| r.message.clone()),
+            es: r.message_es.unwrap_or_else(|| r.message.clone()),
+            fr: r.message,
+        };
+        Event { id: r.id, ts: r.ts, kind: r.kind, level: r.level, installation_id: r.installation_id, actor: r.actor, message, data: r.data }
+    }
 }
 
 pub async fn insert_event(
@@ -511,21 +593,25 @@ pub async fn insert_event(
     level: &str,
     installation_id: Option<i64>,
     actor: Option<&str>,
-    message: &str,
+    message: &Text,
     data: Option<&serde_json::Value>,
 ) -> sqlx::Result<Event> {
-    sqlx::query_as(
-        "INSERT INTO events (ts, kind, level, installation_id, actor, message, data) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *",
+    sqlx::query_as::<_, EventRow>(
+        "INSERT INTO events (ts, kind, level, installation_id, actor, message, message_en, message_es, data)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
     )
     .bind(now())
     .bind(kind)
     .bind(level)
     .bind(installation_id)
     .bind(actor)
-    .bind(message)
+    .bind(&message.fr)
+    .bind(&message.en)
+    .bind(&message.es)
     .bind(data.map(|d| d.to_string()))
     .fetch_one(db)
     .await
+    .map(Event::from)
 }
 
 /// Installations a user (role 'user') can see: (installation id, "read" | "control").
@@ -559,7 +645,7 @@ pub async fn list_visible_events(db: &Db, limit: i64, before_id: Option<i64>, in
         return Ok(vec![]);
     }
     let list = serde_json::to_string(ids).unwrap_or_else(|_| "[]".into());
-    sqlx::query_as(
+    sqlx::query_as::<_, EventRow>(
         "SELECT * FROM events WHERE id < ? AND (? IS NULL OR installation_id = ?)
          AND installation_id IN (SELECT value FROM json_each(?)) ORDER BY id DESC LIMIT ?",
     )
@@ -570,10 +656,11 @@ pub async fn list_visible_events(db: &Db, limit: i64, before_id: Option<i64>, in
     .bind(limit)
     .fetch_all(db)
     .await
+    .map(|rows| rows.into_iter().map(Event::from).collect())
 }
 
 pub async fn list_events(db: &Db, limit: i64, before_id: Option<i64>, installation_id: Option<i64>) -> sqlx::Result<Vec<Event>> {
-    sqlx::query_as(
+    sqlx::query_as::<_, EventRow>(
         "SELECT * FROM events WHERE id < ? AND (? IS NULL OR installation_id = ?) ORDER BY id DESC LIMIT ?",
     )
     .bind(before_id.unwrap_or(i64::MAX))
@@ -582,6 +669,7 @@ pub async fn list_events(db: &Db, limit: i64, before_id: Option<i64>, installati
     .bind(limit)
     .fetch_all(db)
     .await
+    .map(|rows| rows.into_iter().map(Event::from).collect())
 }
 
 /// Deletes old history, events and expired sessions.

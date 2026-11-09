@@ -24,6 +24,7 @@
 use crate::auth::random_bytes;
 use crate::db::{self, CloudInstallationRow, InstallationAccess, ZoneMeta};
 use crate::discovery;
+use crate::i18n::Text;
 use crate::error::{ApiError, ApiResult};
 use crate::hub::InstallationView;
 use crate::AppState;
@@ -109,7 +110,7 @@ pub struct CloudSession {
 }
 
 fn cloud_err(e: reqwest::Error) -> ApiError {
-    ApiError::bad_gateway(format!("Airzone Cloud injoignable : {e}"))
+    ApiError::bad_gateway(crate::text!("Airzone Cloud injoignable : {0}", "Airzone Cloud unreachable: {0}", "Airzone Cloud inaccesible: {0}", e))
 }
 
 impl CloudSession {
@@ -130,7 +131,12 @@ impl CloudSession {
             return Err(ApiError::bad_request("Airzone Cloud a refusé ces identifiants"));
         }
         if !status.is_success() {
-            return Err(ApiError::bad_gateway(format!("connexion Airzone Cloud impossible (HTTP {status})")));
+            return Err(ApiError::bad_gateway(crate::text!(
+                "connexion Airzone Cloud impossible (HTTP {0})",
+                "cannot sign in to Airzone Cloud (HTTP {0})",
+                "no se puede conectar con Airzone Cloud (HTTP {0})",
+                status
+            )));
         }
         let login: Value = login.json().await.map_err(cloud_err)?;
         let token = s(&login, "token").ok_or_else(|| ApiError::bad_gateway("Airzone Cloud n'a pas renvoyé de jeton"))?;
@@ -144,7 +150,14 @@ impl CloudSession {
         if !status.is_success() {
             let detail: Value = serde_json::from_str(&text).unwrap_or_default();
             let msg = s(&detail, "msg").or_else(|| s(&detail, "_id")).or_else(|| s(&detail, "error")).unwrap_or_default();
-            return Err(ApiError::bad_gateway(format!("Airzone Cloud a répondu HTTP {status} pour {what} {msg}").trim().to_string()));
+            return Err(ApiError::bad_gateway(crate::text!(
+                "Airzone Cloud a répondu HTTP {0} pour {1} {2}",
+                "Airzone Cloud answered HTTP {0} for {1} {2}",
+                "Airzone Cloud respondió HTTP {0} para {1} {2}",
+                status,
+                what,
+                msg
+            )));
         }
         Ok(serde_json::from_str(&text).unwrap_or(Value::Null))
     }
@@ -248,7 +261,7 @@ pub async fn fetch_account(session: &CloudSession, schedules: bool) -> ApiResult
                         routines = Some(v);
                         break;
                     }
-                    Err(e) => tracing::info!("Airzone routines of {cloud_id} not readable: {}", e.message),
+                    Err(e) => tracing::info!("Airzone routines of {cloud_id} not readable: {}", e.message.en),
                 }
             }
             (sched, routines)
@@ -364,7 +377,7 @@ pub struct CloudStatus {
     pub auto_sync: bool,
     pub email: Option<String>,
     pub last_sync: Option<i64>,
-    pub last_error: Option<String>,
+    pub last_error: Option<Text>,
     pub installations: Vec<CloudInstallationView>,
     /// Network scanned by this server to find the WebServers.
     pub default_subnet: Option<String>,
@@ -379,7 +392,7 @@ pub async fn status(state: &AppState, include_email: bool) -> ApiResult<CloudSta
         auto_sync,
         email: email.filter(|_| include_email),
         last_sync: db::get_setting(&state.db, KEY_LAST_SYNC).await?.and_then(|v| v.parse().ok()),
-        last_error: db::get_setting(&state.db, KEY_LAST_ERROR).await?,
+        last_error: db::get_setting(&state.db, KEY_LAST_ERROR).await?.as_deref().map(Text::load),
         installations: rows
             .into_iter()
             .map(|r| CloudInstallationView {
@@ -410,7 +423,7 @@ pub struct SyncReport {
     /// Cloud installations whose WebServer was not reached from this server.
     pub unreachable: Vec<String>,
     /// Why some installations were not reached, and what to configure.
-    pub notes: Vec<String>,
+    pub notes: Vec<Text>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -467,8 +480,14 @@ pub async fn sync(state: &AppState, creds: &Credentials, opts: SyncOptions, acto
             db::delete_setting(&state.db, KEY_LAST_ERROR).await?;
         }
         Err(e) => {
-            db::set_setting(&state.db, KEY_LAST_ERROR, &e.message).await?;
-            state.hub.log("system", "error", None, Some(actor), &format!("Synchronisation Airzone Cloud échouée : {}", e.message), None).await;
+            db::set_setting(&state.db, KEY_LAST_ERROR, &e.message.store()).await?;
+            let text = crate::text!(
+                "Synchronisation Airzone Cloud échouée : {0}",
+                "Airzone Cloud synchronisation failed: {0}",
+                "Sincronización con Airzone Cloud fallida: {0}",
+                e.message.arg()
+            );
+            state.hub.log("system", "error", None, Some(actor), text, None).await;
         }
     }
     result
@@ -496,7 +515,7 @@ pub struct AccessInput {
 pub struct AttachResult {
     pub attached: bool,
     pub installation_id: Option<i64>,
-    pub message: String,
+    pub message: Text,
     pub report: SyncReport,
 }
 
@@ -536,13 +555,10 @@ pub async fn set_access(state: &AppState, cloud_id: &str, input: &AccessInput, a
         .find(|r| r.cloud_id == cloud_id)
         .and_then(|r| r.installation_id);
     let message = match installation_id {
-        Some(_) => format!("« {target} » est pilotée par ce serveur."),
-        None => report
-            .notes
-            .iter()
-            .find(|n| n.starts_with(&format!("{target} :")))
-            .cloned()
-            .unwrap_or_else(|| format!("« {target} » n'a pas été trouvée.")),
+        Some(_) => crate::text!("« {0} » est pilotée par ce serveur.", "“{0}” is driven by this server.", "«{0}» la controla este servidor.", target),
+        None => report.notes.iter().find(|n| n.fr.starts_with(&format!("{target} :"))).cloned().unwrap_or_else(|| {
+            crate::text!("« {0} » n'a pas été trouvée.", "“{0}” was not found.", "«{0}» no se encontró.", target)
+        }),
     };
     Ok(AttachResult { attached: installation_id.is_some(), installation_id, message, report })
 }
@@ -573,7 +589,7 @@ async fn reconcile(state: &AppState, cloud: &[CloudInstallation], opts: SyncOpti
         })
         .collect();
     let mut created_ids: HashSet<i64> = HashSet::new();
-    let mut notes: HashMap<usize, String> = HashMap::new();
+    let mut notes: HashMap<usize, Text> = HashMap::new();
     let mut known_hosts: HashSet<(String, i64)> = locals.iter().map(|l| (l.host.clone(), l.port)).collect();
 
     // 2. Installations with a fixed address: check it is the right WebServer (MAC address).
@@ -582,18 +598,31 @@ async fn reconcile(state: &AppState, cloud: &[CloudInstallation], opts: SyncOpti
         let host = a.host.clone();
         match discovery::probe(&host, a.port as u16).await {
             None => {
-                notes.insert(i, format!("{} : aucun WebServer Airzone ne répond à {host}:{}", c.name, a.port));
+                notes.insert(
+                    i,
+                    crate::text!(
+                        "{0} : aucun WebServer Airzone ne répond à {1}:{2}",
+                        "{0}: no Airzone WebServer answers at {1}:{2}",
+                        "{0}: ningún WebServer de Airzone responde en {1}:{2}",
+                        c.name,
+                        host,
+                        a.port
+                    ),
+                );
             }
             Some(found) => {
                 let mac = found.mac.as_deref().map(normalize_mac);
                 if mac.as_ref().is_some_and(|m| !cloud_macs[i].is_empty() && !cloud_macs[i].contains(m)) {
                     notes.insert(
                         i,
-                        format!(
-                            "{} : le WebServer de {host}:{} (MAC {}) n'est pas celui de cette installation (attendu {})",
+                        crate::text!(
+                            "{0} : le WebServer de {1}:{2} (MAC {3}) n'est pas celui de cette installation (attendu {4})",
+                            "{0}: the WebServer at {1}:{2} (MAC {3}) is not the one of this installation (expected {4})",
+                            "{0}: el WebServer de {1}:{2} (MAC {3}) no es el de esta instalación (se esperaba {4})",
                             c.name,
+                            host,
                             a.port,
-                            found.mac.unwrap_or_default(),
+                            found.mac.clone().unwrap_or_default(),
                             c.ws_ids.join(", ")
                         ),
                     );
@@ -630,13 +659,24 @@ async fn reconcile(state: &AppState, cloud: &[CloudInstallation], opts: SyncOpti
         match discovery::global_subnet(&state.db, state.cfg.scan_subnet.as_deref()).await {
             None => {
                 for i in pending {
-                    notes.insert(i, format!("{} : indiquez le réseau local du serveur, ou l'adresse de son WebServer", cloud[i].name));
+                    notes.insert(
+                        i,
+                        crate::text!(
+                            "{0} : indiquez le réseau local du serveur, ou l'adresse de son WebServer",
+                            "{0}: enter the local network of the server, or the address of its WebServer",
+                            "{0}: indique la red local del servidor, o la dirección de su WebServer",
+                            cloud[i].name
+                        ),
+                    );
                 }
             }
             Some(subnet) => match discovery::scan(Some(&subnet), state.cfg.scan_port).await {
                 Err(e) => {
                     for i in pending {
-                        notes.insert(i, format!("{} : analyse de {subnet} impossible ({e})", cloud[i].name));
+                        notes.insert(
+                            i,
+                            crate::text!("{0} : analyse de {1} impossible ({2})", "{0}: cannot scan {1} ({2})", "{0}: no se puede analizar {1} ({2})", cloud[i].name, subnet, e),
+                        );
                     }
                 }
                 Ok(found) => {
@@ -660,10 +700,13 @@ async fn reconcile(state: &AppState, cloud: &[CloudInstallation], opts: SyncOpti
                             None => {
                                 notes.insert(
                                     i,
-                                    format!(
-                                        "{} : WebServer {} absent du réseau {subnet} (autre site ?)",
+                                    crate::text!(
+                                        "{0} : WebServer {1} absent du réseau {2} (autre site ?)",
+                                        "{0}: WebServer {1} not on network {2} (another site?)",
+                                        "{0}: WebServer {1} ausente de la red {2} (¿otro sitio?)",
                                         c.name,
-                                        c.ws_ids.first().cloned().unwrap_or_default()
+                                        c.ws_ids.first().cloned().unwrap_or_default(),
+                                        subnet
                                     ),
                                 );
                             }
@@ -756,8 +799,10 @@ async fn reconcile(state: &AppState, cloud: &[CloudInstallation], opts: SyncOpti
             "info",
             None,
             Some(actor),
-            &format!(
-                "Installations Airzone : {} créée(s), {} mise(s) à jour, {} non jointe(s)",
+            crate::text!(
+                "Installations Airzone : {0} créée(s), {1} mise(s) à jour, {2} non jointe(s)",
+                "Airzone installations: {0} created, {1} updated, {2} not joined",
+                "Instalaciones de Airzone: {0} creada(s), {1} actualizada(s), {2} no unida(s)",
                 report.created.len(),
                 report.updated.len(),
                 report.unreachable.len()
@@ -808,7 +853,12 @@ pub async fn link(state: &AppState, installation_id: i64, cloud_id: Option<&str>
     let Some(cloud_id) = cloud_id.filter(|c| !c.is_empty()) else {
         db::clear_installation_cloud_link(&state.db, installation_id).await?;
         state.hub.reload_installations().await?;
-        state.hub.log("system", "info", Some(installation_id), Some(actor), &format!("« {} » n'est plus associée au compte Airzone", inst.name), None).await;
+        state.hub.log("system", "info", Some(installation_id), Some(actor), crate::text!(
+            "« {0} » n'est plus associée au compte Airzone",
+            "“{0}” is no longer linked to the Airzone account",
+            "«{0}» ya no está asociada a la cuenta de Airzone",
+            inst.name
+        ), None).await;
         return Ok(None);
     };
     let cloud = snapshot(state).await?;
@@ -819,9 +869,12 @@ pub async fn link(state: &AppState, installation_id: i64, cloud_id: Option<&str>
     if let Some(mac) = state.hub.current_webserver_mac(installation_id).await {
         let expected: Vec<String> = c.ws_ids.iter().map(|m| normalize_mac(m)).collect();
         if !expected.is_empty() && !expected.contains(&normalize_mac(&mac)) {
-            return Err(ApiError::bad_request(format!(
-                "le WebServer de « {} » (MAC {mac}) n'est pas celui de « {} » (attendu {})",
+            return Err(ApiError::bad_request(crate::text!(
+                "le WebServer de « {0} » (MAC {1}) n'est pas celui de « {2} » (attendu {3})",
+                "the WebServer of “{0}” (MAC {1}) is not the one of “{2}” (expected {3})",
+                "el WebServer de «{0}» (MAC {1}) no es el de «{2}» (se esperaba {3})",
                 inst.name,
+                mac,
                 c.name,
                 c.ws_ids.join(", ")
             )));
@@ -835,7 +888,20 @@ pub async fn link(state: &AppState, installation_id: i64, cloud_id: Option<&str>
     crate::airzone_schedules::sync_soon(state);
     state
         .hub
-        .log("system", "info", Some(installation_id), Some(actor), &format!("« {} » associée à l'installation Airzone « {} »", inst.name, c.name), None)
+        .log(
+            "system",
+            "info",
+            Some(installation_id),
+            Some(actor),
+            crate::text!(
+                "« {0} » associée à l'installation Airzone « {1} »",
+                "“{0}” linked to the Airzone installation “{1}”",
+                "«{0}» asociada a la instalación de Airzone «{1}»",
+                inst.name,
+                c.name
+            ),
+            None,
+        )
         .await;
     Ok(Some(c.name.clone()))
 }
@@ -870,7 +936,13 @@ pub async fn auto_link(state: &AppState, installation_id: i64, actor: &str) -> A
             "info",
             Some(installation_id),
             Some(actor),
-            &format!("« {} » reconnue comme l'installation Airzone « {} » (même WebServer)", inst.name, c.name),
+            crate::text!(
+                "« {0} » reconnue comme l'installation Airzone « {1} » (même WebServer)",
+                "“{0}” recognised as the Airzone installation “{1}” (same WebServer)",
+                "«{0}» reconocida como la instalación de Airzone «{1}» (mismo WebServer)",
+                inst.name,
+                c.name
+            ),
             None,
         )
         .await;
@@ -882,7 +954,7 @@ pub async fn auto_link_all(state: &AppState) {
     let Ok(installations) = db::list_installations(&state.db).await else { return };
     for i in installations.into_iter().filter(|i| i.cloud_id.is_none() && i.enabled) {
         if let Err(e) = auto_link(state, i.id, "Breezone").await {
-            tracing::warn!("cannot link installation {} to Airzone Cloud: {}", i.id, e.message);
+            tracing::warn!("cannot link installation {} to Airzone Cloud: {}", i.id, e.message.en);
         }
     }
 }
@@ -908,7 +980,7 @@ pub async fn run_auto_sync(state: AppState) {
         ticker.tick().await;
         if load_credentials(&state).await.is_some() {
             if let Err(e) = sync_stored(&state, "Synchronisation automatique").await {
-                tracing::warn!("automatic Airzone Cloud sync failed: {}", e.message);
+                tracing::warn!("automatic Airzone Cloud sync failed: {}", e.message.en);
             }
         }
     }

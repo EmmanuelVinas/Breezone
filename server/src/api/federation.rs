@@ -10,6 +10,7 @@ use crate::db::{self, Share};
 use crate::error::{ApiError, ApiResult};
 use crate::federation::{self, FedInstallation, FedSnapshot, Identity, Invitation, NodeClient, PairRequest, PairResponse, ACTOR_HEADER};
 use crate::hub::{HubMessage, NodeStatus, ZoneCommand};
+use crate::i18n::Text;
 use crate::tls;
 use crate::AppState;
 use axum::body::Bytes;
@@ -157,10 +158,15 @@ async fn validate_share(state: &AppState, req: &ShareInput) -> ApiResult<(String
         return Err(ApiError::bad_request("choisissez au moins une installation"));
     }
     for id in &req.installation_ids {
-        let inst = db::installation_by_id(&state.db, *id).await?.ok_or_else(|| ApiError::bad_request(format!("installation {id} inconnue")))?;
+        let inst = db::installation_by_id(&state.db, *id).await?.ok_or_else(|| ApiError::bad_request(crate::text!("installation {0} inconnue", "unknown installation {0}", "instalación {0} desconocida", id)))?;
         if !inst.is_local() {
             // Re-sharing installations of another node would allow loops.
-            return Err(ApiError::bad_request(format!("« {} » est jointe via un autre nœud : seules les installations locales sont partageables", inst.name)));
+            return Err(ApiError::bad_request(crate::text!(
+                "« {0} » est jointe via un autre nœud : seules les installations locales sont partageables",
+                "“{0}” is joined through another node: only local installations can be shared",
+                "«{0}» está unida a través de otro nodo: solo se pueden compartir las instalaciones locales",
+                inst.name
+            )));
         }
     }
     let expires_at = match req.expires_in_days {
@@ -195,7 +201,7 @@ pub async fn create_share(State(state): State<AppState>, AdminUser(admin): Admin
     let token = federation::encode_token(&Invitation { v: 2, node_id: me.node_id, name: me.name, url, code, reciprocal: req.reciprocal });
     state
         .hub
-        .log("system", "info", None, Some(&admin.username), &format!("Partage « {label} » créé ({} installation(s), {})", ids.len(), permission_label(&req.permission)), None)
+        .log("system", "info", None, Some(&admin.username), share_created(false, &label, ids.len(), &req.permission), None)
         .await;
     Ok((StatusCode::CREATED, Json(CreatedShare { share: share_view(&state, share).await?, token })))
 }
@@ -210,7 +216,7 @@ pub async fn update_share(State(state): State<AppState>, AdminUser(admin): Admin
     ids.dedup();
     db::update_share(&state.db, id, &label, &req.permission, expires_at).await?;
     db::set_share_installations(&state.db, id, &ids).await?;
-    state.hub.log("system", "info", None, Some(&admin.username), &format!("Partage « {label} » modifié"), None).await;
+    state.hub.log("system", "info", None, Some(&admin.username), crate::text!("Partage « {0} » modifié", "Share “{0}” changed", "Uso compartido «{0}» modificado", label), None).await;
     let share = db::share_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("partage introuvable"))?;
     Ok(Json(share_view(&state, share).await?))
 }
@@ -222,13 +228,18 @@ pub async fn approve_share(State(state): State<AppState>, AdminUser(admin): Admi
         return Err(ApiError::bad_request("aucune demande d'accès en attente pour ce partage"));
     }
     let who = share.remote_name.clone().unwrap_or_else(|| "?".into());
-    state.hub.log("system", "info", None, Some(&admin.username), &format!("Accès accordé au serveur « {who} » (partage « {} »)", share.label), None).await;
+    state.hub.log("system", "info", None, Some(&admin.username), crate::text!("Accès accordé au serveur « {0} » (partage « {1} »)", "Access granted to server “{0}” (share “{1}”)", "Acceso concedido al servidor «{0}» (uso compartido «{1}»)", who, share.label), None).await;
     // Reciprocal invitation accepted by the other node: consume what it shares back.
     if let (true, true, Some(url), Some(node_id)) = (share.reciprocal, share.remote_shares_back, share.remote_url.as_deref(), share.remote_node_id.as_deref()) {
         let node = db::upsert_node(&state.db, node_id, &who, url, "", "read").await?;
         state.hub.reload_installations().await?;
         state.hub.poll_node(node.id).await;
-        state.hub.log("system", "info", None, Some(&admin.username), &format!("Nœud « {who} » ajouté : il partage aussi ses installations avec ce serveur"), None).await;
+        state.hub.log("system", "info", None, Some(&admin.username), crate::text!(
+            "Nœud « {0} » ajouté : il partage aussi ses installations avec ce serveur",
+            "Node “{0}” added: it also shares its installations with this server",
+            "Nodo «{0}» añadido: también comparte sus instalaciones con este servidor",
+            who
+        ), None).await;
     }
     let share = db::share_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("partage introuvable"))?;
     Ok(Json(share_view(&state, share).await?))
@@ -238,15 +249,31 @@ pub async fn approve_share(State(state): State<AppState>, AdminUser(admin): Admi
 pub async fn delete_share(State(state): State<AppState>, AdminUser(admin): AdminUser, Path(id): Path<i64>) -> ApiResult<StatusCode> {
     let share = db::share_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("partage introuvable"))?;
     db::delete_share(&state.db, id).await?;
-    state.hub.log("system", "info", None, Some(&admin.username), &format!("Partage « {} » révoqué", share.label), None).await;
+    state.hub.log("system", "info", None, Some(&admin.username), crate::text!("Partage « {0} » révoqué", "Share “{0}” revoked", "Uso compartido «{0}» revocado", share.label), None).await;
     Ok(StatusCode::NO_CONTENT)
 }
 
-fn permission_label(p: &str) -> &'static str {
-    if p == "control" {
-        "pilotage"
+/// "Share … created (n installations, read)" for the activity feed.
+fn share_created(reciprocal: bool, label: &str, count: usize, permission: &str) -> Text {
+    let permission = if permission == "control" { crate::text!("pilotage", "control", "control") } else { crate::text!("lecture", "read", "lectura") };
+    if reciprocal {
+        crate::text!(
+            "Partage réciproque « {0} » créé ({1} installation(s), {2})",
+            "Reciprocal share “{0}” created ({1} installation(s), {2})",
+            "Uso compartido recíproco «{0}» creado ({1} instalación(es), {2})",
+            label,
+            count,
+            permission.arg()
+        )
     } else {
-        "lecture"
+        crate::text!(
+            "Partage « {0} » créé ({1} installation(s), {2})",
+            "Share “{0}” created ({1} installation(s), {2})",
+            "Uso compartido «{0}» creado ({1} instalación(es), {2})",
+            label,
+            count,
+            permission.arg()
+        )
     }
 }
 
@@ -304,7 +331,7 @@ async fn node_views(state: &AppState) -> ApiResult<Vec<NodeView>> {
             status: statuses.get(&n.id).cloned().unwrap_or(NodeStatus {
                 state: "unknown",
                 last_seen: n.last_seen,
-                last_error: n.last_error.clone(),
+                last_error: n.last_error.as_deref().map(Text::load),
                 latency_ms: None,
                 permission: n.permission.clone(),
             }),
@@ -351,8 +378,8 @@ pub struct AddNodeInput {
 }
 
 /// Certificate error with what an administrator needs to decide whether to trust it.
-async fn certificate_error(url: &str, who: &str, reason: &str) -> ApiError {
-    let err = ApiError::bad_gateway(format!("le serveur « {who} » à {url} présente un {reason}"));
+async fn certificate_error(url: &str, who: &str, reason: &Text) -> ApiError {
+    let err = ApiError::bad_gateway(crate::text!("le serveur « {0} » à {1} : {2}", "server “{0}” at {1}: {2}", "el servidor «{0}» en {1}: {2}", who, url, reason.arg()));
     match tls::fetch_certificate(url).await {
         Some(info) => err.with_detail("certificate", info).with_detail("certificate_error", reason),
         None => err,
@@ -417,11 +444,24 @@ pub async fn add_node(State(state): State<AppState>, AdminUser(admin): AdminUser
     let paired = match client.pair(&inv.code, &me.name, back_url).await {
         Ok(p) => p,
         Err(federation::NodeError::Certificate(reason)) => return Err(certificate_error(&url, &inv.name, &reason).await),
-        Err(federation::NodeError::Unreachable(m)) => return Err(ApiError::bad_gateway(format!("le serveur « {} » ne répond pas à {url} ({m})", inv.name))),
+        Err(federation::NodeError::Unreachable(m)) => return Err(ApiError::bad_gateway(crate::text!(
+                "le serveur « {0} » ne répond pas à {1} ({2})",
+                "server “{0}” does not answer at {1} ({2})",
+                "el servidor «{0}» no responde en {1} ({2})",
+                inv.name,
+                url,
+                m.arg()
+            ))),
         Err(other) => return Err(other.into()),
     };
     if paired.node_id != inv.node_id {
-        return Err(ApiError::bad_request(format!("{url} n'est pas le serveur « {} » du jeton", inv.name)));
+        return Err(ApiError::bad_request(crate::text!(
+            "{0} n'est pas le serveur « {1} » du jeton",
+            "{0} is not the server “{1}” of the token",
+            "{0} no es el servidor «{1}» del token",
+            url,
+            inv.name
+        )));
     }
     if let Some((label, ids, permission, _)) = &share_back {
         let public_key = paired.public_key.as_deref().ok_or_else(|| ApiError::bad_gateway("l'autre serveur n'a pas envoyé sa clé publique : mettez-le à jour"))?;
@@ -433,7 +473,7 @@ pub async fn add_node(State(state): State<AppState>, AdminUser(admin): AdminUser
                 "info",
                 None,
                 Some(&admin.username),
-                &format!("Partage réciproque « {label} » créé ({} installation(s), {})", ids.len(), permission_label(permission)),
+                share_created(true, label, ids.len(), permission),
                 None,
             )
             .await;
@@ -443,7 +483,7 @@ pub async fn add_node(State(state): State<AppState>, AdminUser(admin): AdminUser
     state.hub.reload_installations().await?;
     state.hub.poll_node(node.id).await;
     if pinned.is_some() {
-        state.hub.log("system", "warn", None, Some(&admin.username), &format!("Certificat HTTPS du serveur « {} » accepté manuellement", paired.name), None).await;
+        state.hub.log("system", "warn", None, Some(&admin.username), certificate_trusted(&paired.name), None).await;
     }
     state
         .hub
@@ -452,7 +492,12 @@ pub async fn add_node(State(state): State<AppState>, AdminUser(admin): AdminUser
             "info",
             None,
             Some(&admin.username),
-            &format!("Nœud « {} » ajouté : en attente d'acceptation sur ce serveur (Réglages › Partages)", paired.name),
+            crate::text!(
+                "Nœud « {0} » ajouté : en attente d'acceptation sur ce serveur (Réglages › Partages)",
+                "Node “{0}” added: waiting for approval on that server (Settings › Shares)",
+                "Nodo «{0}» añadido: pendiente de aceptación en ese servidor (Ajustes › Compartidos)",
+                paired.name
+            ),
             None,
         )
         .await;
@@ -472,14 +517,14 @@ pub async fn update_node(State(state): State<AppState>, AdminUser(admin): AdminU
     db::set_node_url(&state.db, id, &url).await?;
     state.hub.reload_installations().await?;
     state.hub.poll_node(id).await;
-    state.hub.log("system", "info", None, Some(&admin.username), &format!("Nœud « {} » : adresse {url}", node.name), None).await;
+    state.hub.log("system", "info", None, Some(&admin.username), crate::text!("Nœud « {0} » : adresse {1}", "Node “{0}”: address {1}", "Nodo «{0}»: dirección {1}", node.name, url), None).await;
     node_views(&state).await?.into_iter().find(|n| n.id == id).map(Json).ok_or_else(|| ApiError::not_found("nœud introuvable"))
 }
 
 /// Certificate the node presents, to review it before trusting it.
 pub async fn node_certificate(State(state): State<AppState>, _admin: AdminUser, Path(id): Path<i64>) -> ApiResult<Json<NodeCertificate>> {
     let node = db::node_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("nœud introuvable"))?;
-    let certificate = tls::fetch_certificate(&node.url).await.ok_or_else(|| ApiError::bad_gateway(format!("impossible de lire le certificat de {}", node.url)))?;
+    let certificate = tls::fetch_certificate(&node.url).await.ok_or_else(|| ApiError::bad_gateway(crate::text!("impossible de lire le certificat de {0}", "cannot read the certificate of {0}", "no se puede leer el certificado de {0}", node.url)))?;
     Ok(Json(NodeCertificate { pinned: node.tls_fingerprint, certificate }))
 }
 
@@ -500,14 +545,14 @@ pub struct TrustInput {
 pub async fn trust_node_certificate(State(state): State<AppState>, AdminUser(admin): AdminUser, Path(id): Path<i64>, Json(req): Json<TrustInput>) -> ApiResult<Json<NodeView>> {
     let node = db::node_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("nœud introuvable"))?;
     let wanted = tls::normalize_fingerprint(&req.fingerprint).ok_or_else(|| ApiError::bad_request("empreinte de certificat invalide"))?;
-    let current = tls::fetch_certificate(&node.url).await.ok_or_else(|| ApiError::bad_gateway(format!("impossible de lire le certificat de {}", node.url)))?;
+    let current = tls::fetch_certificate(&node.url).await.ok_or_else(|| ApiError::bad_gateway(crate::text!("impossible de lire le certificat de {0}", "cannot read the certificate of {0}", "no se puede leer el certificado de {0}", node.url)))?;
     if current.fingerprint != wanted {
         return Err(ApiError::conflict("le certificat a changé entre-temps : examinez-le de nouveau").with_detail("certificate", current));
     }
     db::set_node_fingerprint(&state.db, id, Some(&wanted)).await?;
     state.hub.reload_installations().await?;
     state.hub.poll_node(id).await;
-    state.hub.log("system", "warn", None, Some(&admin.username), &format!("Certificat HTTPS du serveur « {} » accepté manuellement", node.name), None).await;
+    state.hub.log("system", "warn", None, Some(&admin.username), certificate_trusted(&node.name), None).await;
     node_views(&state).await?.into_iter().find(|n| n.id == id).map(Json).ok_or_else(|| ApiError::not_found("nœud introuvable"))
 }
 
@@ -517,7 +562,12 @@ pub async fn untrust_node_certificate(State(state): State<AppState>, AdminUser(a
     db::set_node_fingerprint(&state.db, id, None).await?;
     state.hub.reload_installations().await?;
     state.hub.poll_node(id).await;
-    state.hub.log("system", "info", None, Some(&admin.username), &format!("Serveur « {} » : vérification HTTPS habituelle rétablie", node.name), None).await;
+    state.hub.log("system", "info", None, Some(&admin.username), crate::text!(
+        "Serveur « {0} » : vérification HTTPS habituelle rétablie",
+        "Server “{0}”: usual HTTPS check restored",
+        "Servidor «{0}»: verificación HTTPS habitual restablecida",
+        node.name
+    ), None).await;
     node_views(&state).await?.into_iter().find(|n| n.id == id).map(Json).ok_or_else(|| ApiError::not_found("nœud introuvable"))
 }
 
@@ -538,7 +588,12 @@ pub async fn set_node_installations(
     let node = db::node_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("nœud introuvable"))?;
     let offered = state.hub.node_offers().await.remove(&id).unwrap_or_default();
     if offered.is_empty() {
-        return Err(ApiError::bad_request(format!("« {} » ne partage encore aucune installation avec ce serveur", node.name)));
+        return Err(ApiError::bad_request(crate::text!(
+            "« {0} » ne partage encore aucune installation avec ce serveur",
+            "“{0}” does not share any installation with this server yet",
+            "«{0}» aún no comparte ninguna instalación con este servidor",
+            node.name
+        )));
     }
     // Exclusions of installations not offered right now are kept.
     let mut excluded: Vec<i64> = db::node_exclusions(&state.db, id).await?.into_iter().filter(|r| !offered.iter().any(|o| o.remote_id == *r)).collect();
@@ -548,7 +603,21 @@ pub async fn set_node_installations(
     let shown = offered.iter().filter(|o| req.included.contains(&o.remote_id)).count();
     state
         .hub
-        .log("system", "info", None, Some(&admin.username), &format!("Nœud « {} » : {shown} installation(s) sur {} affichée(s)", node.name, offered.len()), None)
+        .log(
+            "system",
+            "info",
+            None,
+            Some(&admin.username),
+            crate::text!(
+                "Nœud « {0} » : {1} installation(s) sur {2} affichée(s)",
+                "Node “{0}”: {1} of {2} installation(s) shown",
+                "Nodo «{0}»: {1} de {2} instalación(es) mostrada(s)",
+                node.name,
+                shown,
+                offered.len()
+            ),
+            None,
+        )
         .await;
     node_views(&state).await?.into_iter().find(|n| n.id == id).map(Json).ok_or_else(|| ApiError::not_found("nœud introuvable"))
 }
@@ -563,7 +632,7 @@ pub async fn delete_node(State(state): State<AppState>, AdminUser(admin): AdminU
     let node = db::node_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("nœud introuvable"))?;
     db::delete_node(&state.db, id).await?;
     state.hub.reload_installations().await?;
-    state.hub.log("system", "info", None, Some(&admin.username), &format!("Nœud « {} » retiré", node.name), None).await;
+    state.hub.log("system", "info", None, Some(&admin.username), crate::text!("Nœud « {0} » retiré", "Node “{0}” removed", "Nodo «{0}» eliminado", node.name), None).await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -704,7 +773,7 @@ pub async fn pair(State(state): State<AppState>, signed: Signed) -> ApiResult<Js
     if !db::claim_share(&state.db, share.id, &node_id, &name, &req.public_key, signed.address.as_deref(), shares_back_from.as_deref()).await? {
         return Err(ApiError::bad_request("invitation déjà utilisée : créez un nouveau partage"));
     }
-    let from = signed.address.as_deref().map(|a| format!(" depuis {a}")).unwrap_or_default();
+    let from = signed.address.as_deref().unwrap_or("?");
     state
         .hub
         .log(
@@ -712,7 +781,14 @@ pub async fn pair(State(state): State<AppState>, signed: Signed) -> ApiResult<Js
             "warn",
             None,
             None,
-            &format!("Le serveur « {name} » demande l'accès au partage « {} »{from} : acceptez ou refusez dans Réglages › Partages", share.label),
+            crate::text!(
+                "Le serveur « {0} » ({2}) demande l'accès au partage « {1} » : acceptez ou refusez dans Réglages › Partages",
+                "Server “{0}” ({2}) asks for access to share “{1}”: accept or refuse in Settings › Shares",
+                "El servidor «{0}» ({2}) pide acceso al uso compartido «{1}»: acepte o rechace en Ajustes › Compartidos",
+                name,
+                share.label,
+                from
+            ),
             None,
         )
         .await;
@@ -770,7 +846,7 @@ pub async fn installations(State(state): State<AppState>, Query(q): Query<WatchQ
 }
 
 pub async fn control(State(state): State<AppState>, Path((id, system_id, zone_id)): Path<(i64, i64, i64)>, auth: ShareAuth) -> ApiResult<Json<FedInstallation>> {
-    let cmd: ZoneCommand = serde_json::from_slice(&auth.body).map_err(|e| ApiError::bad_request(format!("invalid command: {e}")))?;
+    let cmd: ZoneCommand = serde_json::from_slice(&auth.body).map_err(|e| ApiError::bad_request(crate::text!("commande invalide : {0}", "invalid command: {0}", "orden no válida: {0}", e)))?;
     if !auth.installation_ids.contains(&id) {
         return Err(ApiError::not_found("installation non partagée"));
     }
@@ -788,4 +864,13 @@ pub async fn control(State(state): State<AppState>, Path((id, system_id, zone_id
     let actor = if user.is_empty() { format!("nœud {node}") } else { format!("{user} (nœud {node})") };
     state.hub.control(id, system_id, zone_id, &cmd, &actor).await?;
     state.hub.federated(&[id]).await.into_iter().next().map(Json).ok_or_else(|| ApiError::not_found("installation non partagée"))
+}
+
+fn certificate_trusted(server: &str) -> Text {
+    crate::text!(
+        "Certificat HTTPS du serveur « {0} » accepté manuellement",
+        "HTTPS certificate of server “{0}” accepted manually",
+        "Certificado HTTPS del servidor «{0}» aceptado manualmente",
+        server
+    )
 }

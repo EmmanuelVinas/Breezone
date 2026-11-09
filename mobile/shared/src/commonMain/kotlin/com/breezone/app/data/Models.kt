@@ -6,7 +6,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNamingStrategy
 
-/** JSON settings matching the Breezone server API (snake_case, tolerant to new fields). */
 @OptIn(ExperimentalSerializationApi::class)
 val FzJson = Json {
     ignoreUnknownKeys = true
@@ -27,7 +26,10 @@ enum class Mode {
 }
 
 @Serializable
-data class User(val id: Long, val username: String, val role: String) {
+data class UserRights(val zones: Boolean = true, val routines: Boolean = true, val schedules: Boolean = true)
+
+@Serializable
+data class User(val id: Long, val username: String, val role: String, val rights: UserRights = UserRights()) {
     val isAdmin get() = role == "admin"
 }
 
@@ -96,7 +98,6 @@ data class Installation(
     val zones: List<Zone> = emptyList(),
 )
 
-/** Breezone server an installation is reached through (ADR 0008). */
 @Serializable
 data class NodeRef(
     val id: Long,
@@ -105,7 +106,6 @@ data class NodeRef(
     val state: String = "unknown",
 )
 
-/** A command on a zone: only non-null fields are sent. */
 @Serializable
 data class ZoneCommand(
     val on: Boolean? = null,
@@ -192,7 +192,6 @@ data class RunResult(val results: List<ActionResult> = emptyList())
 @Serializable
 data class SetupStatus(val needsSetup: Boolean)
 
-/** A Breezone server the app is connected to. Persisted in the secure store. */
 @Serializable
 data class ServerAccount(
     val id: String,
@@ -212,7 +211,6 @@ data class ScheduleZone(val systemId: Long, val zoneId: Long)
 @Serializable
 data class ScheduleEnd(val time: String, val action: ZoneCommand = ZoneCommand())
 
-/** A schedule of the Airzone app, mirrored from Airzone Cloud (Airzone runs it). */
 @Serializable
 data class AirzoneSchedule(
     val cloudId: String,
@@ -222,7 +220,6 @@ data class AirzoneSchedule(
     val name: String,
     val enabled: Boolean = true,
     val kind: String = "",
-    /** ISO days, 1 = Monday. */
     val days: List<Int> = emptyList(),
     val time: String? = null,
     val zones: List<ScheduleZone> = emptyList(),
@@ -253,5 +250,4 @@ data class AirzoneScheduleInput(
     val action: ZoneCommand,
 )
 
-/** The zone [zoneId] of system [systemId] in this installation. */
 fun Installation.zone(systemId: Long, zoneId: Long): Zone? = zones.firstOrNull { it.systemId == systemId && it.zoneId == zoneId }

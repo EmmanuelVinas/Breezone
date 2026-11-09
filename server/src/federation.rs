@@ -25,6 +25,7 @@ use crate::airzone::ZoneData;
 use crate::auth::{hash_token, random_bytes};
 use crate::db::{self, Db};
 use crate::error::ApiError;
+use crate::i18n::Text;
 use crate::hub::ZoneCommand;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
@@ -343,22 +344,31 @@ pub struct PairResponse {
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum NodeError {
     /// The node answered with an error (401: key revoked or expired, 403, 400…).
-    #[error("{message}")]
-    Rejected { status: u16, message: String },
-    #[error("injoignable : {0}")]
-    Unreachable(String),
+    #[error("{}", message.current())]
+    Rejected { status: u16, message: Text },
+    #[error("{}", self.text().current())]
+    Unreachable(Text),
     /// The node's HTTPS certificate is refused (it can be reviewed and trusted).
-    #[error("{0}")]
-    Certificate(String),
+    #[error("{}", _0.current())]
+    Certificate(Text),
 }
 
 impl NodeError {
+    /// What went wrong, for people.
+    pub fn text(&self) -> Text {
+        match self {
+            NodeError::Rejected { message, .. } => message.clone(),
+            NodeError::Unreachable(reason) => crate::text!("injoignable : {0}", "unreachable: {0}", "inaccesible: {0}", reason.arg()),
+            NodeError::Certificate(reason) => reason.clone(),
+        }
+    }
+
     /// Connection state shown for the node.
     pub fn state(&self) -> &'static str {
         match self {
-            NodeError::Rejected { status: 401, message } if message.contains("expired") => "expired",
+            NodeError::Rejected { status: 401, message } if message.en.contains("expired") => "expired",
             NodeError::Rejected { status: 401, .. } => "revoked",
-            NodeError::Rejected { status: 403, message } if message.contains("pending") => "pending",
+            NodeError::Rejected { status: 403, message } if message.en.contains("pending") => "pending",
             NodeError::Rejected { .. } => "error",
             NodeError::Unreachable(_) => "offline",
             NodeError::Certificate(_) => "certificate",
@@ -370,10 +380,15 @@ impl From<NodeError> for ApiError {
     fn from(e: NodeError) -> Self {
         match e {
             NodeError::Rejected { status: 400, message } => ApiError::bad_request(message),
-            NodeError::Rejected { status: 401, message } => ApiError::bad_gateway(format!("le nœud a refusé l'accès ({message})")),
+            NodeError::Rejected { status: 401, message } => ApiError::bad_gateway(crate::text!(
+                "le nœud a refusé l'accès ({0})",
+                "the node refused access ({0})",
+                "el nodo rechazó el acceso ({0})",
+                message.arg()
+            )),
             NodeError::Rejected { status: 403, message } => ApiError::forbidden(message),
             NodeError::Rejected { status: 404, message } => ApiError::not_found(message),
-            other => ApiError::bad_gateway(other.to_string()),
+            other => ApiError::bad_gateway(other.text()),
         }
     }
 }
@@ -429,6 +444,8 @@ impl NodeClient {
     ) -> Result<reqwest::Response, NodeError> {
         let body = body.unwrap_or_default();
         let mut req = self.http.request(method.clone(), format!("{}{path}", self.url));
+        // Its errors in the language of the person waiting for them (English in the background).
+        req = req.header(reqwest::header::ACCEPT_LANGUAGE, crate::i18n::current().code());
         if let Some(timeout) = timeout {
             req = req.timeout(timeout);
         }
@@ -442,8 +459,8 @@ impl NodeClient {
             req = req.header(reqwest::header::CONTENT_TYPE, "application/json").body(body);
         }
         req.send().await.map_err(|e| {
-            let text = describe(&e);
-            if text.starts_with("certificat") {
+            let (text, certificate) = describe(&e);
+            if certificate {
                 NodeError::Certificate(text)
             } else {
                 NodeError::Unreachable(text)
@@ -456,9 +473,16 @@ impl NodeClient {
         if !status.is_success() {
             let body: serde_json::Value = resp.json().await.unwrap_or_default();
             let message = body["error"].as_str().map(String::from).unwrap_or_else(|| format!("HTTP {status}"));
-            return Err(NodeError::Rejected { status: status.as_u16(), message });
+            return Err(NodeError::Rejected { status: status.as_u16(), message: Text::plain(message) });
         }
-        resp.json::<T>().await.map_err(|e| NodeError::Unreachable(format!("réponse inattendue ({e}) : est-ce bien un serveur Breezone ?")))
+        resp.json::<T>().await.map_err(|e| {
+            NodeError::Unreachable(crate::text!(
+                "réponse inattendue ({0}) : est-ce bien un serveur Breezone ?",
+                "unexpected answer ({0}): is it a Breezone server?",
+                "respuesta inesperada ({0}): ¿es realmente un servidor Breezone?",
+                e
+            ))
+        })
     }
 
     /// Uses the invitation code: the exposing node records this node's public key.
@@ -503,7 +527,8 @@ impl NodeClient {
     }
 }
 
-fn describe(e: &reqwest::Error) -> String {
+/// What failed, for people, and whether it is the HTTPS certificate.
+fn describe(e: &reqwest::Error) -> (Text, bool) {
     // The useful part (TLS, DNS, refused) is deep in the source chain.
     let mut chain = String::new();
     let mut source: Option<&dyn std::error::Error> = Some(e);
@@ -513,25 +538,48 @@ fn describe(e: &reqwest::Error) -> String {
         source = err.source();
     }
     if e.is_timeout() {
-        "délai dépassé".into()
+        (crate::text!("délai dépassé", "timed out", "tiempo de espera agotado"), false)
     } else if chain.contains(crate::tls::PIN_MISMATCH) {
-        "certificat HTTPS différent de celui que vous aviez accepté".into()
+        (
+            crate::text!(
+                "certificat HTTPS différent de celui que vous aviez accepté",
+                "HTTPS certificate different from the one you had accepted",
+                "certificado HTTPS distinto del que había aceptado"
+            ),
+            true,
+        )
     } else if chain.contains("certificate") {
-        if chain.contains("not valid for name") || chain.contains("notvalidforname") {
-            "certificat HTTPS refusé : il ne couvre pas ce nom de domaine".into()
+        let reason = if chain.contains("not valid for name") || chain.contains("notvalidforname") {
+            crate::text!(
+                "certificat HTTPS refusé : il ne couvre pas ce nom de domaine",
+                "HTTPS certificate refused: it does not cover this domain name",
+                "certificado HTTPS rechazado: no cubre este nombre de dominio"
+            )
         } else if chain.contains("expired") {
-            "certificat HTTPS expiré".into()
+            crate::text!("certificat HTTPS expiré", "HTTPS certificate expired", "certificado HTTPS caducado")
         } else {
-            "certificat HTTPS refusé (non reconnu ou auto-signé)".into()
-        }
+            crate::text!(
+                "certificat HTTPS refusé (non reconnu ou auto-signé)",
+                "HTTPS certificate refused (unknown or self-signed)",
+                "certificado HTTPS rechazado (desconocido o autofirmado)"
+            )
+        };
+        (reason, true)
     } else if chain.contains("dns error") || chain.contains("failed to lookup") {
-        "nom de domaine introuvable".into()
+        (crate::text!("nom de domaine introuvable", "domain name not found", "nombre de dominio no encontrado"), false)
     } else if chain.contains("refused") {
-        "connexion refusée (port fermé ou serveur arrêté)".into()
+        (
+            crate::text!(
+                "connexion refusée (port fermé ou serveur arrêté)",
+                "connection refused (port closed or server stopped)",
+                "conexión rechazada (puerto cerrado o servidor detenido)"
+            ),
+            false,
+        )
     } else if e.is_connect() {
-        "connexion impossible".into()
+        (crate::text!("connexion impossible", "cannot connect", "conexión imposible"), false)
     } else {
-        e.to_string()
+        (Text::plain(e.to_string()), false)
     }
 }
 
@@ -548,7 +596,7 @@ mod tests {
         let wrapped = format!("{}\n{}", &token[..10], &token[10..]);
         assert_eq!(parse_token(&wrapped).unwrap(), inv);
         assert!(parse_token("bz2.garbage").is_err());
-        assert!(parse_token("bz1.eyJ2IjoxfQ").unwrap_err().message.contains("ancien format"));
+        assert!(parse_token("bz1.eyJ2IjoxfQ").unwrap_err().message.fr.contains("ancien format"));
         assert!(parse_token("hello").is_err());
     }
 
@@ -583,9 +631,9 @@ mod tests {
 
     #[test]
     fn errors_map_to_states() {
-        assert_eq!(NodeError::Rejected { status: 403, message: "pairing pending approval".into() }.state(), "pending");
-        assert_eq!(NodeError::Rejected { status: 401, message: "share expired".into() }.state(), "expired");
-        assert_eq!(NodeError::Rejected { status: 401, message: "share revoked".into() }.state(), "revoked");
-        assert_eq!(NodeError::Unreachable("x".into()).state(), "offline");
+        assert_eq!(NodeError::Rejected { status: 403, message: Text::plain("pairing pending approval") }.state(), "pending");
+        assert_eq!(NodeError::Rejected { status: 401, message: Text::plain("share expired") }.state(), "expired");
+        assert_eq!(NodeError::Rejected { status: 401, message: Text::plain("share revoked") }.state(), "revoked");
+        assert_eq!(NodeError::Unreachable(Text::plain("x")).state(), "offline");
     }
 }

@@ -9,6 +9,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { t } from "@/lib/i18n"
 
 /** Asks for confirmation before a destructive action. */
 export function Confirm({
@@ -31,8 +32,10 @@ export function Confirm({
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Annuler</AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm}>Confirmer</AlertDialogAction>
+          <AlertDialogCancel>{t("Annuler")}</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>
+            {t("Confirmer")}
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

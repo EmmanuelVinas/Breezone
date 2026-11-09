@@ -14,8 +14,11 @@ import org.koin.core.context.startKoin
 import org.koin.core.module.Module
 import org.koin.dsl.KoinAppDeclaration
 import org.koin.dsl.module
+import androidx.compose.ui.text.intl.Locale
+import io.ktor.client.plugins.defaultRequest
+import io.ktor.client.request.header
+import io.ktor.http.HttpHeaders
 
-/** Provides `SecureStore` and the native `HttpClientEngine`. */
 expect val platformModule: Module
 
 val appModule = module {
@@ -23,6 +26,8 @@ val appModule = module {
         HttpClient(get<HttpClientEngine>()) {
             install(ContentNegotiation) { json(FzJson) }
             install(WebSockets)
+            // Server errors and activity messages in the phone's language.
+            defaultRequest { header(HttpHeaders.AcceptLanguage, Locale.current.language) }
         }
     }
     single { Hub(get(), get(), CoroutineScope(SupervisorJob() + Dispatchers.Default)) }

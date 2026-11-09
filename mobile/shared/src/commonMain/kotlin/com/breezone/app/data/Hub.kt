@@ -31,12 +31,10 @@ import kotlin.random.Random
 
 enum class Live { Connecting, Live, Offline }
 
-/** Everything the app knows about one Breezone server. */
 data class ServerState(
     val account: ServerAccount,
     val user: User? = null,
     val installations: List<Installation> = emptyList(),
-    /** Installations of the Airzone account whose WebServer is on another network. */
     val remote: List<CloudInstallation> = emptyList(),
     val live: Live = Live.Connecting,
     val loaded: Boolean = false,
@@ -44,23 +42,20 @@ data class ServerState(
     val authRequired: Boolean = false,
     /** The app and this server are too far apart in version: which one must be updated. */
     val update: UpdateNeeded? = null,
-    /** Version of the server software, as announced by `/health`. */
     val serverVersion: String? = null,
     /** The server speaks a newer API: still compatible, an app update would bring its new features. */
     val appUpdateAvailable: Boolean = false,
     val error: String? = null,
 )
 
-/** Installation [installationId] of server [serverId]. */
+fun List<ServerState>.rights(serverId: String): UserRights =
+    firstOrNull { it.account.id == serverId }?.user?.rights ?: UserRights()
+
 fun List<ServerState>.installation(serverId: String, installationId: Long): Installation? =
     firstOrNull { it.account.id == serverId }?.installations?.firstOrNull { it.id == installationId }
 
 private const val SERVERS_KEY = "servers"
 
-/**
- * Central repository of the app. Holds one connection per Breezone server, keeps its state up
- * to date through the WebSocket push channel and applies commands optimistically.
- */
 class Hub(
     private val http: HttpClient,
     private val store: SecureStore,
@@ -70,11 +65,9 @@ class Hub(
     val servers: StateFlow<List<ServerState>> = _servers.asStateFlow()
 
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 8)
-    /** User-facing messages (errors, confirmations) for snackbars. */
     val messages: SharedFlow<String> = _messages
 
     private val apis = mutableMapOf<String, BreezoneApi>()
-    /** Answers the requests of the built-in demonstration server (see `Demo.kt`). */
     private val demoHttp by lazy { demoHttpClient() }
     private fun httpFor(account: ServerAccount) = if (isDemo(account.url)) demoHttp else http
     private val jobs = mutableMapOf<String, Job>()
@@ -92,10 +85,6 @@ class Hub(
     fun api(serverId: String): BreezoneApi? = apis[serverId]
 
     fun server(serverId: String): ServerState? = _servers.value.firstOrNull { it.account.id == serverId }
-
-    // -------------------------------------------------------------------------------------
-    // Accounts
-    // -------------------------------------------------------------------------------------
 
     private fun persist() {
         val accounts = _servers.value.map { it.account }
@@ -152,7 +141,6 @@ class Hub(
         return account
     }
 
-    /** Signs out of a server and forgets it. */
     fun removeServer(id: String) {
         val api = apis.remove(id)
         jobs.remove(id)?.cancel()
@@ -164,10 +152,6 @@ class Hub(
     fun rename(id: String, label: String) {
         if (label.isNotBlank()) updateAccount(id) { it.copy(label = label.trim()) }
     }
-
-    // -------------------------------------------------------------------------------------
-    // Live state
-    // -------------------------------------------------------------------------------------
 
     private fun start(account: ServerAccount, pair: TokenPair? = null) {
         val api = BreezoneApi(httpFor(account), account) { rotated -> updateAccount(account.id) { it.copy(refreshToken = rotated) } }
@@ -184,7 +168,7 @@ class Hub(
                 val health = api.health()
                 updateServer(id) { it.copy(serverVersion = health.version, appUpdateAvailable = appUpdateAvailable(health)) }
                 checkCompatible(health)
-                val user = api.user ?: api.me()
+                val user = api.me()
                 val installations = api.status()
                 val remote = runCatching { api.cloud().installations.filter { !it.reachable } }.getOrDefault(emptyList())
                 updateServer(id) { it.copy(user = user, installations = installations, remote = remote, loaded = true, error = null, authRequired = false, update = null) }
@@ -217,6 +201,9 @@ class Hub(
             "snapshot" -> {
                 val list = FzJson.decodeFromJsonElement(ListSerializer(Installation.serializer()), msg["installations"]!!.jsonArray)
                 updateServer(id) { it.copy(installations = list, live = Live.Live, loaded = true) }
+                scope.launch {
+                    runCatching { apis[id]?.me() }.getOrNull()?.let { user -> updateServer(id) { it.copy(user = user) } }
+                }
             }
             "installation" -> {
                 val inst = FzJson.decodeFromJsonElement(Installation.serializer(), msg["installation"]!!)
@@ -233,7 +220,6 @@ class Hub(
         }
     }
 
-    /** Reconnects every server (e.g. when the app comes back to the foreground). */
     fun refresh() {
         _servers.value.forEach { s ->
             val api = apis[s.account.id] ?: return@forEach
@@ -243,10 +229,6 @@ class Hub(
             }
         }
     }
-
-    // -------------------------------------------------------------------------------------
-    // Commands (optimistic)
-    // -------------------------------------------------------------------------------------
 
     private fun applyLocally(serverId: String, zone: Zone, cmd: ZoneCommand) {
         updateServer(serverId) { s ->
@@ -261,7 +243,6 @@ class Hub(
                             speed = cmd.speed ?: z.speed,
                             sleep = cmd.sleep ?: z.sleep,
                         )
-                        // The operation mode is system-wide.
                         cmd.mode != null && z.systemId == zone.systemId -> z.copy(mode = cmd.mode)
                         else -> z
                     }
@@ -278,10 +259,6 @@ class Hub(
     /** Installation this user can only look at (read-only access, or shared read-only by its node): commands are not sent. */
     private fun readOnly(serverId: String, zones: List<Zone>): Installation? =
         server(serverId)?.installations?.firstOrNull { inst -> !inst.controllable && zones.any { it.installationId == inst.id } }
-
-    // -----------------------------------------------------------------------------------
-    // Visual acknowledgement of commands: pending → done ✓ (or error) on the zone card.
-    // -----------------------------------------------------------------------------------
 
     private val _commandStatus = MutableStateFlow<Map<String, CommandStatus>>(emptyMap())
     val commandStatus: StateFlow<Map<String, CommandStatus>> = _commandStatus.asStateFlow()
@@ -327,7 +304,6 @@ class Hub(
         }
     }
 
-    /** Switches several zones (a group) on or off, then confirms with a message. */
     fun setPower(serverId: String, zones: List<Zone>, on: Boolean, label: String? = null) {
         val api = apis[serverId] ?: return
         readOnly(serverId, zones)?.let { inst ->
@@ -365,7 +341,6 @@ class Hub(
         _messages.tryEmit(message)
     }
 
-    /** Shows the usual "failure: …" message for [e]. */
     suspend fun notifyFailure(e: Throwable) = notify(getString(Res.string.common_failure, e.message.orEmpty()))
 
     /** Runs [block]; a failure is shown as a message and gives null. Cancellation goes through. */
@@ -378,12 +353,9 @@ class Hub(
         null
     }
 
-    /** [attempt] in [scope], for one-shot actions started from the UI. */
     fun launchAttempt(scope: CoroutineScope, block: suspend () -> Unit) = scope.launch { attempt(block) }
 }
 
-/** Acknowledgement of a command sent to a zone. */
 enum class CommandStatus { Pending, Done, Error }
 
-/** Key of a zone in [Hub.commandStatus]. */
 fun commandKey(serverId: String, zone: Zone): String = "$serverId/${zone.installationId}/${zone.systemId}/${zone.zoneId}"

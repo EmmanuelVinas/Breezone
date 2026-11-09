@@ -1,4 +1,5 @@
 // Typed client for the Breezone server API (see docs/API.md).
+import { lang } from "@/lib/i18n"
 
 export type Mode =
   "stop" | "cooling" | "heating" | "fan" | "dry" | "aux_heating" | "auto"
@@ -315,7 +316,35 @@ export type AccessEntry = {
   permission: "read" | "control"
 }
 
-export type UserDetails = User & { created_at: number; access: AccessEntry[] }
+/** What a user may change on the installations they drive (all true for an administrator). */
+export type UserRights = {
+  /** Zone names and groups. */
+  zones: boolean
+  /** Create, change and delete routines (running them only needs control). */
+  routines: boolean
+  /** Create, change and delete Airzone schedules (switching on/off only needs control). */
+  schedules: boolean
+}
+
+export const ALL_RIGHTS: UserRights = {
+  zones: true,
+  routines: true,
+  schedules: true,
+}
+
+export type UserDetails = User & {
+  created_at: number
+  access: AccessEntry[]
+  rights: UserRights
+}
+
+export type Me = User & {
+  session_id: number
+  access: AccessEntry[] | null
+  rights: UserRights
+  /** Chosen in the profile; null follows the browser. */
+  language: "fr" | "en" | "es" | null
+}
 
 export type CloudInstallation = {
   cloud_id: string
@@ -450,7 +479,10 @@ async function refreshOnce(attempts: number): Promise<boolean> {
   try {
     const res = await fetch("/api/auth/refresh", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Accept-Language": lang(),
+      },
       body: JSON.stringify({ refresh_token: refresh }),
     })
     if (res.status === 401) {
@@ -492,7 +524,8 @@ export async function request<T>(
   auth = true
 ): Promise<T> {
   const send = async (token: string | null) => {
-    const headers: Record<string, string> = {}
+    // Server messages (errors, activity feed) in the language of the page.
+    const headers: Record<string, string> = { "Accept-Language": lang() }
     if (body !== undefined) headers["Content-Type"] = "application/json"
     if (token) headers["Authorization"] = `Bearer ${token}`
     return fetch(path, {
@@ -595,7 +628,9 @@ export const api = {
       ).catch(() => undefined)
     clearTokens()
   },
-  me: () => request<User & { session_id: number }>("GET", "/api/me"),
+  me: () => request<Me>("GET", "/api/me"),
+  setLanguage: (language: "fr" | "en" | "es" | null) =>
+    request<void>("PUT", "/api/me/language", { language }),
   changePassword: (current_password: string, new_password: string) =>
     request<void>("PUT", "/api/me/password", {
       current_password,
@@ -609,17 +644,24 @@ export const api = {
     username: string,
     password: string,
     role: string,
-    access: AccessEntry[] = []
+    access: AccessEntry[] = [],
+    rights: UserRights = ALL_RIGHTS
   ) =>
     request<UserDetails>("POST", "/api/users", {
       username,
       password,
       role,
       access,
+      rights,
     }),
   updateUser: (
     id: number,
-    data: { role?: string; password?: string; access?: AccessEntry[] }
+    data: {
+      role?: string
+      password?: string
+      access?: AccessEntry[]
+      rights?: UserRights
+    }
   ) => request<UserDetails>("PUT", `/api/users/${id}`, data),
   deleteUser: (id: number) => request<void>("DELETE", `/api/users/${id}`),
 

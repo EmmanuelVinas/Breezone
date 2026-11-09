@@ -54,18 +54,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { t } from "@/lib/i18n"
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 const NODE_STATE: Record<NodeState, { label: string; tone: string }> = {
-  online: { label: "Connecté", tone: "bg-success" },
-  offline: { label: "Injoignable", tone: "bg-destructive" },
-  revoked: { label: "Clé révoquée", tone: "bg-destructive" },
-  expired: { label: "Partage expiré", tone: "bg-warning" },
-  error: { label: "Erreur", tone: "bg-destructive" },
-  pending: { label: "En attente d'acceptation", tone: "bg-warning" },
-  certificate: { label: "Certificat refusé", tone: "bg-destructive" },
-  unknown: { label: "En attente", tone: "bg-muted-foreground" },
+  online: { label: t("Connecté"), tone: "bg-success" },
+  offline: { label: t("Injoignable"), tone: "bg-destructive" },
+  revoked: { label: t("Clé révoquée"), tone: "bg-destructive" },
+  expired: { label: t("Partage expiré"), tone: "bg-warning" },
+  error: { label: t("Erreur"), tone: "bg-destructive" },
+  pending: { label: t("En attente d'acceptation"), tone: "bg-warning" },
+  certificate: { label: t("Certificat refusé"), tone: "bg-destructive" },
+  unknown: { label: t("En attente"), tone: "bg-muted-foreground" },
 }
 
 /** Connection state of another Breezone server. */
@@ -121,48 +122,48 @@ function CertificateReview({
       <div className="flex items-start gap-2">
         <ShieldAlert className="mt-0.5 size-4 shrink-0 text-destructive" />
         <div>
-          <p className="font-medium">Certificat HTTPS non valide</p>
+          <p className="font-medium">{t("Certificat HTTPS non valide")}</p>
           {reason && <p className="text-muted-foreground">{reason}</p>}
         </div>
       </div>
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-        <dt className="text-muted-foreground">Adresse</dt>
+        <dt className="text-muted-foreground">{t("Adresse")}</dt>
         <dd className="break-all">{host}</dd>
-        <dt className="text-muted-foreground">Délivré à</dt>
+        <dt className="text-muted-foreground">{t("Délivré à")}</dt>
         <dd className="break-all">{certificate.subject ?? "—"}</dd>
-        <dt className="text-muted-foreground">Valable pour</dt>
+        <dt className="text-muted-foreground">{t("Valable pour")}</dt>
         <dd className="break-all">
           {certificate.names.length ? certificate.names.join(", ") : "—"}
         </dd>
-        <dt className="text-muted-foreground">Émis par</dt>
+        <dt className="text-muted-foreground">{t("Émis par")}</dt>
         <dd className="break-all">
           {certificate.self_signed
-            ? "lui-même (auto-signé)"
+            ? t("lui-même (auto-signé)")
             : (certificate.issuer ?? "—")}
         </dd>
-        <dt className="text-muted-foreground">Valable</dt>
+        <dt className="text-muted-foreground">{t("Valable")}</dt>
         <dd>
           {certificate.not_before
-            ? `du ${dateTime(certificate.not_before)} `
+            ? t("du {date}", { date: dateTime(certificate.not_before) }) + " "
             : ""}
-          {certificate.not_after ? `au ${dateTime(certificate.not_after)}` : ""}
+          {certificate.not_after
+            ? t("au {date}", { date: dateTime(certificate.not_after) })
+            : ""}
         </dd>
-        <dt className="text-muted-foreground">Empreinte SHA-256</dt>
+        <dt className="text-muted-foreground">{t("Empreinte SHA-256")}</dt>
         <dd className="font-mono break-all">
           {fingerprintText(certificate.fingerprint)}
         </dd>
       </dl>
       <p className="text-xs text-muted-foreground">
-        Faites confiance à ce certificat seulement si vous savez pourquoi il
-        n'est pas valide (par exemple un certificat du NAS qui ne couvre pas ce
-        nom). Pour en être sûr, comparez l'empreinte avec celle affichée par
-        votre navigateur sur cette adresse. Breezone n'acceptera ensuite que ce
-        certificat précis et vous redemandera votre accord s'il change.
+        {t(
+          "Faites confiance à ce certificat seulement si vous savez pourquoi il n'est pas valide (par exemple un certificat du NAS qui ne couvre pas ce nom). Pour en être sûr, comparez l'empreinte avec celle affichée par votre navigateur sur cette adresse. Breezone n'acceptera ensuite que ce certificat précis et vous redemandera votre accord s'il change."
+        )}
       </p>
       <div className="flex flex-wrap justify-end gap-2">
         {onCancel && (
           <Button size="sm" variant="ghost" onClick={onCancel}>
-            Annuler
+            {t("Annuler")}
           </Button>
         )}
         <Button
@@ -172,7 +173,7 @@ function CertificateReview({
           disabled={pending}
         >
           {pending && <Loader2 className="animate-spin" />}
-          Faire confiance à ce certificat
+          {t("Faire confiance à ce certificat")}
         </Button>
       </div>
     </div>
@@ -187,7 +188,7 @@ function certificateOf(e: unknown): CertificateInfo | null {
 }
 
 const permissionLabel = (p: string) =>
-  p === "control" ? "Lecture et pilotage" : "Lecture seule"
+  p === "control" ? t("Lecture et pilotage") : t("Lecture seule")
 
 // ---------------------------------------------------------------------------------------
 // This server
@@ -206,32 +207,32 @@ function IdentityCard() {
       qc.setQueryData(["identity"], d)
       setName(null)
       setUrl(null)
-      toast.success("Serveur enregistré")
+      toast.success(t("Serveur enregistré"))
     },
     onError: (e) => toast.error(errorText(e)),
   })
   return (
     <Card className="rounded-3xl">
       <CardHeader>
-        <CardTitle>Ce serveur</CardTitle>
+        <CardTitle>{t("Ce serveur")}</CardTitle>
         <CardDescription>
-          Comment les autres serveurs Breezone le voient et le joignent.
-          L'adresse publique est celle de votre tunnel Cloudflare (https://…),
-          ou son adresse locale si les deux serveurs sont sur le même réseau.
+          {t(
+            "Comment les autres serveurs Breezone le voient et le joignent. L'adresse publique est celle de votre tunnel Cloudflare (https://…), ou son adresse locale si les deux serveurs sont sur le même réseau."
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4 sm:grid-cols-2">
         <div className="grid gap-2">
-          <Label htmlFor="node-name">Nom</Label>
+          <Label htmlFor="node-name">{t("Nom")}</Label>
           <Input
             id="node-name"
             value={nameValue}
-            placeholder="Bureau"
+            placeholder={t("Bureau")}
             onChange={(e) => setName(e.target.value)}
           />
         </div>
         <div className="grid gap-2">
-          <Label htmlFor="node-url">Adresse publique</Label>
+          <Label htmlFor="node-url">{t("Adresse publique")}</Label>
           <Input
             id="node-url"
             value={urlValue}
@@ -246,7 +247,7 @@ function IdentityCard() {
           onClick={() => save.mutate()}
           disabled={save.isPending || (name === null && url === null)}
         >
-          Enregistrer
+          {t("Enregistrer")}
         </Button>
       </CardFooter>
     </Card>
@@ -299,11 +300,11 @@ function ShareDialog({
       }
       return (await api.createShare(input())).token
     },
-    onSuccess: (t) => {
+    onSuccess: (created) => {
       qc.invalidateQueries({ queryKey: ["shares"] })
-      if (t) setToken(t)
+      if (created) setToken(created)
       else {
-        toast.success("Partage modifié")
+        toast.success(t("Partage modifié"))
         onClose()
       }
     },
@@ -322,16 +323,18 @@ function ShareDialog({
       <Dialog open onOpenChange={(o) => !o && onClose()}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Jeton d'invitation · {label}</DialogTitle>
+            <DialogTitle>
+              {t("Jeton d'invitation · {label}", { label })}
+            </DialogTitle>
             <DialogDescription>
-              Sur l'autre serveur Breezone : Réglages › Nœuds › Ajouter, puis
-              collez ce jeton (ou scannez le QR code avec l'application). Il est
-              utilisable <strong>une seule fois</strong>, pendant{" "}
-              <strong>15 minutes</strong>, et ne contient aucune clé d'accès.
-              Vous devrez ensuite <strong>accepter la demande</strong> ici, dans
-              « À qui ce serveur est partagé ».
+              {t(
+                "Sur l'autre serveur Breezone : Réglages › Nœuds › Ajouter, puis collez ce jeton (ou scannez le QR code avec l'application). Il est utilisable une seule fois, pendant 15 minutes, et ne contient aucune clé d'accès. Vous devrez ensuite accepter la demande ici, dans « À qui ce serveur est partagé »."
+              )}
               {reciprocal &&
-                " L'autre serveur pourra aussi vous partager ses installations : elles apparaîtront dans Nœuds une fois la demande acceptée."}
+                " " +
+                  t(
+                    "L'autre serveur pourra aussi vous partager ses installations : elles apparaîtront dans Nœuds une fois la demande acceptée."
+                  )}
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-center rounded-2xl bg-white p-4">
@@ -344,14 +347,14 @@ function ShareDialog({
               onClick={() =>
                 navigator.clipboard
                   .writeText(token)
-                  .then(() => toast.success("Jeton copié"))
+                  .then(() => toast.success(t("Jeton copié")))
               }
             >
-              <Copy /> Copier
+              <Copy /> {t("Copier")}
             </Button>
           </div>
           <DialogFooter>
-            <Button onClick={onClose}>Terminé</Button>
+            <Button onClick={onClose}>{t("Terminé")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -363,29 +366,29 @@ function ShareDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {share ? "Modifier le partage" : "Nouveau partage"}
+            {share ? t("Modifier le partage") : t("Nouveau partage")}
           </DialogTitle>
           <DialogDescription>
-            Un autre serveur Breezone pourra afficher (et piloter, si vous le
-            permettez) les installations choisies. Seules les installations
-            jointes directement par ce serveur sont partageables.
+            {t(
+              "Un autre serveur Breezone pourra afficher (et piloter, si vous le permettez) les installations choisies. Seules les installations jointes directement par ce serveur sont partageables."
+            )}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
           <div className="grid gap-2">
-            <Label htmlFor="share-label">Pour qui</Label>
+            <Label htmlFor="share-label">{t("Pour qui")}</Label>
             <Input
               id="share-label"
               value={label}
-              placeholder="Maison de Camille"
+              placeholder={t("Maison de Camille")}
               onChange={(e) => setLabel(e.target.value)}
             />
           </div>
           <div className="grid gap-2">
-            <Label>Installations partagées</Label>
+            <Label>{t("Installations partagées")}</Label>
             {local.length === 0 && (
               <p className="text-sm text-muted-foreground">
-                Aucune installation locale.
+                {t("Aucune installation locale.")}
               </p>
             )}
             {local.map((i) => (
@@ -406,7 +409,7 @@ function ShareDialog({
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
-              <Label>Droit</Label>
+              <Label>{t("Droit")}</Label>
               <Select
                 value={permission}
                 onValueChange={(v) =>
@@ -417,13 +420,15 @@ function ShareDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="control">Lecture et pilotage</SelectItem>
-                  <SelectItem value="read">Lecture seule</SelectItem>
+                  <SelectItem value="control">
+                    {t("Lecture et pilotage")}
+                  </SelectItem>
+                  <SelectItem value="read">{t("Lecture seule")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label>Validité</Label>
+              <Label>{t("Validité")}</Label>
               <Select value={expiry} onValueChange={setExpiry}>
                 <SelectTrigger>
                   <SelectValue />
@@ -431,13 +436,17 @@ function ShareDialog({
                 <SelectContent>
                   <SelectItem value="never">
                     {share?.expires_at
-                      ? `Inchangée (${dateTime(share.expires_at)})`
-                      : "Jusqu'à révocation"}
+                      ? t("Inchangée ({date})", {
+                          date: dateTime(share.expires_at),
+                        })
+                      : t("Jusqu'à révocation")}
                   </SelectItem>
-                  <SelectItem value="1">1 jour</SelectItem>
-                  <SelectItem value="7">7 jours</SelectItem>
-                  <SelectItem value="30">30 jours</SelectItem>
-                  <SelectItem value="365">1 an</SelectItem>
+                  <SelectItem value="1">{t("1 jour")}</SelectItem>
+                  <SelectItem value="7">{t("{n} jours", { n: 7 })}</SelectItem>
+                  <SelectItem value="30">
+                    {t("{n} jours", { n: 30 })}
+                  </SelectItem>
+                  <SelectItem value="365">{t("1 an")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -445,20 +454,23 @@ function ShareDialog({
           {!share && (
             <div className="grid gap-2">
               <Label htmlFor="share-url">
-                Adresse de ce serveur pour l'autre
+                {t("Adresse de ce serveur pour l'autre")}
               </Label>
               <Input
                 id="share-url"
                 value={url}
                 placeholder={
                   identity.data?.public_url ??
-                  "https://breezone.mondomaine.fr ou http://192.168.1.20:8427"
+                  t(
+                    "https://breezone.mondomaine.fr ou http://192.168.1.20:8427"
+                  )
                 }
                 onChange={(e) => setUrl(e.target.value)}
               />
               <p className="text-xs text-muted-foreground">
-                Vide = l'adresse publique de ce serveur. HTTP n'est accepté que
-                vers une adresse locale.
+                {t(
+                  "Vide = l'adresse publique de ce serveur. HTTP n'est accepté que vers une adresse locale."
+                )}
               </p>
             </div>
           )}
@@ -470,11 +482,11 @@ function ShareDialog({
                 onCheckedChange={(v) => setReciprocal(v === true)}
               />
               <span>
-                <span className="font-medium">Partage réciproque</span>
+                <span className="font-medium">{t("Partage réciproque")}</span>
                 <span className="block text-muted-foreground">
-                  Proposer à l'autre serveur de partager aussi ses installations
-                  avec celui-ci. Il choisira lesquelles en ajoutant le jeton ;
-                  elles apparaîtront ici quand vous accepterez sa demande.
+                  {t(
+                    "Proposer à l'autre serveur de partager aussi ses installations avec celui-ci. Il choisira lesquelles en ajoutant le jeton ; elles apparaîtront ici quand vous accepterez sa demande."
+                  )}
                 </span>
               </span>
             </label>
@@ -482,14 +494,14 @@ function ShareDialog({
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
-            Annuler
+            {t("Annuler")}
           </Button>
           <Button
             onClick={() => save.mutate()}
             disabled={save.isPending || !label.trim() || selected.size === 0}
           >
             {save.isPending && <Loader2 className="animate-spin" />}
-            {share ? "Enregistrer" : "Créer le jeton"}
+            {share ? t("Enregistrer") : t("Créer le jeton")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -511,7 +523,7 @@ function SharesCard() {
     mutationFn: api.deleteShare,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["shares"] })
-      toast.success("Partage révoqué")
+      toast.success(t("Partage révoqué"))
     },
     onError: (e) => toast.error(errorText(e)),
   })
@@ -519,17 +531,20 @@ function SharesCard() {
     mutationFn: api.approveShare,
     onSuccess: (s) => {
       qc.invalidateQueries({ queryKey: ["shares"] })
-      toast.success(`Accès accordé au serveur « ${s.remote_name ?? "?"} »`)
+      toast.success(
+        t("Accès accordé au serveur « {name} »", { name: s.remote_name ?? "?" })
+      )
     },
     onError: (e) => toast.error(errorText(e)),
   })
   return (
     <Card className="rounded-3xl">
       <CardHeader>
-        <CardTitle>À qui ce serveur est partagé</CardTitle>
+        <CardTitle>{t("À qui ce serveur est partagé")}</CardTitle>
         <CardDescription>
-          Les autres serveurs Breezone qui voient des installations de celui-ci.
-          Révoquer un partage coupe l'accès immédiatement.
+          {t(
+            "Les autres serveurs Breezone qui voient des installations de celui-ci. Révoquer un partage coupe l'accès immédiatement."
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3">
@@ -549,71 +564,100 @@ function SharesCard() {
                 <span className="font-medium">{s.label}</span>
                 {s.remote_name && (
                   <span className="text-sm text-muted-foreground">
-                    · serveur « {s.remote_name} »
+                    · {t("serveur « {name} »", { name: s.remote_name })}
                   </span>
                 )}
                 <Badge variant="outline">{permissionLabel(s.permission)}</Badge>
-                {s.expired && <Badge variant="destructive">Expiré</Badge>}
+                {s.expired && (
+                  <Badge variant="destructive">{t("Expiré")}</Badge>
+                )}
                 {s.status === "invited" && (
-                  <Badge variant="secondary">Invitation non utilisée</Badge>
+                  <Badge variant="secondary">
+                    {t("Invitation non utilisée")}
+                  </Badge>
                 )}
                 {(s.reciprocal || s.reverse) && (
                   <Badge variant="outline">
-                    <ArrowLeftRight /> Réciproque
+                    <ArrowLeftRight /> {t("Réciproque")}
                   </Badge>
                 )}
                 {s.status === "pending" && (
                   <Badge className="bg-warning text-black">
-                    Demande d'accès
+                    {t("Demande d'accès")}
                   </Badge>
                 )}
               </div>
               <div className="text-xs text-muted-foreground">
                 {s.installations.map((i) => i.name).join(", ") ||
-                  "Aucune installation"}
+                  t("Aucune installation")}
               </div>
               {s.status === "pending" && (
                 <p className="mt-1 text-sm">
-                  Le serveur <strong>« {s.remote_name} »</strong> demande
-                  l'accès
-                  {s.last_address ? ` depuis ${s.last_address}` : ""}
-                  {s.requested_at ? ` (${relativeTime(s.requested_at)})` : ""}.
-                  Acceptez seulement si c'est bien vous qui venez d'utiliser
-                  l'invitation.
+                  {t(
+                    "Le serveur « {name} » demande l'accès{from}{when}. Acceptez seulement si c'est bien vous qui venez d'utiliser l'invitation.",
+                    {
+                      name: s.remote_name ?? "?",
+                      from: s.last_address
+                        ? t(" depuis {address}", { address: s.last_address })
+                        : "",
+                      when: s.requested_at
+                        ? ` (${relativeTime(s.requested_at)})`
+                        : "",
+                    }
+                  )}
                   {s.reciprocal &&
-                    (s.remote_shares_back
-                      ? ` Il vous partage aussi ses installations : elles apparaîtront dans Nœuds dès que vous accepterez.`
-                      : ` Il n'a pas accepté le partage réciproque.`)}
+                    " " +
+                      (s.remote_shares_back
+                        ? t(
+                            "Il vous partage aussi ses installations : elles apparaîtront dans Nœuds dès que vous accepterez."
+                          )
+                        : t("Il n'a pas accepté le partage réciproque."))}
                 </p>
               )}
               {s.reciprocal && s.status === "active" && (
                 <p className="mt-1 text-xs text-muted-foreground">
                   {s.remote_shares_back
-                    ? `« ${s.remote_name ?? "?"} » vous partage aussi ses installations : choisissez celles à afficher dans Réglages › Nœuds.`
-                    : `« ${s.remote_name ?? "?"} » ne partage pas ses installations en retour. Pour les voir ici : sur ce serveur-là, Réglages › Partages › Nouveau partage, puis ajoutez le jeton dans Réglages › Nœuds.`}
+                    ? t(
+                        "« {name} » vous partage aussi ses installations : choisissez celles à afficher dans Réglages › Nœuds.",
+                        { name: s.remote_name ?? "?" }
+                      )
+                    : t(
+                        "« {name} » ne partage pas ses installations en retour. Pour les voir ici : sur ce serveur-là, Réglages › Partages › Nouveau partage, puis ajoutez le jeton dans Réglages › Nœuds.",
+                        { name: s.remote_name ?? "?" }
+                      )}
                 </p>
               )}
               {s.reverse && (
                 <p className="mt-1 text-xs text-muted-foreground">
-                  En retour de l'invitation de « {s.remote_name} ».
+                  {t("En retour de l'invitation de « {name} ».", {
+                    name: s.remote_name ?? "?",
+                  })}
                 </p>
               )}
               <div className="text-xs text-muted-foreground">
                 {s.status === "invited"
                   ? s.pairing_expires_at && !s.pairing_expired
-                    ? `Invitation valable jusqu'à ${dateTime(s.pairing_expires_at)}`
-                    : "Invitation expirée : supprimez-la et créez-en une nouvelle"
+                    ? t("Invitation valable jusqu'à {date}", {
+                        date: dateTime(s.pairing_expires_at),
+                      })
+                    : t(
+                        "Invitation expirée : supprimez-la et créez-en une nouvelle"
+                      )
                   : s.status === "pending"
-                    ? "En attente de votre réponse"
+                    ? t("En attente de votre réponse")
                     : s.connected
-                      ? "Connecté maintenant"
+                      ? t("Connecté maintenant")
                       : s.last_seen
-                        ? `Dernière connexion ${relativeTime(s.last_seen)}`
-                        : "Jamais connecté"}
-                {s.last_address && ` · depuis ${s.last_address}`}
+                        ? t("Dernière connexion {when}", {
+                            when: relativeTime(s.last_seen),
+                          })
+                        : t("Jamais connecté")}
+                {s.last_address &&
+                  " ·" + t(" depuis {address}", { address: s.last_address })}
                 {s.expires_at &&
                   !s.expired &&
-                  ` · expire le ${dateTime(s.expires_at)}`}
+                  " · " +
+                    t("expire le {date}", { date: dateTime(s.expires_at) })}
               </div>
             </div>
             {s.status === "pending" && (
@@ -622,7 +666,7 @@ function SharesCard() {
                 onClick={() => approve.mutate(s.id)}
                 disabled={approve.isPending}
               >
-                Accepter
+                {t("Accepter")}
               </Button>
             )}
             <Button
@@ -630,32 +674,36 @@ function SharesCard() {
               variant="ghost"
               onClick={() => setDialog({ share: s, nonce: Date.now() })}
             >
-              Modifier
+              {t("Modifier")}
             </Button>
             <Confirm
               title={
                 s.status === "pending"
-                  ? `Refuser la demande de « ${s.remote_name} » ?`
-                  : `Révoquer « ${s.label} » ?`
+                  ? t("Refuser la demande de « {name} » ?", {
+                      name: s.remote_name ?? "?",
+                    })
+                  : t("Révoquer « {name} » ?", { name: s.label })
               }
-              description="L'autre serveur perd l'accès à ces installations immédiatement."
+              description={t(
+                "L'autre serveur perd l'accès à ces installations immédiatement."
+              )}
               onConfirm={() => revoke.mutate(s.id)}
             >
               <Button size="sm" variant="ghost" className="text-destructive">
-                {s.status === "pending" ? "Refuser" : "Révoquer"}
+                {s.status === "pending" ? t("Refuser") : t("Révoquer")}
               </Button>
             </Confirm>
           </div>
         ))}
         {shares.data?.length === 0 && (
           <p className="text-sm text-muted-foreground">
-            Ce serveur n'est partagé avec aucun autre.
+            {t("Ce serveur n'est partagé avec aucun autre.")}
           </p>
         )}
       </CardContent>
       <CardFooter>
         <Button onClick={() => setDialog({ nonce: Date.now() })}>
-          <Share2 /> Nouveau partage
+          <Share2 /> {t("Nouveau partage")}
         </Button>
       </CardFooter>
       {dialog && (
@@ -686,10 +734,10 @@ export function SharesTab() {
 function readInvitation(
   token: string
 ): { name: string; url: string; reciprocal: boolean } | null {
-  const t = token.replace(/\s+/g, "")
-  if (!t.startsWith("bz2.")) return null
+  const clean = token.replace(/\s+/g, "")
+  if (!clean.startsWith("bz2.")) return null
   try {
-    const b64 = t.slice(4).replace(/-/g, "+").replace(/_/g, "/")
+    const b64 = clean.slice(4).replace(/-/g, "+").replace(/_/g, "/")
     const json = new TextDecoder().decode(
       Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
     )
@@ -752,7 +800,10 @@ export function AddNodeDialog({ onClose }: { onClose: () => void }) {
       qc.invalidateQueries({ queryKey: ["status"] })
       qc.invalidateQueries({ queryKey: ["cloud"] })
       toast.success(
-        `Serveur « ${n.name} » ajouté : acceptez la demande sur ce serveur pour voir ses installations`
+        t(
+          "Serveur « {name} » ajouté : acceptez la demande sur ce serveur pour voir ses installations",
+          { name: n.name }
+        )
       )
       onClose()
     },
@@ -777,18 +828,16 @@ export function AddNodeDialog({ onClose }: { onClose: () => void }) {
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Ajouter un serveur Breezone</DialogTitle>
+          <DialogTitle>{t("Ajouter un serveur Breezone")}</DialogTitle>
           <DialogDescription>
-            Sur le serveur de l'autre site : Réglages › Partages › Nouveau
-            partage. Collez ici le jeton obtenu (valable 15 minutes, une seule
-            fois), puis acceptez la demande sur ce serveur-là. Ses installations
-            apparaîtront alors ici. Les deux serveurs se reconnaissent ensuite
-            par une signature : aucune clé ne circule.
+            {t(
+              "Sur le serveur de l'autre site : Réglages › Partages › Nouveau partage. Collez ici le jeton obtenu (valable 15 minutes, une seule fois), puis acceptez la demande sur ce serveur-là. Ses installations apparaîtront alors ici. Les deux serveurs se reconnaissent ensuite par une signature : aucune clé ne circule."
+            )}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
           <div className="grid gap-2">
-            <Label htmlFor="node-token">Jeton d'invitation</Label>
+            <Label htmlFor="node-token">{t("Jeton d'invitation")}</Label>
             <textarea
               id="node-token"
               className="min-h-24 rounded-xl border bg-transparent px-3 py-2 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -801,11 +850,15 @@ export function AddNodeDialog({ onClose }: { onClose: () => void }) {
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="node-url-override">Adresse (facultatif)</Label>
+            <Label htmlFor="node-url-override">
+              {t("Adresse (facultatif)")}
+            </Label>
             <Input
               id="node-url-override"
               value={url}
-              placeholder="Celle du jeton, sinon par ex. http://192.168.1.20:8427"
+              placeholder={t(
+                "Celle du jeton, sinon par ex. http://192.168.1.20:8427"
+              )}
               onChange={(e) => {
                 setUrl(e.target.value)
                 setReview(null)
@@ -832,12 +885,14 @@ export function AddNodeDialog({ onClose }: { onClose: () => void }) {
                 />
                 <span>
                   <span className="font-medium">
-                    Partager aussi mes installations avec « {invitation?.name} »
+                    {t("Partager aussi mes installations avec « {name} »", {
+                      name: invitation?.name ?? "?",
+                    })}
                   </span>
                   <span className="block text-muted-foreground">
-                    Ce serveur propose un partage réciproque. Il verra les
-                    installations cochées dès qu'il aura accepté votre demande ;
-                    vous pourrez révoquer ce partage dans Réglages › Partages.
+                    {t(
+                      "Ce serveur propose un partage réciproque. Il verra les installations cochées dès qu'il aura accepté votre demande ; vous pourrez révoquer ce partage dans Réglages › Partages."
+                    )}
                   </span>
                 </span>
               </label>
@@ -845,7 +900,7 @@ export function AddNodeDialog({ onClose }: { onClose: () => void }) {
                 <>
                   {local.length === 0 && (
                     <p className="text-sm text-muted-foreground">
-                      Aucune installation locale à partager.
+                      {t("Aucune installation locale à partager.")}
                     </p>
                   )}
                   {local.map((i) => (
@@ -864,7 +919,7 @@ export function AddNodeDialog({ onClose }: { onClose: () => void }) {
                     </label>
                   ))}
                   <div className="grid gap-2">
-                    <Label>Droit</Label>
+                    <Label>{t("Droit")}</Label>
                     <Select
                       value={permission}
                       onValueChange={(v) =>
@@ -876,17 +931,19 @@ export function AddNodeDialog({ onClose }: { onClose: () => void }) {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="control">
-                          Lecture et pilotage
+                          {t("Lecture et pilotage")}
                         </SelectItem>
-                        <SelectItem value="read">Lecture seule</SelectItem>
+                        <SelectItem value="read">
+                          {t("Lecture seule")}
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   {!identity.data?.public_url && (
                     <p className="text-sm text-destructive">
-                      Renseignez d'abord l'adresse publique de ce serveur
-                      (Réglages › Partages › Ce serveur) : l'autre serveur en a
-                      besoin pour le joindre.
+                      {t(
+                        "Renseignez d'abord l'adresse publique de ce serveur (Réglages › Partages › Ce serveur) : l'autre serveur en a besoin pour le joindre."
+                      )}
                     </p>
                   )}
                 </>
@@ -896,7 +953,7 @@ export function AddNodeDialog({ onClose }: { onClose: () => void }) {
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
-            Annuler
+            {t("Annuler")}
           </Button>
           <Button
             onClick={() => add.mutate(null)}
@@ -907,7 +964,8 @@ export function AddNodeDialog({ onClose }: { onClose: () => void }) {
               (sharing && (chosen.size === 0 || !identity.data?.public_url))
             }
           >
-            {add.isPending && <Loader2 className="animate-spin" />} Ajouter
+            {add.isPending && <Loader2 className="animate-spin" />}{" "}
+            {t("Ajouter")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -933,7 +991,7 @@ function NodeRow({ node }: { node: BreezoneNode }) {
     onSuccess: () => {
       setUrl(null)
       invalidate()
-      toast.success("Adresse enregistrée")
+      toast.success(t("Adresse enregistrée"))
     },
     onError: (e) => toast.error(errorText(e)),
   })
@@ -950,7 +1008,7 @@ function NodeRow({ node }: { node: BreezoneNode }) {
     onSuccess: () => {
       setPicking(null)
       invalidate()
-      toast.success("Installations affichées mises à jour")
+      toast.success(t("Installations affichées mises à jour"))
     },
     onError: (e) => toast.error(errorText(e)),
   })
@@ -967,7 +1025,7 @@ function NodeRow({ node }: { node: BreezoneNode }) {
     onSuccess: () => {
       setReview(null)
       invalidate()
-      toast.success(`Certificat de « ${node.name} » accepté`)
+      toast.success(t("Certificat de « {name} » accepté", { name: node.name }))
     },
     onError: (e) => {
       // It changed meanwhile: show the new one.
@@ -980,7 +1038,7 @@ function NodeRow({ node }: { node: BreezoneNode }) {
     mutationFn: () => api.untrustNodeCertificate(node.id),
     onSuccess: () => {
       invalidate()
-      toast.success("Vérification HTTPS habituelle rétablie")
+      toast.success(t("Vérification HTTPS habituelle rétablie"))
     },
     onError: (e) => toast.error(errorText(e)),
   })
@@ -1000,24 +1058,29 @@ function NodeRow({ node }: { node: BreezoneNode }) {
             {node.certificate_pinned && (
               <Badge
                 variant="outline"
-                title="Certificat HTTPS accepté manuellement"
+                title={t("Certificat HTTPS accepté manuellement")}
               >
-                <ShieldCheck /> Certificat accepté
+                <ShieldCheck /> {t("Certificat accepté")}
               </Badge>
             )}
           </div>
           <div className="text-xs text-muted-foreground">
             {node.installations.map((i) => i.name).join(", ") ||
               (s.state === "pending"
-                ? `Ses installations apparaîtront quand « ${node.name} » aura accepté la demande (Réglages › Partages sur ce serveur)`
-                : "Aucune installation partagée")}
+                ? t(
+                    "Ses installations apparaîtront quand « {name} » aura accepté la demande (Réglages › Partages sur ce serveur)",
+                    { name: node.name }
+                  )
+                : t("Aucune installation partagée"))}
           </div>
           <div className="text-xs text-muted-foreground">
             {s.state === "online"
-              ? "Connecté"
+              ? t("Connecté")
               : s.last_seen
-                ? `Dernière réponse ${relativeTime(s.last_seen)}`
-                : "Jamais joint"}
+                ? t("Dernière réponse {when}", {
+                    when: relativeTime(s.last_seen),
+                  })
+                : t("Jamais joint")}
             {s.last_error &&
               s.state !== "online" &&
               s.state !== "pending" &&
@@ -1027,18 +1090,20 @@ function NodeRow({ node }: { node: BreezoneNode }) {
         <Button
           size="icon"
           variant="ghost"
-          aria-label="Actualiser"
+          aria-label={t("Actualiser")}
           onClick={() => refresh.mutate()}
           disabled={refresh.isPending}
         >
           <RefreshCw className={cn(refresh.isPending && "animate-spin")} />
         </Button>
         <Confirm
-          title={`Retirer « ${node.name} » ?`}
-          description="Ses installations disparaîtront de ce serveur (historique local compris). Pensez à révoquer le partage sur l'autre serveur."
+          title={t("Retirer « {name} » ?", { name: node.name })}
+          description={t(
+            "Ses installations disparaîtront de ce serveur (historique local compris). Pensez à révoquer le partage sur l'autre serveur."
+          )}
           onConfirm={() => remove.mutate()}
         >
-          <Button size="icon" variant="ghost" aria-label="Retirer">
+          <Button size="icon" variant="ghost" aria-label={t("Retirer")}>
             <Trash2 />
           </Button>
         </Confirm>
@@ -1055,7 +1120,7 @@ function NodeRow({ node }: { node: BreezoneNode }) {
             onClick={() => saveUrl.mutate()}
             disabled={saveUrl.isPending}
           >
-            <Link2 /> Enregistrer l'adresse
+            <Link2 /> {t("Enregistrer l'adresse")}
           </Button>
         )}
         {s.state === "certificate" && !review && (
@@ -1069,7 +1134,7 @@ function NodeRow({ node }: { node: BreezoneNode }) {
             ) : (
               <ShieldAlert />
             )}
-            Examiner le certificat
+            {t("Examiner le certificat")}
           </Button>
         )}
         {node.offered.length > 0 && picking === null && (
@@ -1083,19 +1148,22 @@ function NodeRow({ node }: { node: BreezoneNode }) {
               )
             }
           >
-            Choisir les installations (
-            {node.offered.filter((o) => o.included).length}/
-            {node.offered.length})
+            {t("Choisir les installations ({n}/{total})", {
+              n: node.offered.filter((o) => o.included).length,
+              total: node.offered.length,
+            })}
           </Button>
         )}
         {node.certificate_pinned && s.state !== "certificate" && (
           <Confirm
-            title="Rétablir la vérification HTTPS habituelle ?"
-            description="À faire quand l'autre serveur a un certificat valide. S'il n'en a pas, la connexion sera de nouveau refusée."
+            title={t("Rétablir la vérification HTTPS habituelle ?")}
+            description={t(
+              "À faire quand l'autre serveur a un certificat valide. S'il n'en a pas, la connexion sera de nouveau refusée."
+            )}
             onConfirm={() => untrust.mutate()}
           >
             <Button variant="ghost" disabled={untrust.isPending}>
-              Rétablir la vérification habituelle
+              {t("Rétablir la vérification habituelle")}
             </Button>
           </Confirm>
         )}
@@ -1103,9 +1171,10 @@ function NodeRow({ node }: { node: BreezoneNode }) {
       {picking && (
         <div className="grid gap-2 rounded-2xl border p-3 text-sm">
           <p className="text-muted-foreground">
-            Installations que « {node.name} » partage avec ce serveur : cochez
-            celles à afficher ici. Celles qu'il partagera plus tard seront
-            affichées jusqu'à ce que vous les décochiez.
+            {t(
+              "Installations que « {name} » partage avec ce serveur : cochez celles à afficher ici. Celles qu'il partagera plus tard seront affichées jusqu'à ce que vous les décochiez.",
+              { name: node.name }
+            )}
           </p>
           {node.offered.map((o) => (
             <label
@@ -1131,7 +1200,7 @@ function NodeRow({ node }: { node: BreezoneNode }) {
           ))}
           <div className="flex justify-end gap-2">
             <Button size="sm" variant="ghost" onClick={() => setPicking(null)}>
-              Annuler
+              {t("Annuler")}
             </Button>
             <Button
               size="sm"
@@ -1139,7 +1208,7 @@ function NodeRow({ node }: { node: BreezoneNode }) {
               disabled={pick.isPending}
             >
               {pick.isPending && <Loader2 className="animate-spin" />}
-              Enregistrer
+              {t("Enregistrer")}
             </Button>
           </div>
         </div>
@@ -1168,11 +1237,11 @@ export function NodesTab() {
   return (
     <Card className="rounded-3xl">
       <CardHeader>
-        <CardTitle>Autres serveurs Breezone</CardTitle>
+        <CardTitle>{t("Autres serveurs Breezone")}</CardTitle>
         <CardDescription>
-          Les serveurs d'autres sites qui partagent leurs installations avec
-          celui-ci : vous les pilotez d'ici, sans VPN. Les serveurs se parlent
-          entre eux ; la clé n'arrive jamais sur les téléphones.
+          {t(
+            "Les serveurs d'autres sites qui partagent leurs installations avec celui-ci : vous les pilotez d'ici, sans VPN. Les serveurs se parlent entre eux ; la clé n'arrive jamais sur les téléphones."
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3">
@@ -1181,13 +1250,13 @@ export function NodesTab() {
         ))}
         {nodes.data?.length === 0 && (
           <p className="text-sm text-muted-foreground">
-            Aucun autre serveur pour l'instant.
+            {t("Aucun autre serveur pour l'instant.")}
           </p>
         )}
       </CardContent>
       <CardFooter>
         <Button onClick={() => setAdding(true)}>
-          <Plus /> Ajouter un serveur
+          <Plus /> {t("Ajouter un serveur")}
         </Button>
       </CardFooter>
       {adding && <AddNodeDialog onClose={() => setAdding(false)} />}

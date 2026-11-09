@@ -16,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { t } from "@/lib/i18n"
 
 function AuthLayout({
   title,
@@ -37,8 +38,9 @@ function AuthLayout({
         <CardContent>{children}</CardContent>
       </Card>
       <p className="max-w-sm text-center text-xs text-muted-foreground">
-        Breezone pilote vos installations Airzone en local, sans abonnement ni
-        cloud.
+        {t(
+          "Breezone pilote vos installations Airzone en local, sans abonnement ni cloud."
+        )}
       </p>
     </div>
   )
@@ -74,12 +76,12 @@ export function LoginPage() {
   })
   return (
     <AuthLayout
-      title="Connexion"
-      description="Vous resterez connecté sur cet appareil."
+      title={t("Connexion")}
+      description={t("Vous resterez connecté sur cet appareil.")}
     >
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
         <div className="grid gap-2">
-          <Label htmlFor="username">Identifiant</Label>
+          <Label htmlFor="username">{t("Identifiant")}</Label>
           <Input
             id="username"
             autoComplete="username"
@@ -90,7 +92,7 @@ export function LoginPage() {
           />
         </div>
         <div className="grid gap-2">
-          <Label htmlFor="password">Mot de passe</Label>
+          <Label htmlFor="password">{t("Mot de passe")}</Label>
           <Input
             id="password"
             type="password"
@@ -104,13 +106,13 @@ export function LoginPage() {
           <Alert variant="destructive">
             <AlertDescription>
               {error === "invalid username or password"
-                ? "Identifiant ou mot de passe incorrect"
+                ? t("Identifiant ou mot de passe incorrect")
                 : error}
             </AlertDescription>
           </Alert>
         )}
         <Button type="submit" size="lg" disabled={busy}>
-          {busy && <Loader2 className="animate-spin" />} Se connecter
+          {busy && <Loader2 className="animate-spin" />} {t("Se connecter")}
         </Button>
       </form>
     </AuthLayout>
@@ -125,19 +127,19 @@ export function SetupPage() {
   const navigate = useNavigate()
   const { error, busy, onSubmit } = useSubmit(async () => {
     if (password !== confirm)
-      throw new Error("Les mots de passe ne correspondent pas")
+      throw new Error(t("Les mots de passe ne correspondent pas"))
     await api.setup(username, password)
     await qc.invalidateQueries({ queryKey: ["setup"] })
     navigate("/settings?tab=cloud&welcome=1", { replace: true })
   })
   return (
     <AuthLayout
-      title="Bienvenue 👋"
-      description="Créez le compte administrateur de ce serveur Breezone."
+      title={t("Bienvenue 👋")}
+      description={t("Créez le compte administrateur de ce serveur Breezone.")}
     >
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
         <div className="grid gap-2">
-          <Label htmlFor="username">Identifiant</Label>
+          <Label htmlFor="username">{t("Identifiant")}</Label>
           <Input
             id="username"
             autoComplete="username"
@@ -147,7 +149,9 @@ export function SetupPage() {
           />
         </div>
         <div className="grid gap-2">
-          <Label htmlFor="password">Mot de passe (8 caractères min.)</Label>
+          <Label htmlFor="password">
+            {t("Mot de passe (8 caractères min.)")}
+          </Label>
           <Input
             id="password"
             type="password"
@@ -159,7 +163,7 @@ export function SetupPage() {
           />
         </div>
         <div className="grid gap-2">
-          <Label htmlFor="confirm">Confirmation</Label>
+          <Label htmlFor="confirm">{t("Confirmation")}</Label>
           <Input
             id="confirm"
             type="password"
@@ -175,7 +179,7 @@ export function SetupPage() {
           </Alert>
         )}
         <Button type="submit" size="lg" disabled={busy}>
-          {busy && <Loader2 className="animate-spin" />} Créer le compte
+          {busy && <Loader2 className="animate-spin" />} {t("Créer le compte")}
         </Button>
       </form>
     </AuthLayout>

@@ -30,6 +30,7 @@ pub fn router() -> Router<AppState> {
         // Current user & devices
         .route("/api/me", get(account::me))
         .route("/api/me/password", put(account::change_password))
+        .route("/api/me/language", put(account::change_language))
         .route("/api/sessions", get(account::list_sessions))
         .route("/api/sessions/{id}", axum::routing::delete(account::delete_session))
         // Users (admin)

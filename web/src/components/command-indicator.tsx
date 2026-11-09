@@ -1,6 +1,7 @@
 import { AlertCircle, Check, Loader2 } from "lucide-react"
 import { useCommandStatus } from "@/lib/command-status"
 import { cn } from "@/lib/utils"
+import { t } from "@/lib/i18n"
 
 /** Small acknowledgement next to a zone's controls: sending… → applied ✓ (or refused). */
 export function CommandIndicator({
@@ -14,10 +15,10 @@ export function CommandIndicator({
   if (!status) return null
   const label =
     status === "pending"
-      ? "Envoi en cours"
+      ? t("Envoi en cours")
       : status === "done"
-        ? "Appliqué"
-        : "Refusé"
+        ? t("Appliqué")
+        : t("Refusé")
   return (
     <span
       role="status"

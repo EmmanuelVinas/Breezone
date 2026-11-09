@@ -18,6 +18,7 @@ import type {
   ZoneCommand,
 } from "@/lib/api"
 import { api } from "@/lib/api"
+import { useRights } from "@/hooks/use-rights"
 import { DAY_LABEL, DAY_SHORT, MODE_LABEL, relativeTime } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Confirm } from "@/components/confirm"
@@ -44,24 +45,25 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { t } from "@/lib/i18n"
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 function daysText(days: number[], time: string | null) {
   const d = [...days].sort()
   let text: string
-  if (d.length === 7) text = "Tous les jours"
-  else if (d.join() === "1,2,3,4,5") text = "En semaine"
-  else if (d.join() === "6,7") text = "Le week-end"
+  if (d.length === 7) text = t("Tous les jours")
+  else if (d.join() === "1,2,3,4,5") text = t("En semaine")
+  else if (d.join() === "6,7") text = t("Le week-end")
   else text = d.map((x) => DAY_LABEL[x - 1].slice(0, 3)).join(", ")
-  return time ? `${text} à ${time}` : text
+  return time ? t("{days} à {time}", { days: text, time }) : text
 }
 
 function actionText(a: ZoneCommand) {
-  if (a.on === false) return "Éteindre"
+  if (a.on === false) return t("Éteindre")
   const parts: string[] = []
   if (a.mode) parts.push(MODE_LABEL[a.mode])
-  else if (a.on) parts.push("Allumer")
+  else if (a.on) parts.push(t("Allumer"))
   if (a.setpoint !== undefined && a.setpoint !== null)
     parts.push(`${a.setpoint}°`)
   return parts.join(" · ") || "—"
@@ -74,7 +76,7 @@ function zoneName(
   return (
     inst?.zones.find(
       (x) => x.system_id === z.system_id && x.zone_id === z.zone_id
-    )?.name ?? `Zone ${z.zone_id}`
+    )?.name ?? t("Zone {id}", { id: z.zone_id })
   )
 }
 
@@ -137,7 +139,10 @@ function ScheduleEditor({
         zone_id: z.zone_id,
         label: `${z.group ? `${z.group} · ` : ""}${z.name}`,
       }))
-    : (schedule?.zones ?? []).map((z) => ({ ...z, label: `Zone ${z.zone_id}` }))
+    : (schedule?.zones ?? []).map((z) => ({
+        ...z,
+        label: t("Zone {id}", { id: z.zone_id }),
+      }))
 
   const save = useMutation({
     mutationFn: () => {
@@ -165,7 +170,7 @@ function ScheduleEditor({
     },
     onSuccess: (s) => {
       qc.setQueryData(["airzone-schedules"], s)
-      toast.success("Programmation enregistrée chez Airzone")
+      toast.success(t("Programmation enregistrée chez Airzone"))
       onClose()
     },
     onError: (e) => toast.error(errorText(e)),
@@ -176,17 +181,20 @@ function ScheduleEditor({
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {schedule ? "Modifier la programmation" : "Nouvelle programmation"}
+            {schedule
+              ? t("Modifier la programmation")
+              : t("Nouvelle programmation")}
           </DialogTitle>
           <DialogDescription>
-            Enregistrée dans votre compte Airzone, qui l'exécute — comme si vous
-            l'aviez créée dans l'application Airzone.
+            {t(
+              "Enregistrée dans votre compte Airzone, qui l'exécute — comme si vous l'aviez créée dans l'application Airzone."
+            )}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-5">
           {!schedule && (
             <div className="grid gap-2">
-              <Label>Installation</Label>
+              <Label>{t("Installation")}</Label>
               <Select
                 value={cloudId}
                 onValueChange={(v) => {
@@ -195,7 +203,7 @@ function ScheduleEditor({
                 }}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Choisir" />
+                  <SelectValue placeholder={t("Choisir")} />
                 </SelectTrigger>
                 <SelectContent>
                   {linked.map((c) => (
@@ -208,17 +216,17 @@ function ScheduleEditor({
             </div>
           )}
           <div className="grid gap-2">
-            <Label htmlFor="az-name">Nom</Label>
+            <Label htmlFor="az-name">{t("Nom")}</Label>
             <Input
               id="az-name"
               value={name}
-              placeholder="ex. Réveil"
+              placeholder={t("ex. Réveil")}
               maxLength={11}
               onChange={(e) => setName(e.target.value)}
             />
           </div>
           <div className="grid gap-2">
-            <Label>Zones</Label>
+            <Label>{t("Zones")}</Label>
             <div className="grid gap-1 sm:grid-cols-2">
               {zoneList.map((z) => {
                 const k = `${z.system_id}-${z.zone_id}`
@@ -246,7 +254,7 @@ function ScheduleEditor({
           </div>
           <div className="flex flex-wrap items-end gap-4">
             <div className="grid gap-2">
-              <Label>Jours</Label>
+              <Label>{t("Jours")}</Label>
               <ToggleGroup
                 type="multiple"
                 variant="outline"
@@ -266,7 +274,7 @@ function ScheduleEditor({
               </ToggleGroup>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="az-time">Heure</Label>
+              <Label htmlFor="az-time">{t("Heure")}</Label>
               <Input
                 id="az-time"
                 type="time"
@@ -277,7 +285,7 @@ function ScheduleEditor({
             </div>
           </div>
           <div className="grid gap-2">
-            <Label>Action</Label>
+            <Label>{t("Action")}</Label>
             <ToggleGroup
               type="single"
               variant="outline"
@@ -301,7 +309,7 @@ function ScheduleEditor({
                 value="mode"
                 className="data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
               >
-                Mode
+                {t("Mode")}
               </ToggleGroupItem>
             </ToggleGroup>
             {kind !== "off" && (
@@ -327,7 +335,7 @@ function ScheduleEditor({
                   type="number"
                   step="0.5"
                   className="w-36"
-                  placeholder="Consigne (°)"
+                  placeholder={t("Consigne (°)")}
                   value={setpoint}
                   onChange={(e) => setSetpoint(e.target.value)}
                 />
@@ -337,7 +345,7 @@ function ScheduleEditor({
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
-            Annuler
+            {t("Annuler")}
           </Button>
           <Button
             onClick={() => save.mutate()}
@@ -349,7 +357,7 @@ function ScheduleEditor({
               !cloudId
             }
           >
-            {save.isPending ? "Envoi à Airzone…" : "Enregistrer"}
+            {save.isPending ? t("Envoi à Airzone…") : t("Enregistrer")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -368,7 +376,8 @@ function ScheduleCard({
 }: {
   s: AirzoneSchedule
   inst: Installation | undefined
-  onEdit: () => void
+  /** Absent when the user may not change schedules (switching on/off stays possible). */
+  onEdit?: () => void
 }) {
   const qc = useQueryClient()
   const done = (r: SchedulesState) => qc.setQueryData(["airzone-schedules"], r)
@@ -378,7 +387,9 @@ function ScheduleCard({
     onSuccess: (r, enabled) => {
       done(r)
       toast.success(
-        `« ${s.name} » ${enabled ? "activée" : "désactivée"} chez Airzone`
+        enabled
+          ? t("« {name} » activée chez Airzone", { name: s.name })
+          : t("« {name} » désactivée chez Airzone", { name: s.name })
       )
     },
     onError: (e) => toast.error(errorText(e)),
@@ -387,7 +398,7 @@ function ScheduleCard({
     mutationFn: () => api.deleteAirzoneSchedule(s.cloud_id, s.id),
     onSuccess: (r) => {
       done(r)
-      toast.success("Programmation supprimée chez Airzone")
+      toast.success(t("Programmation supprimée chez Airzone"))
     },
     onError: (e) => toast.error(errorText(e)),
   })
@@ -401,7 +412,7 @@ function ScheduleCard({
               <h3 className="truncate font-semibold">{s.name}</h3>
             </div>
             <p className="text-sm text-muted-foreground">
-              {s.time ? daysText(s.days, s.time) : "Par dates"}
+              {s.time ? daysText(s.days, s.time) : t("Par dates")}
               {s.end && ` → ${s.end.time}`}
             </p>
           </div>
@@ -409,7 +420,7 @@ function ScheduleCard({
             checked={s.enabled}
             disabled={toggle.isPending}
             onCheckedChange={(v) => toggle.mutate(v)}
-            aria-label="Activer"
+            aria-label={t("Activer")}
           />
         </div>
         <div className="flex flex-wrap gap-1.5">
@@ -422,20 +433,24 @@ function ScheduleCard({
         </div>
         {s.note && <p className="text-xs text-muted-foreground">{s.note}</p>}
         <div className="flex justify-end gap-1">
-          {s.editable && (
+          {s.editable && onEdit && (
             <Button size="sm" variant="ghost" onClick={onEdit}>
-              <Pencil /> Modifier
+              <Pencil /> {t("Modifier")}
             </Button>
           )}
-          <Confirm
-            title={`Supprimer « ${s.name} » ?`}
-            description="La programmation est supprimée de votre compte Airzone."
-            onConfirm={() => remove.mutate()}
-          >
-            <Button size="icon" variant="ghost" aria-label="Supprimer">
-              <Trash2 />
-            </Button>
-          </Confirm>
+          {onEdit && (
+            <Confirm
+              title={`Supprimer « ${s.name} » ?`}
+              description={t(
+                "La programmation est supprimée de votre compte Airzone."
+              )}
+              onConfirm={() => remove.mutate()}
+            >
+              <Button size="icon" variant="ghost" aria-label={t("Supprimer")}>
+                <Trash2 />
+              </Button>
+            </Confirm>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -451,6 +466,7 @@ export function AirzoneSchedulesSection() {
   })
   const status = useQuery({ queryKey: ["status"], queryFn: api.status })
   const cloud = useQuery({ queryKey: ["cloud"], queryFn: api.cloud })
+  const canEdit = useRights().schedules
   const [editing, setEditing] = useState<{
     s?: AirzoneSchedule
     nonce: number
@@ -474,12 +490,19 @@ export function AirzoneSchedulesSection() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="flex items-center gap-2 text-lg font-semibold">
-            <Cloud className="size-5" /> Programmations Airzone
+            <Cloud className="size-5" /> {t("Programmations Airzone")}
           </h2>
           <p className="text-sm text-muted-foreground">
-            Celles de l'application Airzone, exécutées par Airzone.
-            Synchronisées toutes les heures
-            {st.last_sync ? ` · dernière ${relativeTime(st.last_sync)}` : ""}.
+            {st.last_sync
+              ? t(
+                  "Celles de l'application Airzone, exécutées par Airzone. Synchronisées toutes les heures · dernière {when}.",
+                  {
+                    when: relativeTime(st.last_sync),
+                  }
+                )
+              : t(
+                  "Celles de l'application Airzone, exécutées par Airzone. Synchronisées toutes les heures."
+                )}
           </p>
           {st.last_error && (
             <p className="text-sm text-destructive">{st.last_error}</p>
@@ -492,16 +515,18 @@ export function AirzoneSchedulesSection() {
             disabled={refresh.isPending}
           >
             <RefreshCw className={refresh.isPending ? "animate-spin" : ""} />{" "}
-            Actualiser
+            {t("Actualiser")}
           </Button>
-          <Button
-            onClick={() => setEditing({ nonce: Date.now() })}
-            disabled={
-              !cloudInstallations.some((c) => c.installation_id !== null)
-            }
-          >
-            <Plus /> Nouvelle
-          </Button>
+          {canEdit && (
+            <Button
+              onClick={() => setEditing({ nonce: Date.now() })}
+              disabled={
+                !cloudInstallations.some((c) => c.installation_id !== null)
+              }
+            >
+              <Plus /> {t("Nouvelle")}
+            </Button>
+          )}
         </div>
       </div>
       {[...groups.entries()].map(([installation, list]) => {
@@ -517,7 +542,11 @@ export function AirzoneSchedulesSection() {
                   key={s.id}
                   s={s}
                   inst={inst}
-                  onEdit={() => setEditing({ s, nonce: Date.now() })}
+                  onEdit={
+                    canEdit
+                      ? () => setEditing({ s, nonce: Date.now() })
+                      : undefined
+                  }
                 />
               ))}
             </div>
@@ -526,7 +555,7 @@ export function AirzoneSchedulesSection() {
       })}
       {st.schedules.length === 0 && (
         <p className="rounded-3xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-          Aucune programmation dans l'application Airzone.
+          {t("Aucune programmation dans l'application Airzone.")}
         </p>
       )}
       {editing && (

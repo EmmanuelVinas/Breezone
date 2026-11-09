@@ -41,6 +41,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { t, tn } from "@/lib/i18n"
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
@@ -49,10 +50,13 @@ export function accessSummary(
   c: CloudInstallation,
   defaultSubnet: string | null
 ) {
-  if (c.access) return `Adresse ${c.access.host}:${c.access.port}`
+  if (c.access)
+    return t("Adresse {address}", {
+      address: `${c.access.host}:${c.access.port}`,
+    })
   return defaultSubnet
-    ? `Recherche sur ${defaultSubnet}`
-    : "Réseau local à renseigner"
+    ? t("Recherche sur {subnet}", { subnet: defaultSubnet })
+    : t("Réseau local à renseigner")
 }
 
 /**
@@ -111,7 +115,12 @@ export function AccessDialog({
     mutationFn: (id: number) => api.linkCloud(id, inst.cloud_id),
     onSuccess: (i) => {
       refresh()
-      toast.success(`« ${inst.name} » est pilotée par ce serveur (${i.name})`)
+      toast.success(
+        t("« {name} » est pilotée par ce serveur ({local})", {
+          name: inst.name,
+          local: i.name,
+        })
+      )
       onClose()
     },
     onError: (e) => toast.error(errorText(e)),
@@ -127,10 +136,18 @@ export function AccessDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Accès · {inst.name}</DialogTitle>
+          <DialogTitle>{t("Accès · {name}", { name: inst.name })}</DialogTitle>
           <DialogDescription>
-            Comment ce serveur joint le WebServer Airzone de cette installation
-            {inst.ws_ids.length > 0 && <> (MAC {inst.ws_ids.join(", ")})</>}.
+            {inst.ws_ids.length > 0
+              ? t(
+                  "Comment ce serveur joint le WebServer Airzone de cette installation (MAC {mac}).",
+                  {
+                    mac: inst.ws_ids.join(", "),
+                  }
+                )
+              : t(
+                  "Comment ce serveur joint le WebServer Airzone de cette installation."
+                )}
           </DialogDescription>
         </DialogHeader>
         <ToggleGroup
@@ -141,26 +158,32 @@ export function AccessDialog({
           onValueChange={(v) => v && setMode(v as "local" | "node")}
         >
           <ToggleGroupItem value="local" className="flex-1">
-            <Network /> Réseau de ce serveur
+            <Network /> {t("Réseau de ce serveur")}
           </ToggleGroupItem>
           <ToggleGroupItem value="node" className="flex-1">
-            <Server /> Via un autre serveur
+            <Server /> {t("Via un autre serveur")}
           </ToggleGroupItem>
         </ToggleGroup>
 
         {mode === "local" ? (
           <div className="grid grid-cols-[1fr_6rem] gap-3">
             <div className="grid gap-2">
-              <Label htmlFor="ah">Adresse IP ou nom</Label>
+              <Label htmlFor="ah">{t("Adresse IP ou nom")}</Label>
               <Input
                 id="ah"
                 value={host}
-                placeholder={`vide = recherche${defaultSubnet ? ` sur ${defaultSubnet}` : ""}`}
+                placeholder={
+                  defaultSubnet
+                    ? t("vide = recherche sur {subnet}", {
+                        subnet: defaultSubnet,
+                      })
+                    : t("vide = recherche")
+                }
                 onChange={(e) => setHost(e.target.value)}
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="ap">Port</Label>
+              <Label htmlFor="ap">{t("Port")}</Label>
               <Input
                 id="ap"
                 type="number"
@@ -169,18 +192,17 @@ export function AccessDialog({
               />
             </div>
             <p className="col-span-2 text-xs text-muted-foreground">
-              Le WebServer est sur le même réseau que ce serveur. Breezone
-              vérifie qu'il s'agit bien de celui de cette installation (adresse
-              MAC).
+              {t(
+                "Le WebServer est sur le même réseau que ce serveur. Breezone vérifie qu'il s'agit bien de celui de cette installation (adresse MAC)."
+              )}
             </p>
           </div>
         ) : (
           <div className="grid gap-3">
             <p className="text-sm text-muted-foreground">
-              L'installation est sur un autre site, pilotée par le serveur
-              Breezone installé là-bas. Sur ce serveur : Réglages › Partages ›
-              Nouveau partage, puis ajoutez son jeton ici. Les installations
-              partagées sont reconnues automatiquement (même WebServer).
+              {t(
+                "L'installation est sur un autre site, pilotée par le serveur Breezone installé là-bas. Sur ce serveur : Réglages › Partages › Nouveau partage, puis ajoutez son jeton ici. Les installations partagées sont reconnues automatiquement (même WebServer)."
+              )}
             </p>
             {(nodes.data ?? []).map((n) => (
               <div
@@ -197,14 +219,14 @@ export function AccessDialog({
               className="justify-self-start"
               onClick={() => setAddingNode(true)}
             >
-              <Plus /> Ajouter un serveur Breezone
+              <Plus /> {t("Ajouter un serveur Breezone")}
             </Button>
           </div>
         )}
 
         {candidates.length > 0 && (
           <div className="grid gap-2 rounded-2xl border border-dashed p-3">
-            <Label>C'est une installation déjà présente ici</Label>
+            <Label>{t("C'est une installation déjà présente ici")}</Label>
             <Select
               value={
                 linked && candidates.includes(linked) ? String(linked.id) : ""
@@ -213,14 +235,16 @@ export function AccessDialog({
               disabled={link.isPending}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Choisir l'installation correspondante" />
+                <SelectValue
+                  placeholder={t("Choisir l'installation correspondante")}
+                />
               </SelectTrigger>
               <SelectContent>
                 {candidates.map((i) => (
                   <SelectItem key={i.id} value={String(i.id)}>
                     {i.name} ·{" "}
                     {i.node_id !== null
-                      ? `via ${i.host}`
+                      ? t("via {name}", { name: i.host })
                       : `${i.host}:${i.port}`}
                   </SelectItem>
                 ))}
@@ -234,20 +258,20 @@ export function AccessDialog({
             {result.attached ? <CheckCircle2 /> : <TriangleAlert />}
             <AlertTitle>
               {result.attached
-                ? "Installation jointe"
-                : "Installation non jointe"}
+                ? t("Installation jointe")
+                : t("Installation non jointe")}
             </AlertTitle>
             <AlertDescription>{result.message}</AlertDescription>
           </Alert>
         )}
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
-            Fermer
+            {t("Fermer")}
           </Button>
           {mode === "local" && (
             <Button onClick={() => save.mutate()} disabled={save.isPending}>
               {save.isPending && <Loader2 className="animate-spin" />}{" "}
-              Enregistrer et tester
+              {t("Enregistrer et tester")}
             </Button>
           )}
         </DialogFooter>
@@ -278,10 +302,11 @@ export function AirzoneInstallationsCard({
   return (
     <Card className="rounded-3xl">
       <CardHeader>
-        <CardTitle>Vos installations Airzone</CardTitle>
+        <CardTitle>{t("Vos installations Airzone")}</CardTitle>
         <CardDescription>
-          Importées de votre compte Airzone, avec la façon dont ce serveur joint
-          leur WebServer.
+          {t(
+            "Importées de votre compte Airzone, avec la façon dont ce serveur joint leur WebServer."
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-2">
@@ -296,11 +321,11 @@ export function AirzoneInstallationsCard({
                 <div className="flex items-center gap-2">
                   <span className="truncate font-medium">{c.name}</span>
                   {c.reachable && via ? (
-                    <Badge>Via {via}</Badge>
+                    <Badge>{t("Via {name}", { name: via })}</Badge>
                   ) : c.reachable ? (
-                    <Badge>Pilotée ici</Badge>
+                    <Badge>{t("Pilotée ici")}</Badge>
                   ) : (
-                    <Badge variant="outline">Non jointe</Badge>
+                    <Badge variant="outline">{t("Non jointe")}</Badge>
                   )}
                 </div>
                 <div className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
@@ -309,10 +334,10 @@ export function AirzoneInstallationsCard({
                       <MapPin className="size-3" /> {c.location}
                     </span>
                   )}
-                  <span>{c.zones} zones</span>
+                  <span>{tn(c.zones, "{n} zone", "{n} zones")}</span>
                   <span>
                     {via
-                      ? `Jointe via le serveur ${via}`
+                      ? t("Jointe via le serveur {name}", { name: via })
                       : accessSummary(c, defaultSubnet)}
                   </span>
                 </div>
@@ -322,7 +347,7 @@ export function AirzoneInstallationsCard({
                 variant={c.reachable ? "ghost" : "outline"}
                 onClick={() => setEditing(c.cloud_id)}
               >
-                <Network /> Accès
+                <Network /> {t("Accès")}
               </Button>
             </div>
           )

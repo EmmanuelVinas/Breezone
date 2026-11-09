@@ -23,13 +23,14 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { t, tn } from "@/lib/i18n"
 
 const KIND: Record<FeedEvent["kind"], { label: string; icon: LucideIcon }> = {
-  command: { label: "Commandes", icon: SlidersHorizontal },
-  connection: { label: "Connexion", icon: Plug },
-  routine: { label: "Programmations", icon: CalendarClock },
-  system: { label: "Système", icon: Server },
-  auth: { label: "Sécurité", icon: KeyRound },
+  command: { label: t("Commandes"), icon: SlidersHorizontal },
+  connection: { label: t("Connexion"), icon: Plug },
+  routine: { label: t("Programmations"), icon: CalendarClock },
+  system: { label: t("Système"), icon: Server },
+  auth: { label: t("Sécurité"), icon: KeyRound },
 }
 
 export function ActivityPage() {
@@ -64,8 +65,8 @@ export function ActivityPage() {
   return (
     <>
       <PageHeader
-        title="Activité"
-        description="État des centrales Airzone et journal en temps réel."
+        title={t("Activité")}
+        description={t("État des centrales Airzone et journal en temps réel.")}
       />
 
       <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -84,8 +85,11 @@ export function ActivityPage() {
                     )}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  {installationAddress(i)} · {i.zones.length} zones · vue{" "}
-                  {relativeTime(i.connection.last_seen)}
+                  {installationAddress(i)} ·{" "}
+                  {tn(i.zones.length, "{n} zone", "{n} zones")} ·{" "}
+                  {t("vue {when}", {
+                    when: relativeTime(i.connection.last_seen),
+                  })}
                 </div>
                 {i.connection.last_error && i.connection.state !== "online" && (
                   <div className="mt-2 line-clamp-2 text-xs text-destructive">
@@ -107,7 +111,7 @@ export function ActivityPage() {
           onValueChange={(v) => v && setFilter(v)}
           className="justify-start"
         >
-          <ToggleGroupItem value="all">Tout</ToggleGroupItem>
+          <ToggleGroupItem value="all">{t("Tout")}</ToggleGroupItem>
           {(Object.keys(KIND) as FeedEvent["kind"][]).map((k) => (
             <ToggleGroupItem key={k} value={k}>
               {KIND[k].label}
@@ -126,7 +130,7 @@ export function ActivityPage() {
             </div>
           ) : list.length === 0 ? (
             <p className="p-10 text-center text-sm text-muted-foreground">
-              Rien pour le moment.
+              {t("Rien pour le moment.")}
             </p>
           ) : (
             <ul className="divide-y">
@@ -172,7 +176,7 @@ export function ActivityPage() {
       {(events.data?.length ?? 0) >= 150 && (
         <div className="mt-4 flex justify-center">
           <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
-            Charger plus
+            {t("Charger plus")}
           </Button>
         </div>
       )}

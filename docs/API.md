@@ -23,6 +23,16 @@ Règles de compatibilité :
   demande de mettre le serveur à jour ; au-dessus de la sienne, elle propose de se mettre à jour.
 - Un serveur qui n'annonce pas `api_version` (jusqu'à 0.4.x) parle l'API 1.
 
+## Langue des messages
+
+Les textes écrits par le serveur pour les personnes (`error` des réponses, messages du journal,
+erreurs de connexion et de synchronisation, notes) suivent l'en-tête `Accept-Language` de la requête
+(`fr`, `en` ou `es` ; anglais par défaut). Sur le WebSocket, c'est `lang` dans le message
+d'authentification. Le journal est enregistré dans les trois langues. Quelques messages lus par des
+programmes restent en anglais : `invalid username or password` (le web et l'application affichent
+leur propre texte), `share expired`, `share revoked` et `pairing pending approval` (lus par l'autre
+serveur).
+
 ## Premier démarrage et sessions
 
 | Méthode | Chemin | Description |
@@ -33,7 +43,8 @@ Règles de compatibilité :
 | POST | `/api/auth/login` | `{username, password, device_name?}` → `TokenPair` (verrou 15 min après 5 échecs) |
 | POST | `/api/auth/refresh` | `{refresh_token}` → nouveau `TokenPair` ; l'ancien refresh token reste valable 120 s |
 | POST | `/api/auth/logout` | `{refresh_token}` → révoque l'appareil |
-| GET 🔒 | `/api/me` | Utilisateur courant, avec `access` : installations visibles (`null` pour un administrateur) |
+| GET 🔒 | `/api/me` | Utilisateur courant, avec `access` : installations visibles (`null` pour un administrateur), `rights` : ce qu'il peut modifier (voir plus bas), et `language` : langue choisie dans le profil (`"fr"`, `"en"`, `"es"` ou `null` pour suivre le navigateur) |
+| PUT 🔒 | `/api/me/language` | `{language: "fr"\|"en"\|"es"\|null}` — langue du profil, appliquée par l'interface web |
 | PUT 🔒 | `/api/me/password` | `{current_password, new_password}` — déconnecte les autres appareils |
 | GET 🔒 | `/api/sessions` | Appareils connectés (`current` = celui-ci) |
 | DELETE 🔒 | `/api/sessions/{id}` | Déconnecte un appareil (immédiat, WebSocket compris) |
@@ -44,9 +55,9 @@ Règles de compatibilité :
 
 | Méthode | Chemin | Description |
 |---------|--------|-------------|
-| GET | `/api/users` | Liste, avec `access:[{installation_id, permission:"read"\|"control"}]` |
-| POST | `/api/users` | `{username, password, role: "admin"\|"user", access?}` |
-| PUT | `/api/users/{id}` | `{role?, password?, access?}` — un nouveau mot de passe déconnecte l'utilisateur partout ; `access` remplace les installations données |
+| GET | `/api/users` | Liste, avec `access:[{installation_id, permission:"read"\|"control"}]` et `rights` |
+| POST | `/api/users` | `{username, password, role: "admin"\|"user", access?, rights?}` (`rights` : tout autorisé par défaut) |
+| PUT | `/api/users/{id}` | `{role?, password?, access?, rights?}` — un nouveau mot de passe déconnecte l'utilisateur partout ; `access` remplace les installations données, `rights` les droits |
 | DELETE | `/api/users/{id}` | Impossible pour soi-même ou le dernier administrateur |
 
 Un administrateur voit et pilote toutes les installations. Un utilisateur (`role: "user"`) ne voit
@@ -55,6 +66,16 @@ on les demande), une installation en `read` est envoyée avec `controllable: fal
 répondent 403. Les minuteries et routines ne peuvent viser que des installations pilotables par
 l'utilisateur (la cible « toutes » est réservée aux administrateurs). Une installation ajoutée
 ensuite (à la main, depuis le compte Airzone ou via un autre nœud) n'est donnée à personne.
+
+Sur les installations qu'il pilote, un utilisateur peut aussi modifier ce que ses `rights`
+autorisent : `{zones, routines, schedules}`, trois booléens, tous à `true` par défaut (toujours
+`true` pour un administrateur). `zones` : nom, groupe et ordre des zones (`…/meta`) ; `routines` :
+créer, modifier et supprimer des routines (les lancer ne demande que le pilotage) ; `schedules` :
+créer, modifier et supprimer des programmations Airzone (les activer ou désactiver ne demande que
+le pilotage). Sans le droit, ces requêtes répondent 403. Les réglages du serveur (installations,
+compte Airzone, recherche réseau, nœuds, partages, utilisateurs : 👑) restent réservés aux
+administrateurs. Un changement d'accès ou de droits envoie un nouveau `snapshot` sur le WebSocket
+de l'utilisateur ; les clients relisent alors `/api/me`.
 
 ## Installations et zones
 
@@ -223,7 +244,7 @@ avec `kind` ∈ `connection | command | routine | system | auth` et `level` ∈ 
 
 ## Temps réel (WebSocket)
 
-`GET /api/ws`, puis envoyer dans les 10 s : `{"type":"auth","token":"<access_token>"}` (jamais dans l'URL).
+`GET /api/ws`, puis envoyer dans les 10 s : `{"type":"auth","token":"<access_token>","lang":"fr"}` (jamais dans l'URL ; `lang` facultatif, sinon `Accept-Language` de la requête).
 
 Messages reçus :
 

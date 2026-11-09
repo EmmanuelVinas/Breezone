@@ -2,7 +2,6 @@ package com.breezone.app.data
 
 import kotlin.concurrent.Volatile
 
-/** SHA-256 of `bytes` (platform implementation). */
 expect fun sha256(bytes: ByteArray): ByteArray
 
 /** Lowercase hex SHA-256 of a certificate (DER), as the server and the web UI show it. */
@@ -17,7 +16,6 @@ data class CertificateInfo(
     val subject: String?,
     val names: List<String>,
     val issuer: String?,
-    /** Epoch seconds. */
     val notBefore: Long?,
     val notAfter: Long?,
     val selfSigned: Boolean,
@@ -58,16 +56,12 @@ object TlsTrust {
         pins = if (fingerprint == null) pins - k else pins + (k to fingerprint)
     }
 
-    /** A certificate was trusted for the server at `url`. */
     fun isPinned(url: String): Boolean = keyOf(url)?.let { it in pins } == true
 
-    /** Certificate the server at `url` presented last, if any. */
     fun presented(url: String): CertificateInfo? = keyOf(url)?.let { seen[it] }?.let(::parseCertificate)
 }
 
-// ---------------------------------------------------------------------------------------
 // Minimal X.509 reading (DER): subject and issuer common names, names covered, dates.
-// ---------------------------------------------------------------------------------------
 
 private class Der(val tag: Int, val bytes: ByteArray, val start: Int, val end: Int) {
     fun children(): List<Der> {
@@ -123,7 +117,6 @@ private fun time(t: Der): Long? {
     return daysFromCivil(y, mo, d) * 86_400L + h * 3600L + mi * 60L + se
 }
 
-/** Days since 1970-01-01 (proleptic Gregorian calendar). */
 private fun daysFromCivil(year: Int, month: Int, day: Int): Long {
     val y = if (month <= 2) year - 1 else year
     val era = (if (y >= 0) y else y - 399) / 400

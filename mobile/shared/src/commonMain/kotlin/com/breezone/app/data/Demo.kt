@@ -68,7 +68,6 @@ const val DEMO_LOGIN_URL = "https://breezone.cloud"
 fun isDemoLogin(username: String, password: String): Boolean =
     username.trim().equals("demo", ignoreCase = true) && password == "demo"
 
-/** HTTP client whose requests are answered by the demonstration server. */
 fun demoHttpClient(): HttpClient = HttpClient(MockEngine { request -> DemoServer.handle(this, request) }) {
     install(ContentNegotiation) { json(FzJson) }
 }
@@ -175,7 +174,6 @@ object DemoServer {
         }
     }
 
-    /** Live channel: hello, then the installations as they evolve. */
     fun live(): Flow<JsonObject> = flow {
         emit(buildJsonObject { put("type", "hello") })
         while (true) {
@@ -242,7 +240,6 @@ object DemoServer {
                 val results = actions.map { a -> ActionResult(apply(a.installationId, a.systemId, a.zoneId, ZoneCommand(on = a.on, setpoint = a.setpoint, mode = a.mode)) != null) }
                 ok(RunResult.serializer(), RunResult(results))
             }
-            // /api/installations/{id}/zones/{sys}/{zone}[/history]
             parts.size >= 6 && parts[1] == "installations" && parts[3] == "zones" -> {
                 val (inst, sys, zone) = Triple(parts[2].toLong(), parts[4].toLong(), parts[5].toLong())
                 val z = installations?.firstOrNull { it.id == inst }?.zone(sys, zone)
@@ -298,7 +295,6 @@ object DemoServer {
                 )
                 scope.schedulesState()
             }
-            // /api/airzone/schedules/{cloud_id}/{id}[/enabled]
             parts.size >= 5 && parts[1] == "airzone" && parts[2] == "schedules" -> {
                 val index = schedules.indexOfFirst { it.cloudId == parts[3] && it.id == parts[4] }
                 if (index < 0) return@withLock json("""{"error":"schedule not found"}""", HttpStatusCode.NotFound)

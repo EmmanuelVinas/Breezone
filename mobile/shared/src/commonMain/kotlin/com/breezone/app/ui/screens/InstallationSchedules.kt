@@ -58,9 +58,8 @@ import org.koin.compose.koinInject
 /** Airzone limits schedule names to 11 characters. */
 private const val NAME_MAX = 11
 
-/** Schedules of the Airzone account for one installation, shown in its "Schedules" tab. */
 @Composable
-fun InstallationSchedules(serverId: String, inst: Installation, modifier: Modifier = Modifier) {
+fun InstallationSchedules(serverId: String, inst: Installation, canEdit: Boolean, modifier: Modifier = Modifier) {
     val hub = koinInject<Hub>()
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf<SchedulesState?>(null) }
@@ -77,7 +76,6 @@ fun InstallationSchedules(serverId: String, inst: Installation, modifier: Modifi
             ?: runCatching { api.cloud() }.getOrNull()?.installations?.firstOrNull { it.installationId == inst.id }?.cloudId
     }
 
-    /** Runs a call that answers with the new schedules. */
     fun apply(call: suspend () -> SchedulesState?) {
         hub.launchAttempt(scope) { call()?.let { state = it } }
     }
@@ -87,7 +85,7 @@ fun InstallationSchedules(serverId: String, inst: Installation, modifier: Modifi
     SectionList(
         hint = stringResource(Res.string.schedules_hint),
         addLabel = stringResource(Res.string.schedules_new),
-        onAdd = if (inst.controllable && s?.account == true && cloudId != null) ({ creating = true }) else null,
+        onAdd = if (canEdit && s?.account == true && cloudId != null) ({ creating = true }) else null,
         modifier = modifier,
     ) {
         when {
@@ -105,12 +103,12 @@ fun InstallationSchedules(serverId: String, inst: Installation, modifier: Modifi
             }
         }
         items(schedules, key = { "${it.cloudId}-${it.id}" }, contentType = { "schedule" }) { schedule ->
-            val canEdit = schedule.editable && inst.controllable
+            val editable = schedule.editable && canEdit
             ScheduleCard(
                 schedule = schedule,
                 inst = inst,
-                canEdit = canEdit,
-                onClick = { if (canEdit) editing = schedule },
+                canEdit = editable,
+                onClick = { if (editable) editing = schedule },
                 onEnabled = { enabled -> apply { hub.api(serverId)?.setScheduleEnabled(schedule, enabled) } },
             )
         }

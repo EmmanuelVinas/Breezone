@@ -22,7 +22,6 @@ data class Health(
     val minClientApi: Int = 1,
 )
 
-/** Which side must be updated before the app and a server can work together. */
 enum class UpdateNeeded { App, Server }
 
 fun updateNeeded(health: Health): UpdateNeeded? = when {
@@ -34,5 +33,4 @@ fun updateNeeded(health: Health): UpdateNeeded? = when {
 /** The server speaks a newer API than the app: still compatible, but an app update would add features. */
 fun appUpdateAvailable(health: Health) = health.apiVersion > CLIENT_API && updateNeeded(health) == null
 
-/** Thrown when the app and a server are too far apart in version to work together. */
 class IncompatibleException(val update: UpdateNeeded, val serverVersion: String?, message: String) : Exception(message)

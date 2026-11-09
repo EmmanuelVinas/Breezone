@@ -19,8 +19,8 @@ async fn a_websocket_request_without_its_headers_is_explained() {
     let resp = http.get(format!("{base}/api/ws")).send().await.unwrap();
     assert_eq!(resp.status(), 400);
     let body: Value = resp.json().await.unwrap();
-    assert!(body["error"].as_str().unwrap().contains("en-têtes WebSocket"), "{body}");
+    assert!(body["error"].as_str().unwrap().contains("WebSocket headers"), "{body}");
 
     let events: Value = http.get(format!("{base}/api/events?limit=10")).bearer_auth(token).send().await.unwrap().json().await.unwrap();
-    assert!(events.as_array().unwrap().iter().any(|e| e["message"].as_str().unwrap_or_default().contains("Temps réel indisponible")), "{events}");
+    assert!(events.as_array().unwrap().iter().any(|e| e["message"].as_str().unwrap_or_default().contains("Live updates unavailable")), "{events}");
 }

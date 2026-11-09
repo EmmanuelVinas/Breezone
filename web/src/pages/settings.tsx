@@ -16,6 +16,7 @@ import {
   Smartphone,
   Trash2,
   UserPlus,
+  Languages,
 } from "lucide-react"
 import { toast } from "sonner"
 import type {
@@ -23,8 +24,9 @@ import type {
   Found,
   InstallationConfig,
   SyncReport,
+  UserRights,
 } from "@/lib/api"
-import { api, currentUser } from "@/lib/api"
+import { ALL_RIGHTS, api, currentUser } from "@/lib/api"
 import { dateTime, relativeTime } from "@/lib/format"
 import { PageHeader } from "@/components/app-shell"
 import { InstallationMap } from "@/components/installation-map"
@@ -62,6 +64,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { browserLang, LANG_NAMES, setLang, t, tn, type Lang } from "@/lib/i18n"
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
@@ -101,9 +104,12 @@ function InstallationDialog({
         r.ok
           ? {
               ok: true,
-              text: `${r.zones?.length ?? 0} zone(s) : ${r.zones?.map((z) => z.name).join(", ")}`,
+              text: t("{n} zone(s) : {names}", {
+                n: r.zones?.length ?? 0,
+                names: r.zones?.map((z) => z.name).join(", ") ?? "",
+              }),
             }
-          : { ok: false, text: r.error ?? "Pas de réponse" }
+          : { ok: false, text: r.error ?? t("Pas de réponse") }
       ),
     onError: (e) => setTest({ ok: false, text: errorText(e) }),
   })
@@ -120,7 +126,9 @@ function InstallationDialog({
         : api.createInstallation(data)
     },
     onSuccess: () => {
-      toast.success(editing ? "Installation modifiée" : "Installation ajoutée")
+      toast.success(
+        editing ? t("Installation modifiée") : t("Installation ajoutée")
+      )
       qc.invalidateQueries({ queryKey: ["installations"] })
       qc.invalidateQueries({ queryKey: ["status"] })
       onClose()
@@ -133,26 +141,29 @@ function InstallationDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {editing ? "Modifier l'installation" : "Ajouter une installation"}
+            {editing
+              ? t("Modifier l'installation")
+              : t("Ajouter une installation")}
           </DialogTitle>
           <DialogDescription>
-            Adresse du WebServer Airzone sur le réseau local (API locale, port
-            3000).
+            {t(
+              "Adresse du WebServer Airzone sur le réseau local (API locale, port 3000)."
+            )}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
           <div className="grid gap-2">
-            <Label htmlFor="in">Nom</Label>
+            <Label htmlFor="in">{t("Nom")}</Label>
             <Input
               id="in"
               value={form.name}
-              placeholder="Maison"
+              placeholder={t("Maison")}
               onChange={(e) => set({ name: e.target.value })}
             />
           </div>
           <div className="grid grid-cols-[1fr_6rem] gap-3">
             <div className="grid gap-2">
-              <Label htmlFor="ih">Adresse IP</Label>
+              <Label htmlFor="ih">{t("Adresse IP")}</Label>
               <Input
                 id="ih"
                 value={form.host}
@@ -161,7 +172,7 @@ function InstallationDialog({
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="ip">Port</Label>
+              <Label htmlFor="ip">{t("Port")}</Label>
               <Input
                 id="ip"
                 type="number"
@@ -175,12 +186,12 @@ function InstallationDialog({
               checked={form.enabled}
               onCheckedChange={(enabled) => set({ enabled })}
             />{" "}
-            Activée (interrogée régulièrement)
+            {t("Activée (interrogée régulièrement)")}
           </label>
           {test && (
             <Alert variant={test.ok ? "default" : "destructive"}>
               <AlertTitle>
-                {test.ok ? "WebServer joignable" : "Échec"}
+                {test.ok ? t("WebServer joignable") : t("Échec")}
               </AlertTitle>
               <AlertDescription>{test.text}</AlertDescription>
             </Alert>
@@ -192,13 +203,14 @@ function InstallationDialog({
             onClick={() => runTest.mutate()}
             disabled={!form.host || runTest.isPending}
           >
-            {runTest.isPending && <Loader2 className="animate-spin" />} Tester
+            {runTest.isPending && <Loader2 className="animate-spin" />}{" "}
+            {t("Tester")}
           </Button>
           <Button
             onClick={() => save.mutate()}
             disabled={!form.name || !form.host || save.isPending}
           >
-            Enregistrer
+            {t("Enregistrer")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -233,8 +245,8 @@ function InstallationsTab({ openAccess }: { openAccess: string | null }) {
       qc.invalidateQueries({ queryKey: ["cloud"] })
       toast.success(
         d.subnet
-          ? `Réseau du serveur : ${d.subnet}`
-          : "Réseau du serveur : automatique"
+          ? t("Réseau du serveur : {subnet}", { subnet: d.subnet })
+          : t("Réseau du serveur : automatique")
       )
     },
     onError: (e) => toast.error(errorText(e)),
@@ -267,28 +279,36 @@ function InstallationsTab({ openAccess }: { openAccess: string | null }) {
       <Card className="rounded-3xl">
         <CardHeader>
           <CardTitle className="flex flex-wrap items-center gap-2">
-            <Network className="size-4" /> WebServers sur le réseau de ce
-            serveur
+            <Network className="size-4" />{" "}
+            {t("WebServers sur le réseau de ce serveur")}
             {!showSearch ? null : saved ? (
               <Badge>{saved}</Badge>
             ) : effective ? (
-              <Badge variant="secondary">{effective} · détecté</Badge>
+              <Badge variant="secondary">
+                {t("{subnet} · détecté", { subnet: effective })}
+              </Badge>
             ) : (
-              <Badge variant="destructive">Non défini</Badge>
+              <Badge variant="destructive">{t("Non défini")}</Badge>
             )}
           </CardTitle>
           <CardDescription>
-            Les WebServers Airzone que ce serveur Breezone joint directement (un
-            WebServer = une installation).
+            {t(
+              "Les WebServers Airzone que ce serveur Breezone joint directement (un WebServer = une installation)."
+            )}
             {!showSearch
               ? ""
-              : saved
-                ? " Enregistré dans les réglages."
-                : effective
-                  ? " Déduit de l'adresse du serveur ; enregistrez-le pour le fixer."
-                  : discovery.data?.in_container
-                    ? " Le serveur tourne dans un conteneur et ne peut pas le deviner : indiquez-le (ex. 192.168.1.0/24)."
-                    : " Indiquez-le (ex. 192.168.1.0/24)."}
+              : " " +
+                (saved
+                  ? t("Enregistré dans les réglages.")
+                  : effective
+                    ? t(
+                        "Déduit de l'adresse du serveur ; enregistrez-le pour le fixer."
+                      )
+                    : discovery.data?.in_container
+                      ? t(
+                          "Le serveur tourne dans un conteneur et ne peut pas le deviner : indiquez-le (ex. 192.168.1.0/24)."
+                        )
+                      : t("Indiquez-le (ex. 192.168.1.0/24)."))}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
@@ -306,29 +326,35 @@ function InstallationsTab({ openAccess }: { openAccess: string | null }) {
                     <div className="flex items-center gap-2">
                       <span className="truncate font-medium">{c.name}</span>
                       {!c.enabled && (
-                        <Badge variant="secondary">Désactivée</Badge>
+                        <Badge variant="secondary">{t("Désactivée")}</Badge>
                       )}
                     </div>
                     <div className="truncate text-xs text-muted-foreground">
                       {c.host}:{c.port}
-                      {c.mac ? ` · ${c.mac}` : ""} · {live?.zones.length ?? 0}{" "}
-                      zones
+                      {c.mac ? ` · ${c.mac}` : ""} ·{" "}
+                      {tn(live?.zones.length ?? 0, "{n} zone", "{n} zones")}
                     </div>
                   </div>
                   <Button
                     size="icon"
                     variant="ghost"
                     onClick={() => setDialog({ initial: c, nonce: Date.now() })}
-                    aria-label="Modifier"
+                    aria-label={t("Modifier")}
                   >
                     <Pencil />
                   </Button>
                   <Confirm
-                    title={`Supprimer « ${c.name} » ?`}
-                    description="Son historique et ses réglages Breezone seront supprimés."
+                    title={t("Supprimer « {name} » ?", { name: c.name })}
+                    description={t(
+                      "Son historique et ses réglages Breezone seront supprimés."
+                    )}
                     onConfirm={() => remove.mutate(c.id)}
                   >
-                    <Button size="icon" variant="ghost" aria-label="Supprimer">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label={t("Supprimer")}
+                    >
                       <Trash2 />
                     </Button>
                   </Confirm>
@@ -338,13 +364,14 @@ function InstallationsTab({ openAccess }: { openAccess: string | null }) {
           {showSearch && (
             <div className="grid gap-3 rounded-2xl border border-dashed p-3">
               <p className="text-sm text-muted-foreground">
-                Cherchez le WebServer sur le réseau du serveur (port 3000), ou
-                saisissez son adresse.
+                {t(
+                  "Cherchez le WebServer sur le réseau du serveur (port 3000), ou saisissez son adresse."
+                )}
               </p>
               <div className="flex flex-wrap gap-2">
                 <Input
                   className="max-w-56"
-                  placeholder="ex. 192.168.1.0/24"
+                  placeholder={t("ex. 192.168.1.0/24")}
                   value={subnetValue}
                   onChange={(e) => setSubnet(e.target.value)}
                 />
@@ -355,7 +382,7 @@ function InstallationsTab({ openAccess }: { openAccess: string | null }) {
                   onClick={() => saveSubnet.mutate()}
                   disabled={saveSubnet.isPending || (!dirty && !!saved)}
                 >
-                  Enregistrer
+                  {t("Enregistrer")}
                 </Button>
                 <Button
                   variant="outline"
@@ -367,25 +394,27 @@ function InstallationsTab({ openAccess }: { openAccess: string | null }) {
                   ) : (
                     <Radar />
                   )}{" "}
-                  Rechercher
+                  {t("Rechercher")}
                 </Button>
                 <Button
                   variant="ghost"
                   onClick={() => setDialog({ nonce: Date.now() })}
                 >
-                  Saisir l'adresse
+                  {t("Saisir l'adresse")}
                 </Button>
                 {locals.length > 0 && (
                   <Button variant="ghost" onClick={() => setAdding(false)}>
-                    Annuler
+                    {t("Annuler")}
                   </Button>
                 )}
               </div>
               {scan.data && (
                 <div className="grid gap-2">
                   <p className="text-sm text-muted-foreground">
-                    {scan.data.found.length} WebServer(s) trouvé(s) sur{" "}
-                    {scan.data.subnet ?? "le réseau"}.
+                    {t("{n} WebServer(s) trouvé(s) sur {subnet}.", {
+                      n: scan.data.found.length,
+                      subnet: scan.data.subnet ?? t("le réseau"),
+                    })}
                   </p>
                   {scan.data.found.map((f: Found) => (
                     <div
@@ -397,15 +426,16 @@ function InstallationsTab({ openAccess }: { openAccess: string | null }) {
                         <div className="text-xs text-muted-foreground">
                           {[
                             f.mac,
-                            f.firmware && `firmware ${f.firmware}`,
-                            f.zones !== null && `${f.zones} zones`,
+                            f.firmware && t("firmware {v}", { v: f.firmware }),
+                            f.zones !== null &&
+                              tn(f.zones, "{n} zone", "{n} zones"),
                           ]
                             .filter(Boolean)
                             .join(" · ")}
                         </div>
                       </div>
                       {known.has(`${f.host}:${f.port}`) ? (
-                        <Badge variant="secondary">Déjà ajouté</Badge>
+                        <Badge variant="secondary">{t("Déjà ajouté")}</Badge>
                       ) : (
                         <Button
                           size="sm"
@@ -416,7 +446,7 @@ function InstallationsTab({ openAccess }: { openAccess: string | null }) {
                             })
                           }
                         >
-                          Ajouter
+                          {t("Ajouter")}
                         </Button>
                       )}
                     </div>
@@ -429,7 +459,7 @@ function InstallationsTab({ openAccess }: { openAccess: string | null }) {
         {!showSearch && (
           <CardFooter>
             <Button variant="outline" onClick={() => setAdding(true)}>
-              <Plus /> Ajouter un WebServer
+              <Plus /> {t("Ajouter un WebServer")}
             </Button>
           </CardFooter>
         )}
@@ -454,18 +484,28 @@ function ReportAlert({ report }: { report: SyncReport }) {
   return (
     <Alert>
       <CheckCircle2 />
-      <AlertTitle>Synchronisation terminée</AlertTitle>
+      <AlertTitle>{t("Synchronisation terminée")}</AlertTitle>
       <AlertDescription>
         <ul className="list-disc pl-4">
           {report.created.length > 0 && (
-            <li>Créée(s) automatiquement : {report.created.join(", ")}</li>
+            <li>
+              {t("Créée(s) automatiquement : {list}", {
+                list: report.created.join(", "),
+              })}
+            </li>
           )}
           {report.updated.length > 0 && (
-            <li>Mise(s) à jour : {report.updated.join(", ")}</li>
+            <li>
+              {t("Mise(s) à jour : {list}", {
+                list: report.updated.join(", "),
+              })}
+            </li>
           )}
           {report.unreachable.length > 0 && (
             <li>
-              Non jointe(s) depuis ce serveur : {report.unreachable.join(", ")}
+              {t("Non jointe(s) depuis ce serveur : {list}", {
+                list: report.unreachable.join(", "),
+              })}
             </li>
           )}
           {report.notes?.map((n) => (
@@ -476,7 +516,7 @@ function ReportAlert({ report }: { report: SyncReport }) {
           {report.created.length +
             report.updated.length +
             report.unreachable.length ===
-            0 && <li>Aucune installation dans ce compte.</li>}
+            0 && <li>{t("Aucune installation dans ce compte.")}</li>}
         </ul>
       </AlertDescription>
     </Alert>
@@ -538,36 +578,37 @@ function CloudTab({ admin }: { admin: boolean }) {
             ) : (
               <CloudOff className="size-5 text-muted-foreground" />
             )}{" "}
-            Compte Airzone
+            {t("Compte Airzone")}
           </CardTitle>
           <CardDescription>
-            Facultatif. Le pilotage n'utilise jamais le cloud : Breezone y lit
-            seulement vos installations (nom, ville), vos groupes de zones et
-            leur ordre, crée automatiquement les installations trouvées sur ce
-            réseau, puis resynchronise chaque jour sans écraser vos
-            personnalisations.
+            {t(
+              "Facultatif. Le pilotage n'utilise jamais le cloud : Breezone y lit seulement vos installations (nom, ville), vos groupes de zones et leur ordre, crée automatiquement les installations trouvées sur ce réseau, puis resynchronise chaque jour sans écraser vos personnalisations."
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           {s?.email && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
               <span>
-                Compte : <strong>{s.email}</strong>
+                {t("Compte :")} <strong>{s.email}</strong>
               </span>
               <span className="text-muted-foreground">
-                Dernière synchro :{" "}
-                {s.last_sync ? dateTime(s.last_sync) : "jamais"}
+                {t("Dernière synchro : {when}", {
+                  when: s.last_sync ? dateTime(s.last_sync) : t("jamais"),
+                })}
               </span>
               {s.auto_sync ? (
-                <Badge>Synchro quotidienne</Badge>
+                <Badge>{t("Synchro quotidienne")}</Badge>
               ) : (
-                <Badge variant="secondary">Identifiants non mémorisés</Badge>
+                <Badge variant="secondary">
+                  {t("Identifiants non mémorisés")}
+                </Badge>
               )}
             </div>
           )}
           {s?.last_error && (
             <Alert variant="destructive">
-              <AlertTitle>Dernière synchronisation en échec</AlertTitle>
+              <AlertTitle>{t("Dernière synchronisation en échec")}</AlertTitle>
               <AlertDescription>{s.last_error}</AlertDescription>
             </Alert>
           )}
@@ -580,18 +621,20 @@ function CloudTab({ admin }: { admin: boolean }) {
                 disabled={sync.isPending}
               >
                 <RefreshCw className={sync.isPending ? "animate-spin" : ""} />{" "}
-                Synchroniser maintenant
+                {t("Synchroniser maintenant")}
               </Button>
               <Button variant="ghost" onClick={() => setChanging(true)}>
-                Changer de compte
+                {t("Changer de compte")}
               </Button>
               <Confirm
-                title="Oublier le compte Airzone ?"
-                description="La synchronisation s'arrête. Vos installations et groupes restent dans Breezone."
+                title={t("Oublier le compte Airzone ?")}
+                description={t(
+                  "La synchronisation s'arrête. Vos installations et groupes restent dans Breezone."
+                )}
                 onConfirm={() => forget.mutate()}
               >
                 <Button variant="ghost" className="text-destructive">
-                  Oublier
+                  {t("Oublier")}
                 </Button>
               </Confirm>
             </div>
@@ -600,12 +643,13 @@ function CloudTab({ admin }: { admin: boolean }) {
             <form onSubmit={submit} className="grid gap-3 sm:max-w-md">
               {s?.email && !s.auto_sync && (
                 <p className="text-sm text-muted-foreground">
-                  Le mot de passe n'est pas mémorisé : saisissez-le pour
-                  synchroniser.
+                  {t(
+                    "Le mot de passe n'est pas mémorisé : saisissez-le pour synchroniser."
+                  )}
                 </p>
               )}
               <div className="grid gap-2">
-                <Label htmlFor="ce">E-mail Airzone</Label>
+                <Label htmlFor="ce">{t("E-mail Airzone")}</Label>
                 <Input
                   id="ce"
                   type="email"
@@ -617,7 +661,7 @@ function CloudTab({ admin }: { admin: boolean }) {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="cp">Mot de passe Airzone</Label>
+                <Label htmlFor="cp">{t("Mot de passe Airzone")}</Label>
                 <Input
                   id="cp"
                   type="password"
@@ -632,12 +676,12 @@ function CloudTab({ admin }: { admin: boolean }) {
                   checked={remember}
                   onCheckedChange={(v) => setRemember(v === true)}
                 />{" "}
-                Mémoriser (chiffré) pour la synchro quotidienne
+                {t("Mémoriser (chiffré) pour la synchro quotidienne")}
               </label>
               <div className="flex flex-wrap gap-2">
                 <Button type="submit" disabled={connect.isPending}>
                   {connect.isPending && <Loader2 className="animate-spin" />}{" "}
-                  Connecter et importer
+                  {t("Connecter et importer")}
                 </Button>
                 {changing && (
                   <Button
@@ -645,17 +689,19 @@ function CloudTab({ admin }: { admin: boolean }) {
                     variant="ghost"
                     onClick={() => setChanging(false)}
                   >
-                    Annuler
+                    {t("Annuler")}
                   </Button>
                 )}
                 {s?.email && !s.auto_sync && (
                   <Confirm
-                    title="Oublier le compte Airzone ?"
-                    description="Vos installations et groupes restent dans Breezone."
+                    title={t("Oublier le compte Airzone ?")}
+                    description={t(
+                      "Vos installations et groupes restent dans Breezone."
+                    )}
                     onConfirm={() => forget.mutate()}
                   >
                     <Button type="button" variant="ghost">
-                      Oublier
+                      {t("Oublier")}
                     </Button>
                   </Confirm>
                 )}
@@ -699,7 +745,9 @@ function AccessEditor({
   return (
     <div className="grid gap-2">
       {list.length === 0 && (
-        <p className="text-sm text-muted-foreground">Aucune installation.</p>
+        <p className="text-sm text-muted-foreground">
+          {t("Aucune installation.")}
+        </p>
       )}
       {list.map((i) => (
         <div
@@ -710,7 +758,7 @@ function AccessEditor({
             {i.name}
             <span className="block text-xs text-muted-foreground">
               {i.node_id !== null
-                ? "via un autre serveur Breezone"
+                ? t("via un autre serveur Breezone")
                 : (i.location ?? `${i.host}:${i.port}`)}
             </span>
           </span>
@@ -719,26 +767,88 @@ function AccessEditor({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">Aucun accès</SelectItem>
-              <SelectItem value="read">Lecture seule</SelectItem>
-              <SelectItem value="control">Lecture et pilotage</SelectItem>
+              <SelectItem value="none">{t("Aucun accès")}</SelectItem>
+              <SelectItem value="read">{t("Lecture seule")}</SelectItem>
+              <SelectItem value="control">
+                {t("Lecture et pilotage")}
+              </SelectItem>
             </SelectContent>
           </Select>
         </div>
       ))}
       <p className="text-xs text-muted-foreground">
-        Les installations ajoutées plus tard ne sont données à personne :
-        revenez ici pour les attribuer.
+        {t(
+          "Les installations ajoutées plus tard ne sont données à personne : revenez ici pour les attribuer."
+        )}
       </p>
     </div>
   )
 }
 
-function accessSummary(access: AccessEntry[]) {
-  if (access.length === 0) return "Aucune installation"
+const RIGHTS: { key: keyof UserRights; label: string; hint: string }[] = [
+  {
+    key: "zones",
+    label: t("Renommer et regrouper les zones"),
+    hint: t("Nom, groupe et ordre des zones."),
+  },
+  {
+    key: "routines",
+    label: t("Créer et modifier les routines"),
+    hint: t("Lancer une routine reste possible avec le pilotage."),
+  },
+  {
+    key: "schedules",
+    label: t("Créer et modifier les programmations Airzone"),
+    hint: t("Les activer ou les désactiver reste possible avec le pilotage."),
+  },
+]
+
+/** What a user may change on the installations they drive, besides driving them. */
+function RightsEditor({
+  value,
+  onChange,
+}: {
+  value: UserRights
+  onChange: (v: UserRights) => void
+}) {
+  return (
+    <div className="grid gap-2">
+      {RIGHTS.map((r) => (
+        <label
+          key={r.key}
+          className="flex cursor-pointer items-center gap-3 rounded-xl border p-2.5 text-sm"
+        >
+          <span className="min-w-0 flex-1">
+            {r.label}
+            <span className="block text-xs text-muted-foreground">
+              {r.hint}
+            </span>
+          </span>
+          <Switch
+            checked={value[r.key]}
+            onCheckedChange={(on) => onChange({ ...value, [r.key]: on })}
+          />
+        </label>
+      ))}
+      <p className="text-xs text-muted-foreground">
+        {t(
+          "Sur les installations qu'il pilote. Sans ces droits, il pilote sans rien modifier."
+        )}
+      </p>
+    </div>
+  )
+}
+
+function accessSummary(access: AccessEntry[], rights: UserRights) {
+  if (access.length === 0) return t("Aucune installation")
   const control = access.filter((a) => a.permission === "control").length
   const n = access.length
-  return `${n} installation${n > 1 ? "s" : ""}${control ? ` · ${control} en pilotage` : " · lecture seule"}`
+  const limited = control > 0 && RIGHTS.some((r) => !rights[r.key])
+  return [
+    tn(n, "{n} installation", "{n} installations"),
+    control ? t("{n} en pilotage", { n: control }) : t("lecture seule"),
+    ...(limited ? [t("droits limités")] : []),
+  ].join(" · ")
 }
 
 function UsersTab() {
@@ -748,10 +858,12 @@ function UsersTab() {
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({ username: "", password: "", role: "user" })
   const [newAccess, setNewAccess] = useState<AccessEntry[]>([])
+  const [newRights, setNewRights] = useState<UserRights>(ALL_RIGHTS)
   const [editing, setEditing] = useState<{
     id: number
     username: string
     access: AccessEntry[]
+    rights: UserRights
   } | null>(null)
   const [reset, setReset] = useState<{ id: number; username: string } | null>(
     null
@@ -764,13 +876,15 @@ function UsersTab() {
         form.username,
         form.password,
         form.role,
-        form.role === "user" ? newAccess : []
+        form.role === "user" ? newAccess : [],
+        form.role === "user" ? newRights : ALL_RIGHTS
       ),
     onSuccess: () => {
-      toast.success("Utilisateur créé")
+      toast.success(t("Utilisateur créé"))
       setOpen(false)
       setForm({ username: "", password: "", role: "user" })
       setNewAccess([])
+      setNewRights(ALL_RIGHTS)
       refresh()
     },
     onError: (e) => toast.error(errorText(e)),
@@ -781,10 +895,15 @@ function UsersTab() {
       data,
     }: {
       id: number
-      data: { role?: string; password?: string; access?: AccessEntry[] }
+      data: {
+        role?: string
+        password?: string
+        access?: AccessEntry[]
+        rights?: UserRights
+      }
     }) => api.updateUser(id, data),
     onSuccess: () => {
-      toast.success("Utilisateur modifié")
+      toast.success(t("Utilisateur modifié"))
       setReset(null)
       setEditing(null)
       setNewPassword("")
@@ -801,11 +920,11 @@ function UsersTab() {
   return (
     <Card className="rounded-3xl">
       <CardHeader>
-        <CardTitle>Utilisateurs</CardTitle>
+        <CardTitle>{t("Utilisateurs")}</CardTitle>
         <CardDescription>
-          Les administrateurs voient et pilotent tout, et configurent le
-          serveur. Un utilisateur ne voit que les installations que vous lui
-          donnez, en lecture seule ou avec le pilotage.
+          {t(
+            "Les administrateurs voient et pilotent tout, et configurent le serveur. Un utilisateur ne voit que les installations que vous lui donnez, en lecture seule ou avec le pilotage, et vous choisissez ce qu'il peut y modifier."
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-2">
@@ -821,14 +940,16 @@ function UsersTab() {
               <div className="font-medium">
                 {u.username}{" "}
                 {u.id === me?.id && (
-                  <span className="text-xs text-muted-foreground">(vous)</span>
+                  <span className="text-xs text-muted-foreground">
+                    {t("(vous)")}
+                  </span>
                 )}
               </div>
               <div className="text-xs text-muted-foreground">
                 {u.role === "admin"
-                  ? "Toutes les installations"
-                  : accessSummary(u.access)}{" "}
-                · créé le {dateTime(u.created_at)}
+                  ? t("Toutes les installations")
+                  : accessSummary(u.access, u.rights)}{" "}
+                · {t("créé le {date}", { date: dateTime(u.created_at) })}
               </div>
             </div>
             {u.role === "user" && (
@@ -840,10 +961,11 @@ function UsersTab() {
                     id: u.id,
                     username: u.username,
                     access: u.access,
+                    rights: u.rights,
                   })
                 }
               >
-                Installations
+                {t("Accès et droits")}
               </Button>
             )}
             <Select
@@ -857,8 +979,8 @@ function UsersTab() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="user">Utilisateur</SelectItem>
-                <SelectItem value="admin">Administrateur</SelectItem>
+                <SelectItem value="user">{t("Utilisateur")}</SelectItem>
+                <SelectItem value="admin">{t("Administrateur")}</SelectItem>
               </SelectContent>
             </Select>
             <Button
@@ -866,15 +988,15 @@ function UsersTab() {
               size="sm"
               onClick={() => setReset({ id: u.id, username: u.username })}
             >
-              Mot de passe
+              {t("Mot de passe")}
             </Button>
             {u.id !== me?.id && (
               <Confirm
-                title={`Supprimer ${u.username} ?`}
-                description="Tous ses appareils seront déconnectés."
+                title={t("Supprimer {name} ?", { name: u.username })}
+                description={t("Tous ses appareils seront déconnectés.")}
                 onConfirm={() => remove.mutate(u.id)}
               >
-                <Button size="icon" variant="ghost" aria-label="Supprimer">
+                <Button size="icon" variant="ghost" aria-label={t("Supprimer")}>
                   <Trash2 />
                 </Button>
               </Confirm>
@@ -884,18 +1006,18 @@ function UsersTab() {
       </CardContent>
       <CardFooter>
         <Button onClick={() => setOpen(true)}>
-          <UserPlus /> Ajouter un utilisateur
+          <UserPlus /> {t("Ajouter un utilisateur")}
         </Button>
       </CardFooter>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Nouvel utilisateur</DialogTitle>
+            <DialogTitle>{t("Nouvel utilisateur")}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="nu">Identifiant</Label>
+              <Label htmlFor="nu">{t("Identifiant")}</Label>
               <Input
                 id="nu"
                 value={form.username}
@@ -903,7 +1025,9 @@ function UsersTab() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="np">Mot de passe (8 caractères min.)</Label>
+              <Label htmlFor="np">
+                {t("Mot de passe (8 caractères min.)")}
+              </Label>
               <Input
                 id="np"
                 type="password"
@@ -912,7 +1036,7 @@ function UsersTab() {
               />
             </div>
             <div className="grid gap-2">
-              <Label>Rôle</Label>
+              <Label>{t("Rôle")}</Label>
               <Select
                 value={form.role}
                 onValueChange={(role) => setForm({ ...form, role })}
@@ -921,19 +1045,23 @@ function UsersTab() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="user">Utilisateur</SelectItem>
-                  <SelectItem value="admin">Administrateur</SelectItem>
+                  <SelectItem value="user">{t("Utilisateur")}</SelectItem>
+                  <SelectItem value="admin">{t("Administrateur")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             {form.role === "user" ? (
               <div className="grid gap-2">
-                <Label>Installations</Label>
+                <Label>{t("Installations")}</Label>
                 <AccessEditor value={newAccess} onChange={setNewAccess} />
+                <Label className="mt-2">{t("Droits")}</Label>
+                <RightsEditor value={newRights} onChange={setNewRights} />
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
-                Un administrateur voit et pilote toutes les installations.
+                {t(
+                  "Un administrateur voit et pilote toutes les installations."
+                )}
               </p>
             )}
           </div>
@@ -944,7 +1072,7 @@ function UsersTab() {
                 create.isPending || !form.username || form.password.length < 8
               }
             >
-              Créer
+              {t("Créer")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -956,33 +1084,48 @@ function UsersTab() {
       >
         <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Installations de {editing?.username}</DialogTitle>
+            <DialogTitle>
+              {t("Accès de {name}", { name: editing?.username ?? "" })}
+            </DialogTitle>
             <DialogDescription>
-              Ce qu'il voit dans le web et l'application, et ce qu'il peut
-              piloter. Le changement s'applique aussitôt sur ses appareils.
+              {t(
+                "Ce qu'il voit dans le web et l'application, ce qu'il peut piloter et modifier. Le changement s'applique aussitôt sur ses appareils."
+              )}
             </DialogDescription>
           </DialogHeader>
           {editing && (
-            <AccessEditor
-              value={editing.access}
-              onChange={(access) => setEditing({ ...editing, access })}
-            />
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label>{t("Installations")}</Label>
+                <AccessEditor
+                  value={editing.access}
+                  onChange={(access) => setEditing({ ...editing, access })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>{t("Droits")}</Label>
+                <RightsEditor
+                  value={editing.rights}
+                  onChange={(rights) => setEditing({ ...editing, rights })}
+                />
+              </div>
+            </div>
           )}
           <DialogFooter>
             <Button variant="ghost" onClick={() => setEditing(null)}>
-              Annuler
+              {t("Annuler")}
             </Button>
             <Button
               onClick={() =>
                 editing &&
                 update.mutate({
                   id: editing.id,
-                  data: { access: editing.access },
+                  data: { access: editing.access, rights: editing.rights },
                 })
               }
               disabled={update.isPending}
             >
-              Enregistrer
+              {t("Enregistrer")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -992,17 +1135,19 @@ function UsersTab() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              Nouveau mot de passe pour {reset?.username}
+              {t("Nouveau mot de passe pour {name}", {
+                name: reset?.username ?? "",
+              })}
             </DialogTitle>
             <DialogDescription>
-              Tous ses appareils seront déconnectés.
+              {t("Tous ses appareils seront déconnectés.")}
             </DialogDescription>
           </DialogHeader>
           <Input
             type="password"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
-            placeholder="8 caractères minimum"
+            placeholder={t("8 caractères minimum")}
           />
           <DialogFooter>
             <Button
@@ -1012,7 +1157,7 @@ function UsersTab() {
               }
               disabled={newPassword.length < 8}
             >
-              Enregistrer
+              {t("Enregistrer")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1031,17 +1176,18 @@ function DevicesTab() {
   const revoke = useMutation({
     mutationFn: api.revokeSession,
     onSuccess: () => {
-      toast.success("Appareil déconnecté")
+      toast.success(t("Appareil déconnecté"))
       qc.invalidateQueries({ queryKey: ["sessions"] })
     },
   })
   return (
     <Card className="rounded-3xl">
       <CardHeader>
-        <CardTitle>Appareils connectés</CardTitle>
+        <CardTitle>{t("Appareils connectés")}</CardTitle>
         <CardDescription>
-          Chaque appareil reste connecté sans redemander le mot de passe.
-          Déconnectez ici un téléphone perdu : il est coupé immédiatement.
+          {t(
+            "Chaque appareil reste connecté sans redemander le mot de passe. Déconnectez ici un téléphone perdu : il est coupé immédiatement."
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-2">
@@ -1054,11 +1200,15 @@ function DevicesTab() {
             <div className="min-w-0 flex-1">
               <div className="font-medium">
                 {s.device_name}{" "}
-                {s.current && <Badge className="ml-1">Cet appareil</Badge>}
+                {s.current && (
+                  <Badge className="ml-1">{t("Cet appareil")}</Badge>
+                )}
               </div>
               <div className="text-xs text-muted-foreground">
-                Connecté le {dateTime(s.created_at)} · actif{" "}
-                {relativeTime(s.last_used_at)}
+                {t("Connecté le {date} · actif {when}", {
+                  date: dateTime(s.created_at),
+                  when: relativeTime(s.last_used_at),
+                })}
               </div>
             </div>
             {!s.current && (
@@ -1067,7 +1217,7 @@ function DevicesTab() {
                 size="sm"
                 onClick={() => revoke.mutate(s.id)}
               >
-                <LogOut /> Déconnecter
+                <LogOut /> {t("Déconnecter")}
               </Button>
             )}
           </div>
@@ -1084,53 +1234,96 @@ function AccountTab() {
     mutationFn: () => api.changePassword(current, next),
     onSuccess: () => {
       toast.success(
-        "Mot de passe modifié — vos autres appareils ont été déconnectés"
+        t("Mot de passe modifié — vos autres appareils ont été déconnectés")
       )
       setCurrent("")
       setNext("")
     },
-    onError: (e) =>
-      toast.error(
-        errorText(e) === "current password is incorrect"
-          ? "Mot de passe actuel incorrect"
-          : errorText(e)
-      ),
+    onError: (e) => toast.error(errorText(e)),
+  })
+  return (
+    <div className="grid gap-6">
+      <LanguageCard />
+      <Card className="rounded-3xl sm:max-w-lg">
+        <CardHeader>
+          <CardTitle>{t("Mot de passe")}</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          <div className="grid gap-2">
+            <Label htmlFor="pc">{t("Mot de passe actuel")}</Label>
+            <Input
+              id="pc"
+              type="password"
+              autoComplete="current-password"
+              value={current}
+              onChange={(e) => setCurrent(e.target.value)}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="pn">{t("Nouveau mot de passe")}</Label>
+            <Input
+              id="pn"
+              type="password"
+              autoComplete="new-password"
+              value={next}
+              onChange={(e) => setNext(e.target.value)}
+            />
+          </div>
+        </CardContent>
+        <CardFooter>
+          <Button
+            onClick={() => change.mutate()}
+            disabled={!current || next.length < 8 || change.isPending}
+          >
+            {t("Modifier")}
+          </Button>
+        </CardFooter>
+      </Card>
+    </div>
+  )
+}
+
+/** Language of the web UI and of the server messages, kept in the profile. */
+function LanguageCard() {
+  const me = useQuery({ queryKey: ["me"], queryFn: api.me })
+  const save = useMutation({
+    mutationFn: (language: Lang | null) => api.setLanguage(language),
+    onSuccess: (_, language) => setLang(language),
+    onError: (e) => toast.error(errorText(e)),
   })
   return (
     <Card className="rounded-3xl sm:max-w-lg">
       <CardHeader>
-        <CardTitle>Mot de passe</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <Languages className="size-4" /> {t("Langue")}
+        </CardTitle>
+        <CardDescription>
+          {t(
+            "Celle de l'interface web et des messages du serveur. L'application mobile suit la langue du téléphone."
+          )}
+        </CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-4">
-        <div className="grid gap-2">
-          <Label htmlFor="pc">Mot de passe actuel</Label>
-          <Input
-            id="pc"
-            type="password"
-            autoComplete="current-password"
-            value={current}
-            onChange={(e) => setCurrent(e.target.value)}
-          />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="pn">Nouveau mot de passe</Label>
-          <Input
-            id="pn"
-            type="password"
-            autoComplete="new-password"
-            value={next}
-            onChange={(e) => setNext(e.target.value)}
-          />
-        </div>
-      </CardContent>
-      <CardFooter>
-        <Button
-          onClick={() => change.mutate()}
-          disabled={!current || next.length < 8 || change.isPending}
+      <CardContent>
+        <Select
+          value={me.data ? (me.data.language ?? "auto") : undefined}
+          onValueChange={(v) => save.mutate(v === "auto" ? null : (v as Lang))}
+          disabled={!me.data || save.isPending}
         >
-          Modifier
-        </Button>
-      </CardFooter>
+          <SelectTrigger className="w-64">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="auto">
+              {t("Automatique ({name})", { name: LANG_NAMES[browserLang()] })}
+            </SelectItem>
+            {(Object.keys(LANG_NAMES) as Lang[]).map((l) => (
+              <SelectItem key={l} value={l}>
+                {LANG_NAMES[l]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </CardContent>
     </Card>
   )
 }
@@ -1139,41 +1332,41 @@ export function SettingsPage() {
   const [params, setParams] = useSearchParams()
   const admin = currentUser()?.role === "admin"
   const tabs = [
-    { id: "cloud", label: "Compte Airzone" },
-    ...(admin ? [{ id: "installations", label: "Installations" }] : []),
+    { id: "cloud", label: t("Compte Airzone") },
+    ...(admin ? [{ id: "installations", label: t("Installations") }] : []),
     ...(admin
       ? [
-          { id: "nodes", label: "Nœuds" },
-          { id: "shares", label: "Partages" },
+          { id: "nodes", label: t("Nœuds") },
+          { id: "shares", label: t("Partages") },
         ]
       : []),
-    ...(admin ? [{ id: "users", label: "Utilisateurs" }] : []),
-    { id: "devices", label: "Appareils" },
-    { id: "account", label: "Mon compte" },
+    ...(admin ? [{ id: "users", label: t("Utilisateurs") }] : []),
+    { id: "devices", label: t("Appareils") },
+    { id: "account", label: t("Mon compte") },
   ]
-  const tab = tabs.some((t) => t.id === params.get("tab"))
+  const tab = tabs.some((x) => x.id === params.get("tab"))
     ? params.get("tab")!
     : tabs[0].id
 
   return (
     <>
-      <PageHeader title="Réglages" />
+      <PageHeader title={t("Réglages")} />
       {params.get("welcome") && (
         <Alert className="mb-6 rounded-2xl">
           <CheckCircle2 />
-          <AlertTitle>Compte créé 🎉</AlertTitle>
+          <AlertTitle>{t("Compte créé 🎉")}</AlertTitle>
           <AlertDescription>
-            Ajoutez maintenant vos installations : le plus simple est de
-            connecter votre compte Airzone (onglet « Compte Airzone »), Breezone
-            trouvera vos WebServers sur le réseau et importera vos groupes.
+            {t(
+              "Ajoutez maintenant vos installations : le plus simple est de connecter votre compte Airzone (onglet « Compte Airzone »), Breezone trouvera vos WebServers sur le réseau et importera vos groupes."
+            )}
           </AlertDescription>
         </Alert>
       )}
-      <Tabs value={tab} onValueChange={(t) => setParams({ tab: t })}>
+      <Tabs value={tab} onValueChange={(v) => setParams({ tab: v })}>
         <TabsList className="mb-6 flex-wrap">
-          {tabs.map((t) => (
-            <TabsTrigger key={t.id} value={t.id}>
-              {t.label}
+          {tabs.map((x) => (
+            <TabsTrigger key={x.id} value={x.id}>
+              {x.label}
             </TabsTrigger>
           ))}
         </TabsList>

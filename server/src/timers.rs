@@ -5,6 +5,7 @@
 
 use crate::db::{self, Db};
 use crate::error::{ApiError, ApiResult};
+use crate::i18n::Text;
 use crate::hub::{Hub, InstallationView, ZoneCommand};
 use crate::routines::{run_actions, Action};
 use serde::{Deserialize, Serialize};
@@ -50,7 +51,7 @@ impl Target {
     }
 
     /// "Salon (Maison)", "groupe Étage (Maison)", "Maison", "toutes les installations".
-    pub fn describe(&self, installations: &[InstallationView]) -> String {
+    pub fn describe(&self, installations: &[InstallationView]) -> Text {
         let inst = |id: i64| installations.iter().find(|i| i.id == id);
         let inst_name = |id: i64| inst(id).map(|i| i.name.clone()).unwrap_or_else(|| format!("installation {id}"));
         match self {
@@ -59,11 +60,14 @@ impl Target {
                     .and_then(|i| i.zones.iter().find(|z| z.system_id == *system_id && z.zone_id == *zone_id))
                     .map(|z| z.name.clone())
                     .unwrap_or_else(|| format!("zone {zone_id}"));
-                format!("{zone} ({})", inst_name(*installation_id))
+                Text::plain(format!("{zone} ({})", inst_name(*installation_id)))
             }
-            Target::Group { installation_id, group } => format!("groupe {group} ({})", inst_name(*installation_id)),
-            Target::Installation { installation_id } => inst_name(*installation_id),
-            Target::All => "toutes les installations".into(),
+            Target::Group { installation_id, group } => {
+                let name = inst_name(*installation_id);
+                crate::text!("groupe {0} ({1})", "group {0} ({1})", "grupo {0} ({1})", group, name)
+            }
+            Target::Installation { installation_id } => Text::plain(inst_name(*installation_id)),
+            Target::All => crate::text!("toutes les installations", "all installations", "todas las instalaciones"),
         }
     }
 }
@@ -87,7 +91,7 @@ pub fn actions(target: &Target, command: &ZoneCommand, installations: &[Installa
 #[derive(Debug, Clone, Serialize)]
 pub struct TimerView {
     pub id: i64,
-    pub label: String,
+    pub label: Text,
     pub run_at: i64,
     pub target: Target,
     pub command: ZoneCommand,
@@ -98,7 +102,7 @@ pub struct TimerView {
 fn view(row: db::TimerRow) -> Option<TimerView> {
     Some(TimerView {
         id: row.id,
-        label: row.label,
+        label: Text::load(&row.label),
         run_at: row.run_at,
         target: serde_json::from_str(&row.target).ok()?,
         command: serde_json::from_str(&row.command).ok()?,
@@ -133,16 +137,18 @@ pub async fn create(hub: &Hub, db: &Db, input: &TimerInput, actor: &str) -> ApiR
     if input.target.zones(&installations).is_empty() {
         return Err(ApiError::bad_request("aucune zone pilotable dans cette cible"));
     }
-    let label = input
-        .label
-        .as_deref()
-        .map(str::trim)
-        .filter(|l| !l.is_empty())
-        .map(|l| l.chars().take(80).collect())
-        .unwrap_or_else(|| format!("{} · {}", verb(&input.command), input.target.describe(&installations)));
+    // Stored in every language (see `Text::store`), unless the user typed it.
+    let label = match input.label.as_deref().map(str::trim).filter(|l| !l.is_empty()) {
+        Some(l) => Text::plain(l.chars().take(80).collect::<String>()),
+        None => {
+            let (verb, target) = (verb(&input.command), input.target.describe(&installations));
+            crate::text!("{0} · {1}", "{0} · {1}", "{0} · {1}", verb.arg(), target.arg())
+        }
+    };
     let run_at = db::now() + input.delay_minutes * 60;
-    let row = db::insert_timer(db, &label, run_at, &json!(input.target).to_string(), &json!(input.command).to_string(), actor).await?;
-    hub.log("routine", "info", None, Some(actor), &format!("Minuterie dans {} : {label}", human_delay(input.delay_minutes)), None).await;
+    let row = db::insert_timer(db, &label.store(), run_at, &json!(input.target).to_string(), &json!(input.command).to_string(), actor).await?;
+    let delay = human_delay(input.delay_minutes);
+    hub.log("routine", "info", None, Some(actor), crate::text!("Minuterie dans {0} : {1}", "Timer in {0}: {1}", "Temporizador en {0}: {1}", delay, label.arg()), None).await;
     hub.routines_changed();
     view(row).ok_or_else(|| ApiError::internal("timer not stored"))
 }
@@ -150,29 +156,31 @@ pub async fn create(hub: &Hub, db: &Db, input: &TimerInput, actor: &str) -> ApiR
 pub async fn cancel(hub: &Hub, db: &Db, id: i64, actor: &str) -> ApiResult<()> {
     let row = db::timer_by_id(db, id).await?.ok_or_else(|| ApiError::not_found("minuterie introuvable"))?;
     db::delete_timer(db, id).await?;
-    hub.log("routine", "info", None, Some(actor), &format!("Minuterie annulée : {}", row.label), None).await;
+    let label = Text::load(&row.label);
+    hub.log("routine", "info", None, Some(actor), crate::text!("Minuterie annulée : {0}", "Timer cancelled: {0}", "Temporizador cancelado: {0}", label.arg()), None).await;
     hub.routines_changed();
     Ok(())
 }
 
-/// "Éteindre", "Allumer à 20°", "Consigne 19°", "Mode chaud".
-pub fn verb(cmd: &ZoneCommand) -> String {
-    let mut parts = vec![];
+/// "Éteindre", "Allumer 20°", "Consigne 19°", "Mode chaud".
+pub fn verb(cmd: &ZoneCommand) -> Text {
+    let mut parts: Vec<Text> = vec![];
     match cmd.on {
-        Some(false) => return "Éteindre".into(),
-        Some(true) => parts.push("Allumer".to_string()),
+        Some(false) => return crate::text!("Éteindre", "Switch off", "Apagar"),
+        Some(true) => parts.push(crate::text!("Allumer", "Switch on", "Encender")),
         None => {}
     }
     if let Some(m) = cmd.mode {
-        parts.push(format!("Mode {}", crate::hub::mode_label(m)));
+        let label = crate::hub::mode_label(m);
+        parts.push(crate::text!("Mode {0}", "{0} mode", "Modo {0}", label.arg()));
     }
     if let Some(sp) = cmd.setpoint {
-        parts.push(if parts.is_empty() { format!("Consigne {sp}°") } else { format!("{sp}°") });
+        parts.push(if parts.is_empty() { crate::text!("Consigne {0}°", "Setpoint {0}°", "Consigna {0}°", sp) } else { Text::plain(format!("{sp}°")) });
     }
     if parts.is_empty() {
         cmd.describe()
     } else {
-        parts.join(" ")
+        crate::hub::join(&parts, " ")
     }
 }
 
@@ -209,11 +217,21 @@ pub async fn run_due(hub: &Hub, db: &Db) {
         let results = run_actions(hub, &actions, &format!("{actor} · minuterie")).await;
         let failed = results.iter().filter(|r| !r.ok).count();
         let (level, message) = if failed == 0 {
-            ("info", format!("Minuterie exécutée : {}", t.label))
+            ("info", crate::text!("Minuterie exécutée : {0}", "Timer run: {0}", "Temporizador ejecutado: {0}", t.label.arg()))
         } else {
-            ("warn", format!("Minuterie exécutée avec {failed} échec(s) sur {} : {}", results.len(), t.label))
+            (
+                "warn",
+                crate::text!(
+                    "Minuterie exécutée avec {0} échec(s) sur {1} : {2}",
+                    "Timer run with {0} failure(s) out of {1}: {2}",
+                    "Temporizador ejecutado con {0} fallo(s) de {1}: {2}",
+                    failed,
+                    results.len(),
+                    t.label.arg()
+                ),
+            )
         };
-        hub.log("routine", level, None, Some(&actor), &message, Some(json!({ "results": results }))).await;
+        hub.log("routine", level, None, Some(&actor), message, Some(json!({ "results": results }))).await;
     }
     hub.routines_changed();
 }

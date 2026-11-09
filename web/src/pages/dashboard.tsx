@@ -45,6 +45,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { t, tn } from "@/lib/i18n"
 
 const LAST_KEY = "breezone.last_installation"
 
@@ -88,10 +89,10 @@ function InstallationTile({
         <span className="inline-flex items-center gap-1.5 rounded-full bg-black/25 px-2.5 py-1 text-[11px] font-medium backdrop-blur">
           <ConnectionDot state={inst.connection.state} className="size-2" />
           {inst.connection.state === "online"
-            ? "Connectée"
+            ? t("Connectée")
             : inst.connection.state === "offline"
-              ? "Hors ligne"
-              : "En attente"}
+              ? t("Hors ligne")
+              : t("En attente")}
         </span>
         {avg !== null && (
           <span className="tabular inline-flex items-center gap-1 text-sm font-semibold">
@@ -105,13 +106,17 @@ function InstallationTile({
           {inst.name}
         </div>
         <div className="truncate text-xs opacity-85">
-          {[inst.location, inst.node && `via ${inst.node.name}`]
+          {[
+            inst.location,
+            inst.node && t("via {name}", { name: inst.node.name }),
+          ]
             .filter(Boolean)
             .join(" · ") || installationAddress(inst)}
         </div>
         <div className="mt-1 text-xs opacity-85">
-          {on}/{inst.zones.length} zone{inst.zones.length > 1 ? "s" : ""}{" "}
-          allumée{on > 1 ? "s" : ""}
+          {tn(on, "{n}/{total} zone allumée", "{n}/{total} zones allumées", {
+            total: inst.zones.length,
+          })}
         </div>
       </div>
     </Link>
@@ -125,7 +130,7 @@ function RemoteTile({ inst }: { inst: CloudInstallation }) {
       <DialogTrigger asChild>
         <button className="relative flex w-64 shrink-0 snap-start flex-col justify-between overflow-hidden rounded-3xl border border-dashed bg-card/50 p-4 text-left">
           <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-            <CloudOff className="size-3" /> Non jointe
+            <CloudOff className="size-3" /> {t("Non jointe")}
           </span>
           <div className="mt-8">
             <div className="truncate text-lg leading-tight font-semibold text-muted-foreground">
@@ -135,7 +140,7 @@ function RemoteTile({ inst }: { inst: CloudInstallation }) {
               {inst.location ?? "—"}
             </div>
             <div className="mt-1 text-xs text-muted-foreground">
-              {inst.zones} zones
+              {tn(inst.zones, "{n} zone", "{n} zones")}
             </div>
           </div>
         </button>
@@ -144,10 +149,9 @@ function RemoteTile({ inst }: { inst: CloudInstallation }) {
         <DialogHeader>
           <DialogTitle>{inst.name}</DialogTitle>
           <DialogDescription>
-            Cette installation figure dans votre compte Airzone, mais ce serveur
-            Breezone ne joint pas son WebServer. S'il est sur le même réseau,
-            indiquez son adresse locale ; s'il est sur un autre site, il sera
-            joint via le nœud Breezone installé là-bas (fonction à venir).
+            {t(
+              "Cette installation figure dans votre compte Airzone, mais ce serveur Breezone ne joint pas son WebServer. S'il est sur le même réseau, indiquez son adresse locale ; s'il est sur un autre site, ajoutez le serveur Breezone installé là-bas (Réglages › Nœuds)."
+            )}
           </DialogDescription>
         </DialogHeader>
         {admin && (
@@ -155,7 +159,7 @@ function RemoteTile({ inst }: { inst: CloudInstallation }) {
             <Link
               to={`/settings?tab=installations&access=${encodeURIComponent(inst.cloud_id)}`}
             >
-              Configurer l'accès local
+              {t("Configurer l'accès local")}
             </Link>
           </Button>
         )}
@@ -181,7 +185,7 @@ function SystemModes({
         <div key={m.system_id} className="flex items-center gap-2">
           {labelled && (
             <span className="text-xs text-muted-foreground">
-              Système {m.system_id}
+              {t("Système {id}", { id: m.system_id })}
             </span>
           )}
           <ToggleGroup
@@ -194,7 +198,14 @@ function SystemModes({
                 {
                   onSuccess: () =>
                     toast.success(
-                      `Mode ${MODE_LABEL[v as Mode].toLowerCase()} appliqué${labelled ? ` au système ${m.system_id}` : ""}`
+                      labelled
+                        ? t("Mode {mode} appliqué au système {id}", {
+                            mode: MODE_LABEL[v as Mode].toLowerCase(),
+                            id: m.system_id,
+                          })
+                        : t("Mode {mode} appliqué", {
+                            mode: MODE_LABEL[v as Mode].toLowerCase(),
+                          })
                     ),
                 }
               )
@@ -248,9 +259,11 @@ function ZoneGroup({
     <section className="mb-8">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-baseline gap-3">
-          <h2 className="text-lg font-semibold">{name ?? "Zones"}</h2>
+          <h2 className="text-lg font-semibold">{name ?? t("Zones")}</h2>
           <span className="text-sm text-muted-foreground">
-            {on}/{zones.length} allumée{on > 1 ? "s" : ""}
+            {tn(on, "{n}/{total} allumée", "{n}/{total} allumées", {
+              total: zones.length,
+            })}
           </span>
         </div>
         <div
@@ -269,7 +282,7 @@ function ZoneGroup({
                 power.mutate({ zones, on: true, label: name ?? undefined })
               }
             >
-              <Power /> Tout allumer
+              <Power /> {t("Tout allumer")}
             </Button>
             <Button
               size="sm"
@@ -279,7 +292,7 @@ function ZoneGroup({
                 power.mutate({ zones, on: false, label: name ?? undefined })
               }
             >
-              <PowerOff /> Tout éteindre
+              <PowerOff /> {t("Tout éteindre")}
             </Button>
           </div>
         </div>
@@ -302,20 +315,22 @@ function EmptyState() {
   return (
     <div className="flex flex-col items-center rounded-3xl border border-dashed bg-card/40 px-6 py-16 text-center">
       <Home className="size-10 text-muted-foreground" />
-      <h2 className="mt-4 text-lg font-semibold">Aucune installation</h2>
+      <h2 className="mt-4 text-lg font-semibold">{t("Aucune installation")}</h2>
       <p className="mt-1 max-w-md text-sm text-muted-foreground">
         {admin
-          ? "Connectez votre compte Airzone pour tout importer automatiquement, ou recherchez les WebServers Airzone sur votre réseau."
-          : "Un administrateur doit d'abord ajouter une installation."}
+          ? t(
+              "Connectez votre compte Airzone pour tout importer automatiquement, ou recherchez les WebServers Airzone sur votre réseau."
+            )
+          : t("Un administrateur doit d'abord ajouter une installation.")}
       </p>
       {admin && (
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <Button asChild>
-            <Link to="/settings?tab=cloud">Importer depuis Airzone</Link>
+            <Link to="/settings?tab=cloud">{t("Importer depuis Airzone")}</Link>
           </Button>
           <Button asChild variant="outline">
             <Link to="/settings?tab=installations">
-              <Search /> Rechercher sur le réseau
+              <Search /> {t("Rechercher sur le réseau")}
             </Link>
           </Button>
         </div>
@@ -331,7 +346,7 @@ export function DashboardPage() {
   const cloud = useQuery({ queryKey: ["cloud"], queryFn: api.cloud })
   const refresh = useMutation({
     mutationFn: api.refreshInstallation,
-    onSuccess: (i) => toast.success(`${i.name} actualisée`),
+    onSuccess: (i) => toast.success(t("{name} actualisée", { name: i.name })),
     onError: (e) => toast.error(e instanceof Error ? e.message : String(e)),
   })
 
@@ -377,7 +392,7 @@ export function DashboardPage() {
 
   return (
     <>
-      <PageHeader title="Mes installations" />
+      <PageHeader title={t("Mes installations")} />
       {installations.length === 0 && remote.length === 0 ? (
         <EmptyState />
       ) : (
@@ -410,14 +425,14 @@ export function DashboardPage() {
                     )}
                     <ConnectionBadge connection={selected.connection} />
                     {!selected.enabled && (
-                      <Badge variant="secondary">Désactivée</Badge>
+                      <Badge variant="secondary">{t("Désactivée")}</Badge>
                     )}
                     <Button
                       variant="ghost"
                       size="icon"
                       className="size-7"
                       onClick={() => refresh.mutate(selected.id)}
-                      aria-label="Actualiser"
+                      aria-label={t("Actualiser")}
                     >
                       <RefreshCw
                         className={cn(refresh.isPending && "animate-spin")}
@@ -437,9 +452,18 @@ export function DashboardPage() {
                 <div className="rounded-3xl border border-dashed p-10 text-center text-sm text-muted-foreground">
                   {selected.connection.state === "offline"
                     ? selected.node
-                      ? `Le serveur ${selected.node.name} ne transmet pas cette installation : ${selected.connection.last_error ?? ""}`
-                      : `Le WebServer ${selected.host}:${selected.port} ne répond pas : ${selected.connection.last_error ?? ""}`
-                    : "En attente des données du WebServer…"}
+                      ? t(
+                          "Le serveur {node} ne transmet pas cette installation : {error}",
+                          {
+                            node: selected.node.name,
+                            error: selected.connection.last_error ?? "",
+                          }
+                        )
+                      : t("Le WebServer {address} ne répond pas : {error}", {
+                          address: `${selected.host}:${selected.port}`,
+                          error: selected.connection.last_error ?? "",
+                        })
+                    : t("En attente des données du WebServer…")}
                 </div>
               ) : (
                 groups.map((g) => (

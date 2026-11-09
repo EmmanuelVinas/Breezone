@@ -17,6 +17,8 @@ const APPLIED: &[(&str, &str)] = &[
     ("0010_federation_v2.sql", "6c5226bd7af97dc40f20e3c8fa0171ef7957e9cd55d99025d4c9c18dad6e12bd"),
     ("0011_user_access.sql", "68eba7a16d3e94990d75ee65ecebc391c900e8db9ab15d2da249c3e936627f7e"),
     ("0012_node_exclusions.sql", "b4c9b9ad3dd7e258b5bf167d34520e76e2b61b416cfbaf8d6b690059cc7cf9ac"),
+    ("0013_user_rights.sql", "05b762c66ba9d38b1a095da56e1d6584d3f7638bf03e5cce7ee3c886ca78c289"),
+    ("0014_languages.sql", "de771077740cd94aaf4c7629cca12883a68b468e9ebe541a7ecdce865d29effc"),
 ];
 
 #[test]

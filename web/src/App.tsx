@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useSyncExternalStore } from "react"
+import { Suspense, lazy, useSyncExternalStore } from "react"
 import {
   BrowserRouter,
   Navigate,
@@ -70,9 +70,6 @@ function Gate() {
     staleTime: Infinity,
   })
   const signedIn = useSignedIn()
-  useEffect(() => {
-    document.documentElement.lang = "fr"
-  }, [])
   if (setup.isLoading) return null
   if (setup.data?.needs_setup) {
     return (

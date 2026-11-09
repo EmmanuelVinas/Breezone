@@ -68,7 +68,7 @@ async fn cloud_sync_creates_installations_and_groups() {
     assert_eq!(v["report"]["created"], json!(["Maison"]));
     assert_eq!(v["report"]["unreachable"], json!(["Atelier"]));
     let note = v["report"]["notes"][0].as_str().unwrap();
-    assert!(note.starts_with("Atelier : WebServer AABBCCDDEEFF absent du réseau 127.0.0.0/30"), "{note}");
+    assert!(note.starts_with("Atelier: WebServer AABBCCDDEEFF not on network 127.0.0.0/30"), "English without Accept-Language: {note}");
     assert_eq!(v["status"]["auto_sync"], true);
 
     let (_, status) = c.call(reqwest::Method::GET, "/api/status", None).await;
@@ -100,7 +100,7 @@ async fn cloud_sync_creates_installations_and_groups() {
         .await;
     assert_eq!(s, StatusCode::OK, "{v}");
     assert_eq!(v["result"]["attached"], false);
-    assert!(v["result"]["message"].as_str().unwrap().contains("n'est pas celui de cette installation"), "{v}");
+    assert!(v["result"]["message"].as_str().unwrap().contains("is not the one of this installation"), "{v}");
     // …the right address attaches the installation, with its cloud organisation (no new login).
     let (s, v) = c
         .call(reqwest::Method::PUT, "/api/cloud/installations/inst-office/access", Some(json!({"host":"127.0.0.1","port":office_port})))
@@ -231,4 +231,24 @@ async fn airzone_schedules_are_mirrored_and_edited_on_airzone_cloud() {
         )
         .await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
+
+    // A user who drives the installation but may not edit schedules: switching on and off only.
+    let home = wake["installation_id"].as_i64().unwrap();
+    let (s, v) = c
+        .call(
+            reqwest::Method::POST,
+            "/api/users",
+            Some(json!({"username":"camille","password":"motdepasse1","access":[{"installation_id": home, "permission":"control"}],
+                        "rights": {"zones": true, "routines": true, "schedules": false}})),
+        )
+        .await;
+    assert_eq!(s, StatusCode::CREATED, "{v}");
+    let (_, v) = c.call(reqwest::Method::POST, "/api/auth/login", Some(json!({"username":"camille","password":"motdepasse1"}))).await;
+    let user = Client { base: c.base.clone(), http: c.http.clone(), token: Some(v["access_token"].as_str().unwrap().into()) };
+    let (s, v) = user.call(reqwest::Method::PUT, &format!("/api/airzone/schedules/inst-home/{id}"), Some(json!({ "name": "X", "days": [1], "time": "10:00", "zones": [{"system_id":1,"zone_id":1}], "action": {"on": true} }))).await;
+    assert_eq!(s, StatusCode::FORBIDDEN, "{v}");
+    let (s, _) = user.call(reqwest::Method::DELETE, &format!("/api/airzone/schedules/inst-home/{id}"), None).await;
+    assert_eq!(s, StatusCode::FORBIDDEN);
+    let (s, v) = user.call(reqwest::Method::PUT, &format!("/api/airzone/schedules/inst-home/{id}/enabled"), Some(json!({"enabled": true}))).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
 }

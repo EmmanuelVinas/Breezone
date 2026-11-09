@@ -156,7 +156,6 @@ fun EditorSheet(
     }
 }
 
-/** Name of the edited item. */
 @Composable
 fun NameField(value: String, onValueChange: (String) -> Unit, placeholder: String) {
     OutlinedTextField(
@@ -170,7 +169,6 @@ fun NameField(value: String, onValueChange: (String) -> Unit, placeholder: Strin
     )
 }
 
-/** "Setpoint  –  20,0°  +" row of the editors. */
 @Composable
 fun SetpointStepper(value: Double, onChange: (Double) -> Unit, limits: SetpointLimits) {
     Row(verticalAlignment = Alignment.CenterVertically) {

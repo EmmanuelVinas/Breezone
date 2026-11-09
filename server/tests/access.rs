@@ -141,3 +141,63 @@ async fn users_only_see_and_drive_the_installations_given_to_them() {
     let (s, _) = admin.call(Method::PUT, &format!("/api/users/{user_id}"), Some(json!({"access":[{"installation_id": home, "permission":"admin"}]}))).await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
 }
+
+#[tokio::test]
+async fn administrators_choose_what_users_may_change() {
+    let dir = std::env::temp_dir().join(format!("breezone-rights-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let mut cfg = Config::for_tests(dir);
+    cfg.scan_port = 9;
+    let state = breezone_server::init_state(cfg).await.unwrap();
+    let base = format!("http://127.0.0.1:{}", serve(breezone_server::app(state)).await);
+    let http = reqwest::Client::new();
+    let admin = Client { token: token(&http, &base, "/api/setup", "admin").await, base: base.clone(), http: http.clone() };
+    let ws = serve(mock::router(Arc::new(Mutex::new(mock::preset("maison"))) as MockState)).await;
+    let (_, v) = admin.call(Method::POST, "/api/installations", Some(json!({"name": "Maison", "host": "127.0.0.1", "port": ws}))).await;
+    let home = v["id"].as_i64().unwrap();
+
+    // Everything is allowed by default.
+    let (s, v) = admin
+        .call(Method::POST, "/api/users", Some(json!({"username":"camille","password":"motdepasse1","access":[{"installation_id": home, "permission":"control"}]})))
+        .await;
+    assert_eq!(s, StatusCode::CREATED, "{v}");
+    assert_eq!(v["rights"], json!({"zones": true, "routines": true, "schedules": true}));
+    let user_id = v["id"].as_i64().unwrap();
+    let user = Client { token: token(&http, &base, "/api/auth/login", "camille").await, base: base.clone(), http: http.clone() };
+    let (_, me) = admin.call(Method::GET, "/api/me", None).await;
+    assert_eq!(me["rights"], json!({"zones": true, "routines": true, "schedules": true}));
+
+    let meta = format!("/api/installations/{home}/zones/1/1/meta");
+    let (s, v) = user.call(Method::PUT, &meta, Some(json!({"display_name": "Salon"}))).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    let routine = json!({"name":"Nuit","actions":[{"installation_id": home, "system_id":1, "zone_id":1, "on": false}]});
+    let (s, v) = user.call(Method::POST, "/api/routines", Some(routine.clone())).await;
+    assert_eq!(s, StatusCode::CREATED, "{v}");
+    let routine_id = v["id"].as_i64().unwrap();
+
+    // Rights taken away: driving and running routines still work, editing does not.
+    let (s, v) = admin.call(Method::PUT, &format!("/api/users/{user_id}"), Some(json!({"rights": {"zones": false, "routines": false, "schedules": false}}))).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    assert_eq!(v["rights"], json!({"zones": false, "routines": false, "schedules": false}));
+    let (_, me) = user.call(Method::GET, "/api/me", None).await;
+    assert_eq!(me["rights"]["routines"], false, "{me}");
+
+    let (s, v) = user.call(Method::PUT, &meta, Some(json!({"display_name": "Séjour"}))).await;
+    assert_eq!(s, StatusCode::FORBIDDEN, "{v}");
+    let (s, _) = user.call(Method::POST, "/api/routines", Some(routine.clone())).await;
+    assert_eq!(s, StatusCode::FORBIDDEN);
+    let (s, _) = user.call(Method::PUT, &format!("/api/routines/{routine_id}"), Some(routine.clone())).await;
+    assert_eq!(s, StatusCode::FORBIDDEN);
+    let (s, _) = user.call(Method::DELETE, &format!("/api/routines/{routine_id}"), None).await;
+    assert_eq!(s, StatusCode::FORBIDDEN);
+    let (s, v) = user.call(Method::POST, &format!("/api/routines/{routine_id}/run"), None).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    let (s, v) = user.call(Method::PATCH, &format!("/api/installations/{home}/zones/1/1"), Some(json!({"on": true}))).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+
+    // Administrators keep every right, whatever is stored for them.
+    let (s, v) = admin.call(Method::PUT, &meta, Some(json!({"display_name": "Séjour"}))).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    let (s, _) = admin.call(Method::DELETE, &format!("/api/routines/{routine_id}"), None).await;
+    assert_eq!(s, StatusCode::NO_CONTENT);
+}

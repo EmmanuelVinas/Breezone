@@ -6,12 +6,13 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { t } from "@/lib/i18n"
 
 const LABEL = {
-  online: "Connectée",
-  offline: "Hors ligne",
-  unknown: "En attente",
-} as const
+  online: t("Connectée"),
+  offline: t("Hors ligne"),
+  unknown: t("En attente"),
+}
 
 export function ConnectionDot({
   state,
@@ -55,7 +56,9 @@ export function ConnectionBadge({ connection }: { connection: Connection }) {
       </TooltipTrigger>
       <TooltipContent>
         {connection.last_error ??
-          `Dernière réponse ${relativeTime(connection.last_seen)}`}
+          t("Dernière réponse {when}", {
+            when: relativeTime(connection.last_seen),
+          })}
       </TooltipContent>
     </Tooltip>
   )

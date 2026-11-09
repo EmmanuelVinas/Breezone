@@ -77,7 +77,6 @@ fun AddServerScreen(reauthServerId: String?, canGoBack: Boolean, onBack: () -> U
     var needsSetup by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    // Certificate refused by the usual checks, shown before the user trusts it.
     var review by remember { mutableStateOf<CertificateInfo?>(null) }
     var trusted by remember { mutableStateOf(existing?.certificate) }
     val demoLogin = existing == null && !needsSetup && isDemoLogin(username, password)
@@ -162,7 +161,6 @@ fun AddServerScreen(reauthServerId: String?, canGoBack: Boolean, onBack: () -> U
             label = { Text(stringResource(Res.string.add_server_url)) },
             placeholder = { Text(stringResource(Res.string.add_server_url_placeholder)) },
             singleLine = true,
-            // demo / demo: the demo address, not editable.
             enabled = existing == null && !demoLogin,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
             modifier = Modifier.fillMaxWidth(),

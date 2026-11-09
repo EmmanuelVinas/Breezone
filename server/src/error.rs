@@ -4,18 +4,20 @@
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
+use crate::i18n::Text;
 use serde_json::json;
 
 #[derive(Debug)]
 pub struct ApiError {
     pub status: StatusCode,
-    pub message: String,
+    /// Rendered in the language of the request (see `i18n`).
+    pub message: Text,
     /// Extra fields merged into the JSON body (e.g. the certificate to review).
     pub details: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
 impl ApiError {
-    pub fn new(status: StatusCode, message: impl Into<String>) -> Self {
+    pub fn new(status: StatusCode, message: impl Into<Text>) -> Self {
         Self { status, message: message.into(), details: None }
     }
     pub fn with_detail(mut self, key: &str, value: impl serde::Serialize) -> Self {
@@ -23,25 +25,25 @@ impl ApiError {
         self.details.get_or_insert_with(Default::default).insert(key.to_string(), value);
         self
     }
-    pub fn bad_request(message: impl Into<String>) -> Self {
+    pub fn bad_request(message: impl Into<Text>) -> Self {
         Self::new(StatusCode::BAD_REQUEST, message)
     }
-    pub fn unauthorized(message: impl Into<String>) -> Self {
+    pub fn unauthorized(message: impl Into<Text>) -> Self {
         Self::new(StatusCode::UNAUTHORIZED, message)
     }
-    pub fn forbidden(message: impl Into<String>) -> Self {
+    pub fn forbidden(message: impl Into<Text>) -> Self {
         Self::new(StatusCode::FORBIDDEN, message)
     }
-    pub fn not_found(message: impl Into<String>) -> Self {
+    pub fn not_found(message: impl Into<Text>) -> Self {
         Self::new(StatusCode::NOT_FOUND, message)
     }
-    pub fn conflict(message: impl Into<String>) -> Self {
+    pub fn conflict(message: impl Into<Text>) -> Self {
         Self::new(StatusCode::CONFLICT, message)
     }
-    pub fn bad_gateway(message: impl Into<String>) -> Self {
+    pub fn bad_gateway(message: impl Into<Text>) -> Self {
         Self::new(StatusCode::BAD_GATEWAY, message)
     }
-    pub fn internal(message: impl Into<String>) -> Self {
+    pub fn internal(message: impl Into<Text>) -> Self {
         Self::new(StatusCode::INTERNAL_SERVER_ERROR, message)
     }
 }

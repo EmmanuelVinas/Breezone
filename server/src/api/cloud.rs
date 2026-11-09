@@ -34,7 +34,7 @@ pub async fn sync(State(state): State<AppState>, AdminUser(admin): AdminUser) ->
 /// Forgets the Airzone credentials and the cloud installation list.
 pub async fn disconnect(State(state): State<AppState>, AdminUser(admin): AdminUser) -> ApiResult<StatusCode> {
     cloud::forget(&state).await?;
-    state.hub.log("system", "info", None, Some(&admin.username), "Compte Airzone Cloud oublié", None).await;
+    state.hub.log("system", "info", None, Some(&admin.username), crate::text!("Compte Airzone Cloud oublié", "Airzone Cloud account forgotten", "Cuenta de Airzone Cloud olvidada"), None).await;
     Ok(StatusCode::NO_CONTENT)
 }
 

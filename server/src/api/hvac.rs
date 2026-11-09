@@ -77,11 +77,11 @@ pub async fn create_installation(State(state): State<AppState>, AdminUser(admin)
     let (name, host) = validate_installation(&req)?;
     let inst = db::insert_installation(&state.db, &name, &host, req.port, req.enabled).await?;
     state.hub.reload_installations().await?;
-    state.hub.log("system", "info", Some(inst.id), Some(&admin.username), &format!("Installation « {name} » ajoutée ({host}:{})", req.port), None).await;
+    state.hub.log("system", "info", Some(inst.id), Some(&admin.username), crate::text!("Installation « {0} » ajoutée ({1}:{2})", "Installation “{0}” added ({1}:{2})", "Instalación «{0}» añadida ({1}:{2})", name, host, req.port), None).await;
     state.hub.poll_one(inst.id).await;
     // Same WebServer as an installation of the Airzone account: link them (no duplicate).
     if let Err(e) = cloud::auto_link(&state, inst.id, &admin.username).await {
-        tracing::warn!("cannot link to Airzone Cloud: {}", e.message);
+        tracing::warn!("cannot link to Airzone Cloud: {}", e.message.en);
     }
     let view = state.hub.installation(inst.id).await.ok_or_else(|| ApiError::internal("installation not loaded"))?;
     Ok((StatusCode::CREATED, Json(view)))
@@ -102,7 +102,7 @@ pub async fn update_installation(State(state): State<AppState>, AdminUser(admin)
     };
     db::update_installation(&state.db, id, &name, &host, port, req.enabled).await?;
     state.hub.reload_installations().await?;
-    state.hub.log("system", "info", Some(id), Some(&admin.username), &format!("Installation « {name} » modifiée"), None).await;
+    state.hub.log("system", "info", Some(id), Some(&admin.username), crate::text!("Installation « {0} » modifiée", "Installation “{0}” changed", "Instalación «{0}» modificada", name), None).await;
     if req.enabled {
         state.hub.poll_one(id).await;
         if current.host != host || current.port != port {
@@ -120,14 +120,20 @@ pub async fn update_installation(State(state): State<AppState>, AdminUser(admin)
                             "info",
                             Some(id),
                             Some(&admin.username),
-                            &format!("« {name} » pointe vers un autre WebServer ({new}) : noms et groupes des zones, historique et lien Airzone remis à zéro"),
+                            crate::text!(
+                                "« {0} » pointe vers un autre WebServer ({1}) : noms et groupes des zones, historique et lien Airzone remis à zéro",
+                                "“{0}” points to another WebServer ({1}): zone names and groups, history and Airzone link reset",
+                                "«{0}» apunta a otro WebServer ({1}): nombres y grupos de zonas, historial y vínculo Airzone restablecidos",
+                                name,
+                                new
+                            ),
                             None,
                         )
                         .await;
                 }
             }
             if let Err(e) = cloud::auto_link(&state, id, &admin.username).await {
-                tracing::warn!("cannot link to Airzone Cloud: {}", e.message);
+                tracing::warn!("cannot link to Airzone Cloud: {}", e.message.en);
             }
         }
     }
@@ -138,7 +144,7 @@ pub async fn delete_installation(State(state): State<AppState>, AdminUser(admin)
     let inst = db::installation_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("installation not found"))?;
     db::delete_installation(&state.db, id).await?;
     state.hub.reload_installations().await?;
-    state.hub.log("system", "info", None, Some(&admin.username), &format!("Installation « {} » supprimée", inst.name), None).await;
+    state.hub.log("system", "info", None, Some(&admin.username), crate::text!("Installation « {0} » supprimée", "Installation “{0}” deleted", "Instalación «{0}» eliminada", inst.name), None).await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -214,7 +220,7 @@ pub async fn update_zone_meta(
     Path((id, system_id, zone_id)): Path<(i64, i64, i64)>,
     Json(req): Json<MetaInput>,
 ) -> ApiResult<Json<Option<ZoneView>>> {
-    Access::of(&state.db, &user).await?.control(id)?;
+    Access::of(&state.db, &user).await?.edit_zones(id)?;
     db::installation_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("installation not found"))?;
     let clean = |s: Option<String>| s.map(|v| v.trim().chars().take(60).collect::<String>()).filter(|v| !v.is_empty());
     let meta = ZoneMeta {

@@ -39,9 +39,8 @@ import org.koin.compose.koinInject
 /** A zone of the edited installation (its actions on other installations are kept aside). */
 private fun zoneKey(systemId: Long, zoneId: Long) = systemId to zoneId
 
-/** Routines touching an installation, shown in its "Routines" tab. */
 @Composable
-fun InstallationRoutines(serverId: String, inst: Installation, modifier: Modifier = Modifier) {
+fun InstallationRoutines(serverId: String, inst: Installation, canEdit: Boolean, modifier: Modifier = Modifier) {
     val hub = koinInject<Hub>()
     val scope = rememberCoroutineScope()
     var routines by remember { mutableStateOf<List<Routine>?>(null) }
@@ -61,7 +60,7 @@ fun InstallationRoutines(serverId: String, inst: Installation, modifier: Modifie
     SectionList(
         hint = stringResource(Res.string.routines_installation_hint),
         addLabel = stringResource(Res.string.routines_new),
-        onAdd = if (inst.controllable) ({ creating = true }) else null,
+        onAdd = if (canEdit) ({ creating = true }) else null,
         modifier = modifier,
     ) {
         val list = routines
@@ -83,7 +82,7 @@ fun InstallationRoutines(serverId: String, inst: Installation, modifier: Modifie
                         reload()
                     }
                 },
-                onEdit = { if (inst.controllable) editing = r },
+                onEdit = if (canEdit) ({ editing = r }) else null,
             )
         }
     }
@@ -107,8 +106,8 @@ fun InstallationRoutines(serverId: String, inst: Installation, modifier: Modifie
 }
 
 @Composable
-private fun RoutineCard(routine: Routine, onRun: () -> Unit, onEdit: () -> Unit) {
-    SectionCard(Modifier.clickable(onClick = onEdit)) {
+private fun RoutineCard(routine: Routine, onRun: () -> Unit, onEdit: (() -> Unit)?) {
+    SectionCard(Modifier.clickable(enabled = onEdit != null) { onEdit?.invoke() }) {
         ItemCardHeader(FzIcons.Sparkles, Fz.colors.fan, routine.name)
         Row(verticalAlignment = Alignment.CenterVertically) {
             val parts = buildList {

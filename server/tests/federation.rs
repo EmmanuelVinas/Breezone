@@ -104,7 +104,7 @@ async fn a_node_drives_the_installations_another_node_shares() {
     assert_eq!(s, StatusCode::BAD_REQUEST);
     let (s, v) = home.call(Method::POST, "/api/nodes", Some(json!({"token":"bz1.eyJ2IjoxfQ"}))).await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
-    assert!(v["error"].as_str().unwrap().contains("ancien format"), "{v}");
+    assert!(v["error"].as_str().unwrap().contains("old token format"), "{v}");
 
     // Home: the Airzone account first (the office installation is not reachable from home)…
     let (s, v) = home
@@ -130,7 +130,7 @@ async fn a_node_drives_the_installations_another_node_shares() {
     assert_eq!(shares[0]["remote_name"], "Breezone");
     assert!(shares[0]["requested_at"].is_i64());
     let (_, events) = office.call(Method::GET, "/api/events?limit=5", None).await;
-    assert!(events.as_array().unwrap().iter().any(|e| e["message"].as_str().unwrap_or_default().contains("demande l'accès")));
+    assert!(events.as_array().unwrap().iter().any(|e| e["message"].as_str().unwrap_or_default().contains("asks for access")));
     let share_id = shares[0]["id"].as_i64().unwrap();
     let (s, v) = office.call(Method::POST, &format!("/api/shares/{share_id}/approve"), None).await;
     assert_eq!(s, StatusCode::OK, "{v}");
@@ -269,7 +269,7 @@ async fn pairing_and_signed_requests_are_enforced() {
     sqlx::query("UPDATE shares SET pairing_expires_at = 0").execute(&office.state.db).await.unwrap();
     let r = neighbour.pair(&http, &office.base, old["token"].as_str().unwrap()).await;
     assert_eq!(r.status(), StatusCode::BAD_REQUEST);
-    assert!(r.text().await.unwrap().contains("expirée"));
+    assert!(r.text().await.unwrap().contains("expired"));
 
     // Pairing with a valid invitation: pending until approved.
     let (_, created) = office.call(Method::POST, "/api/shares", Some(share("Voisin"))).await;
@@ -369,7 +369,7 @@ async fn an_installation_added_by_hand_is_linked_to_the_airzone_account() {
     // Explicit choice: another installation of the account is refused (different WebServer)…
     let (s, v) = n.call(Method::PUT, &format!("/api/installations/{id}/cloud"), Some(json!({"cloud_id":"inst-office"}))).await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
-    assert!(v["error"].as_str().unwrap().contains("n'est pas celui de"), "{v}");
+    assert!(v["error"].as_str().unwrap().contains("is not the one of"), "{v}");
     // …unlinking and linking again works, and takes the Airzone name.
     let (s, _) = n.call(Method::PUT, &format!("/api/installations/{id}/cloud"), Some(json!({"cloud_id": null}))).await;
     assert_eq!(s, StatusCode::OK);
@@ -402,7 +402,7 @@ async fn an_installation_added_by_hand_is_linked_to_the_airzone_account() {
     let (_, history) = n.call(Method::GET, &format!("/api/installations/{id}/zones/1/1/history?hours=24"), None).await;
     assert!(history.as_array().unwrap().iter().all(|r| r["room_temp"] != 19.5), "history of the home kept: {history}");
     let (_, events) = n.call(Method::GET, "/api/events?limit=20", None).await;
-    assert!(events.as_array().unwrap().iter().any(|e| e["message"].as_str().unwrap_or_default().contains("pointe vers un autre WebServer")));
+    assert!(events.as_array().unwrap().iter().any(|e| e["message"].as_str().unwrap_or_default().contains("points to another WebServer")));
 }
 
 #[tokio::test]
@@ -534,7 +534,7 @@ async fn a_shared_installation_replaces_an_unreachable_local_copy() {
     assert_eq!(node["installations"][0]["name"], "Atelier", "the shared copy is used: {node}");
     let (_, events) = home.call(Method::GET, "/api/events?limit=20", None).await;
     assert!(
-        events.as_array().unwrap().iter().any(|e| e["message"].as_str().unwrap_or_default().contains("existe aussi sur ce serveur")),
+        events.as_array().unwrap().iter().any(|e| e["message"].as_str().unwrap_or_default().contains("also exists on this server")),
         "{events}"
     );
 }

@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import com.breezone.app.data.CommandStatus
 import com.breezone.app.data.Hub
 import com.breezone.app.data.installation
+import com.breezone.app.data.rights
 import com.breezone.app.data.Installation
 import com.breezone.app.data.Mode
 import com.breezone.app.data.Zone
@@ -71,6 +72,7 @@ fun InstallationScreen(
     val servers by hub.servers.collectAsState()
     val commandStatus by hub.commandStatus.collectAsState()
     val inst = servers.installation(serverId, installationId)
+    val rights = servers.rights(serverId)
 
     Scaffold(
         topBar = {
@@ -98,20 +100,17 @@ fun InstallationScreen(
             Muted(stringResource(Res.string.installation_not_found), Modifier.padding(padding).padding(24.dp))
             return@Scaffold
         }
-        // The section bar (in App) stays in place: the lists end above it.
         val content = Modifier.fillMaxSize().padding(padding)
         when (section) {
             0 -> InstallationZones(serverId, inst, commandStatus, onOpenZone, content)
-            1 -> InstallationRoutines(serverId, inst, content)
-            else -> InstallationSchedules(serverId, inst, content)
+            1 -> InstallationRoutines(serverId, inst, canEdit = inst.controllable && rights.routines, content)
+            else -> InstallationSchedules(serverId, inst, canEdit = inst.controllable && rights.schedules, content)
         }
     }
 }
 
-/** Padding of the list of a section. */
 val SectionListPadding = PaddingValues(16.dp)
 
-/** Sections of an installation, shown in the bottom bar by App. */
 internal val INSTALLATION_SECTIONS = listOf(
     Res.string.installation_tab_zones to FzIcons.Thermometer,
     Res.string.installation_tab_routines to FzIcons.Sparkles,
@@ -173,7 +172,6 @@ private fun InstallationZones(
                                 Text(stringResource(Res.string.installation_all_off))
                             }
                         }
-                        // The mode of the systems lying entirely in this group.
                         val masters = modes.byGroup[group].orEmpty()
                         if (inst.controllable && masters.isNotEmpty()) SystemModes(masters, labelled, onMode)
                     }

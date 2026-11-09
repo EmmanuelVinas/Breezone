@@ -1,5 +1,6 @@
 package com.breezone.app.data
 
+import androidx.compose.ui.text.intl.Locale
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.client.request.header
@@ -49,7 +50,6 @@ private fun errorMessage(body: String, status: HttpStatusCode): String =
     runCatching { FzJson.parseToJsonElement(body).jsonObject["error"]?.toString()?.trim('"') }.getOrNull()
         ?: status.description
 
-/** The localized explanation of a version mismatch. */
 suspend fun incompatible(update: UpdateNeeded, serverVersion: String?) = IncompatibleException(
     update,
     serverVersion,
@@ -64,7 +64,6 @@ suspend fun checkCompatible(health: Health) {
     updateNeeded(health)?.let { throw incompatible(it, health.version) }
 }
 
-/** Calls that do not need an account (onboarding). */
 class BreezoneDiscovery(private val http: HttpClient) {
     /** Checks that `url` is a Breezone server; returns whether it still needs its first setup. */
     suspend fun probe(url: String): SetupStatus {
@@ -243,7 +242,6 @@ class BreezoneApi(
 
     suspend fun cloudSync(): CloudResult = call(HttpMethod.Post, "/api/cloud/sync")
 
-    /** Revokes this device on the server (sign out). */
     suspend fun logout() {
         val refresh = refreshToken ?: return
         runCatching {
@@ -255,7 +253,6 @@ class BreezoneApi(
         }
     }
 
-    /** Push channel: emits every message of the server WebSocket until it closes. */
     fun live(): Flow<JsonObject> = if (base == DEMO_URL) DemoServer.live() else wsLive()
 
     private fun wsLive(): Flow<JsonObject> = callbackFlow {
@@ -263,7 +260,12 @@ class BreezoneApi(
         val token = token()
         val job = launch {
             http.webSocket(wsUrl, request = { header(CLIENT_API_HEADER, CLIENT_API) }) {
-                send(Frame.Text(buildJsonObject { put("type", "auth"); put("token", token) }.toString()))
+                val auth = buildJsonObject {
+                    put("type", "auth")
+                    put("token", token)
+                    put("lang", Locale.current.language)
+                }
+                send(Frame.Text(auth.toString()))
                 for (frame in incoming) {
                     if (frame is Frame.Text) {
                         val text = frame.readText()

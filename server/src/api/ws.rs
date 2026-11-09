@@ -12,6 +12,7 @@
 
 use crate::access::Access;
 use crate::auth;
+use crate::i18n::{Lang, Text};
 use crate::hub::HubMessage;
 use crate::db;
 use crate::AppState;
@@ -29,7 +30,11 @@ use tokio::sync::broadcast::error::RecvError;
 
 pub async fn handler(ws: Result<WebSocketUpgrade, WebSocketUpgradeRejection>, State(state): State<AppState>) -> Response {
     match ws {
-        Ok(ws) => ws.on_upgrade(move |socket| session(socket, state)),
+        Ok(ws) => {
+            // The language of the upgrade request, unless the auth message gives another one.
+            let lang = crate::i18n::current();
+            ws.on_upgrade(move |socket| session(socket, state, lang))
+        }
         Err(rejection) => {
             // Typically a reverse proxy that does not forward the WebSocket headers: live
             // updates cannot work through it. Say so once in a while in the activity feed.
@@ -39,35 +44,54 @@ pub async fn handler(ws: Result<WebSocketUpgrade, WebSocketUpgradeRejection>, St
             if now - last >= 3600 && LAST_HINT.compare_exchange(last, now, Ordering::Relaxed, Ordering::Relaxed).is_ok() {
                 state
                     .hub
-                    .log("system", "warn", None, None, PROXY_HINT, None)
+                    .log("system", "warn", None, None, proxy_hint(), None)
                     .await;
             }
-            tracing::warn!("websocket refused ({rejection}): {PROXY_HINT}");
-            (StatusCode::BAD_REQUEST, axum::Json(json!({ "error": PROXY_HINT }))).into_response()
+            tracing::warn!("websocket refused ({rejection}): {}", proxy_hint().en);
+            (StatusCode::BAD_REQUEST, axum::Json(json!({ "error": proxy_hint() }))).into_response()
         }
     }
 }
 
-const PROXY_HINT: &str = "Temps réel indisponible : la demande de WebSocket est arrivée sans ses en-têtes. \
+fn proxy_hint() -> Text {
+    crate::text!(
+        "Temps réel indisponible : la demande de WebSocket est arrivée sans ses en-têtes. \
 Si Breezone est derrière un proxy inversé (NAS Synology, nginx…), ajoutez-y les en-têtes WebSocket \
-(Synology : Proxy inversé › En-tête personnalisé › Créer › WebSocket).";
+(Synology : Proxy inversé › En-tête personnalisé › Créer › WebSocket).",
+        "Live updates unavailable: the WebSocket request arrived without its headers. \
+If Breezone is behind a reverse proxy (Synology NAS, nginx…), add the WebSocket headers to it \
+(Synology: Reverse Proxy › Custom Header › Create › WebSocket).",
+        "Tiempo real no disponible: la solicitud de WebSocket llegó sin sus encabezados. \
+Si Breezone está detrás de un proxy inverso (NAS Synology, nginx…), añada los encabezados WebSocket \
+(Synology: Proxy inverso › Encabezado personalizado › Crear › WebSocket)."
+    )
+}
 
 async fn send_json(sink: &mut futures_util::stream::SplitSink<WebSocket, Message>, value: &Value) -> bool {
     sink.send(Message::Text(value.to_string().into())).await.is_ok()
 }
 
-async fn session(socket: WebSocket, state: AppState) {
-    let (mut sink, mut stream) = socket.split();
+async fn session(socket: WebSocket, state: AppState, lang: Lang) {
+    let (sink, mut stream) = socket.split();
 
-    // 1. Authentication message.
+    // 1. Authentication message: `{type: "auth", token, lang?}`.
     let first = tokio::time::timeout(Duration::from_secs(10), stream.next()).await;
-    let token = match first {
-        Ok(Some(Ok(Message::Text(text)))) => serde_json::from_str::<Value>(&text)
-            .ok()
-            .filter(|v| v["type"] == "auth")
-            .and_then(|v| v["token"].as_str().map(String::from)),
+    let auth = match first {
+        Ok(Some(Ok(Message::Text(text)))) => serde_json::from_str::<Value>(&text).ok().filter(|v| v["type"] == "auth"),
         _ => None,
     };
+    let token = auth.as_ref().and_then(|v| v["token"].as_str().map(String::from));
+    // Messages (installation states, activity feed) are written in this language.
+    let lang = auth.as_ref().and_then(|v| v["lang"].as_str()).and_then(Lang::parse).unwrap_or(lang);
+    crate::i18n::scope(lang, live(sink, stream, state, token)).await
+}
+
+async fn live(
+    mut sink: futures_util::stream::SplitSink<WebSocket, Message>,
+    mut stream: futures_util::stream::SplitStream<WebSocket>,
+    state: AppState,
+    token: Option<String>,
+) {
     let user = match token {
         Some(t) => auth::authenticate(&state, &t).await.ok(),
         None => None,

@@ -319,7 +319,6 @@ fun ZoneCard(
     }
 }
 
-/** Small acknowledgement next to a zone's controls: sending… → applied ✓ (or refused). */
 @Composable
 fun CommandIndicator(status: CommandStatus?, modifier: Modifier = Modifier) {
     when (status) {

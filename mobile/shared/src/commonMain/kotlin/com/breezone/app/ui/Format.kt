@@ -158,14 +158,12 @@ fun scheduleText(days: List<Int>, time: String?): String {
     return stringResource(Res.string.schedule_at, label, time)
 }
 
-/** Groups zones by their Breezone group, keeping the server order. */
 fun groupZones(zones: List<Zone>): List<Pair<String?, List<Zone>>> {
     val groups = linkedMapOf<String?, MutableList<Zone>>()
     zones.forEach { groups.getOrPut(it.group) { mutableListOf() }.add(it) }
     return groups.map { it.key to it.value }
 }
 
-/** Where each system's mode selector goes (see [systemModePlacement]). */
 data class ModePlacement(
     /** Master zones whose system lies entirely in one group, by group name. */
     val byGroup: Map<String?, List<Zone>>,

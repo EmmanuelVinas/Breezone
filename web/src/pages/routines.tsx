@@ -10,6 +10,7 @@ import type {
   RoutineInput,
 } from "@/lib/api"
 import { api } from "@/lib/api"
+import { useRights } from "@/hooks/use-rights"
 import { MODE_LABEL, relativeTime } from "@/lib/format"
 import { PageHeader } from "@/components/app-shell"
 import { AirzoneSchedulesSection } from "@/components/airzone-schedules"
@@ -45,6 +46,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { t, tn } from "@/lib/i18n"
 
 type ZoneOption = {
   key: string
@@ -70,15 +72,15 @@ function describeAction(a: Action, options: ZoneOption[]) {
   const zone =
     options.find(
       (o) => o.key === `${a.installation_id}-${a.system_id}-${a.zone_id}`
-    )?.label ?? `Zone ${a.zone_id}`
+    )?.label ?? t("Zone {id}", { id: a.zone_id })
   const parts = []
-  if (a.on !== undefined) parts.push(a.on ? "allumer" : "éteindre")
+  if (a.on !== undefined) parts.push(a.on ? t("allumer") : t("éteindre"))
   if (a.setpoint !== undefined) parts.push(`${a.setpoint}°`)
   if (a.mode) parts.push(MODE_LABEL[a.mode].toLowerCase())
   const delay = a.delay_minutes
-    ? ` (${DELAYS.find(([m]) => m === a.delay_minutes)?.[1].toLowerCase() ?? `après ${a.delay_minutes} min`})`
+    ? ` (${DELAYS.find(([m]) => m === a.delay_minutes)?.[1].toLowerCase() ?? t("après {n} min", { n: a.delay_minutes })})`
     : ""
-  return `${zone} : ${parts.join(", ")}${delay}`
+  return t("{zone} : {actions}", { zone, actions: parts.join(", ") }) + delay
 }
 
 type Draft = {
@@ -92,13 +94,13 @@ function toDraft(r?: Routine): Draft {
 
 /** When an action of a routine runs, after the routine starts. */
 export const DELAYS: [number, string][] = [
-  [0, "Tout de suite"],
-  [15, "Après 15 min"],
-  [30, "Après 30 min"],
-  [60, "Après 1 h"],
-  [120, "Après 2 h"],
-  [240, "Après 4 h"],
-  [480, "Après 8 h"],
+  [0, t("Tout de suite")],
+  [15, t("Après {n} min", { n: 15 })],
+  [30, t("Après {n} min", { n: 30 })],
+  [60, t("Après {h} h", { h: 1 })],
+  [120, t("Après {h} h", { h: 2 })],
+  [240, t("Après {h} h", { h: 4 })],
+  [480, t("Après {h} h", { h: 8 })],
 ]
 
 function ActionRow({
@@ -128,7 +130,7 @@ function ActionRow({
         }}
       >
         <SelectTrigger className="w-full">
-          <SelectValue placeholder="Zone" />
+          <SelectValue placeholder={t("Zone")} />
         </SelectTrigger>
         <SelectContent>
           {options.map((o) => (
@@ -148,9 +150,9 @@ function ActionRow({
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="keep">Allumage inchangé</SelectItem>
-          <SelectItem value="on">Allumer</SelectItem>
-          <SelectItem value="off">Éteindre</SelectItem>
+          <SelectItem value="keep">{t("Allumage inchangé")}</SelectItem>
+          <SelectItem value="on">{t("Allumer")}</SelectItem>
+          <SelectItem value="off">{t("Éteindre")}</SelectItem>
         </SelectContent>
       </Select>
       <Input
@@ -158,7 +160,7 @@ function ActionRow({
         step="0.5"
         min={15}
         max={30}
-        placeholder="Consigne °"
+        placeholder={t("Consigne °")}
         className="sm:w-28"
         value={action.setpoint ?? ""}
         onChange={(e) =>
@@ -179,7 +181,7 @@ function ActionRow({
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="keep">Mode inchangé</SelectItem>
+          <SelectItem value="keep">{t("Mode inchangé")}</SelectItem>
           {(Object.keys(MODE_LABEL) as Mode[]).map((m) => (
             <SelectItem key={m} value={m}>
               {MODE_LABEL[m]}
@@ -193,7 +195,7 @@ function ActionRow({
           onChange({ ...action, delay_minutes: Number(v) || null })
         }
       >
-        <SelectTrigger className="w-full lg:w-36" aria-label="Quand">
+        <SelectTrigger className="w-full lg:w-36" aria-label={t("Quand")}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -208,7 +210,7 @@ function ActionRow({
         variant="ghost"
         size="icon"
         onClick={onRemove}
-        aria-label="Retirer"
+        aria-label={t("Retirer")}
       >
         <Trash2 />
       </Button>
@@ -243,7 +245,7 @@ function RoutineEditor({
         : api.createRoutine(input)
     },
     onSuccess: () => {
-      toast.success(routine ? "Scène modifiée" : "Scène créée")
+      toast.success(routine ? t("Scène modifiée") : t("Scène créée"))
       qc.invalidateQueries({ queryKey: ["routines"] })
       onOpenChange(false)
     },
@@ -291,27 +293,27 @@ function RoutineEditor({
       <DialogContent className="max-h-[90svh] overflow-x-hidden overflow-y-auto sm:max-w-[min(68rem,95vw)]">
         <DialogHeader>
           <DialogTitle>
-            {routine ? "Modifier la scène" : "Nouvelle scène"}
+            {routine ? t("Modifier la scène") : t("Nouvelle scène")}
           </DialogTitle>
           <DialogDescription>
-            Lancée à la demande et exécutée par le serveur Breezone. Chaque
-            action peut attendre (« après 2 h »). Pour une heure fixe, créez une
-            programmation.
+            {t(
+              "Lancée à la demande et exécutée par le serveur Breezone. Chaque action peut attendre (« après 2 h »). Pour une heure fixe, créez une programmation."
+            )}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-5">
           <div className="grid gap-2">
-            <Label htmlFor="rn">Nom</Label>
+            <Label htmlFor="rn">{t("Nom")}</Label>
             <Input
               id="rn"
               value={draft.name}
-              placeholder="ex. Je pars"
+              placeholder={t("ex. Je pars")}
               onChange={(e) => set({ name: e.target.value })}
             />
           </div>
           <div className="grid gap-2">
             <div className="flex items-center justify-between">
-              <Label>Actions</Label>
+              <Label>{t("Actions")}</Label>
               <div className="flex gap-1">
                 <Button
                   size="sm"
@@ -319,7 +321,7 @@ function RoutineEditor({
                   onClick={addAll}
                   disabled={!options.length}
                 >
-                  <ListPlus /> Toutes les zones
+                  <ListPlus /> {t("Toutes les zones")}
                 </Button>
                 <Button
                   size="sm"
@@ -327,13 +329,13 @@ function RoutineEditor({
                   onClick={() => addZone()}
                   disabled={!options.length}
                 >
-                  <Plus /> Zone
+                  <Plus /> {t("Zone")}
                 </Button>
               </div>
             </div>
             {draft.actions.length === 0 && (
               <p className="text-sm text-muted-foreground">
-                Ajoutez au moins une zone à piloter.
+                {t("Ajoutez au moins une zone à piloter.")}
               </p>
             )}
             {draft.actions.map((a, i) => (
@@ -360,7 +362,7 @@ function RoutineEditor({
               save.isPending || !draft.name.trim() || draft.actions.length === 0
             }
           >
-            Enregistrer
+            {t("Enregistrer")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -375,7 +377,8 @@ function RoutineCard({
 }: {
   routine: Routine
   options: ZoneOption[]
-  onEdit: () => void
+  /** Absent when the user may not change routines. */
+  onEdit?: () => void
 }) {
   const qc = useQueryClient()
   const run = useMutation({
@@ -383,8 +386,13 @@ function RoutineCard({
     onSuccess: (r) => {
       const failed = r.results.filter((x) => !x.ok).length
       if (failed)
-        toast.warning(`« ${routine.name} » : ${failed} action(s) en échec`)
-      else toast.success(`« ${routine.name} » exécutée`)
+        toast.warning(
+          t("« {name} » : {failed} action(s) en échec", {
+            name: routine.name,
+            failed,
+          })
+        )
+      else toast.success(t("« {name} » exécutée", { name: routine.name }))
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : String(e)),
   })
@@ -403,9 +411,9 @@ function RoutineCard({
               <h3 className="truncate font-semibold">{routine.name}</h3>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
-              {routine.actions.length} action(s)
+              {tn(routine.actions.length, "{n} action", "{n} actions")}
               {routine.actions.some((a) => a.delay_minutes)
-                ? " · dont certaines différées"
+                ? t(" · dont certaines différées")
                 : ""}
             </p>
           </div>
@@ -418,14 +426,19 @@ function RoutineCard({
           ))}
           {routine.actions.length > 4 && (
             <li className="text-muted-foreground">
-              · et {routine.actions.length - 4} autre(s)
+              ·{" "}
+              {tn(routine.actions.length - 4, "et {n} autre", "et {n} autres")}
             </li>
           )}
         </ul>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
             {routine.last_run_at && (
-              <span>Dernière : {relativeTime(routine.last_run_at)}</span>
+              <span>
+                {t("Dernière : {when}", {
+                  when: relativeTime(routine.last_run_at),
+                })}
+              </span>
             )}
           </div>
           <div className="flex gap-1">
@@ -435,39 +448,47 @@ function RoutineCard({
               onClick={() => run.mutate()}
               disabled={run.isPending}
             >
-              <Play /> Lancer
+              <Play /> {t("Lancer")}
             </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={onEdit}
-              aria-label="Modifier"
-            >
-              <Pencil />
-            </Button>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button size="icon" variant="ghost" aria-label="Supprimer">
-                  <Trash2 />
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>
-                    Supprimer « {routine.name} » ?
-                  </AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Cette programmation ne sera plus exécutée.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Annuler</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => remove.mutate()}>
-                    Supprimer
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            {onEdit && (
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={onEdit}
+                aria-label={t("Modifier")}
+              >
+                <Pencil />
+              </Button>
+            )}
+            {onEdit && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    aria-label={t("Supprimer")}
+                  >
+                    <Trash2 />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      {t("Supprimer « {name} » ?", { name: routine.name })}
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {t("Cette scène ne pourra plus être lancée.")}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>{t("Annuler")}</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => remove.mutate()}>
+                      {t("Supprimer")}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
           </div>
         </div>
       </CardContent>
@@ -487,6 +508,7 @@ function BreezoneRoutines({
   const routines = useQuery({ queryKey: ["routines"], queryFn: api.routines })
   const status = useQuery({ queryKey: ["status"], queryFn: api.status })
   const options = zoneOptions(status.data ?? [])
+  const canEdit = useRights().routines
   const [editing, setEditing] = useState<{
     routine?: Routine
     nonce: number
@@ -499,12 +521,14 @@ function BreezoneRoutines({
           <h2 className="text-lg font-semibold">{title}</h2>
           <p className="text-sm text-muted-foreground">{description}</p>
         </div>
-        <Button
-          onClick={() => setEditing({ nonce: Date.now() })}
-          disabled={!options.length}
-        >
-          <Plus /> Nouvelle
-        </Button>
+        {canEdit && (
+          <Button
+            onClick={() => setEditing({ nonce: Date.now() })}
+            disabled={!options.length}
+          >
+            <Plus /> {t("Nouvelle")}
+          </Button>
+        )}
       </div>
       {routines.isLoading ? (
         <div className="grid gap-4 md:grid-cols-2">
@@ -518,7 +542,11 @@ function BreezoneRoutines({
               key={r.id}
               routine={r}
               options={options}
-              onEdit={() => setEditing({ routine: r, nonce: Date.now() })}
+              onEdit={
+                canEdit
+                  ? () => setEditing({ routine: r, nonce: Date.now() })
+                  : undefined
+              }
             />
           ))}
         </div>
@@ -544,8 +572,10 @@ export function SchedulesPage() {
   return (
     <>
       <PageHeader
-        title="Programmations"
-        description="Ce qui se déclenche à heure fixe. Enregistrées dans votre compte Airzone et exécutées par Airzone ; modifiables ici comme dans l'application Airzone."
+        title={t("Programmations")}
+        description={t(
+          "Ce qui se déclenche à heure fixe. Enregistrées dans votre compte Airzone et exécutées par Airzone ; modifiables ici comme dans l'application Airzone."
+        )}
       />
       <div className="grid gap-10">
         <AirzoneSchedulesSection />
@@ -559,15 +589,21 @@ export function RoutinesPage() {
   return (
     <>
       <PageHeader
-        title="Routines"
-        description="Ce que vous lancez quand vous voulez : une minuterie (« dans 2 h, éteindre l'étage ») ou une scène de plusieurs actions."
+        title={t("Routines")}
+        description={t(
+          "Ce que vous lancez quand vous voulez : une minuterie (« dans 2 h, éteindre l'étage ») ou une scène de plusieurs actions."
+        )}
       />
       <div className="grid gap-10">
         <TimersSection />
         <BreezoneRoutines
-          title="Scènes"
-          description="Plusieurs actions lancées d'un geste ; chacune peut attendre (ex. éteindre le salon tout de suite, l'étage après 2 h)."
-          empty="Aucune scène. Exemple : « Je pars » — tout éteindre sauf la chambre, qui s'éteint après 1 h."
+          title={t("Scènes")}
+          description={t(
+            "Plusieurs actions lancées d'un geste ; chacune peut attendre (ex. éteindre le salon tout de suite, l'étage après 2 h)."
+          )}
+          empty={t(
+            "Aucune scène. Exemple : « Je pars » — tout éteindre sauf la chambre, qui s'éteint après 1 h."
+          )}
         />
         <AirzoneRoutinesSection />
       </div>

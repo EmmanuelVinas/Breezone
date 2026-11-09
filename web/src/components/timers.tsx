@@ -19,19 +19,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { locale, t } from "@/lib/i18n"
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 const DELAYS: [number, string][] = [
-  [15, "15 min"],
-  [30, "30 min"],
-  [60, "1 h"],
-  [90, "1 h 30"],
-  [120, "2 h"],
-  [180, "3 h"],
-  [240, "4 h"],
-  [480, "8 h"],
-  [720, "12 h"],
+  [15, t("{n} min", { n: 15 })],
+  [30, t("{n} min", { n: 30 })],
+  [60, t("{h} h", { h: 1 })],
+  [90, t("{h} h {m}", { h: 1, m: 30 })],
+  [120, t("{h} h", { h: 2 })],
+  [180, t("{h} h", { h: 3 })],
+  [240, t("{h} h", { h: 4 })],
+  [480, t("{h} h", { h: 8 })],
+  [720, t("{h} h", { h: 12 })],
 ]
 
 /** Targets: everything, then per installation the installation, its groups and its zones. */
@@ -45,14 +46,14 @@ function targets(installations: Installation[]) {
   if (installations.length > 1)
     list.push({
       key: "all",
-      label: "Toutes les installations",
+      label: t("Toutes les installations"),
       target: { kind: "all" },
       group: "",
     })
   for (const i of installations.filter((i) => i.controllable)) {
     list.push({
       key: `i-${i.id}`,
-      label: `${i.name} (toute l'installation)`,
+      label: t("{name} (toute l'installation)", { name: i.name }),
       target: { kind: "installation", installation_id: i.id },
       group: i.name,
     })
@@ -62,7 +63,7 @@ function targets(installations: Installation[]) {
     for (const g of groups)
       list.push({
         key: `g-${i.id}-${g}`,
-        label: `Groupe ${g}`,
+        label: t("Groupe {name}", { name: g }),
         target: { kind: "group", installation_id: i.id, group: g },
         group: i.name,
       })
@@ -86,14 +87,16 @@ function targets(installations: Installation[]) {
 function useCountdown(ts: number) {
   const [now, setNow] = useState(() => Date.now() / 1000)
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now() / 1000), 30_000)
-    return () => clearInterval(t)
+    const tick = setInterval(() => setNow(Date.now() / 1000), 30_000)
+    return () => clearInterval(tick)
   }, [])
   const left = Math.max(0, Math.round((ts - now) / 60))
-  if (left < 1) return "dans un instant"
+  if (left < 1) return t("dans un instant")
   const h = Math.floor(left / 60)
   const m = left % 60
-  return h ? `dans ${h} h ${String(m).padStart(2, "0")}` : `dans ${m} min`
+  return h
+    ? t("dans {h} h {m}", { h, m: String(m).padStart(2, "0") })
+    : t("dans {m} min", { m })
 }
 
 function TimerRow({
@@ -113,11 +116,11 @@ function TimerRow({
     mutationFn: () => api.cancelTimer(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["timers"] })
-      toast.success("Minuterie annulée")
+      toast.success(t("Minuterie annulée"))
     },
     onError: (e) => toast.error(errorText(e)),
   })
-  const at = new Date(runAt * 1000).toLocaleTimeString("fr-FR", {
+  const at = new Date(runAt * 1000).toLocaleTimeString(locale(), {
     hour: "2-digit",
     minute: "2-digit",
   })
@@ -127,7 +130,7 @@ function TimerRow({
       <div className="min-w-0 flex-1">
         <div className="truncate font-medium">{label}</div>
         <div className="text-xs text-muted-foreground">
-          {countdown} · à {at}
+          {countdown} · {t("à {time}", { time: at })}
           {by ? ` · ${by}` : ""}
         </div>
       </div>
@@ -137,7 +140,7 @@ function TimerRow({
         onClick={() => cancel.mutate()}
         disabled={cancel.isPending}
       >
-        <X /> Annuler
+        <X /> {t("Annuler")}
       </Button>
     </div>
   )
@@ -178,9 +181,9 @@ export function TimersSection() {
         command,
       })
     },
-    onSuccess: (t) => {
+    onSuccess: (timer) => {
       qc.invalidateQueries({ queryKey: ["timers"] })
-      toast.success(`Minuterie : ${t.label}`)
+      toast.success(t("Minuterie : {label}", { label: timer.label }))
     },
     onError: (e) => toast.error(errorText(e)),
   })
@@ -193,17 +196,18 @@ export function TimersSection() {
     <section className="grid gap-4">
       <div>
         <h2 className="flex items-center gap-2 text-lg font-semibold">
-          <Hourglass className="size-5" /> Minuteries
+          <Hourglass className="size-5" /> {t("Minuteries")}
         </h2>
         <p className="text-sm text-muted-foreground">
-          Une action plus tard sur une zone, un groupe ou toute une
-          installation.
+          {t(
+            "Une action plus tard sur une zone, un groupe ou toute une installation."
+          )}
         </p>
       </div>
       <Card className="rounded-3xl">
         <CardContent className="flex flex-wrap items-end gap-3">
           <div className="grid gap-1.5">
-            <Label>Dans</Label>
+            <Label>{t("Dans")}</Label>
             <Select value={delay} onValueChange={setDelay}>
               <SelectTrigger className="w-28">
                 <SelectValue />
@@ -218,7 +222,7 @@ export function TimersSection() {
             </Select>
           </div>
           <div className="grid gap-1.5">
-            <Label>Action</Label>
+            <Label>{t("Action")}</Label>
             <Select
               value={action}
               onValueChange={(v) => setAction(v as typeof action)}
@@ -227,10 +231,10 @@ export function TimersSection() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="off">Éteindre</SelectItem>
-                <SelectItem value="on">Allumer</SelectItem>
-                <SelectItem value="setpoint">Consigne</SelectItem>
-                <SelectItem value="mode">Mode</SelectItem>
+                <SelectItem value="off">{t("Éteindre")}</SelectItem>
+                <SelectItem value="on">{t("Allumer")}</SelectItem>
+                <SelectItem value="setpoint">{t("Consigne")}</SelectItem>
+                <SelectItem value="mode">{t("Mode")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -249,7 +253,7 @@ export function TimersSection() {
           )}
           {action === "mode" && (
             <div className="grid gap-1.5">
-              <Label>Mode</Label>
+              <Label>{t("Mode")}</Label>
               <Select value={mode} onValueChange={(v) => setMode(v as Mode)}>
                 <SelectTrigger className="w-44">
                   <SelectValue />
@@ -267,10 +271,10 @@ export function TimersSection() {
             </div>
           )}
           <div className="grid min-w-56 flex-1 gap-1.5">
-            <Label>Sur</Label>
+            <Label>{t("Sur")}</Label>
             <Select value={target?.key ?? ""} onValueChange={setTargetKey}>
               <SelectTrigger>
-                <SelectValue placeholder="Choisir" />
+                <SelectValue placeholder={t("Choisir")} />
               </SelectTrigger>
               <SelectContent>
                 {[...byGroup.entries()].map(([g, list]) => (
@@ -290,17 +294,17 @@ export function TimersSection() {
             onClick={() => create.mutate()}
             disabled={!target || create.isPending}
           >
-            <Plus /> Programmer
+            <Plus /> {t("Programmer")}
           </Button>
         </CardContent>
       </Card>
-      {(timers.data ?? []).map((t) => (
+      {(timers.data ?? []).map((timer) => (
         <TimerRow
-          key={t.id}
-          id={t.id}
-          label={t.label}
-          runAt={t.run_at}
-          by={t.created_by}
+          key={timer.id}
+          id={timer.id}
+          label={timer.label}
+          runAt={timer.run_at}
+          by={timer.created_by}
         />
       ))}
     </section>
@@ -319,11 +323,12 @@ export function AirzoneRoutinesSection() {
     <section className="grid gap-3">
       <div>
         <h2 className="flex items-center gap-2 text-lg font-semibold">
-          <Cloud className="size-5" /> Routines Airzone
+          <Cloud className="size-5" /> {t("Routines Airzone")}
         </h2>
         <p className="text-sm text-muted-foreground">
-          Celles de votre compte Airzone. Leur import en scènes Breezone arrive
-          bientôt.
+          {t(
+            "Celles de votre compte Airzone. Leur import en scènes Breezone arrive bientôt."
+          )}
         </p>
       </div>
       <div className="flex flex-wrap gap-2">

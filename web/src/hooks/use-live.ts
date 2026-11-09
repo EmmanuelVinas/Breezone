@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import type { FeedEvent, Installation } from "@/lib/api"
 import { getAccessToken } from "@/lib/api"
+import { lang } from "@/lib/i18n"
 
 export type LiveState = "connecting" | "live" | "offline"
 
@@ -43,7 +44,8 @@ export function useLive(enabled: boolean): LiveState {
       if (!token || stopped) return schedule()
       const proto = location.protocol === "https:" ? "wss" : "ws"
       ws = new WebSocket(`${proto}://${location.host}/api/ws`)
-      ws.onopen = () => ws?.send(JSON.stringify({ type: "auth", token }))
+      ws.onopen = () =>
+        ws?.send(JSON.stringify({ type: "auth", token, lang: lang() }))
       ws.onmessage = (e) => {
         if (typeof e.data !== "string" || e.data === "pong") return
         const msg = JSON.parse(e.data) as Message
@@ -54,6 +56,8 @@ export function useLive(enabled: boolean): LiveState {
             break
           case "snapshot":
             qc.setQueryData(["status"], msg.installations)
+            // Also sent when an administrator changed this user's access or rights.
+            qc.invalidateQueries({ queryKey: ["me"] })
             break
           case "installation":
             qc.setQueryData<Installation[]>(["status"], (old) => {

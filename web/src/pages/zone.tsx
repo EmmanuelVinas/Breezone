@@ -44,6 +44,7 @@ import type { ChartConfig } from "@/components/ui/chart"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Input } from "@/components/ui/input"
+import { useRights } from "@/hooks/use-rights"
 import { Label } from "@/components/ui/label"
 import {
   Dialog,
@@ -54,6 +55,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { locale, t } from "@/lib/i18n"
 
 const COLOR_VAR: Record<Mode, string> = {
   stop: "--muted-foreground",
@@ -66,9 +68,9 @@ const COLOR_VAR: Record<Mode, string> = {
 }
 
 const chartConfig = {
-  room_temp: { label: "Température", color: "var(--heat)" },
-  setpoint: { label: "Consigne", color: "var(--primary)" },
-  humidity: { label: "Humidité", color: "var(--cool)" },
+  room_temp: { label: t("Température"), color: "var(--heat)" },
+  setpoint: { label: t("Consigne"), color: "var(--primary)" },
+  humidity: { label: t("Humidité"), color: "var(--cool)" },
 } satisfies ChartConfig
 
 function History({ zone }: { zone: Zone }) {
@@ -91,7 +93,7 @@ function History({ zone }: { zone: Zone }) {
   const tickFormat = (ts: number) =>
     Number(hours) <= 24
       ? time(ts)
-      : new Date(ts * 1000).toLocaleDateString("fr-FR", {
+      : new Date(ts * 1000).toLocaleDateString(locale(), {
           day: "2-digit",
           month: "2-digit",
         })
@@ -99,9 +101,9 @@ function History({ zone }: { zone: Zone }) {
     <Card className="rounded-3xl">
       <CardHeader className="flex flex-row items-start justify-between gap-4">
         <div>
-          <CardTitle>Historique</CardTitle>
+          <CardTitle>{t("Historique")}</CardTitle>
           <CardDescription>
-            Température, consigne (quand la zone est allumée) et humidité
+            {t("Température, consigne (quand la zone est allumée) et humidité")}
           </CardDescription>
         </div>
         <ToggleGroup
@@ -111,9 +113,9 @@ function History({ zone }: { zone: Zone }) {
           variant="outline"
           size="sm"
         >
-          <ToggleGroupItem value="24">24 h</ToggleGroupItem>
-          <ToggleGroupItem value="168">7 j</ToggleGroupItem>
-          <ToggleGroupItem value="720">30 j</ToggleGroupItem>
+          <ToggleGroupItem value="24">{t("24 h")}</ToggleGroupItem>
+          <ToggleGroupItem value="168">{t("7 j")}</ToggleGroupItem>
+          <ToggleGroupItem value="720">{t("30 j")}</ToggleGroupItem>
         </ToggleGroup>
       </CardHeader>
       <CardContent>
@@ -121,7 +123,9 @@ function History({ zone }: { zone: Zone }) {
           <Skeleton className="h-64 w-full" />
         ) : data.length < 2 ? (
           <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
-            Pas encore assez de relevés : ils s'accumulent toutes les 5 minutes.
+            {t(
+              "Pas encore assez de relevés : ils s'accumulent toutes les 5 minutes."
+            )}
           </div>
         ) : (
           <ChartContainer config={chartConfig} className="h-64 w-full">
@@ -213,7 +217,7 @@ function EditZone({ zone }: { zone: Zone }) {
         position: Number(position) || 0,
       }),
     onSuccess: () => {
-      toast.success("Zone mise à jour")
+      toast.success(t("Zone mise à jour"))
       setOpen(false)
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : String(e)),
@@ -222,20 +226,24 @@ function EditZone({ zone }: { zone: Zone }) {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
-          <Pencil /> Personnaliser
+          <Pencil /> {t("Personnaliser")}
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Personnaliser la zone</DialogTitle>
+          <DialogTitle>{t("Personnaliser la zone")}</DialogTitle>
           <DialogDescription>
-            Ces réglages sont propres à Breezone. Nom Airzone d'origine : «{" "}
-            {zone.airzone_name ?? "—"} ».
+            {t(
+              "Ces réglages sont propres à Breezone. Nom Airzone d'origine : « {name} ».",
+              {
+                name: zone.airzone_name ?? "—",
+              }
+            )}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
           <div className="grid gap-2">
-            <Label htmlFor="zn">Nom affiché</Label>
+            <Label htmlFor="zn">{t("Nom affiché")}</Label>
             <Input
               id="zn"
               value={name}
@@ -243,16 +251,16 @@ function EditZone({ zone }: { zone: Zone }) {
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="zg">Groupe (étage, pièce…)</Label>
+            <Label htmlFor="zg">{t("Groupe (étage, pièce…)")}</Label>
             <Input
               id="zg"
               value={group}
-              placeholder="ex. Étage"
+              placeholder={t("ex. Étage")}
               onChange={(e) => setGroup(e.target.value)}
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="zp">Ordre dans le groupe</Label>
+            <Label htmlFor="zp">{t("Ordre dans le groupe")}</Label>
             <Input
               id="zp"
               type="number"
@@ -263,7 +271,7 @@ function EditZone({ zone }: { zone: Zone }) {
         </div>
         <DialogFooter>
           <Button onClick={() => save.mutate()} disabled={save.isPending}>
-            Enregistrer
+            {t("Enregistrer")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -301,7 +309,7 @@ function ZoneDetail({ zone }: { zone: Zone }) {
               variant="outline"
               className="size-12 rounded-2xl"
               onClick={() => nudge(-step)}
-              aria-label="Baisser"
+              aria-label={t("Baisser")}
             >
               <Minus />
             </Button>
@@ -313,7 +321,7 @@ function ZoneDetail({ zone }: { zone: Zone }) {
               )}
               onClick={() => control.mutate({ zone, cmd: { on: !zone.on } })}
             >
-              <Power /> {zone.on ? "Allumée" : "Éteinte"}
+              <Power /> {zone.on ? t("Allumée") : t("Éteinte")}
             </Button>
             <CommandIndicator zone={zone} />
             <Button
@@ -321,21 +329,21 @@ function ZoneDetail({ zone }: { zone: Zone }) {
               variant="outline"
               className="size-12 rounded-2xl"
               onClick={() => nudge(step)}
-              aria-label="Monter"
+              aria-label={t("Monter")}
             >
               <Plus />
             </Button>
           </div>
           <div className="grid w-full grid-cols-2 gap-3 text-sm">
             <div className="rounded-2xl bg-muted/50 p-3">
-              <div className="text-muted-foreground">Température</div>
+              <div className="text-muted-foreground">{t("Température")}</div>
               <div className="tabular text-xl font-semibold">
                 {formatTemp(zone.room_temp)}
               </div>
             </div>
             <div className="rounded-2xl bg-muted/50 p-3">
               <div className="inline-flex items-center gap-1 text-muted-foreground">
-                <Droplet className="size-3.5" /> Humidité
+                <Droplet className="size-3.5" /> {t("Humidité")}
               </div>
               <div className="tabular text-xl font-semibold">
                 {zone.humidity !== null ? `${zone.humidity} %` : "–"}
@@ -349,10 +357,11 @@ function ZoneDetail({ zone }: { zone: Zone }) {
         {zone.modes.length > 0 && (
           <Card className="rounded-3xl">
             <CardHeader>
-              <CardTitle>Mode</CardTitle>
+              <CardTitle>{t("Mode")}</CardTitle>
               <CardDescription>
-                Le mode s'applique à toutes les zones du système (réglé sur la
-                zone maître).
+                {t(
+                  "Le mode s'applique à toutes les zones du système (réglé sur la zone maître)."
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -369,7 +378,9 @@ function ZoneDetail({ zone }: { zone: Zone }) {
                           {
                             onSuccess: () =>
                               toast.success(
-                                `Mode ${MODE_LABEL[m].toLowerCase()} appliqué à tout le système`
+                                t("Mode {mode} appliqué à tout le système", {
+                                  mode: MODE_LABEL[m].toLowerCase(),
+                                })
                               ),
                           }
                         )
@@ -400,7 +411,7 @@ function ZoneDetail({ zone }: { zone: Zone }) {
             <Card className="rounded-3xl">
               <CardHeader>
                 <CardTitle className="inline-flex items-center gap-2">
-                  <Fan className="size-4" /> Ventilation
+                  <Fan className="size-4" /> {t("Ventilation")}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -414,7 +425,7 @@ function ZoneDetail({ zone }: { zone: Zone }) {
                 >
                   {zone.speeds.map((s) => (
                     <ToggleGroupItem key={s} value={String(s)}>
-                      {s === 0 ? "Auto" : s}
+                      {s === 0 ? t("Auto") : s}
                     </ToggleGroupItem>
                   ))}
                 </ToggleGroup>
@@ -425,7 +436,7 @@ function ZoneDetail({ zone }: { zone: Zone }) {
             <Card className="rounded-3xl">
               <CardHeader>
                 <CardTitle className="inline-flex items-center gap-2">
-                  <Moon className="size-4" /> Veille
+                  <Moon className="size-4" /> {t("Veille")}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -439,7 +450,7 @@ function ZoneDetail({ zone }: { zone: Zone }) {
                 >
                   {[0, 30, 60, 90].map((s) => (
                     <ToggleGroupItem key={s} value={String(s)}>
-                      {s === 0 ? "Non" : `${s} min`}
+                      {s === 0 ? t("Non") : t("{n} min", { n: s })}
                     </ToggleGroupItem>
                   ))}
                 </ToggleGroup>
@@ -452,7 +463,7 @@ function ZoneDetail({ zone }: { zone: Zone }) {
           <Card className="rounded-3xl border-destructive/40">
             <CardHeader>
               <CardTitle className="text-destructive">
-                Alertes Airzone
+                {t("Alertes Airzone")}
               </CardTitle>
               <CardDescription>{zone.errors.join(" · ")}</CardDescription>
             </CardHeader>
@@ -468,6 +479,7 @@ function ZoneDetail({ zone }: { zone: Zone }) {
 export function ZonePage() {
   const { inst, sys, zone: zoneId } = useParams()
   const status = useQuery({ queryKey: ["status"], queryFn: api.status })
+  const rights = useRights()
   const installation = status.data?.find((i) => i.id === Number(inst))
   const zone = installation?.zones.find(
     (z) => z.system_id === Number(sys) && z.zone_id === Number(zoneId)
@@ -480,14 +492,14 @@ export function ZonePage() {
           <Button asChild variant="ghost" size="icon" className="rounded-full">
             <Link
               to={installation ? `/installations/${installation.id}` : "/"}
-              aria-label="Retour"
+              aria-label={t("Retour")}
             >
               <ArrowLeft />
             </Link>
           </Button>
           <div>
             <h1 className="font-heading text-2xl font-semibold tracking-tight">
-              {zone?.name ?? "Zone"}
+              {zone?.name ?? t("Zone")}
             </h1>
             <p className="text-sm text-muted-foreground">
               {installation?.name}
@@ -495,7 +507,7 @@ export function ZonePage() {
             </p>
           </div>
         </div>
-        {zone && installation?.controllable && (
+        {zone && installation?.controllable && rights.zones && (
           <EditZone key={`${zone.name}-${zone.group}`} zone={zone} />
         )}
       </div>
@@ -505,8 +517,9 @@ export function ZonePage() {
         <>
           {!installation?.controllable && (
             <p className="mb-4 rounded-2xl border p-3 text-sm text-muted-foreground">
-              Lecture seule : vous pouvez consulter cette installation, pas la
-              piloter.
+              {t(
+                "Lecture seule : vous pouvez consulter cette installation, pas la piloter."
+              )}
             </p>
           )}
           {/* A disabled fieldset disables every control of the zone at once. */}
@@ -522,7 +535,7 @@ export function ZonePage() {
           </fieldset>
         </>
       ) : (
-        <p className="text-muted-foreground">Zone introuvable.</p>
+        <p className="text-muted-foreground">{t("Zone introuvable.")}</p>
       )}
     </>
   )

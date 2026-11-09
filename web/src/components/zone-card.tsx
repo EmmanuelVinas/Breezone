@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { CommandIndicator } from "@/components/command-indicator"
+import { t } from "@/lib/i18n"
 
 /** Debounces quick +/- taps into a single setpoint command. */
 export function useSetpointDraft(zone: Zone) {
@@ -101,10 +102,10 @@ export function ZoneCard({
                 <ModeIcon
                   className={cn("size-3.5", zone.demand && "animate-pulse")}
                 />
-                {zone.demand ? "En demande" : MODE_LABEL[zone.mode]}
+                {zone.demand ? t("En demande") : MODE_LABEL[zone.mode]}
               </span>
             ) : (
-              <span>Éteinte</span>
+              <span>{t("Éteinte")}</span>
             )}
             {zone.battery_low && (
               <BatteryWarning className="size-3.5 text-warning" />
@@ -119,7 +120,7 @@ export function ZoneCard({
           checked={zone.on}
           disabled={readOnly}
           onCheckedChange={(on) => control.mutate({ zone, cmd: { on } })}
-          aria-label={zone.on ? "Éteindre" : "Allumer"}
+          aria-label={zone.on ? t("Éteindre") : t("Allumer")}
         />
       </div>
 
@@ -146,7 +147,7 @@ export function ZoneCard({
             className="size-8 rounded-xl"
             disabled={readOnly}
             onClick={() => nudge(-(zone.step || 0.5))}
-            aria-label="Baisser"
+            aria-label={t("Baisser")}
           >
             <Minus />
           </Button>
@@ -164,7 +165,7 @@ export function ZoneCard({
             className="size-8 rounded-xl"
             disabled={readOnly}
             onClick={() => nudge(zone.step || 0.5)}
-            aria-label="Monter"
+            aria-label={t("Monter")}
           >
             <Plus />
           </Button>

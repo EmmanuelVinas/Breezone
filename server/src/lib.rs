@@ -14,6 +14,7 @@ pub mod discovery;
 pub mod error;
 pub mod federation;
 pub mod hub;
+pub mod i18n;
 pub mod mock;
 pub mod routines;
 pub mod timers;
@@ -110,6 +111,7 @@ pub fn app(state: AppState) -> Router {
         })
     };
     router
+        .layer(axum::middleware::from_fn(i18n::middleware))
         .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any))
         .layer(TraceLayer::new_for_http())
         .with_state(state)

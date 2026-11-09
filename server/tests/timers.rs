@@ -55,7 +55,7 @@ async fn timers_switch_a_group_off_later() {
     )
     .await;
     assert_eq!(s, StatusCode::CREATED, "{t}");
-    assert_eq!(t["label"], "Éteindre · groupe Etage (Maison)");
+    assert_eq!(t["label"], "Switch off · group Etage (Maison)");
     let (_, list) = call(Method::GET, "/api/timers", None).await;
     assert_eq!(list.as_array().unwrap().len(), 1);
 
