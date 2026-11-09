@@ -6,6 +6,15 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-11-09
+
+### Fixed
+
+- Airzone schedules of an installation reached through another Breezone server: creating, changing,
+  switching on or off and deleting them now goes through the server that owns the installation,
+  which writes them with its own Airzone account. Before, this server's account was used, and
+  Airzone refused it without a subscription (« An active subscription is required »).
+
 ## [0.7.2] - 2026-11-09
 
 ### Fixed
@@ -206,7 +215,8 @@ All notable changes are documented here. The format follows
 - Project renamed from FreeZone to Breezone (former `FREEZONE_*` variables and `freezone.db` are
   still recognised).
 
-[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.7.2...HEAD
+[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.7.3...HEAD
+[0.7.3]: https://github.com/EmmanuelVinas/breezone/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/EmmanuelVinas/breezone/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/EmmanuelVinas/breezone/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.6.1...v0.7.0

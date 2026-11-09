@@ -525,6 +525,13 @@ impl NodeClient {
         let body = serde_json::to_vec(cmd).expect("serializable command");
         self.send(reqwest::Method::PATCH, &path, Some(body), Some(actor)).await
     }
+
+    /// Asks the node to change the Airzone schedules of one of its installations.
+    pub async fn schedule(&self, remote_id: i64, op: &crate::airzone_schedules::ScheduleOp, actor: &str) -> Result<serde_json::Value, NodeError> {
+        let path = format!("/api/federation/installations/{remote_id}/schedules");
+        let body = serde_json::to_vec(op).expect("serializable operation");
+        self.send(reqwest::Method::POST, &path, Some(body), Some(actor)).await
+    }
 }
 
 /// What failed, for people, and whether it is the HTTPS certificate.

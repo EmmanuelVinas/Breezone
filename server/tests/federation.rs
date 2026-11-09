@@ -576,3 +576,55 @@ async fn a_node_chooses_which_shared_installations_it_shows() {
     let (_, node) = home.call(Method::PUT, &format!("/api/nodes/{node_id}/installations"), Some(json!({"included": all}))).await;
     assert_eq!(node["installations"].as_array().unwrap().len(), 2, "{node}");
 }
+
+#[tokio::test]
+async fn airzone_schedules_of_a_shared_installation_are_changed_by_the_node_owning_it() {
+    // The office owns the installation, with an Airzone account that may write schedules; home
+    // reaches it through the office, with an Airzone account that may only read them.
+    let office_ws = serve(mock::router_with_mac(Arc::new(Mutex::new(mock::preset("bureau"))) as MockState, "AA:BB:CC:DD:EE:FF")).await;
+    let office_cloud = serve(mock::cloud_router(mock::cloud_account(mock::MOCK_MAC))).await;
+    let home_cloud = serve(mock::cloud_router_without_subscription(mock::cloud_account(mock::MOCK_MAC))).await;
+    let office = Node::start("sched-office", |c| {
+        c.airzone_cloud_url = format!("http://127.0.0.1:{office_cloud}");
+        c.scan_port = 9;
+    })
+    .await;
+    let home = Node::start("sched-home", |c| {
+        c.airzone_cloud_url = format!("http://127.0.0.1:{home_cloud}");
+        c.scan_port = 9;
+    })
+    .await;
+    let account = json!({"email": mock::MOCK_CLOUD_EMAIL, "password": mock::MOCK_CLOUD_PASSWORD});
+
+    let (_, inst) = office.call(Method::POST, "/api/installations", Some(json!({"name":"Atelier","host":"127.0.0.1","port":office_ws}))).await;
+    let office_inst = inst["id"].as_i64().unwrap();
+    let (s, v) = office.call(Method::PUT, "/api/cloud", Some(account.clone())).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    office.call(Method::PUT, &format!("/api/installations/{office_inst}/cloud"), Some(json!({"cloud_id":"inst-office"}))).await;
+    office.call(Method::PUT, "/api/node", Some(json!({"name":"Bureau","public_url": office.base}))).await;
+    let (_, created) = office
+        .call(Method::POST, "/api/shares", Some(json!({"label":"Maison","installation_ids":[office_inst],"permission":"control"})))
+        .await;
+
+    let (s, v) = home.call(Method::PUT, "/api/cloud", Some(account)).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    let (_, node) = home.call(Method::POST, "/api/nodes", Some(json!({"token": created["token"]}))).await;
+    let (_, shares) = office.call(Method::GET, "/api/shares", None).await;
+    office.call(Method::POST, &format!("/api/shares/{}/approve", shares[0]["id"]), None).await;
+    home.call(Method::POST, &format!("/api/nodes/{}/refresh", node["id"]), None).await;
+    breezone_server::cloud::auto_link_all(&home.state).await;
+
+    let (s, r) = home.call(Method::POST, "/api/airzone/schedules/sync", None).await;
+    assert_eq!(s, StatusCode::OK, "{r}");
+    let opening = r["schedules"].as_array().unwrap().iter().find(|s| s["id"] == "sched-bureau").cloned().expect("office schedule");
+    assert!(opening["installation_id"].is_i64(), "linked to the shared installation: {opening}");
+
+    // Switched off from home: the office applies it with its Airzone account.
+    let (s, v) = home.call(Method::PUT, "/api/airzone/schedules/inst-office/sched-bureau/enabled", Some(json!({"enabled": false}))).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    let (_, r) = office.call(Method::POST, "/api/airzone/schedules/sync", None).await;
+    let opening = r["schedules"].as_array().unwrap().iter().find(|s| s["id"] == "sched-bureau").cloned().unwrap();
+    assert_eq!(opening["enabled"], false, "written on the office's Airzone account: {opening}");
+    let (_, events) = office.call(Method::GET, "/api/events?limit=5", None).await;
+    assert!(events.as_array().unwrap().iter().any(|e| e["actor"].as_str().unwrap_or_default().contains("nœud")), "{events}");
+}

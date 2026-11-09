@@ -224,7 +224,7 @@ fn view(cloud_id: &str, installation: &str, installation_id: Option<i64>, raw: &
 }
 
 /// What the user edits.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScheduleInput {
     /// Airzone Cloud installation (creation only).
     #[serde(default)]
@@ -243,6 +243,31 @@ pub struct ScheduleInput {
 
 fn yes() -> bool {
     true
+}
+
+/// A change to the Airzone schedules of an installation reached through another node: that node,
+/// which owns it, applies it with its own Airzone account (the Airzone account of this server may
+/// not be allowed to write them).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "op", rename_all = "snake_case")]
+pub enum ScheduleOp {
+    Create { input: ScheduleInput },
+    Update { schedule_id: String, input: ScheduleInput },
+    Enable { schedule_id: String, enabled: bool },
+    Delete { schedule_id: String },
+}
+
+/// Applies an operation to the schedules of the Airzone installation `cloud_id`.
+pub async fn apply(state: &AppState, cloud_id: &str, op: &ScheduleOp, actor: &str) -> ApiResult<SchedulesState> {
+    match op {
+        ScheduleOp::Create { input } => {
+            let input = ScheduleInput { cloud_id: Some(cloud_id.to_string()), ..input.clone() };
+            create(state, &input, actor).await
+        }
+        ScheduleOp::Update { schedule_id, input } => update(state, cloud_id, schedule_id, input, actor).await,
+        ScheduleOp::Enable { schedule_id, enabled } => set_enabled(state, cloud_id, schedule_id, *enabled, actor).await,
+        ScheduleOp::Delete { schedule_id } => delete(state, cloud_id, schedule_id, actor).await,
+    }
 }
 
 /// Builds the Airzone schedule from the input, keeping the fields Breezone does not know.

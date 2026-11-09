@@ -73,6 +73,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/federation/pair", post(federation::pair))
         .route("/api/federation/installations", get(federation::installations))
         .route("/api/federation/installations/{id}/zones/{system_id}/{zone_id}", patch(federation::control))
+        .route("/api/federation/installations/{id}/schedules", post(federation::schedule))
         // Routines
         .route("/api/routines", get(routines::list).post(routines::create))
         .route("/api/routines/{id}", get(routines::get).put(routines::update).delete(routines::delete))

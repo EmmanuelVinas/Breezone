@@ -1362,6 +1362,25 @@ impl Hub {
 
     /// Sends a command to the node exposing the installation; it validates and applies it.
     #[allow(clippy::too_many_arguments)]
+    /// Has the node owning an installation change its Airzone schedules.
+    pub async fn schedule_remote(&self, node_id: i64, remote_id: i64, op: &crate::airzone_schedules::ScheduleOp, actor: &str) -> ApiResult<()> {
+        let (client, node_name) = {
+            let nodes = self.nodes.read().await;
+            let n = nodes.get(&node_id).ok_or_else(|| ApiError::not_found("node not found"))?;
+            (n.client.clone(), n.node.name.clone())
+        };
+        let client = client.ok_or_else(|| {
+            ApiError::bad_gateway(crate::text!(
+                "clé du nœud « {0} » illisible : ajoutez-le de nouveau",
+                "unreadable key of node “{0}”: add it again",
+                "clave del nodo «{0}» ilegible: añádalo de nuevo",
+                node_name
+            ))
+        })?;
+        client.schedule(remote_id, op, actor).await?;
+        Ok(())
+    }
+
     async fn control_remote(&self, id: i64, node_id: i64, remote_id: i64, inst_name: &str, system_id: i64, zone_id: i64, cmd: &ZoneCommand, actor: &str) -> ApiResult<ZoneView> {
         let (client, node_name) = {
             let nodes = self.nodes.read().await;

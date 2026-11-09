@@ -866,6 +866,39 @@ pub async fn control(State(state): State<AppState>, Path((id, system_id, zone_id
     state.hub.federated(&[id]).await.into_iter().next().map(Json).ok_or_else(|| ApiError::not_found("installation non partagée"))
 }
 
+/// Another node changes the Airzone schedules of an installation this node shares (with control):
+/// this node applies it with its own Airzone account.
+pub async fn schedule(State(state): State<AppState>, Path(id): Path<i64>, auth: ShareAuth) -> ApiResult<Json<serde_json::Value>> {
+    let op: crate::airzone_schedules::ScheduleOp = serde_json::from_slice(&auth.body)
+        .map_err(|e| ApiError::bad_request(crate::text!("commande invalide : {0}", "invalid command: {0}", "orden no válida: {0}", e)))?;
+    if !auth.installation_ids.contains(&id) {
+        return Err(ApiError::not_found("installation non partagée"));
+    }
+    if auth.share.permission != "control" {
+        return Err(ApiError::forbidden("ce partage est en lecture seule"));
+    }
+    let inst = db::installation_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("installation non partagée"))?;
+    let cloud_id = inst.cloud_id.ok_or_else(|| {
+        ApiError::bad_request(crate::text!(
+            "« {0} » n'est pas reliée au compte Airzone du serveur qui la partage",
+            "“{0}” is not linked to the Airzone account of the server sharing it",
+            "«{0}» no está vinculada a la cuenta de Airzone del servidor que la comparte",
+            inst.name
+        ))
+    })?;
+    db::touch_share(&state.db, auth.share.id, None, None, auth.address.as_deref()).await?;
+    let node = auth.share.remote_name.clone().unwrap_or_else(|| auth.share.label.clone());
+    let user: String = auth
+        .headers
+        .get(ACTOR_HEADER)
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v.chars().filter(|c| !c.is_control()).take(60).collect())
+        .unwrap_or_default();
+    let actor = if user.is_empty() { format!("nœud {node}") } else { format!("{user} (nœud {node})") };
+    crate::airzone_schedules::apply(&state, &cloud_id, &op, &actor).await?;
+    Ok(Json(serde_json::json!({ "ok": true })))
+}
+
 fn certificate_trusted(server: &str) -> Text {
     crate::text!(
         "Certificat HTTPS du serveur « {0} » accepté manuellement",

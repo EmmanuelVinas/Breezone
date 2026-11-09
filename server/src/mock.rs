@@ -249,6 +249,15 @@ fn authorized(headers: &axum::http::HeaderMap) -> bool {
 }
 
 pub fn cloud_router(account: Value) -> Router {
+    cloud_router_with(account, true)
+}
+
+/// An account without an Airzone subscription: schedules can be read, not written (HTTP 402).
+pub fn cloud_router_without_subscription(account: Value) -> Router {
+    cloud_router_with(account, false)
+}
+
+fn cloud_router_with(account: Value, subscribed: bool) -> Router {
     use axum::extract::Path;
     use axum::http::{HeaderMap, StatusCode};
     use axum::response::IntoResponse;
@@ -309,6 +318,9 @@ pub fn cloud_router(account: Value) -> Router {
                     if !authorized(&headers) {
                         return StatusCode::UNAUTHORIZED.into_response();
                     }
+                    if !subscribed {
+                        return payment_required();
+                    }
                     let Some(mut s) = written_schedule(&body) else { return bad_input() };
                     let new_id = format!("sched-{}", rand_id());
                     s["_id"] = json!(new_id);
@@ -330,6 +342,9 @@ pub fn cloud_router(account: Value) -> Router {
                     let mut all = sched.lock().unwrap();
                     let Some(list) = all.get_mut(&id).and_then(Value::as_array_mut) else { return StatusCode::NOT_FOUND.into_response() };
                     let Some(s) = list.iter_mut().find(|s| s["_id"] == sid.as_str()) else { return StatusCode::NOT_FOUND.into_response() };
+                    if !subscribed {
+                        return payment_required();
+                    }
                     let Some(mut new) = written_schedule(&body) else { return bad_input() };
                     new["_id"] = json!(sid);
                     *s = new;
@@ -341,6 +356,9 @@ pub fn cloud_router(account: Value) -> Router {
                 move |headers: HeaderMap, Path((id, sid)): Path<(String, String)>| async move {
                     if !authorized(&headers) {
                         return StatusCode::UNAUTHORIZED.into_response();
+                    }
+                    if !subscribed {
+                        return payment_required();
                     }
                     let mut all = sched.lock().unwrap();
                     if let Some(list) = all.get_mut(&id).and_then(Value::as_array_mut) {
@@ -389,4 +407,10 @@ fn written_schedule(body: &Value) -> Option<Value> {
 fn bad_input() -> axum::response::Response {
     use axum::response::IntoResponse;
     (axum::http::StatusCode::BAD_REQUEST, axum::Json(json!({ "msg": "Bad input parameters" }))).into_response()
+}
+
+fn payment_required() -> axum::response::Response {
+    use axum::response::IntoResponse;
+    let msg = "An active subscription is required to use this cloud feature.";
+    (axum::http::StatusCode::PAYMENT_REQUIRED, axum::Json(json!({ "msg": msg }))).into_response()
 }
