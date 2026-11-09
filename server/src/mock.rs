@@ -309,7 +309,7 @@ pub fn cloud_router(account: Value) -> Router {
                     if !authorized(&headers) {
                         return StatusCode::UNAUTHORIZED.into_response();
                     }
-                    let mut s = body["schedule"].clone();
+                    let Some(mut s) = written_schedule(&body) else { return bad_input() };
                     let new_id = format!("sched-{}", rand_id());
                     s["_id"] = json!(new_id);
                     let mut all = sched.lock().unwrap();
@@ -330,7 +330,7 @@ pub fn cloud_router(account: Value) -> Router {
                     let mut all = sched.lock().unwrap();
                     let Some(list) = all.get_mut(&id).and_then(Value::as_array_mut) else { return StatusCode::NOT_FOUND.into_response() };
                     let Some(s) = list.iter_mut().find(|s| s["_id"] == sid.as_str()) else { return StatusCode::NOT_FOUND.into_response() };
-                    let mut new = body["schedule"].clone();
+                    let Some(mut new) = written_schedule(&body) else { return bad_input() };
                     new["_id"] = json!(sid);
                     *s = new;
                     Json(json!({})).into_response()
@@ -360,4 +360,33 @@ pub fn cloud_router(account: Value) -> Router {
             }),
         )
         .route("/api/v1/user/logout", get(|| async { Json(json!({})) }))
+}
+
+/// Like Airzone Cloud: setpoints are written as numbers (read back as `{celsius, fahrenheit}`),
+/// anything else is refused; the read-only fields of a schedule are refused too.
+fn written_schedule(body: &Value) -> Option<Value> {
+    let mut s = body.get("schedule")?.clone();
+    let o = s.as_object_mut()?;
+    if o.contains_key("_id") || o.contains_key("installation_id") {
+        return None;
+    }
+    for conf in ["start_conf", "end_conf"] {
+        let Some(c) = o.get_mut(conf).and_then(Value::as_object_mut) else { continue };
+        for key in ["setpoint", "setpoint_air_cool", "setpoint_air_heat"] {
+            match c.get(key) {
+                None => {}
+                Some(Value::Number(n)) => {
+                    let celsius = n.as_f64()?;
+                    c.insert(key.into(), json!({ "celsius": celsius, "fahrenheit": (celsius * 9.0 / 5.0 + 32.0).round() }));
+                }
+                Some(_) => return None,
+            }
+        }
+    }
+    Some(s)
+}
+
+fn bad_input() -> axum::response::Response {
+    use axum::response::IntoResponse;
+    (axum::http::StatusCode::BAD_REQUEST, axum::Json(json!({ "msg": "Bad input parameters" }))).into_response()
 }

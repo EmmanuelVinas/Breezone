@@ -334,6 +334,10 @@ fn to_airzone(input: &ScheduleInput, existing: Option<&Value>, devices: &HashMap
     sched.insert("prog_enabled".into(), json!(input.enabled));
     sched.entry("type").or_insert(json!("week"));
     sched.insert("device_ids".into(), json!(device_ids));
+    plain_setpoints(&mut start);
+    if let Some(end) = sched.get_mut("end_conf").and_then(Value::as_object_mut) {
+        plain_setpoints(end);
+    }
     sched.insert("start_conf".into(), Value::Object(start));
     // Units of the setpoint, as sent by the official app (0 = Celsius).
     let opts = with_temp.then(|| json!({ "units": 0 }));
@@ -572,15 +576,30 @@ pub async fn update(state: &AppState, cloud_id: &str, id: &str, input: &Schedule
 }
 
 /// Enables or disables a schedule (any type), keeping everything else.
-pub async fn set_enabled(state: &AppState, cloud_id: &str, id: &str, enabled: bool, actor: &str) -> ApiResult<SchedulesState> {
-    let mut current = existing(state, cloud_id, id).await?;
-    let name = current.get("name").and_then(Value::as_str).unwrap_or("Programmation").to_string();
-    if let Some(o) = current.as_object_mut() {
-        o.remove("_id");
-        o.remove("id");
-        o.insert("prog_enabled".into(), json!(enabled));
+/// Setpoints are read as `{"celsius": 21, "fahrenheit": 70}` but written as a plain number (in the
+/// units of `opts`): Airzone refuses the read form ("Bad input parameters").
+fn plain_setpoints(conf: &mut Map<String, Value>) {
+    for key in ["setpoint", "setpoint_air_cool", "setpoint_air_heat"] {
+        if let Some(celsius) = conf.get(key).and_then(|v| v.get("celsius")).cloned() {
+            conf.insert(key.into(), celsius);
+        }
     }
-    let body = json!({ "schedule": current });
+}
+
+pub async fn set_enabled(state: &AppState, cloud_id: &str, id: &str, enabled: bool, actor: &str) -> ApiResult<SchedulesState> {
+    let current = existing(state, cloud_id, id).await?;
+    let name = current.get("name").and_then(Value::as_str).unwrap_or("Programmation").to_string();
+    // What the official app sends: the schedule's own fields only, setpoints as numbers.
+    let mut start = current.get("start_conf").and_then(Value::as_object).cloned().unwrap_or_default();
+    plain_setpoints(&mut start);
+    let schedule = json!({
+        "name": name,
+        "device_ids": current.get("device_ids").cloned().unwrap_or(json!([])),
+        "prog_enabled": enabled,
+        "type": current.get("type").cloned().unwrap_or(json!("week")),
+        "start_conf": start,
+    });
+    let body = json!({ "schedule": schedule, "opts": { "units": 0 } });
     let path = format!("installations/{cloud_id}/schedule/{id}");
     let what = if enabled {
         crate::text!("programmation « {0} » activée", "schedule “{0}” enabled", "programación «{0}» activada", name)

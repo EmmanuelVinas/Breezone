@@ -6,6 +6,14 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-11-09
+
+### Fixed
+
+- Airzone schedules: switching a schedule on or off failed with « Bad input parameters » when it
+  has a setpoint. Breezone sent the schedule as read from Airzone Cloud (setpoints as
+  `{celsius, fahrenheit}`, read-only fields); it now sends what the official app sends.
+
 ## [0.7.1] - 2026-11-09
 
 ### Changed
@@ -198,7 +206,8 @@ All notable changes are documented here. The format follows
 - Project renamed from FreeZone to Breezone (former `FREEZONE_*` variables and `freezone.db` are
   still recognised).
 
-[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.7.2...HEAD
+[0.7.2]: https://github.com/EmmanuelVinas/breezone/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/EmmanuelVinas/breezone/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/EmmanuelVinas/breezone/compare/v0.6.0...v0.6.1
