@@ -25,14 +25,15 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.breezone.app.data.CommandStatus
 import com.breezone.app.data.Hub
 import com.breezone.app.data.installation
-import com.breezone.app.data.rights
 import com.breezone.app.data.Installation
 import com.breezone.app.data.Mode
 import com.breezone.app.data.Zone
@@ -72,7 +73,6 @@ fun InstallationScreen(
     val servers by hub.servers.collectAsState()
     val commandStatus by hub.commandStatus.collectAsState()
     val inst = servers.installation(serverId, installationId)
-    val rights = servers.rights(serverId)
 
     Scaffold(
         topBar = {
@@ -103,8 +103,8 @@ fun InstallationScreen(
         val content = Modifier.fillMaxSize().padding(padding)
         when (section) {
             0 -> InstallationZones(serverId, inst, commandStatus, onOpenZone, content)
-            1 -> InstallationRoutines(serverId, inst, canEdit = inst.controllable && rights.routines, content)
-            else -> InstallationSchedules(serverId, inst, canEdit = inst.controllable && rights.schedules, content)
+            1 -> InstallationRoutines(serverId, inst, canEdit = inst.controllable && inst.rights.routines, content)
+            else -> InstallationSchedules(serverId, inst, canEdit = inst.controllable && inst.rights.schedules, content)
         }
     }
 }
@@ -128,10 +128,18 @@ private fun InstallationZones(
     val hub = koinInject<Hub>()
     val modes = remember(inst.zones) { systemModePlacement(inst.zones) }
     val labelled = modes.systems > 1
-    val onMode: (Zone, Mode) -> Unit = { master, mode ->
-        hub.control(serverId, master, ZoneCommand(mode = mode)) {
-            getString(Res.string.hub_mode_applied, getString(mode.labelRes).lowercase())
-        }
+    var pendingMode by remember { mutableStateOf<Pair<Zone, Mode>?>(null) }
+    val onMode: (Zone, Mode) -> Unit = { master, mode -> pendingMode = master to mode }
+    pendingMode?.let { (master, mode) ->
+        ModeConfirmation(
+            mode = mode,
+            onConfirm = {
+                hub.control(serverId, master, ZoneCommand(mode = mode)) {
+                    getString(Res.string.hub_mode_applied, getString(mode.labelRes).lowercase())
+                }
+            },
+            onDismiss = { pendingMode = null },
+        )
     }
     LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = 160.dp),

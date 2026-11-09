@@ -31,7 +31,10 @@ for (const f of files) {
 const keys = (lang) => {
   const src = readFileSync(join(root, "locales", `${lang}.ts`), "utf8")
   const out = new Set()
-  for (const m of src.matchAll(new RegExp(String.raw`^\s*` + lit + String.raw`\s*:`, "gm"))) out.add(unquote(m[1]))
+  // Keys are quoted, or bare identifiers once Prettier has removed the quotes.
+  const key = String.raw`(` + lit.slice(1, -1) + String.raw`|[\p{L}_$][\p{L}\p{N}_$]*)`
+  for (const m of src.matchAll(new RegExp(String.raw`^\s*` + key + String.raw`\s*:`, "gmu")))
+    out.add(/^["`]/.test(m[1]) ? unquote(m[1]) : m[1])
   return out
 }
 

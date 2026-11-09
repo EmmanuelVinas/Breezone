@@ -84,7 +84,13 @@ fun ZoneScreen(serverId: String, installationId: Long, systemId: Long, zoneId: L
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             ZoneControls(zone) { cmd -> hub.control(serverId, zone, cmd) }
-            if (zone.modes.isNotEmpty()) ModeCard(zone) { hub.control(serverId, zone, ZoneCommand(mode = it)) }
+            if (zone.modes.isNotEmpty()) {
+                var pendingMode by remember { mutableStateOf<Mode?>(null) }
+                ModeCard(zone) { pendingMode = it }
+                pendingMode?.let { mode ->
+                    ModeConfirmation(mode, onConfirm = { hub.control(serverId, zone, ZoneCommand(mode = mode)) }, onDismiss = { pendingMode = null })
+                }
+            }
             if (zone.speeds.isNotEmpty()) {
                 val auto = stringResource(Res.string.common_auto)
                 SectionCard {

@@ -24,12 +24,10 @@ async fn may_change(state: &AppState, user: &AuthUser, cloud_id: &str, edit: boo
     let access = Access::of(&state.db, user).await?;
     if !access.is_admin() {
         let linked = db::list_installations(&state.db).await?.into_iter().find(|i| i.cloud_id.as_deref() == Some(cloud_id));
-        match linked {
-            Some(i) => access.control(i.id)?,
-            None => return Err(ApiError::not_found("installation not found")),
-        }
+        let Some(i) = linked else { return Err(ApiError::not_found("installation not found")) };
+        access.control(i.id)?;
         if edit {
-            access.edit_schedules()?;
+            access.edit_schedules(i.id)?;
         }
     }
     Ok(access)

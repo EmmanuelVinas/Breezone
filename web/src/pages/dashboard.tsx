@@ -1,6 +1,6 @@
-import { useEffect, useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router"
-import { useMutation, useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   CloudOff,
   Home,
@@ -9,8 +9,12 @@ import {
   PowerOff,
   RefreshCw,
   Search,
+  Settings2,
   Thermometer,
+  Trash2,
 } from "lucide-react"
+import { InstallationDialog } from "@/components/installation-dialog"
+import { Confirm } from "@/components/confirm"
 import { toast } from "sonner"
 import type { CloudInstallation, Installation, Mode, Zone } from "@/lib/api"
 import { api, currentUser } from "@/lib/api"
@@ -25,6 +29,7 @@ import {
 } from "@/lib/format"
 import { useGroupPower, useZoneControl } from "@/hooks/use-zone-control"
 import { cn } from "@/lib/utils"
+import { ConfirmDialog } from "@/components/confirm"
 import { PageHeader } from "@/components/app-shell"
 import { ConnectionBadge, ConnectionDot } from "@/components/connection-badge"
 import { ZoneCard } from "@/components/zone-card"
@@ -178,9 +183,42 @@ function SystemModes({
   labelled: boolean
 }) {
   const control = useZoneControl()
+  // A mode applies to a whole system: it is confirmed first (an accidental tap is easy).
+  const [pending, setPending] = useState<{ zone: Zone; mode: Mode } | null>(
+    null
+  )
   if (!masters.length) return null
+  const apply = ({ zone: m, mode: v }: { zone: Zone; mode: Mode }) =>
+    control.mutate(
+      { zone: m, cmd: { mode: v } },
+      {
+        onSuccess: () =>
+          toast.success(
+            labelled
+              ? t("Mode {mode} appliqué au système {id}", {
+                  mode: MODE_LABEL[v].toLowerCase(),
+                  id: m.system_id,
+                })
+              : t("Mode {mode} appliqué", {
+                  mode: MODE_LABEL[v].toLowerCase(),
+                })
+          ),
+      }
+    )
   return (
     <div className="flex flex-wrap gap-3">
+      <ConfirmDialog
+        open={pending !== null}
+        title={t("Passer en mode {mode} ?", {
+          mode: pending ? MODE_LABEL[pending.mode].toLowerCase() : "",
+        })}
+        description={t("Le mode s'applique à toutes les zones du système.")}
+        onCancel={() => setPending(null)}
+        onConfirm={() => {
+          if (pending) apply(pending)
+          setPending(null)
+        }}
+      />
       {masters.map((m) => (
         <div key={m.system_id} className="flex items-center gap-2">
           {labelled && (
@@ -192,23 +230,7 @@ function SystemModes({
             type="single"
             value={m.mode ?? undefined}
             onValueChange={(v) =>
-              v &&
-              control.mutate(
-                { zone: m, cmd: { mode: v as Mode } },
-                {
-                  onSuccess: () =>
-                    toast.success(
-                      labelled
-                        ? t("Mode {mode} appliqué au système {id}", {
-                            mode: MODE_LABEL[v as Mode].toLowerCase(),
-                            id: m.system_id,
-                          })
-                        : t("Mode {mode} appliqué", {
-                            mode: MODE_LABEL[v as Mode].toLowerCase(),
-                          })
-                    ),
-                }
-              )
+              v && v !== m.mode && setPending({ zone: m, mode: v as Mode })
             }
             className="rounded-2xl border bg-card/60 p-1"
           >
@@ -344,6 +366,23 @@ export function DashboardPage() {
   const navigate = useNavigate()
   const status = useQuery({ queryKey: ["status"], queryFn: api.status })
   const cloud = useQuery({ queryKey: ["cloud"], queryFn: api.cloud })
+  // Settings of the selected installation, for its administrators.
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const configs = useQuery({
+    queryKey: ["installations"],
+    queryFn: api.installations,
+  })
+  const qc = useQueryClient()
+  const remove = useMutation({
+    mutationFn: api.deleteInstallation,
+    onSuccess: () => {
+      toast.success(t("Installation supprimée"))
+      for (const key of ["status", "installations", "cloud"])
+        qc.invalidateQueries({ queryKey: [key] })
+      navigate("/")
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : String(e)),
+  })
   const refresh = useMutation({
     mutationFn: api.refreshInstallation,
     onSuccess: (i) => toast.success(t("{name} actualisée", { name: i.name })),
@@ -438,6 +477,37 @@ export function DashboardPage() {
                         className={cn(refresh.isPending && "animate-spin")}
                       />
                     </Button>
+                    {selected.rights.admin && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-7"
+                          onClick={() => setSettingsOpen(true)}
+                          aria-label={t("Réglages de l'installation")}
+                        >
+                          <Settings2 />
+                        </Button>
+                        <Confirm
+                          title={t("Supprimer « {name} » ?", {
+                            name: selected.name,
+                          })}
+                          description={t(
+                            "Son historique et ses réglages Breezone seront supprimés. Le WebServer n'est pas modifié."
+                          )}
+                          onConfirm={() => remove.mutate(selected.id)}
+                        >
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-7"
+                            aria-label={t("Supprimer")}
+                          >
+                            <Trash2 />
+                          </Button>
+                        </Confirm>
+                      </>
+                    )}
                   </div>
                 </div>
                 {selected.controllable && (
@@ -480,6 +550,12 @@ export function DashboardPage() {
             </>
           )}
         </>
+      )}
+      {settingsOpen && selected && (
+        <InstallationDialog
+          initial={configs.data?.find((c) => c.id === selected.id)}
+          onClose={() => setSettingsOpen(false)}
+        />
       )}
     </>
   )

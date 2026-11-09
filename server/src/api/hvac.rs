@@ -84,10 +84,12 @@ pub async fn create_installation(State(state): State<AppState>, AdminUser(admin)
         tracing::warn!("cannot link to Airzone Cloud: {}", e.message.en);
     }
     let view = state.hub.installation(inst.id).await.ok_or_else(|| ApiError::internal("installation not loaded"))?;
-    Ok((StatusCode::CREATED, Json(view)))
+    Ok((StatusCode::CREATED, Json(Access::of(&state.db, &admin).await?.apply(view))))
 }
 
-pub async fn update_installation(State(state): State<AppState>, AdminUser(admin): AdminUser, Path(id): Path<i64>, Json(req): Json<InstallationInput>) -> ApiResult<Json<InstallationView>> {
+pub async fn update_installation(State(state): State<AppState>, admin: AuthUser, Path(id): Path<i64>, Json(req): Json<InstallationInput>) -> ApiResult<Json<InstallationView>> {
+    let access = Access::of(&state.db, &admin).await?;
+    access.manage(id)?;
     let current = db::installation_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("installation not found"))?;
     let (name, host, port) = if current.is_local() {
         let (name, host) = validate_installation(&req)?;
@@ -137,10 +139,11 @@ pub async fn update_installation(State(state): State<AppState>, AdminUser(admin)
             }
         }
     }
-    state.hub.installation(id).await.map(Json).ok_or_else(|| ApiError::not_found("installation not found"))
+    state.hub.installation(id).await.map(|v| Json(access.apply(v))).ok_or_else(|| ApiError::not_found("installation not found"))
 }
 
-pub async fn delete_installation(State(state): State<AppState>, AdminUser(admin): AdminUser, Path(id): Path<i64>) -> ApiResult<StatusCode> {
+pub async fn delete_installation(State(state): State<AppState>, admin: AuthUser, Path(id): Path<i64>) -> ApiResult<StatusCode> {
+    Access::of(&state.db, &admin).await?.manage(id)?;
     let inst = db::installation_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("installation not found"))?;
     db::delete_installation(&state.db, id).await?;
     state.hub.reload_installations().await?;
@@ -158,12 +161,14 @@ pub struct CloudLinkInput {
 /// Says which installation of the Airzone account an installation is.
 pub async fn link_cloud(
     State(state): State<AppState>,
-    AdminUser(admin): AdminUser,
+    admin: AuthUser,
     Path(id): Path<i64>,
     Json(req): Json<CloudLinkInput>,
 ) -> ApiResult<Json<InstallationView>> {
+    let access = Access::of(&state.db, &admin).await?;
+    access.manage(id)?;
     cloud::link(&state, id, req.cloud_id.as_deref(), &admin.username).await?;
-    state.hub.installation(id).await.map(Json).ok_or_else(|| ApiError::not_found("installation not found"))
+    state.hub.installation(id).await.map(|v| Json(access.apply(v))).ok_or_else(|| ApiError::not_found("installation not found"))
 }
 
 #[derive(Deserialize)]
@@ -174,7 +179,10 @@ pub struct TestRequest {
 }
 
 /// Checks that a host answers the Airzone local API, before saving it.
-pub async fn test_installation(_admin: AdminUser, Json(req): Json<TestRequest>) -> ApiResult<Json<Value>> {
+pub async fn test_installation(State(state): State<AppState>, user: AuthUser, Json(req): Json<TestRequest>) -> ApiResult<Json<Value>> {
+    if !Access::of(&state.db, &user).await?.manages_any() {
+        return Err(ApiError::forbidden("administrator role required"));
+    }
     if !(1..=65535).contains(&req.port) {
         return Err(ApiError::bad_request("invalid port"));
     }

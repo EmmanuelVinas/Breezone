@@ -40,12 +40,6 @@ pub struct User {
     pub password_hash: String,
     pub role: String,
     pub created_at: i64,
-    #[serde(skip)]
-    pub edit_zones: bool,
-    #[serde(skip)]
-    pub edit_routines: bool,
-    #[serde(skip)]
-    pub edit_schedules: bool,
     /// Language chosen in the profile ("fr" | "en" | "es"); `None` follows the browser.
     pub language: Option<String>,
 }
@@ -54,19 +48,11 @@ impl User {
     pub fn is_admin(&self) -> bool {
         self.role == "admin"
     }
-
-    /// What this user may change besides driving (everything for an administrator).
-    pub fn rights(&self) -> UserRights {
-        if self.is_admin() {
-            UserRights::default()
-        } else {
-            UserRights { zones: self.edit_zones, routines: self.edit_routines, schedules: self.edit_schedules }
-        }
-    }
 }
 
-/// What a user (role "user") may change on the installations they control, on top of driving
-/// them. Everything is allowed by default.
+/// What a user may change on an installation they control, on top of driving it. Everything is
+/// allowed by default.
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UserRights {
     /// Zone names and groups.
@@ -92,15 +78,14 @@ pub async fn update_user_language(db: &Db, id: i64, language: Option<&str>) -> s
     Ok(())
 }
 
-pub async fn update_user_rights(db: &Db, id: i64, rights: &UserRights) -> sqlx::Result<()> {
-    sqlx::query("UPDATE users SET edit_zones = ?, edit_routines = ?, edit_schedules = ? WHERE id = ?")
-        .bind(rights.zones)
-        .bind(rights.routines)
-        .bind(rights.schedules)
-        .bind(id)
-        .execute(db)
-        .await?;
-    Ok(())
+/// An installation given to a user (role "user").
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Grant {
+    pub installation_id: i64,
+    /// "read" | "control" | "admin"
+    pub permission: String,
+    /// What they may change when the permission is "control".
+    pub rights: UserRights,
 }
 
 pub async fn count_users(db: &Db) -> sqlx::Result<i64> {
@@ -615,24 +600,41 @@ pub async fn insert_event(
 }
 
 /// Installations a user (role 'user') can see: (installation id, "read" | "control").
-pub async fn user_access(db: &Db, user_id: i64) -> sqlx::Result<Vec<(i64, String)>> {
-    sqlx::query_as("SELECT installation_id, permission FROM user_installations WHERE user_id = ? ORDER BY installation_id")
-        .bind(user_id)
-        .fetch_all(db)
-        .await
+pub async fn user_access(db: &Db, user_id: i64) -> sqlx::Result<Vec<Grant>> {
+    let rows: Vec<(i64, String, bool, bool, bool)> = sqlx::query_as(
+        "SELECT installation_id, permission, edit_zones, edit_routines, edit_schedules FROM user_installations
+         WHERE user_id = ? ORDER BY installation_id",
+    )
+    .bind(user_id)
+    .fetch_all(db)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|(installation_id, permission, zones, routines, schedules)| Grant {
+            installation_id,
+            permission,
+            rights: UserRights { zones, routines, schedules },
+        })
+        .collect())
 }
 
 /// Replaces the installations a user can see.
-pub async fn set_user_access(db: &Db, user_id: i64, access: &[(i64, String)]) -> sqlx::Result<()> {
+pub async fn set_user_access(db: &Db, user_id: i64, access: &[Grant]) -> sqlx::Result<()> {
     let mut tx = db.begin().await?;
     sqlx::query("DELETE FROM user_installations WHERE user_id = ?").bind(user_id).execute(&mut *tx).await?;
-    for (installation_id, permission) in access {
-        sqlx::query("INSERT INTO user_installations (user_id, installation_id, permission) VALUES (?, ?, ?)")
-            .bind(user_id)
-            .bind(installation_id)
-            .bind(permission)
-            .execute(&mut *tx)
-            .await?;
+    for g in access {
+        sqlx::query(
+            "INSERT INTO user_installations (user_id, installation_id, permission, edit_zones, edit_routines, edit_schedules)
+             VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(user_id)
+        .bind(g.installation_id)
+        .bind(&g.permission)
+        .bind(g.rights.zones)
+        .bind(g.rights.routines)
+        .bind(g.rights.schedules)
+        .execute(&mut *tx)
+        .await?;
     }
     tx.commit().await?;
     Ok(())

@@ -3,7 +3,7 @@ import type { FormEvent, ReactNode } from "react"
 import { useLocation, useNavigate } from "react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { Loader2 } from "lucide-react"
-import { api } from "@/lib/api"
+import { ANDROID_APP_URL, api } from "@/lib/api"
 import { Brand } from "@/components/brand"
 import { Button } from "@/components/ui/button"
 import {
@@ -40,7 +40,15 @@ function AuthLayout({
       <p className="max-w-sm text-center text-xs text-muted-foreground">
         {t(
           "Breezone pilote vos installations Airzone en local, sans abonnement ni cloud."
-        )}
+        )}{" "}
+        <a
+          href={ANDROID_APP_URL}
+          target="_blank"
+          rel="noopener"
+          className="text-primary hover:underline"
+        >
+          {t("Application Android sur Google Play")}
+        </a>
       </p>
     </div>
   )

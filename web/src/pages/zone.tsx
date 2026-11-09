@@ -27,6 +27,7 @@ import { useZoneControl } from "@/hooks/use-zone-control"
 import { useSetpointDraft } from "@/components/zone-card"
 import { SetpointDial } from "@/components/setpoint-dial"
 import { cn } from "@/lib/utils"
+import { ConfirmDialog } from "@/components/confirm"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -44,7 +45,6 @@ import type { ChartConfig } from "@/components/ui/chart"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Input } from "@/components/ui/input"
-import { useRights } from "@/hooks/use-rights"
 import { Label } from "@/components/ui/label"
 import {
   Dialog,
@@ -285,6 +285,8 @@ function ZoneDetail({ zone }: { zone: Zone }) {
   const mode: Mode = zone.on && zone.mode ? zone.mode : "stop"
   const tone = MODE_TONE[mode]
   const step = zone.step || 0.5
+  // A mode applies to the whole system: it is confirmed first.
+  const [pendingMode, setPendingMode] = useState<Mode | null>(null)
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,420px)_1fr]">
@@ -372,19 +374,7 @@ function ZoneDetail({ zone }: { zone: Zone }) {
                   return (
                     <button
                       key={m}
-                      onClick={() =>
-                        control.mutate(
-                          { zone, cmd: { mode: m } },
-                          {
-                            onSuccess: () =>
-                              toast.success(
-                                t("Mode {mode} appliqué à tout le système", {
-                                  mode: MODE_LABEL[m].toLowerCase(),
-                                })
-                              ),
-                          }
-                        )
-                      }
+                      onClick={() => !active && setPendingMode(m)}
                       className={cn(
                         "flex flex-col items-center gap-2 rounded-2xl border p-3 text-xs font-medium transition-colors hover:bg-muted",
                         active &&
@@ -402,6 +392,34 @@ function ZoneDetail({ zone }: { zone: Zone }) {
                   )
                 })}
               </div>
+              <ConfirmDialog
+                open={pendingMode !== null}
+                title={t("Passer en mode {mode} ?", {
+                  mode: pendingMode
+                    ? MODE_LABEL[pendingMode].toLowerCase()
+                    : "",
+                })}
+                description={t(
+                  "Le mode s'applique à toutes les zones du système."
+                )}
+                onCancel={() => setPendingMode(null)}
+                onConfirm={() => {
+                  const m = pendingMode
+                  setPendingMode(null)
+                  if (m)
+                    control.mutate(
+                      { zone, cmd: { mode: m } },
+                      {
+                        onSuccess: () =>
+                          toast.success(
+                            t("Mode {mode} appliqué à tout le système", {
+                              mode: MODE_LABEL[m].toLowerCase(),
+                            })
+                          ),
+                      }
+                    )
+                }}
+              />
             </CardContent>
           </Card>
         )}
@@ -479,7 +497,6 @@ function ZoneDetail({ zone }: { zone: Zone }) {
 export function ZonePage() {
   const { inst, sys, zone: zoneId } = useParams()
   const status = useQuery({ queryKey: ["status"], queryFn: api.status })
-  const rights = useRights()
   const installation = status.data?.find((i) => i.id === Number(inst))
   const zone = installation?.zones.find(
     (z) => z.system_id === Number(sys) && z.zone_id === Number(zoneId)
@@ -507,7 +524,7 @@ export function ZonePage() {
             </p>
           </div>
         </div>
-        {zone && installation?.controllable && rights.zones && (
+        {zone && installation?.controllable && installation.rights.zones && (
           <EditZone key={`${zone.name}-${zone.group}`} zone={zone} />
         )}
       </div>

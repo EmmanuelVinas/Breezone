@@ -95,10 +95,24 @@ pub struct InstallationView {
     /// Node the installation is reached through.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub node: Option<NodeRef>,
-    /// The installation can be driven (false: shared read-only by its node).
+    /// The installation can be driven (false: shared read-only by its node, or read-only for this user).
     pub controllable: bool,
+    /// What the user who reads it may change (see `Access::apply`).
+    pub rights: InstallationUserRights,
     pub connection: ConnectionView,
     pub zones: Vec<ZoneView>,
+}
+
+/// What a user may change on an installation, besides driving it.
+#[derive(Debug, Clone, Copy, Default, Serialize, PartialEq)]
+pub struct InstallationUserRights {
+    /// Zone names and groups.
+    pub zones: bool,
+    pub routines: bool,
+    /// Airzone schedules.
+    pub schedules: bool,
+    /// The installation's own settings (address, Airzone link, deletion).
+    pub admin: bool,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -367,6 +381,7 @@ impl InstState {
             access: if self.node.is_some() { "node" } else { "local" },
             node: self.node.clone(),
             controllable: self.controllable,
+            rights: InstallationUserRights::default(),
             connection: self.conn.clone(),
             zones,
         }

@@ -4,7 +4,7 @@ Base : `http(s)://<serveur>` — JSON, champs en `snake_case`. Erreurs : statut 
 
 Authentification : `Authorization: Bearer <access_token>`. Le jeton d'accès dure 15 min ; on en obtient
 un nouveau avec le refresh token de l’appareil.
-🔒 = authentifié, 👑 = administrateur.
+🔒 = authentifié, 👑 = administrateur du serveur, 🛠 = administrateur du serveur ou de l'installation.
 
 ## Versions de l'API
 
@@ -43,7 +43,7 @@ serveur).
 | POST | `/api/auth/login` | `{username, password, device_name?}` → `TokenPair` (verrou 15 min après 5 échecs) |
 | POST | `/api/auth/refresh` | `{refresh_token}` → nouveau `TokenPair` ; l'ancien refresh token reste valable 120 s |
 | POST | `/api/auth/logout` | `{refresh_token}` → révoque l'appareil |
-| GET 🔒 | `/api/me` | Utilisateur courant, avec `access` : installations visibles (`null` pour un administrateur), `rights` : ce qu'il peut modifier (voir plus bas), et `language` : langue choisie dans le profil (`"fr"`, `"en"`, `"es"` ou `null` pour suivre le navigateur) |
+| GET 🔒 | `/api/me` | Utilisateur courant, avec `access` : installations visibles (`null` pour un administrateur), `rights` : ce qu'il peut modifier sur au moins une installation (pour les applications jusqu'à 0.7.0 ; chaque `Installation` porte ses propres `rights`), et `language` : langue choisie dans le profil (`"fr"`, `"en"`, `"es"` ou `null` pour suivre le navigateur) |
 | PUT 🔒 | `/api/me/language` | `{language: "fr"\|"en"\|"es"\|null}` — langue du profil, appliquée par l'interface web |
 | PUT 🔒 | `/api/me/password` | `{current_password, new_password}` — déconnecte les autres appareils |
 | GET 🔒 | `/api/sessions` | Appareils connectés (`current` = celui-ci) |
@@ -55,9 +55,9 @@ serveur).
 
 | Méthode | Chemin | Description |
 |---------|--------|-------------|
-| GET | `/api/users` | Liste, avec `access:[{installation_id, permission:"read"\|"control"}]` et `rights` |
-| POST | `/api/users` | `{username, password, role: "admin"\|"user", access?, rights?}` (`rights` : tout autorisé par défaut) |
-| PUT | `/api/users/{id}` | `{role?, password?, access?, rights?}` — un nouveau mot de passe déconnecte l'utilisateur partout ; `access` remplace les installations données, `rights` les droits |
+| GET | `/api/users` | Liste, avec `access:[{installation_id, permission:"read"\|"control"\|"admin", rights:{zones, routines, schedules}}]` |
+| POST | `/api/users` | `{username, password, role: "admin"\|"user", access?}` (`rights` d'une entrée : tout autorisé par défaut) |
+| PUT | `/api/users/{id}` | `{role?, password?, access?}` — un nouveau mot de passe déconnecte l'utilisateur partout ; `access` remplace les installations données et leurs droits |
 | DELETE | `/api/users/{id}` | Impossible pour soi-même ou le dernier administrateur |
 
 Un administrateur voit et pilote toutes les installations. Un utilisateur (`role: "user"`) ne voit
@@ -67,14 +67,17 @@ répondent 403. Les minuteries et routines ne peuvent viser que des installation
 l'utilisateur (la cible « toutes » est réservée aux administrateurs). Une installation ajoutée
 ensuite (à la main, depuis le compte Airzone ou via un autre nœud) n'est donnée à personne.
 
-Sur les installations qu'il pilote, un utilisateur peut aussi modifier ce que ses `rights`
-autorisent : `{zones, routines, schedules}`, trois booléens, tous à `true` par défaut (toujours
-`true` pour un administrateur). `zones` : nom, groupe et ordre des zones (`…/meta`) ; `routines` :
+Les droits se donnent par installation. `read` : consulter ; `control` : piloter, et modifier ce
+que les `rights` de l'entrée autorisent (`{zones, routines, schedules}`, trois booléens, tous à
+`true` par défaut) ; `admin` : tous les droits sur l'installation, y compris ses réglages (🛠 :
+adresse, lien Airzone, suppression). Un administrateur du serveur a tous les droits partout.
+`zones` : nom, groupe et ordre des zones (`…/meta`) ; `routines` :
 créer, modifier et supprimer des routines (les lancer ne demande que le pilotage) ; `schedules` :
 créer, modifier et supprimer des programmations Airzone (les activer ou désactiver ne demande que
-le pilotage). Sans le droit, ces requêtes répondent 403. Les réglages du serveur (installations,
-compte Airzone, recherche réseau, nœuds, partages, utilisateurs : 👑) restent réservés aux
-administrateurs. Un changement d'accès ou de droits envoie un nouveau `snapshot` sur le WebSocket
+le pilotage). Sans le droit, ces requêtes répondent 403. Chaque `Installation` renvoyée porte
+`rights: {zones, routines, schedules, admin}`, ce que l'utilisateur qui la lit peut y modifier. Les
+réglages du serveur (ajout d'installation, compte Airzone, recherche réseau, nœuds, partages,
+utilisateurs : 👑) restent réservés aux administrateurs du serveur. Un changement d'accès ou de droits envoie un nouveau `snapshot` sur le WebSocket
 de l'utilisateur ; les clients relisent alors `/api/me`.
 
 ## Installations et zones
@@ -86,10 +89,10 @@ de l'utilisateur ; les clients relisent alors `/api/me`.
 | POST 🔒 | `/api/installations/{id}/refresh` | Interroge immédiatement le WebServer |
 | GET 🔒 | `/api/installations` | Configuration (`host`, `port`, `mac`, `location`, `enabled`, `cloud_id`, `node_id`, `remote_id`) |
 | POST 👑 | `/api/installations` | `{name, host, port?=3000, enabled?=true}` |
-| PUT 👑 | `/api/installations/{id}` | Idem (installation via un nœud : seuls `name` et `enabled` changent) |
-| PUT 👑 | `/api/installations/{id}/cloud` | `{cloud_id: string\|null}` : installation du compte Airzone à laquelle elle correspond (refusé si la MAC du WebServer prouve le contraire) → `Installation` |
-| DELETE 👑 | `/api/installations/{id}` | Supprime (historique et réglages Breezone compris) |
-| POST 👑 | `/api/installations/test` | `{host, port}` → `{ok, zones, webserver}` ou `{ok:false, error}` |
+| PUT 🛠 | `/api/installations/{id}` | Idem (installation via un nœud : seuls `name` et `enabled` changent) |
+| PUT 🛠 | `/api/installations/{id}/cloud` | `{cloud_id: string\|null}` : installation du compte Airzone à laquelle elle correspond (refusé si la MAC du WebServer prouve le contraire) → `Installation` |
+| DELETE 🛠 | `/api/installations/{id}` | Supprime (historique et réglages Breezone compris) |
+| POST 🛠 | `/api/installations/test` | `{host, port}` → `{ok, zones, webserver}` ou `{ok:false, error}` |
 | POST 👑 | `/api/discovery/scan` | `{subnet?}` → `{subnet, found:[{host, port, mac, firmware, zones}]}` (seules les réponses portant la signature Airzone comptent) |
 | GET 🔒 / PUT 👑 | `/api/discovery/settings` | Réseau local du serveur : `{subnet}` → `{subnet, effective, in_container}` |
 | PATCH 🔒 | `/api/installations/{id}/zones/{system_id}/{zone_id}` | `ZoneCommand` → `Zone` mise à jour |
@@ -98,7 +101,7 @@ de l'utilisateur ; les clients relisent alors `/api/me`.
 | POST 🔒 | `/api/control/batch` | `{actions:[Action]}` → `{results:[{ok, error}]}` |
 
 `Installation` : `{id, name, location, host, port, enabled, access:"local"|"node", node?:{id, name, state},
-controllable, connection:{state:"online"|"offline"|"unknown", last_seen, last_error, latency_ms}, zones:[Zone]}`.
+controllable, rights:{zones, routines, schedules, admin}, connection:{state:"online"|"offline"|"unknown", last_seen, last_error, latency_ms}, zones:[Zone]}`.
 `access: "node"` : installation jointe via un autre serveur Breezone (`host` = son adresse) ;
 `controllable: false` si ce serveur la partage en lecture seule.
 

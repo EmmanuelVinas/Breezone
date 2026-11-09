@@ -30,6 +30,7 @@ import { ALL_RIGHTS, api, currentUser } from "@/lib/api"
 import { dateTime, relativeTime } from "@/lib/format"
 import { PageHeader } from "@/components/app-shell"
 import { InstallationMap } from "@/components/installation-map"
+import { InstallationDialog } from "@/components/installation-dialog"
 import { ConnectionDot } from "@/components/connection-badge"
 import { Confirm } from "@/components/confirm"
 import { NodesTab, SharesTab } from "@/components/federation"
@@ -47,7 +48,6 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Select,
@@ -71,152 +71,6 @@ const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 // ---------------------------------------------------------------------------------------
 // Installations
 // ---------------------------------------------------------------------------------------
-
-type InstallationForm = {
-  name: string
-  host: string
-  port: string
-  enabled: boolean
-}
-
-function InstallationDialog({
-  initial,
-  onClose,
-}: {
-  initial?: InstallationConfig | { name: string; host: string; port: number }
-  onClose: () => void
-}) {
-  const qc = useQueryClient()
-  const editing = initial && "id" in initial ? initial : undefined
-  const [form, setForm] = useState<InstallationForm>({
-    name: initial?.name ?? "",
-    host: initial?.host ?? "",
-    port: String(initial?.port ?? 3000),
-    enabled: editing?.enabled ?? true,
-  })
-  const [test, setTest] = useState<{ ok: boolean; text: string } | null>(null)
-  const set = (p: Partial<InstallationForm>) => setForm((f) => ({ ...f, ...p }))
-
-  const runTest = useMutation({
-    mutationFn: () => api.testInstallation(form.host, Number(form.port)),
-    onSuccess: (r) =>
-      setTest(
-        r.ok
-          ? {
-              ok: true,
-              text: t("{n} zone(s) : {names}", {
-                n: r.zones?.length ?? 0,
-                names: r.zones?.map((z) => z.name).join(", ") ?? "",
-              }),
-            }
-          : { ok: false, text: r.error ?? t("Pas de réponse") }
-      ),
-    onError: (e) => setTest({ ok: false, text: errorText(e) }),
-  })
-  const save = useMutation({
-    mutationFn: () => {
-      const data = {
-        name: form.name,
-        host: form.host,
-        port: Number(form.port),
-        enabled: form.enabled,
-      }
-      return editing
-        ? api.updateInstallation(editing.id, data)
-        : api.createInstallation(data)
-    },
-    onSuccess: () => {
-      toast.success(
-        editing ? t("Installation modifiée") : t("Installation ajoutée")
-      )
-      qc.invalidateQueries({ queryKey: ["installations"] })
-      qc.invalidateQueries({ queryKey: ["status"] })
-      onClose()
-    },
-    onError: (e) => toast.error(errorText(e)),
-  })
-
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
-            {editing
-              ? t("Modifier l'installation")
-              : t("Ajouter une installation")}
-          </DialogTitle>
-          <DialogDescription>
-            {t(
-              "Adresse du WebServer Airzone sur le réseau local (API locale, port 3000)."
-            )}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor="in">{t("Nom")}</Label>
-            <Input
-              id="in"
-              value={form.name}
-              placeholder={t("Maison")}
-              onChange={(e) => set({ name: e.target.value })}
-            />
-          </div>
-          <div className="grid grid-cols-[1fr_6rem] gap-3">
-            <div className="grid gap-2">
-              <Label htmlFor="ih">{t("Adresse IP")}</Label>
-              <Input
-                id="ih"
-                value={form.host}
-                placeholder="192.168.1.25"
-                onChange={(e) => set({ host: e.target.value })}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="ip">{t("Port")}</Label>
-              <Input
-                id="ip"
-                type="number"
-                value={form.port}
-                onChange={(e) => set({ port: e.target.value })}
-              />
-            </div>
-          </div>
-          <label className="flex items-center gap-3 text-sm">
-            <Switch
-              checked={form.enabled}
-              onCheckedChange={(enabled) => set({ enabled })}
-            />{" "}
-            {t("Activée (interrogée régulièrement)")}
-          </label>
-          {test && (
-            <Alert variant={test.ok ? "default" : "destructive"}>
-              <AlertTitle>
-                {test.ok ? t("WebServer joignable") : t("Échec")}
-              </AlertTitle>
-              <AlertDescription>{test.text}</AlertDescription>
-            </Alert>
-          )}
-        </div>
-        <DialogFooter className="gap-2">
-          <Button
-            variant="outline"
-            onClick={() => runTest.mutate()}
-            disabled={!form.host || runTest.isPending}
-          >
-            {runTest.isPending && <Loader2 className="animate-spin" />}{" "}
-            {t("Tester")}
-          </Button>
-          <Button
-            onClick={() => save.mutate()}
-            disabled={!form.name || !form.host || save.isPending}
-          >
-            {t("Enregistrer")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
 
 function InstallationsTab({ openAccess }: { openAccess: string | null }) {
   const qc = useQueryClient()
@@ -718,7 +572,17 @@ function CloudTab({ admin }: { admin: boolean }) {
 // Users
 // ---------------------------------------------------------------------------------------
 
-/** Installations a user can see, and whether they can drive them. */
+/** What may be changed on an installation driven with the "control" permission. */
+const RIGHTS: { key: keyof UserRights; label: string }[] = [
+  { key: "zones", label: t("Renommer et regrouper les zones") },
+  { key: "routines", label: t("Créer et modifier les routines") },
+  {
+    key: "schedules",
+    label: t("Créer et modifier les programmations Airzone"),
+  },
+]
+
+/** Per installation: no access, read-only, control (with chosen rights) or administrator. */
 function AccessEditor({
   value,
   onChange,
@@ -731,16 +595,11 @@ function AccessEditor({
     queryFn: api.installations,
   })
   const list = installations.data ?? []
-  const level = (id: number) =>
-    value.find((a) => a.installation_id === id)?.permission ?? "none"
-  const set = (id: number, l: string) =>
+  const entry = (id: number) => value.find((a) => a.installation_id === id)
+  const replace = (id: number, next: AccessEntry | null) =>
     onChange([
       ...value.filter((a) => a.installation_id !== id),
-      ...(l === "none"
-        ? []
-        : [
-            { installation_id: id, permission: l as AccessEntry["permission"] },
-          ]),
+      ...(next ? [next] : []),
     ])
   return (
     <div className="grid gap-2">
@@ -749,33 +608,81 @@ function AccessEditor({
           {t("Aucune installation.")}
         </p>
       )}
-      {list.map((i) => (
-        <div
-          key={i.id}
-          className="flex flex-wrap items-center gap-3 rounded-xl border p-2.5 text-sm"
-        >
-          <span className="min-w-0 flex-1">
-            {i.name}
-            <span className="block text-xs text-muted-foreground">
-              {i.node_id !== null
-                ? t("via un autre serveur Breezone")
-                : (i.location ?? `${i.host}:${i.port}`)}
-            </span>
-          </span>
-          <Select value={level(i.id)} onValueChange={(l) => set(i.id, l)}>
-            <SelectTrigger className="w-44">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">{t("Aucun accès")}</SelectItem>
-              <SelectItem value="read">{t("Lecture seule")}</SelectItem>
-              <SelectItem value="control">
-                {t("Lecture et pilotage")}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      ))}
+      {list.map((i) => {
+        const e = entry(i.id)
+        return (
+          <div
+            key={i.id}
+            className="grid gap-2 rounded-xl border p-2.5 text-sm"
+          >
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="min-w-0 flex-1">
+                {i.name}
+                <span className="block text-xs text-muted-foreground">
+                  {i.node_id !== null
+                    ? t("via un autre serveur Breezone")
+                    : (i.location ?? `${i.host}:${i.port}`)}
+                </span>
+              </span>
+              <Select
+                value={e?.permission ?? "none"}
+                onValueChange={(l) =>
+                  replace(
+                    i.id,
+                    l === "none"
+                      ? null
+                      : {
+                          installation_id: i.id,
+                          permission: l as AccessEntry["permission"],
+                          rights: e?.rights ?? ALL_RIGHTS,
+                        }
+                  )
+                }
+              >
+                <SelectTrigger className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">{t("Aucun accès")}</SelectItem>
+                  <SelectItem value="read">{t("Lecture seule")}</SelectItem>
+                  <SelectItem value="control">{t("Pilotage")}</SelectItem>
+                  <SelectItem value="admin">
+                    {t("Administrateur de l'installation")}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {e?.permission === "control" && (
+              <div className="grid gap-1.5 border-t pt-2">
+                {RIGHTS.map((r) => (
+                  <label
+                    key={r.key}
+                    className="flex cursor-pointer items-center gap-2 text-xs"
+                  >
+                    <Checkbox
+                      checked={e.rights[r.key]}
+                      onCheckedChange={(on) =>
+                        replace(i.id, {
+                          ...e,
+                          rights: { ...e.rights, [r.key]: on === true },
+                        })
+                      }
+                    />
+                    {r.label}
+                  </label>
+                ))}
+              </div>
+            )}
+            {e?.permission === "admin" && (
+              <p className="border-t pt-2 text-xs text-muted-foreground">
+                {t(
+                  "Tous les droits sur cette installation, y compris ses réglages (adresse, lien Airzone, suppression)."
+                )}
+              </p>
+            )}
+          </div>
+        )
+      })}
       <p className="text-xs text-muted-foreground">
         {t(
           "Les installations ajoutées plus tard ne sont données à personne : revenez ici pour les attribuer."
@@ -785,68 +692,23 @@ function AccessEditor({
   )
 }
 
-const RIGHTS: { key: keyof UserRights; label: string; hint: string }[] = [
-  {
-    key: "zones",
-    label: t("Renommer et regrouper les zones"),
-    hint: t("Nom, groupe et ordre des zones."),
-  },
-  {
-    key: "routines",
-    label: t("Créer et modifier les routines"),
-    hint: t("Lancer une routine reste possible avec le pilotage."),
-  },
-  {
-    key: "schedules",
-    label: t("Créer et modifier les programmations Airzone"),
-    hint: t("Les activer ou les désactiver reste possible avec le pilotage."),
-  },
-]
-
-/** What a user may change on the installations they drive, besides driving them. */
-function RightsEditor({
-  value,
-  onChange,
-}: {
-  value: UserRights
-  onChange: (v: UserRights) => void
-}) {
-  return (
-    <div className="grid gap-2">
-      {RIGHTS.map((r) => (
-        <label
-          key={r.key}
-          className="flex cursor-pointer items-center gap-3 rounded-xl border p-2.5 text-sm"
-        >
-          <span className="min-w-0 flex-1">
-            {r.label}
-            <span className="block text-xs text-muted-foreground">
-              {r.hint}
-            </span>
-          </span>
-          <Switch
-            checked={value[r.key]}
-            onCheckedChange={(on) => onChange({ ...value, [r.key]: on })}
-          />
-        </label>
-      ))}
-      <p className="text-xs text-muted-foreground">
-        {t(
-          "Sur les installations qu'il pilote. Sans ces droits, il pilote sans rien modifier."
-        )}
-      </p>
-    </div>
-  )
-}
-
-function accessSummary(access: AccessEntry[], rights: UserRights) {
+function accessSummary(access: AccessEntry[]) {
   if (access.length === 0) return t("Aucune installation")
-  const control = access.filter((a) => a.permission === "control").length
   const n = access.length
-  const limited = control > 0 && RIGHTS.some((r) => !rights[r.key])
+  const count = (p: AccessEntry["permission"]) =>
+    access.filter((a) => a.permission === p).length
+  const limited = access.some(
+    (a) => a.permission === "control" && RIGHTS.some((r) => !a.rights[r.key])
+  )
   return [
     tn(n, "{n} installation", "{n} installations"),
-    control ? t("{n} en pilotage", { n: control }) : t("lecture seule"),
+    ...(count("admin")
+      ? [t("{n} en administration", { n: count("admin") })]
+      : []),
+    ...(count("control")
+      ? [t("{n} en pilotage", { n: count("control") })]
+      : []),
+    ...(count("read") ? [t("{n} en lecture seule", { n: count("read") })] : []),
     ...(limited ? [t("droits limités")] : []),
   ].join(" · ")
 }
@@ -858,12 +720,10 @@ function UsersTab() {
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({ username: "", password: "", role: "user" })
   const [newAccess, setNewAccess] = useState<AccessEntry[]>([])
-  const [newRights, setNewRights] = useState<UserRights>(ALL_RIGHTS)
   const [editing, setEditing] = useState<{
     id: number
     username: string
     access: AccessEntry[]
-    rights: UserRights
   } | null>(null)
   const [reset, setReset] = useState<{ id: number; username: string } | null>(
     null
@@ -876,15 +736,13 @@ function UsersTab() {
         form.username,
         form.password,
         form.role,
-        form.role === "user" ? newAccess : [],
-        form.role === "user" ? newRights : ALL_RIGHTS
+        form.role === "user" ? newAccess : []
       ),
     onSuccess: () => {
       toast.success(t("Utilisateur créé"))
       setOpen(false)
       setForm({ username: "", password: "", role: "user" })
       setNewAccess([])
-      setNewRights(ALL_RIGHTS)
       refresh()
     },
     onError: (e) => toast.error(errorText(e)),
@@ -899,7 +757,6 @@ function UsersTab() {
         role?: string
         password?: string
         access?: AccessEntry[]
-        rights?: UserRights
       }
     }) => api.updateUser(id, data),
     onSuccess: () => {
@@ -948,7 +805,7 @@ function UsersTab() {
               <div className="text-xs text-muted-foreground">
                 {u.role === "admin"
                   ? t("Toutes les installations")
-                  : accessSummary(u.access, u.rights)}{" "}
+                  : accessSummary(u.access)}{" "}
                 · {t("créé le {date}", { date: dateTime(u.created_at) })}
               </div>
             </div>
@@ -961,7 +818,6 @@ function UsersTab() {
                     id: u.id,
                     username: u.username,
                     access: u.access,
-                    rights: u.rights,
                   })
                 }
               >
@@ -1054,8 +910,6 @@ function UsersTab() {
               <div className="grid gap-2">
                 <Label>{t("Installations")}</Label>
                 <AccessEditor value={newAccess} onChange={setNewAccess} />
-                <Label className="mt-2">{t("Droits")}</Label>
-                <RightsEditor value={newRights} onChange={setNewRights} />
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
@@ -1102,13 +956,6 @@ function UsersTab() {
                   onChange={(access) => setEditing({ ...editing, access })}
                 />
               </div>
-              <div className="grid gap-2">
-                <Label>{t("Droits")}</Label>
-                <RightsEditor
-                  value={editing.rights}
-                  onChange={(rights) => setEditing({ ...editing, rights })}
-                />
-              </div>
             </div>
           )}
           <DialogFooter>
@@ -1120,7 +967,7 @@ function UsersTab() {
                 editing &&
                 update.mutate({
                   id: editing.id,
-                  data: { access: editing.access, rights: editing.rights },
+                  data: { access: editing.access },
                 })
               }
               disabled={update.isPending}

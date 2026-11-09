@@ -19,6 +19,7 @@ const APPLIED: &[(&str, &str)] = &[
     ("0012_node_exclusions.sql", "b4c9b9ad3dd7e258b5bf167d34520e76e2b61b416cfbaf8d6b690059cc7cf9ac"),
     ("0013_user_rights.sql", "05b762c66ba9d38b1a095da56e1d6584d3f7638bf03e5cce7ee3c886ca78c289"),
     ("0014_languages.sql", "de771077740cd94aaf4c7629cca12883a68b468e9ebe541a7ecdce865d29effc"),
+    ("0015_installation_rights.sql", "907cad13e1aa809cd27a71a5985f54659d385933bb0d563157f49f777dfda4f0"),
 ];
 
 #[test]

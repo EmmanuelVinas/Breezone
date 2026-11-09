@@ -27,7 +27,9 @@ use crate::hub::Hub;
 use axum::response::Html;
 use axum::Router;
 use std::sync::Arc;
+use axum::http::{header, HeaderValue};
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
@@ -110,11 +112,24 @@ pub fn app(state: AppState) -> Router {
             Html("<h1>Breezone</h1><p>The server is running, but the web UI is not installed (BREEZONE_WEB_DIR).</p>")
         })
     };
-    router
+    with_security_headers(router)
         .layer(axum::middleware::from_fn(i18n::middleware))
         .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
+}
+
+/// Browser protections for the web UI: only its own scripts, never shown inside another site's
+/// frame (clickjacking), no MIME sniffing, no referrer sent. HSTS is left to the HTTPS proxy: on a
+/// local address with a self-signed certificate it would make the warning impossible to bypass.
+fn with_security_headers(router: Router<AppState>) -> Router<AppState> {
+    const CSP: &str = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; \
+font-src 'self' data:; connect-src 'self' ws: wss:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
+    router
+        .layer(SetResponseHeaderLayer::if_not_present(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static(CSP)))
+        .layer(SetResponseHeaderLayer::if_not_present(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY")))
+        .layer(SetResponseHeaderLayer::if_not_present(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff")))
+        .layer(SetResponseHeaderLayer::if_not_present(header::REFERRER_POLICY, HeaderValue::from_static("no-referrer")))
 }
 
 /// Starts the poller, the live links to other nodes, the routine scheduler and the maintenance task.

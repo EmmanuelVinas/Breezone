@@ -6,6 +6,26 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-11-09
+
+### Changed
+
+- Users: rights are given per installation — no access, read-only, control (with or without the
+  right to change zone names and groups, routines, Airzone schedules) or administrator of the
+  installation (every right, plus its settings: address, Airzone link, deletion, from the
+  installation's page). Rights given until now apply to each installation of the user. Server
+  administrators keep every right.
+- Web and site: link to the Android app on Google Play.
+
+- Web and app: changing the mode of a system asks for a confirmation first (it applies to every
+  zone, an accidental tap could switch the house from heating to cooling).
+- Security: device sessions last 60 days instead of 365 (still extended at each use).
+- Security: sign-in attempts are limited per account and address, per address and per account
+  (an attacker elsewhere no longer locks the owner out), the counters cannot fill the memory, and
+  at most two passwords are hashed at a time.
+- Security: the server sends a Content-Security-Policy, `X-Frame-Options: DENY`,
+  `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`.
+
 ## [0.7.0] - 2026-11-09
 
 ### Added
@@ -178,7 +198,8 @@ All notable changes are documented here. The format follows
 - Project renamed from FreeZone to Breezone (former `FREEZONE_*` variables and `freezone.db` are
   still recognised).
 
-[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/EmmanuelVinas/breezone/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/EmmanuelVinas/breezone/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.5.0...v0.6.0

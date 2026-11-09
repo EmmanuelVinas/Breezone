@@ -67,7 +67,7 @@ sont retrouvés sur le réseau par leur adresse MAC.
 ## Installation (Docker)
 
 L'image est publiée sur GitHub Container Registry : `ghcr.io/emmanuelvinas/breezone`
-(`linux/amd64` et `linux/arm64`). Tags : `latest`, la version (`0.7.0`) et la série (`0.7`).
+(`linux/amd64` et `linux/arm64`). Tags : `latest`, la version (`0.7.1`) et la série (`0.7`).
 
 Créez un dossier `breezone` contenant ce `docker-compose.yml`, puis lancez `docker compose up -d` :
 
@@ -113,7 +113,7 @@ le [`docker-compose.yml` complet](docker-compose.yml) du dépôt contient un ser
 port 3000 des WebServers : leur API n'a aucune authentification.
 
 **Mise à jour.** `docker compose pull && docker compose up -d`. Pour rester sur une version précise,
-remplacez `latest` par son numéro (ex. `0.7.0`). Les données (base SQLite, secret de
+remplacez `latest` par son numéro (ex. `0.7.1`). Les données (base SQLite, secret de
 signature) sont dans le volume `breezone_data`. Sauvegarde :
 `docker run --rm -v breezone_data:/data -v "$PWD":/backup alpine tar czf /backup/breezone.tgz -C /data .`
 
@@ -126,8 +126,8 @@ Une application Android et iOS (français, anglais, espagnol) pour piloter vos i
 téléphone : zones, modes, routines et programmations  de chaque installation, temps réel,
 plusieurs serveurs.
 
-**Liens Google Play et App Store : bientôt disponibles.** En attendant, compilez-la depuis
-[`mobile/`](mobile).
+**Android : [Breezone sur Google Play](https://play.google.com/store/apps/details?id=com.breezone.app).** iOS : bientôt sur l'App Store ; en
+attendant, compilez-la depuis [`mobile/`](mobile).
 
 Saisissez l'adresse de votre serveur (`http://192.168.1.10:8427` à la maison, ou l'adresse `https://`
 de votre tunnel) puis vos identifiants ; ajoutez un serveur par site. La session de l'appareil est

@@ -44,6 +44,11 @@ import com.breezone.app.resources.Res
 import com.breezone.app.resources.add_server_show_password
 import com.breezone.app.resources.common_back
 import com.breezone.app.resources.common_cancel
+import com.breezone.app.resources.mode_confirm
+import com.breezone.app.resources.mode_confirm_text
+import com.breezone.app.resources.mode_confirm_title
+import com.breezone.app.data.Mode
+import com.breezone.app.ui.label
 import com.breezone.app.ui.icons.FzIcons
 import com.breezone.app.ui.theme.Fz
 import org.jetbrains.compose.resources.stringResource
@@ -118,6 +123,21 @@ fun ConfirmDialog(title: String, confirm: String, onConfirm: () -> Unit, onDismi
         text = text?.let { { Text(it) } },
         confirmButton = { TextButton(onClick = onConfirm) { Text(confirm) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) } },
+    )
+}
+
+/** A mode applies to a whole system: an accidental tap must not switch it from heating to cooling. */
+@Composable
+fun ModeConfirmation(mode: Mode, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    ConfirmDialog(
+        title = stringResource(Res.string.mode_confirm_title, mode.label().lowercase()),
+        confirm = stringResource(Res.string.mode_confirm),
+        text = stringResource(Res.string.mode_confirm_text),
+        onConfirm = {
+            onDismiss()
+            onConfirm()
+        },
+        onDismiss = onDismiss,
     )
 }
 

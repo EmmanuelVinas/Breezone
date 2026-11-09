@@ -48,8 +48,6 @@ data class ServerState(
     val error: String? = null,
 )
 
-fun List<ServerState>.rights(serverId: String): UserRights =
-    firstOrNull { it.account.id == serverId }?.user?.rights ?: UserRights()
 
 fun List<ServerState>.installation(serverId: String, installationId: Long): Installation? =
     firstOrNull { it.account.id == serverId }?.installations?.firstOrNull { it.id == installationId }

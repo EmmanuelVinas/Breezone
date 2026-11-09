@@ -7,12 +7,13 @@ import {
   LogOut,
   Moon,
   Settings,
+  Smartphone,
   Sun,
   Timer,
 } from "lucide-react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import type { LiveState } from "@/hooks/use-live"
-import { api, currentUser } from "@/lib/api"
+import { ANDROID_APP_URL, api, currentUser } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { useTheme } from "@/components/theme-provider"
 import { Brand, BrandMark } from "@/components/brand"
@@ -26,7 +27,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { t } from "@/lib/i18n"
-import { useProfileLanguage } from "@/hooks/use-rights"
+import { useProfileLanguage } from "@/hooks/use-profile-language"
 
 const NAV = [
   { to: "/", label: t("Installations"), icon: LayoutGrid, end: true },
@@ -173,6 +174,12 @@ export function AppShell({
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={logout} variant="destructive">
                   <LogOut /> {t("Se déconnecter")}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <a href={ANDROID_APP_URL} target="_blank" rel="noopener">
+                    <Smartphone /> {t("Application Android")}
+                  </a>
                 </DropdownMenuItem>
                 {version && (
                   <>

@@ -18,7 +18,6 @@ import type {
   ZoneCommand,
 } from "@/lib/api"
 import { api } from "@/lib/api"
-import { useRights } from "@/hooks/use-rights"
 import { DAY_LABEL, DAY_SHORT, MODE_LABEL, relativeTime } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Confirm } from "@/components/confirm"
@@ -102,7 +101,11 @@ function ScheduleEditor({
   onClose: () => void
 }) {
   const qc = useQueryClient()
-  const linked = cloudInstallations.filter((c) => c.installation_id !== null)
+  const linked = cloudInstallations.filter((c) =>
+    installations.some(
+      (i) => i.id === c.installation_id && i.controllable && i.rights.schedules
+    )
+  )
   const [cloudId, setCloudId] = useState(
     schedule?.cloud_id ?? linked[0]?.cloud_id ?? ""
   )
@@ -466,7 +469,10 @@ export function AirzoneSchedulesSection() {
   })
   const status = useQuery({ queryKey: ["status"], queryFn: api.status })
   const cloud = useQuery({ queryKey: ["cloud"], queryFn: api.cloud })
-  const canEdit = useRights().schedules
+  const editable = (installationId: number | null) =>
+    !!status.data?.some(
+      (i) => i.id === installationId && i.controllable && i.rights.schedules
+    )
   const [editing, setEditing] = useState<{
     s?: AirzoneSchedule
     nonce: number
@@ -517,13 +523,8 @@ export function AirzoneSchedulesSection() {
             <RefreshCw className={refresh.isPending ? "animate-spin" : ""} />{" "}
             {t("Actualiser")}
           </Button>
-          {canEdit && (
-            <Button
-              onClick={() => setEditing({ nonce: Date.now() })}
-              disabled={
-                !cloudInstallations.some((c) => c.installation_id !== null)
-              }
-            >
+          {cloudInstallations.some((c) => editable(c.installation_id)) && (
+            <Button onClick={() => setEditing({ nonce: Date.now() })}>
               <Plus /> {t("Nouvelle")}
             </Button>
           )}
@@ -543,7 +544,7 @@ export function AirzoneSchedulesSection() {
                   s={s}
                   inst={inst}
                   onEdit={
-                    canEdit
+                    editable(s.installation_id)
                       ? () => setEditing({ s, nonce: Date.now() })
                       : undefined
                   }

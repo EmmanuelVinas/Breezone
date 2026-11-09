@@ -238,8 +238,8 @@ async fn airzone_schedules_are_mirrored_and_edited_on_airzone_cloud() {
         .call(
             reqwest::Method::POST,
             "/api/users",
-            Some(json!({"username":"camille","password":"motdepasse1","access":[{"installation_id": home, "permission":"control"}],
-                        "rights": {"zones": true, "routines": true, "schedules": false}})),
+            Some(json!({"username":"camille","password":"motdepasse1","access":[{"installation_id": home, "permission":"control",
+                        "rights": {"zones": true, "routines": true, "schedules": false}}]})),
         )
         .await;
     assert_eq!(s, StatusCode::CREATED, "{v}");

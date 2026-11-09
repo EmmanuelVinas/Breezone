@@ -105,7 +105,7 @@ pub fn lookup(source: &str) -> Option<Text> {
         "database error" => ("erreur de base de données", "database error", "error de base de datos"),
         "délai entre 0 minute et 7 jours" => ("délai entre 0 minute et 7 jours", "delay between 0 minutes and 7 days", "retraso entre 0 minutos y 7 días"),
         "délai entre 1 minute et 7 jours" => ("délai entre 1 minute et 7 jours", "delay between 1 minute and 7 days", "retraso entre 1 minuto y 7 días"),
-        "droit attendu : read ou control" => ("droit attendu : read ou control", "permission expected: read or control", "permiso esperado: read o control"),
+        "droit attendu : read, control ou admin" => ("droit attendu : read, control ou admin", "permission expected: read, control or admin", "permiso esperado: read, control o admin"),
         "durée de validité invalide" => ("durée de validité invalide", "invalid validity period", "periodo de validez no válido"),
         "e-mail et mot de passe Airzone requis" => (
             "e-mail et mot de passe Airzone requis",

@@ -312,4 +312,7 @@
     <string name="demo_routine_evening">Evening</string>
     <string name="demo_schedule_wake">Wake up</string>
     <string name="demo_schedule_night">Night</string>
+    <string name="mode_confirm_title">Switch to %1$s mode?</string>
+    <string name="mode_confirm_text">The mode applies to every zone of the system.</string>
+    <string name="mode_confirm">Switch</string>
 </resources>

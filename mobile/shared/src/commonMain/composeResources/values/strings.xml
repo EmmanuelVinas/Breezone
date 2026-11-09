@@ -321,4 +321,7 @@
     <string name="demo_routine_evening">Soirée</string>
     <string name="demo_schedule_wake">Réveil</string>
     <string name="demo_schedule_night">Nuit</string>
+    <string name="mode_confirm_title">Passer en mode %1$s ?</string>
+    <string name="mode_confirm_text">Le mode s’applique à toutes les zones du système.</string>
+    <string name="mode_confirm">Changer</string>
 </resources>

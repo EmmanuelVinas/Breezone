@@ -70,7 +70,7 @@ The web UI is in French for now; English is on the [roadmap](docs/ROADMAP.md).
 ## Install (Docker)
 
 The image is published on GitHub Container Registry: `ghcr.io/emmanuelvinas/breezone`
-(`linux/amd64` and `linux/arm64`). Tags: `latest`, the version (`0.7.0`) and the minor line (`0.7`).
+(`linux/amd64` and `linux/arm64`). Tags: `latest`, the version (`0.7.1`) and the minor line (`0.7`).
 
 Create a `breezone` folder with this `docker-compose.yml`, then run `docker compose up -d`:
 
@@ -116,7 +116,7 @@ profile, token in `.env`: `CLOUDFLARE_TUNNEL_TOKEN`). No port is opened on your 
 3000 of the WebServers: their API has no authentication.
 
 **Update.** `docker compose pull && docker compose up -d`. To stay on a given version, replace
-`latest` with its number (e.g. `0.7.0`). Data (SQLite database, signing secret) is
+`latest` with its number (e.g. `0.7.1`). Data (SQLite database, signing secret) is
 in the `breezone_data` volume; back it up with
 `docker run --rm -v breezone_data:/data -v "$PWD":/backup alpine tar czf /backup/breezone.tgz -C /data .`
 
@@ -132,7 +132,7 @@ in the `breezone_data` volume; back it up with
 | `BREEZONE_ADMIN_USER` / `BREEZONE_ADMIN_PASSWORD`                    | —                               | Administrator created at first start (otherwise from the web page)                  |
 | `BREEZONE_POLL_INTERVAL_SECS`                                        | `15`                            | WebServer polling period                                                            |
 | `BREEZONE_HISTORY_RETENTION_DAYS` / `BREEZONE_EVENTS_RETENTION_DAYS` | `90` / `30`                     | Retention                                                                           |
-| `BREEZONE_ACCESS_TOKEN_TTL_SECS` / `BREEZONE_REFRESH_TOKEN_TTL_DAYS` | `900` / `365`                   | Token lifetimes (device sessions are sliding)                                       |
+| `BREEZONE_ACCESS_TOKEN_TTL_SECS` / `BREEZONE_REFRESH_TOKEN_TTL_DAYS` | `900` / `60`                    | Token lifetimes (device sessions are sliding)                                       |
 | `BREEZONE_JWT_SECRET`                                                | generated in `/data/jwt.secret` | Signing secret                                                                      |
 | `TZ`                                                                 | `Europe/Paris`                  | Time zone                                                                           |
 | `RUST_LOG`                                                           | `info,…`                        | Log level                                                                           |
@@ -143,7 +143,8 @@ in the `breezone_data` volume; back it up with
 An Android and iOS app (English, French, Spanish) to drive your installations from your phone: zones,
 modes, routines and  schedules of each installation, live updates, several servers.
 
-**Google Play and App Store links: coming soon.** Until then, build it yourself from [`mobile/`](mobile).
+**Android: [Breezone on Google Play](https://play.google.com/store/apps/details?id=com.breezone.app).** iOS: coming soon
+on the App Store; until then, build it yourself from [`mobile/`](mobile).
 
 Add your server's address (`http://192.168.1.10:8427` at home, or your tunnel's `https://` address)
 and sign in; add one server per site. The device session is kept in the Android Keystore / iOS

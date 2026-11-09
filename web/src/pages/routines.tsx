@@ -10,7 +10,6 @@ import type {
   RoutineInput,
 } from "@/lib/api"
 import { api } from "@/lib/api"
-import { useRights } from "@/hooks/use-rights"
 import { MODE_LABEL, relativeTime } from "@/lib/format"
 import { PageHeader } from "@/components/app-shell"
 import { AirzoneSchedulesSection } from "@/components/airzone-schedules"
@@ -229,7 +228,9 @@ function RoutineEditor({
 }) {
   const qc = useQueryClient()
   const status = useQuery({ queryKey: ["status"], queryFn: api.status })
-  const options = zoneOptions(status.data ?? [])
+  const options = zoneOptions(
+    (status.data ?? []).filter((i) => i.controllable && i.rights.routines)
+  )
   const [draft, setDraft] = useState<Draft>(() => toDraft(routine))
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }))
 
@@ -508,7 +509,14 @@ function BreezoneRoutines({
   const routines = useQuery({ queryKey: ["routines"], queryFn: api.routines })
   const status = useQuery({ queryKey: ["status"], queryFn: api.status })
   const options = zoneOptions(status.data ?? [])
-  const canEdit = useRights().routines
+  // Installations whose routines this user may change.
+  const editable = new Set(
+    (status.data ?? [])
+      .filter((i) => i.controllable && i.rights.routines)
+      .map((i) => i.id)
+  )
+  const canEdit = (r: Routine) =>
+    r.actions.every((a) => editable.has(a.installation_id))
   const [editing, setEditing] = useState<{
     routine?: Routine
     nonce: number
@@ -521,7 +529,7 @@ function BreezoneRoutines({
           <h2 className="text-lg font-semibold">{title}</h2>
           <p className="text-sm text-muted-foreground">{description}</p>
         </div>
-        {canEdit && (
+        {editable.size > 0 && (
           <Button
             onClick={() => setEditing({ nonce: Date.now() })}
             disabled={!options.length}
@@ -543,7 +551,7 @@ function BreezoneRoutines({
               routine={r}
               options={options}
               onEdit={
-                canEdit
+                canEdit(r)
                   ? () => setEditing({ routine: r, nonce: Date.now() })
                   : undefined
               }

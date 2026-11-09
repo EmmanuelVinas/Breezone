@@ -33,8 +33,17 @@ use std::sync::Mutex;
 
 /// Grace window during which the previous refresh token is still accepted.
 const ROTATION_GRACE_SECS: i64 = 120;
-const MAX_FAILED_LOGINS: u32 = 5;
 const LOCKOUT_SECS: i64 = 15 * 60;
+/// Failed sign-ins allowed per window: for one account from one address, from one address
+/// (any account), and for one account (from anywhere: a distributed attack). The account limit
+/// is high so that someone else's attempts cannot easily lock its owner out.
+const MAX_FAILED_LOGINS: u32 = 5;
+const MAX_FAILED_PER_ADDRESS: u32 = 20;
+const MAX_FAILED_PER_ACCOUNT: u32 = 50;
+/// Counters kept at most (attempts with random names or addresses must not fill the memory).
+const MAX_TRACKED: usize = 10_000;
+/// Password hashes computed at the same time: Argon2 is heavy for a small NAS.
+static HASHING: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(2);
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
@@ -186,28 +195,55 @@ impl AuthService {
         })
     }
 
-    /// Brute-force protection: counts a login attempt for a username (before the password is
-    /// checked, in the same lock, so parallel attempts cannot all pass) and rejects it after too
-    /// many attempts without success.
-    pub fn check_throttle(&self, username: &str) -> ApiResult<()> {
-        let key = username.to_lowercase();
+    fn throttle_keys(username: &str, address: &str) -> [(String, u32); 3] {
+        let user = username.to_lowercase();
+        [
+            (format!("pair:{address}|{user}"), MAX_FAILED_LOGINS),
+            (format!("address:{address}"), MAX_FAILED_PER_ADDRESS),
+            (format!("account:{user}"), MAX_FAILED_PER_ACCOUNT),
+        ]
+    }
+
+    /// Brute-force protection: counts a login attempt (before the password is checked, in the
+    /// same lock, so parallel attempts cannot all pass) and rejects it once a limit is reached.
+    pub fn check_throttle(&self, username: &str, address: &str) -> ApiResult<()> {
         let mut failures = self.failures.lock().unwrap();
         let now = db::now();
-        let entry = failures.entry(key).or_insert((0, now));
-        if now - entry.1 > LOCKOUT_SECS {
-            *entry = (0, now);
+        if failures.len() >= MAX_TRACKED {
+            failures.retain(|_, (_, since)| now - *since <= LOCKOUT_SECS);
         }
-        if entry.0 >= MAX_FAILED_LOGINS {
-            return Err(ApiError::new(StatusCode::TOO_MANY_REQUESTS, "too many failed attempts, retry in a few minutes"));
+        if failures.len() >= MAX_TRACKED {
+            // Still full: forget the oldest half rather than refusing everyone.
+            let mut since: Vec<i64> = failures.values().map(|(_, s)| *s).collect();
+            since.sort_unstable();
+            let cut = since[since.len() / 2];
+            failures.retain(|_, (_, s)| *s > cut);
         }
-        entry.0 += 1;
+        let keys = Self::throttle_keys(username, address);
+        for (key, limit) in &keys {
+            if let Some(entry) = failures.get_mut(key) {
+                if now - entry.1 > LOCKOUT_SECS {
+                    *entry = (0, now);
+                }
+                if entry.0 >= *limit {
+                    return Err(ApiError::new(StatusCode::TOO_MANY_REQUESTS, "too many failed attempts, retry in a few minutes"));
+                }
+            }
+        }
+        for (key, _) in keys {
+            failures.entry(key).or_insert((0, now)).0 += 1;
+        }
         Ok(())
     }
 
-    /// A successful login clears the counter (failures are already counted).
-    pub fn record_login(&self, username: &str, success: bool) {
+    /// A successful login clears the counters of that account (failures are already counted);
+    /// the address keeps its count.
+    pub fn record_login(&self, username: &str, address: &str, success: bool) {
         if success {
-            self.failures.lock().unwrap().remove(&username.to_lowercase());
+            let mut failures = self.failures.lock().unwrap();
+            for (key, _) in Self::throttle_keys(username, address).into_iter().filter(|(k, _)| !k.starts_with("address:")) {
+                failures.remove(&key);
+            }
         }
     }
 }
@@ -253,6 +289,7 @@ pub fn validate_username(username: &str) -> ApiResult<()> {
 
 /// Argon2id hashing is CPU and memory heavy: run it off the async runtime.
 pub async fn hash_password(password: String) -> anyhow::Result<String> {
+    let _permit = HASHING.acquire().await?;
     tokio::task::spawn_blocking(move || {
         Argon2::default()
             .hash_password(password.as_bytes())
@@ -263,12 +300,26 @@ pub async fn hash_password(password: String) -> anyhow::Result<String> {
 }
 
 pub async fn verify_password(password: String, hash: String) -> bool {
+    let Ok(_permit) = HASHING.acquire().await else { return false };
     tokio::task::spawn_blocking(move || match PasswordHash::new(&hash) {
         Ok(parsed) => Argon2::default().verify_password(password.as_bytes(), &parsed).is_ok(),
         Err(_) => false,
     })
     .await
     .unwrap_or(false)
+}
+
+/// Address of the client, for brute-force protection. Behind a reverse proxy, the last entry of
+/// `X-Forwarded-For` is the one the proxy added (earlier ones come from the client).
+pub fn client_ip(headers: &axum::http::HeaderMap, connect: Option<std::net::IpAddr>) -> String {
+    let get = |name: &str| headers.get(name).and_then(|v| v.to_str().ok()).map(str::trim).filter(|v| !v.is_empty());
+    get("x-forwarded-for")
+        .and_then(|v| v.rsplit(',').next())
+        .map(str::trim)
+        .or_else(|| get("x-real-ip"))
+        .map(|v| v.chars().take(64).collect())
+        .or_else(|| connect.map(|ip| ip.to_string()))
+        .unwrap_or_else(|| "unknown".into())
 }
 
 // ---------------------------------------------------------------------------------------
@@ -363,12 +414,26 @@ mod tests {
     fn throttle_locks_after_failures() {
         let s = AuthService::new(b"secret-secret-secret-secret-secret", 900, 365);
         for _ in 0..MAX_FAILED_LOGINS {
-            assert!(s.check_throttle("bob").is_ok());
-            s.record_login("bob", false);
+            assert!(s.check_throttle("bob", "1.2.3.4").is_ok());
+            s.record_login("bob", "1.2.3.4", false);
         }
-        assert!(s.check_throttle("Bob").is_err());
-        s.record_login("bob", true);
-        assert!(s.check_throttle("bob").is_ok());
+        assert!(s.check_throttle("Bob", "1.2.3.4").is_err());
+        assert!(s.check_throttle("bob", "5.6.7.8").is_ok(), "the owner, elsewhere, is not locked out");
+        s.record_login("bob", "1.2.3.4", true);
+        assert!(s.check_throttle("bob", "1.2.3.4").is_ok());
+    }
+
+    #[test]
+    fn throttle_limits_an_address_and_an_account() {
+        let s = AuthService::new(b"secret-secret-secret-secret-secret", 900, 365);
+        for i in 0..MAX_FAILED_PER_ADDRESS {
+            assert!(s.check_throttle(&format!("user{i}"), "1.2.3.4").is_ok());
+        }
+        assert!(s.check_throttle("someone", "1.2.3.4").is_err(), "too many accounts tried from one address");
+        for i in 0..MAX_FAILED_PER_ACCOUNT {
+            assert!(s.check_throttle("admin", &format!("10.0.{}.{}", i / 250, i % 250)).is_ok());
+        }
+        assert!(s.check_throttle("admin", "10.9.9.9").is_err(), "a distributed attack on one account");
     }
 
     #[test]

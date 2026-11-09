@@ -25,11 +25,17 @@ enum class Mode {
     @SerialName("auto") Auto,
 }
 
+/** What the signed-in user may change on an installation (everything with servers up to 0.7.0). */
 @Serializable
-data class UserRights(val zones: Boolean = true, val routines: Boolean = true, val schedules: Boolean = true)
+data class InstallationUserRights(
+    val zones: Boolean = true,
+    val routines: Boolean = true,
+    val schedules: Boolean = true,
+    val admin: Boolean = false,
+)
 
 @Serializable
-data class User(val id: Long, val username: String, val role: String, val rights: UserRights = UserRights()) {
+data class User(val id: Long, val username: String, val role: String) {
     val isAdmin get() = role == "admin"
 }
 
@@ -92,8 +98,9 @@ data class Installation(
     /** "local" (WebServer on the server's network) or "node" (through another Breezone server). */
     val access: String = "local",
     val node: NodeRef? = null,
-    /** False when the other Breezone server shares it read-only. */
+    /** False when read-only for this user, or shared read-only by its node. */
     val controllable: Boolean = true,
+    val rights: InstallationUserRights = InstallationUserRights(),
     val connection: Connection = Connection(),
     val zones: List<Zone> = emptyList(),
 )

@@ -138,12 +138,12 @@ async fn users_only_see_and_drive_the_installations_given_to_them() {
     // Unknown installations and permissions are refused.
     let (s, _) = admin.call(Method::PUT, &format!("/api/users/{user_id}"), Some(json!({"access":[{"installation_id": 999, "permission":"read"}]}))).await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
-    let (s, _) = admin.call(Method::PUT, &format!("/api/users/{user_id}"), Some(json!({"access":[{"installation_id": home, "permission":"admin"}]}))).await;
+    let (s, _) = admin.call(Method::PUT, &format!("/api/users/{user_id}"), Some(json!({"access":[{"installation_id": home, "permission":"owner"}]}))).await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]
-async fn administrators_choose_what_users_may_change() {
+async fn administrators_choose_what_users_may_change_per_installation() {
     let dir = std::env::temp_dir().join(format!("breezone-rights-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let mut cfg = Config::for_tests(dir);
@@ -155,13 +155,16 @@ async fn administrators_choose_what_users_may_change() {
     let ws = serve(mock::router(Arc::new(Mutex::new(mock::preset("maison"))) as MockState)).await;
     let (_, v) = admin.call(Method::POST, "/api/installations", Some(json!({"name": "Maison", "host": "127.0.0.1", "port": ws}))).await;
     let home = v["id"].as_i64().unwrap();
+    let ws = serve(mock::router_with_mac(Arc::new(Mutex::new(mock::preset("bureau"))) as MockState, "AA:BB:CC:DD:EE:FF")).await;
+    let (_, v) = admin.call(Method::POST, "/api/installations", Some(json!({"name": "Bureau", "host": "127.0.0.1", "port": ws}))).await;
+    let office = v["id"].as_i64().unwrap();
 
     // Everything is allowed by default.
     let (s, v) = admin
         .call(Method::POST, "/api/users", Some(json!({"username":"camille","password":"motdepasse1","access":[{"installation_id": home, "permission":"control"}]})))
         .await;
     assert_eq!(s, StatusCode::CREATED, "{v}");
-    assert_eq!(v["rights"], json!({"zones": true, "routines": true, "schedules": true}));
+    assert_eq!(v["access"][0]["rights"], json!({"zones": true, "routines": true, "schedules": true}));
     let user_id = v["id"].as_i64().unwrap();
     let user = Client { token: token(&http, &base, "/api/auth/login", "camille").await, base: base.clone(), http: http.clone() };
     let (_, me) = admin.call(Method::GET, "/api/me", None).await;
@@ -175,12 +178,28 @@ async fn administrators_choose_what_users_may_change() {
     assert_eq!(s, StatusCode::CREATED, "{v}");
     let routine_id = v["id"].as_i64().unwrap();
 
-    // Rights taken away: driving and running routines still work, editing does not.
-    let (s, v) = admin.call(Method::PUT, &format!("/api/users/{user_id}"), Some(json!({"rights": {"zones": false, "routines": false, "schedules": false}}))).await;
+    // Rights taken away on the home, administrator of the office: driving and running routines
+    // still work at home, editing does not; the office's settings can be changed.
+    let none = json!({"zones": false, "routines": false, "schedules": false});
+    let access = json!({"access": [
+        {"installation_id": home, "permission": "control", "rights": none},
+        {"installation_id": office, "permission": "admin"},
+    ]});
+    let (s, v) = admin.call(Method::PUT, &format!("/api/users/{user_id}"), Some(access)).await;
     assert_eq!(s, StatusCode::OK, "{v}");
-    assert_eq!(v["rights"], json!({"zones": false, "routines": false, "schedules": false}));
-    let (_, me) = user.call(Method::GET, "/api/me", None).await;
-    assert_eq!(me["rights"]["routines"], false, "{me}");
+    let (_, status) = user.call(Method::GET, "/api/status", None).await;
+    let rights = |id: i64| status.as_array().unwrap().iter().find(|i| i["id"] == id).unwrap()["rights"].clone();
+    assert_eq!(rights(home), json!({"zones": false, "routines": false, "schedules": false, "admin": false}));
+    assert_eq!(rights(office), json!({"zones": true, "routines": true, "schedules": true, "admin": true}));
+
+    let (s, v) = user.call(Method::PUT, &format!("/api/installations/{office}"), Some(json!({"name": "Bureau 2", "host": "127.0.0.1", "port": ws}))).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    let (s, _) = user.call(Method::PUT, &format!("/api/installations/{home}"), Some(json!({"name": "Maison 2", "host": "127.0.0.1", "port": 9}))).await;
+    assert_eq!(s, StatusCode::FORBIDDEN);
+    let (s, v) = user.call(Method::PUT, &format!("/api/installations/{office}/zones/1/1/meta"), Some(json!({"display_name": "Accueil"}))).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    let (s, _) = user.call(Method::GET, "/api/users", None).await;
+    assert_eq!(s, StatusCode::FORBIDDEN, "users stay reserved to the server's administrators");
 
     let (s, v) = user.call(Method::PUT, &meta, Some(json!({"display_name": "Séjour"}))).await;
     assert_eq!(s, StatusCode::FORBIDDEN, "{v}");

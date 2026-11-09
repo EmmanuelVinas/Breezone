@@ -1,6 +1,6 @@
 [package]
 name = "breezone-server"
-version = "0.7.0"
+version = "0.7.1"
 edition = "2021"
 description = "Breezone — self-hosted hub that drives the local Airzone API and serves the mobile app and web UI"
 default-run = "breezone-server"
@@ -28,7 +28,7 @@ rustls = { version = "0.23", default-features = false, features = ["ring", "std"
 x509-parser = "0.18"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-tower-http = { version = "0.7", features = ["fs", "cors", "trace"] }
+tower-http = { version = "0.7", features = ["fs", "cors", "trace", "set-header"] }
 anyhow = "1"
 thiserror = "2"
 sqlx = { version = "0.9.0", default-features = false, features = ["runtime-tokio", "sqlite", "migrate", "macros", "derive"] }

@@ -1,4 +1,8 @@
 // Typed client for the Breezone server API (see docs/API.md).
+
+/** The Android app on Google Play. */
+export const ANDROID_APP_URL =
+  "https://play.google.com/store/apps/details?id=com.breezone.app"
 import { lang } from "@/lib/i18n"
 
 export type Mode =
@@ -74,8 +78,10 @@ export type Installation = {
   /** "local": WebServer on this server's network; "node": through another Breezone server. */
   access: "local" | "node"
   node?: NodeRef
-  /** false when the other server shares it read-only. */
+  /** false when read-only (for this user, or shared read-only by its node). */
   controllable: boolean
+  /** What the signed-in user may change on it. */
+  rights: InstallationUserRights
   connection: Connection
   zones: Zone[]
 }
@@ -313,7 +319,10 @@ export type Session = {
 /** One installation given to a user (administrators see everything). */
 export type AccessEntry = {
   installation_id: number
-  permission: "read" | "control"
+  /** "admin": every right on the installation, including its settings. */
+  permission: "read" | "control" | "admin"
+  /** With "control": what may be changed besides driving. */
+  rights: UserRights
 }
 
 /** What a user may change on the installations they drive (all true for an administrator). */
@@ -335,7 +344,11 @@ export const ALL_RIGHTS: UserRights = {
 export type UserDetails = User & {
   created_at: number
   access: AccessEntry[]
-  rights: UserRights
+}
+
+export type InstallationUserRights = UserRights & {
+  /** The installation's settings (address, Airzone link, deletion). */
+  admin: boolean
 }
 
 export type Me = User & {
@@ -644,15 +657,13 @@ export const api = {
     username: string,
     password: string,
     role: string,
-    access: AccessEntry[] = [],
-    rights: UserRights = ALL_RIGHTS
+    access: AccessEntry[] = []
   ) =>
     request<UserDetails>("POST", "/api/users", {
       username,
       password,
       role,
       access,
-      rights,
     }),
   updateUser: (
     id: number,
@@ -660,7 +671,6 @@ export const api = {
       role?: string
       password?: string
       access?: AccessEntry[]
-      rights?: UserRights
     }
   ) => request<UserDetails>("PUT", `/api/users/${id}`, data),
   deleteUser: (id: number) => request<void>("DELETE", `/api/users/${id}`),
