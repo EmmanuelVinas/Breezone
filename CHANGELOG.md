@@ -6,6 +6,16 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-11-13
+
+### Fixed
+
+- Settings › Breezone: a release older than the installed version (an image installed before its
+  GitHub release was published) was shown as the latest version; « Breezone est à jour » now shows
+  after any check that finds nothing newer.
+- Zone page (web and app): the air quality section only shows when the thermostat has measured the
+  air quality, now or in the last 30 days.
+
 ## [0.9.0] - 2026-11-12
 
 ### Added
@@ -262,7 +272,8 @@ All notable changes are documented here. The format follows
 - Project renamed from FreeZone to Breezone (former `FREEZONE_*` variables and `freezone.db` are
   still recognised).
 
-[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/EmmanuelVinas/breezone/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.7.4...v0.8.0
 [0.7.4]: https://github.com/EmmanuelVinas/breezone/compare/v0.7.3...v0.7.4
