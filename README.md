@@ -70,7 +70,7 @@ The web UI is in French for now; English is on the [roadmap](docs/ROADMAP.md).
 ## Install (Docker)
 
 The image is published on GitHub Container Registry: `ghcr.io/emmanuelvinas/breezone`
-(`linux/amd64` and `linux/arm64`). Tags: `latest`, the version (`0.7.4`) and the minor line (`0.7`).
+(`linux/amd64` and `linux/arm64`). Tags: `latest`, the version (`0.8.0`) and the minor line (`0.8`).
 
 Create a `breezone` folder with this `docker-compose.yml`, then run `docker compose up -d`:
 
@@ -116,7 +116,7 @@ profile, token in `.env`: `CLOUDFLARE_TUNNEL_TOKEN`). No port is opened on your 
 3000 of the WebServers: their API has no authentication.
 
 **Update.** `docker compose pull && docker compose up -d`. To stay on a given version, replace
-`latest` with its number (e.g. `0.7.4`). Data (SQLite database, signing secret) is
+`latest` with its number (e.g. `0.8.0`). Data (SQLite database, signing secret) is
 in the `breezone_data` volume; back it up with
 `docker run --rm -v breezone_data:/data -v "$PWD":/backup alpine tar czf /backup/breezone.tgz -C /data .`
 

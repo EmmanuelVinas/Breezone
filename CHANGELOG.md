@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-12
+
 ### Added
 
 - Charts (#30): a 24-hour temperature curve on every zone card (web and app), and the comfort of a
@@ -244,7 +246,8 @@ All notable changes are documented here. The format follows
 - Project renamed from FreeZone to Breezone (former `FREEZONE_*` variables and `freezone.db` are
   still recognised).
 
-[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.7.4...HEAD
+[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.7.4...v0.8.0
 [0.7.4]: https://github.com/EmmanuelVinas/breezone/compare/v0.7.3...v0.7.4
 [0.7.3]: https://github.com/EmmanuelVinas/breezone/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/EmmanuelVinas/breezone/compare/v0.7.1...v0.7.2
