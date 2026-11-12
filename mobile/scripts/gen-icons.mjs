@@ -14,7 +14,7 @@ const ICONS = [
   "thermometer", "map-pin", "plus", "minus", "chevron-right", "chevron-left", "house", "calendar-clock",
   "settings", "cloud", "cloud-off", "refresh-cw", "play", "trash-2", "pencil", "log-out", "server",
   "battery-warning", "triangle-alert", "check", "x", "clock", "radar", "user", "eye", "eye-off",
-  "circle-check", "wifi-off", "activity", "list-plus",
+  "circle-check", "wifi-off", "activity", "list-plus", "leaf",
 ]
 
 const n = (v) => Number(v)

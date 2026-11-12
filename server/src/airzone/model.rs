@@ -117,6 +117,21 @@ pub struct ZoneData {
     pub air_demand: Option<i64>,
     #[serde(rename = "floor_demand", default, skip_serializing_if = "Option::is_none")]
     pub floor_demand: Option<i64>,
+    /// Air quality of the zone (thermostats with a sensor): 0 none, 1 good, 2 regular, 3 bad.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aq_quality: Option<i64>,
+    /// Air purification: 0 off, 1 on, 2 auto.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aq_mode: Option<i64>,
+    /// Thresholds of the automatic air purification.
+    #[serde(rename = "aq_thrlow", default, skip_serializing_if = "Option::is_none")]
+    pub aq_threshold_low: Option<i64>,
+    #[serde(rename = "aq_thrhigh", default, skip_serializing_if = "Option::is_none")]
+    pub aq_threshold_high: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub heat_demand: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cold_demand: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub battery: Option<i64>,
     #[serde(default)]
@@ -135,6 +150,26 @@ impl ZoneData {
 
     pub fn is_on(&self) -> bool {
         self.on.unwrap_or(0) != 0
+    }
+
+    /// Air quality level: "good", "regular" or "bad" (`None`: no sensor or no measure).
+    pub fn air_quality_level(&self) -> Option<&'static str> {
+        self.aq_quality.and_then(air_quality_level)
+    }
+
+    /// The zone is asking for heat or cold (air or radiant floor).
+    pub fn in_demand(&self) -> bool {
+        [self.air_demand, self.floor_demand, self.heat_demand, self.cold_demand].iter().any(|d| d.unwrap_or(0) != 0)
+    }
+}
+
+/// Meaning of an `aq_quality` value: 1 good, 2 regular, 3 bad (0: no measure).
+pub fn air_quality_level(value: i64) -> Option<&'static str> {
+    match value {
+        1 => Some("good"),
+        2 => Some("regular"),
+        3 => Some("bad"),
+        _ => None,
     }
 }
 

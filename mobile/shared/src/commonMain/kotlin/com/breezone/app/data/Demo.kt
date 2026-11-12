@@ -44,10 +44,14 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.jetbrains.compose.resources.getString
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.round
 import kotlin.math.sin
 import kotlin.random.Random
 import kotlin.time.Clock
+import kotlin.time.Instant
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 /**
  * Built-in demonstration server: a simulated Breezone server living in the app, so that anyone
@@ -100,8 +104,10 @@ object DemoServer {
             Installation(
                 id = 1, name = getString(Res.string.demo_home), location = "Annecy", connection = online,
                 zones = listOf(
-                    zone(1, 1, getString(Res.string.demo_zone_living), ground, true, 19.4, 20.0, 41, master = true),
-                    zone(1, 2, getString(Res.string.demo_zone_office), ground, true, 19.1, 19.5, 46),
+                    zone(1, 1, getString(Res.string.demo_zone_living), ground, true, 19.4, 20.0, 41, master = true)
+                        .copy(airQuality = AirQuality("good", 1, "auto", 25, 50)),
+                    zone(1, 2, getString(Res.string.demo_zone_office), ground, true, 19.1, 19.5, 46)
+                        .copy(airQuality = AirQuality("regular", 2, "auto", 25, 50)),
                     zone(1, 3, getString(Res.string.demo_zone_bedroom1), upstairs, true, 18.2, 18.5, 45),
                     zone(1, 4, getString(Res.string.demo_zone_bedroom2), upstairs, false, 16.8, 18.0, 52),
                     zone(1, 5, getString(Res.string.demo_zone_dressing), upstairs, false, 16.1, 17.0, 55),
@@ -200,8 +206,43 @@ object DemoServer {
                 humidity = 42 + ((i + seed) % 9).toLong(),
                 setpoint = if (on) zone.setpoint else null,
                 isOn = on,
+                // Mostly good, regular in the evening, a bad moment around dinner.
+                airQuality = zone.airQuality?.let { if (hour == 19) 3 else if (hour in 17..22) 2 else 1 },
             )
         }
+    }
+
+    private fun daily(zone: Zone, days: Int): List<DayStats> =
+        history(zone, days * 24)
+            .groupBy { Instant.fromEpochSeconds(it.ts).toLocalDateTime(TimeZone.currentSystemDefault()).date.toString() }
+            .map { (day, readings) ->
+                val temps = readings.mapNotNull { it.roomTemp }
+                val on = readings.filter { it.isOn == true }
+                val comfortable = on.count { r -> r.roomTemp != null && r.setpoint != null && abs(r.roomTemp - r.setpoint) <= 0.5 }
+                // Same spacing as `history`.
+                val step = if (days <= 1) 300L else 1800L
+                DayStats(
+                    day = day,
+                    minTemp = temps.minOrNull(),
+                    maxTemp = temps.maxOrNull(),
+                    avgTemp = temps.takeIf { it.isNotEmpty() }?.let { round(it.average() * 10) / 10 },
+                    recordedSecs = readings.size * step,
+                    onSecs = on.size * step,
+                    comfortSecs = comfortable * step,
+                    comfort = if (on.isEmpty()) null else comfortable.toDouble() / on.size,
+                    demandSecs = on.size * step / 2,
+                    airQualitySecs = zone.airQuality?.let {
+                        AirQualitySecs(
+                            good = readings.count { it.airQuality == 1L } * step,
+                            regular = readings.count { it.airQuality == 2L } * step,
+                            bad = readings.count { it.airQuality == 3L } * step,
+                        )
+                    },
+                )
+            }
+
+    private fun trends(installation: Installation): List<ZoneTrend> = installation.zones.map { z ->
+        ZoneTrend(z.systemId, z.zoneId, history(z, 24).chunked(6).map { c -> listOf(c.first().ts.toDouble(), round(c.mapNotNull { it.roomTemp }.average() * 10) / 10) })
     }
 
     private suspend fun body(request: HttpRequestData): String =
@@ -240,6 +281,11 @@ object DemoServer {
                 val results = actions.map { a -> ActionResult(apply(a.installationId, a.systemId, a.zoneId, ZoneCommand(on = a.on, setpoint = a.setpoint, mode = a.mode)) != null) }
                 ok(RunResult.serializer(), RunResult(results))
             }
+            parts.size == 4 && parts[1] == "installations" && parts[3] == "trends" -> {
+                val inst = installations?.firstOrNull { it.id == parts[2].toLongOrNull() }
+                    ?: return@withLock json("""{"error":"installation not found"}""", HttpStatusCode.NotFound)
+                ok(ListSerializer(ZoneTrend.serializer()), trends(inst))
+            }
             parts.size >= 6 && parts[1] == "installations" && parts[3] == "zones" -> {
                 val (inst, sys, zone) = Triple(parts[2].toLong(), parts[4].toLong(), parts[5].toLong())
                 val z = installations?.firstOrNull { it.id == inst }?.zone(sys, zone)
@@ -247,6 +293,9 @@ object DemoServer {
                 if (parts.size == 7 && parts[6] == "history") {
                     val hours = request.url.parameters["hours"]?.toIntOrNull() ?: 24
                     ok(ListSerializer(Reading.serializer()), history(z, hours.coerceIn(1, 24 * 30)))
+                } else if (parts.size == 7 && parts[6] == "daily") {
+                    val days = request.url.parameters["days"]?.toIntOrNull() ?: 14
+                    ok(ListSerializer(DayStats.serializer()), daily(z, days.coerceIn(1, 30)))
                 } else {
                     val cmd = FzJson.decodeFromString(ZoneCommand.serializer(), body(request))
                     ok(Zone.serializer(), apply(inst, sys, zone, cmd)!!)

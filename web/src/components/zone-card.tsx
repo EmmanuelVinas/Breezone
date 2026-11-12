@@ -4,12 +4,15 @@ import {
   BatteryWarning,
   ChevronRight,
   Droplet,
+  Leaf,
   Minus,
   Plus,
   TriangleAlert,
 } from "lucide-react"
 import type { Zone } from "@/lib/api"
 import {
+  AIR_QUALITY_LABEL,
+  AIR_QUALITY_TONE,
   MODE_ICON,
   MODE_LABEL,
   clampSetpoint,
@@ -21,6 +24,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { CommandIndicator } from "@/components/command-indicator"
+import { Sparkline } from "@/components/sparkline"
 import { t } from "@/lib/i18n"
 
 /** Debounces quick +/- taps into a single setpoint command. */
@@ -56,10 +60,13 @@ export function useSetpointDraft(zone: Zone) {
 export function ZoneCard({
   zone,
   readOnly = false,
+  trend,
 }: {
   zone: Zone
   /** The user can only look at this installation. */
   readOnly?: boolean
+  /** Room temperature over the last 24 h. */
+  trend?: [number, number][]
 }) {
   const control = useZoneControl()
   const { value, nudge, pending } = useSetpointDraft(zone)
@@ -107,6 +114,24 @@ export function ZoneCard({
             ) : (
               <span>{t("Éteinte")}</span>
             )}
+            {zone.air_quality?.level && (
+              <span
+                className={cn(
+                  "inline-flex items-center gap-0.5",
+                  AIR_QUALITY_TONE[zone.air_quality.level].text
+                )}
+                title={t("Qualité de l'air : {level}", {
+                  level: AIR_QUALITY_LABEL[zone.air_quality.level],
+                })}
+              >
+                <Leaf className="size-3.5" />
+                <span className="sr-only">
+                  {t("Qualité de l'air : {level}", {
+                    level: AIR_QUALITY_LABEL[zone.air_quality.level],
+                  })}
+                </span>
+              </span>
+            )}
             {zone.battery_low && (
               <BatteryWarning className="size-3.5 text-warning" />
             )}
@@ -124,7 +149,26 @@ export function ZoneCard({
         />
       </div>
 
-      <div className="relative mt-5 flex items-end justify-between">
+      {trend && trend.length > 1 && (
+        <Sparkline
+          points={trend}
+          className={cn(
+            "relative mt-4 h-9 w-full",
+            zone.on ? tone.text : "text-muted-foreground/70"
+          )}
+          label={t("Température sur 24 h : de {min} à {max}", {
+            min: formatTemp(Math.min(...trend.map((p) => p[1]))),
+            max: formatTemp(Math.max(...trend.map((p) => p[1]))),
+          })}
+        />
+      )}
+
+      <div
+        className={cn(
+          "relative flex items-end justify-between",
+          trend && trend.length > 1 ? "mt-3" : "mt-5"
+        )}
+      >
         <div>
           <div className="tabular text-5xl leading-none font-semibold tracking-tight">
             {formatTemp(zone.room_temp)}

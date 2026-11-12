@@ -158,6 +158,31 @@
     <string name="zone_history_7d">7 j</string>
     <string name="zone_history_loading">Chargement…</string>
     <string name="zone_history_empty">Pas encore assez de relevés : ils s’accumulent toutes les 5 minutes.</string>
+    <string name="zone_history_hint">Pincez pour zoomer, touchez la courbe pour lire les valeurs, touchez la légende pour masquer une courbe</string>
+    <string name="zone_comfort_title">Confort jour par jour</string>
+    <string name="zone_comfort_hint">Part du temps allumée où la température est à ±0,5° de la consigne</string>
+    <string name="zone_comfort_7d">7 j</string>
+    <string name="zone_comfort_30d">30 j</string>
+    <string name="zone_comfort_share">Confort</string>
+    <string name="zone_comfort_on">Allumée, par jour</string>
+    <string name="zone_comfort_demand">En demande, par jour</string>
+    <string name="zone_comfort_percent">%1$d %</string>
+    <string name="zone_comfort_hours">%1$d h %2$s</string>
+    <string name="zone_comfort_legend_range">Min – max</string>
+    <string name="zone_comfort_legend_avg">Moyenne</string>
+    <string name="air_quality_title">Qualité de l’air</string>
+    <string name="air_quality_hint">Mesurée par le thermostat de la zone</string>
+    <string name="air_quality_hint_days">Mesurée par le thermostat de la zone ; heure par heure dans l’historique</string>
+    <string name="air_quality_now">Maintenant</string>
+    <string name="air_quality_good">Bonne</string>
+    <string name="air_quality_regular">Moyenne</string>
+    <string name="air_quality_bad">Mauvaise</string>
+    <string name="air_quality_none">Pas de mesure</string>
+    <string name="air_quality_mode_off">Purification arrêtée</string>
+    <string name="air_quality_mode_on">Purification en marche</string>
+    <string name="air_quality_mode_auto">Purification automatique</string>
+    <string name="air_quality_good_share">Air de bonne qualité</string>
+    <string name="air_quality_badge">Qualité de l’air : %1$s</string>
 
     <!-- Routines -->
     <string name="routines_new">Nouvelle scène</string>

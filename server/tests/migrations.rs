@@ -20,6 +20,7 @@ const APPLIED: &[(&str, &str)] = &[
     ("0013_user_rights.sql", "05b762c66ba9d38b1a095da56e1d6584d3f7638bf03e5cce7ee3c886ca78c289"),
     ("0014_languages.sql", "de771077740cd94aaf4c7629cca12883a68b468e9ebe541a7ecdce865d29effc"),
     ("0015_installation_rights.sql", "907cad13e1aa809cd27a71a5985f54659d385933bb0d563157f49f777dfda4f0"),
+    ("0016_demand_and_air_quality.sql", "d3ad3a5d199a523f47e061b45230c88a3d1e6694ee7599d4c2579ee9324c741b"),
 ];
 
 #[test]

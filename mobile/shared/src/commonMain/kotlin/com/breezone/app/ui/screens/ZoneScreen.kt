@@ -40,11 +40,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.breezone.app.data.AirQuality
+import com.breezone.app.data.DayStats
 import com.breezone.app.data.Hub
 import com.breezone.app.data.installation
 import com.breezone.app.data.zone
@@ -54,7 +57,13 @@ import com.breezone.app.data.Zone
 import com.breezone.app.data.ZoneCommand
 import com.breezone.app.resources.*
 import com.breezone.app.ui.color
+import com.breezone.app.ui.airQualityColor
+import com.breezone.app.ui.airQualityLabel
+import com.breezone.app.ui.components.AirQualityDaysChart
+import com.breezone.app.ui.components.DailyComfortChart
+import com.breezone.app.ui.components.DailyTemperatureChart
 import com.breezone.app.ui.components.HistoryChart
+import com.breezone.app.ui.components.HistorySeries
 import com.breezone.app.ui.components.SetpointDial
 import com.breezone.app.ui.components.rememberSetpointDraft
 import com.breezone.app.ui.formatTemp
@@ -65,6 +74,7 @@ import com.breezone.app.ui.theme.Fz
 import com.breezone.app.ui.theme.TempStyle
 import com.breezone.app.ui.tone
 import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 
@@ -117,6 +127,8 @@ fun ZoneScreen(serverId: String, installationId: Long, systemId: Long, zoneId: L
                 }
             }
             History(hub, serverId, zone)
+            DailyComfort(hub, serverId, zone)
+            zone.airQuality?.let { AirQualitySection(hub, serverId, zone, it) }
             Spacer(Modifier.height(24.dp))
         }
     }
@@ -229,10 +241,12 @@ private fun Segments(options: List<Pair<Long, String>>, selected: Long?, onSelec
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun History(hub: Hub, serverId: String, zone: Zone) {
     var hours by remember { mutableIntStateOf(24) }
     var readings by remember { mutableStateOf<List<Reading>?>(null) }
+    var hidden by remember { mutableStateOf(emptySet<HistorySeries>()) }
     LaunchedEffect(zone.installationId, zone.systemId, zone.zoneId, hours) {
         while (true) {
             readings = runCatching { hub.api(serverId)?.history(zone, hours) }.getOrNull() ?: readings
@@ -242,7 +256,7 @@ private fun History(hub: Hub, serverId: String, zone: Zone) {
     SectionCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f)) { SectionTitle(stringResource(Res.string.zone_history_title), FzIcons.Activity) }
-            listOf(24 to Res.string.zone_history_24h, 168 to Res.string.zone_history_7d).forEach { (h, label) ->
+            listOf(24 to Res.string.zone_history_24h, 168 to Res.string.zone_history_7d, 720 to Res.string.zone_comfort_30d).forEach { (h, label) ->
                 FilterChip(selected = hours == h, onClick = { hours = h }, label = { Text(stringResource(label)) }, modifier = Modifier.padding(start = 6.dp))
             }
         }
@@ -251,11 +265,18 @@ private fun History(hub: Hub, serverId: String, zone: Zone) {
             data == null -> Muted(stringResource(Res.string.zone_history_loading))
             data.size < 2 -> Muted(stringResource(Res.string.zone_history_empty))
             else -> {
-                HistoryChart(data)
-                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Legend(Fz.colors.heat, stringResource(Res.string.zone_temperature))
-                    Legend(MaterialTheme.colorScheme.primary, stringResource(Res.string.zone_setpoint))
-                    Legend(Fz.colors.cool, stringResource(Res.string.zone_humidity_label))
+                Caption(stringResource(Res.string.zone_history_hint))
+                HistoryChart(data, hours, hidden)
+                val toggle = { s: HistorySeries -> hidden = if (s in hidden) hidden - s else hidden + s }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Legend(Fz.colors.heat, stringResource(Res.string.zone_temperature), HistorySeries.Temperature !in hidden) { toggle(HistorySeries.Temperature) }
+                    Legend(MaterialTheme.colorScheme.primary, stringResource(Res.string.zone_setpoint), HistorySeries.Setpoint !in hidden) { toggle(HistorySeries.Setpoint) }
+                    if (data.any { it.humidity != null }) {
+                        Legend(Fz.colors.cool, stringResource(Res.string.zone_humidity_label), HistorySeries.Humidity !in hidden) { toggle(HistorySeries.Humidity) }
+                    }
+                    if (zone.airQuality != null && data.any { (it.airQuality ?: 0) in 1..3 }) {
+                        Legend(Fz.colors.success, stringResource(Res.string.air_quality_title), HistorySeries.Air !in hidden) { toggle(HistorySeries.Air) }
+                    }
                 }
             }
         }
@@ -263,8 +284,126 @@ private fun History(hub: Hub, serverId: String, zone: Zone) {
 }
 
 @Composable
-private fun Legend(color: Color, label: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+private fun duration(secs: Long): String {
+    val minutes = (secs + 30) / 60
+    return if (minutes < 60) {
+        stringResource(Res.string.zone_sleep_minutes, minutes.toInt())
+    } else {
+        stringResource(Res.string.zone_comfort_hours, (minutes / 60).toInt(), (minutes % 60).toString().padStart(2, '0'))
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DailyComfort(hub: Hub, serverId: String, zone: Zone) {
+    var days by remember { mutableIntStateOf(7) }
+    var stats by remember { mutableStateOf<List<DayStats>?>(null) }
+    LaunchedEffect(zone.installationId, zone.systemId, zone.zoneId, days) {
+        while (true) {
+            stats = runCatching { hub.api(serverId)?.daily(zone, days) }.getOrNull() ?: stats
+            delay(300_000)
+        }
+    }
+    SectionCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) { SectionTitle(stringResource(Res.string.zone_comfort_title), FzIcons.Thermometer) }
+            listOf(7 to Res.string.zone_comfort_7d, 30 to Res.string.zone_comfort_30d).forEach { (d, label) ->
+                FilterChip(selected = days == d, onClick = { days = d }, label = { Text(stringResource(label)) }, modifier = Modifier.padding(start = 6.dp))
+            }
+        }
+        Caption(stringResource(Res.string.zone_comfort_hint))
+        val data = stats
+        when {
+            data == null -> Muted(stringResource(Res.string.zone_history_loading))
+            data.isEmpty() -> Muted(stringResource(Res.string.zone_history_empty))
+            else -> {
+                val on = data.sumOf { it.onSecs }
+                val comfortable = data.sumOf { it.comfortSecs }
+                val withDemand = data.filter { it.demandSecs != null }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Tile(
+                        stringResource(Res.string.zone_comfort_share),
+                        if (on > 0) stringResource(Res.string.zone_comfort_percent, (comfortable * 100.0 / on).roundToInt()) else "–",
+                        Modifier.weight(1f),
+                    )
+                    Tile(stringResource(Res.string.zone_comfort_on), duration(on / data.size), Modifier.weight(1f))
+                    if (withDemand.isNotEmpty()) {
+                        Tile(stringResource(Res.string.zone_comfort_demand), duration(withDemand.sumOf { it.demandSecs ?: 0 } / withDemand.size), Modifier.weight(1f))
+                    }
+                }
+                DailyTemperatureChart(data)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Legend(Fz.colors.heat.copy(alpha = 0.4f), stringResource(Res.string.zone_comfort_legend_range))
+                    Legend(Fz.colors.heat, stringResource(Res.string.zone_comfort_legend_avg))
+                    if (data.any { it.avgHumidity != null }) Legend(Fz.colors.cool, stringResource(Res.string.zone_humidity_label))
+                }
+                DailyComfortChart(data)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Legend(MaterialTheme.colorScheme.primary, stringResource(Res.string.zone_comfort_share))
+                    if (withDemand.isNotEmpty()) Legend(Fz.colors.heat, stringResource(Res.string.zone_demand))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AirQualitySection(hub: Hub, serverId: String, zone: Zone, air: AirQuality) {
+    var days by remember { mutableIntStateOf(7) }
+    var stats by remember { mutableStateOf<List<DayStats>?>(null) }
+    LaunchedEffect(zone.installationId, zone.systemId, zone.zoneId, days) {
+        while (true) {
+            stats = runCatching { hub.api(serverId)?.daily(zone, days) }.getOrNull() ?: stats
+            delay(300_000)
+        }
+    }
+    val secs = stats.orEmpty().mapNotNull { it.airQualitySecs }
+    val measured = secs.sumOf { it.good + it.regular + it.bad }
+    val goodShare = if (measured > 0) secs.sumOf { it.good }.toDouble() / measured else null
+    SectionCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) { SectionTitle(stringResource(Res.string.air_quality_title), FzIcons.Leaf) }
+            listOf(7 to Res.string.zone_comfort_7d, 30 to Res.string.zone_comfort_30d).forEach { (d, label) ->
+                FilterChip(selected = days == d, onClick = { days = d }, label = { Text(stringResource(label)) }, modifier = Modifier.padding(start = 6.dp))
+            }
+        }
+        Caption(stringResource(Res.string.air_quality_hint_days))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.weight(1f).clip(RoundedCornerShape(18.dp)).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)).padding(12.dp)) {
+                Caption(stringResource(Res.string.air_quality_now))
+                Text(airQualityLabel(air.level), color = airQualityColor(air.level), fontSize = 18.sp)
+                val mode = when (air.mode) {
+                    "off" -> Res.string.air_quality_mode_off
+                    "on" -> Res.string.air_quality_mode_on
+                    "auto" -> Res.string.air_quality_mode_auto
+                    else -> null
+                }
+                if (mode != null) Caption(stringResource(mode))
+            }
+            Tile(
+                stringResource(Res.string.air_quality_good_share),
+                goodShare?.let { stringResource(Res.string.zone_comfort_percent, (it * 100).roundToInt()) } ?: "–",
+                Modifier.weight(1f),
+            )
+        }
+        val data = stats
+        if (data != null && measured > 0) {
+            AirQualityDaysChart(data)
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                listOf("good", "regular", "bad").forEach { Legend(airQualityColor(it), airQualityLabel(it)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Legend(color: Color, label: String, shown: Boolean = true, onToggle: (() -> Unit)? = null) {
+    Row(
+        Modifier
+            .alpha(if (shown) 1f else 0.4f)
+            .then(if (onToggle != null) Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = onToggle) else Modifier),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(color))
         Spacer(Modifier.size(5.dp))
         Text(label, fontSize = 11.sp, color = Fz.colors.muted)

@@ -26,6 +26,7 @@ type InstallationForm = {
   host: string
   port: string
   enabled: boolean
+  record_demand: boolean
 }
 
 /** Adds or edits an installation reached directly by this server (or renames a shared one). */
@@ -43,7 +44,10 @@ export function InstallationDialog({
     host: initial?.host ?? "",
     port: String(initial?.port ?? 3000),
     enabled: editing?.enabled ?? true,
+    record_demand: editing?.record_demand ?? false,
   })
+  // Set on the server that owns the installation: a shared one follows it.
+  const owned = !editing || editing.node_id === null
   const [test, setTest] = useState<{ ok: boolean; text: string } | null>(null)
   const set = (p: Partial<InstallationForm>) => setForm((f) => ({ ...f, ...p }))
 
@@ -70,6 +74,7 @@ export function InstallationDialog({
         host: form.host,
         port: Number(form.port),
         enabled: form.enabled,
+        ...(owned && { record_demand: form.record_demand }),
       }
       return editing
         ? api.updateInstallation(editing.id, data)
@@ -138,6 +143,23 @@ export function InstallationDialog({
             />{" "}
             {t("Activée (interrogée régulièrement)")}
           </label>
+          {owned && (
+            <label className="flex items-start gap-3 text-sm">
+              <Switch
+                className="mt-0.5"
+                checked={form.record_demand}
+                onCheckedChange={(record_demand) => set({ record_demand })}
+              />
+              <span>
+                {t("Enregistrer le temps de demande des zones")}
+                <span className="block text-xs text-muted-foreground">
+                  {t(
+                    "Durée pendant laquelle chaque zone demande du chaud ou du froid, gardée avec l'historique. Les serveurs à qui l'installation est partagée suivent ce réglage."
+                  )}
+                </span>
+              </span>
+            </label>
+          )}
           {test && (
             <Alert variant={test.ok ? "default" : "destructive"}>
               <AlertTitle>

@@ -10,7 +10,7 @@
 
 pub mod model;
 
-pub use model::{master_zone, HvacResponse, OperationMode, ZoneData};
+pub use model::{air_quality_level, master_zone, HvacResponse, OperationMode, ZoneData};
 
 use serde_json::{json, Value};
 use std::time::Duration;

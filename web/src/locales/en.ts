@@ -625,6 +625,40 @@ const en: Record<string, string> = {
   "Zone introuvable.": "Zone not found.",
   "Zone mise à jour": "Zone updated",
   Zones: "Zones",
+  "Min – max": "Min – max",
+  Confort: "Comfort",
+  "Confort jour par jour": "Comfort day by day",
+  "Part du temps allumée où la température est à ±0,5° de la consigne":
+    "Share of the time on with the temperature within ±0.5° of the setpoint",
+  "Allumée, par jour": "On, per day",
+  "En demande, par jour": "In demand, per day",
+  "Enregistrer le temps de demande des zones":
+    "Record the demand time of the zones",
+  "Durée pendant laquelle chaque zone demande du chaud ou du froid, gardée avec l'historique. Les serveurs à qui l'installation est partagée suivent ce réglage.":
+    "How long each zone asks for heat or cold, kept with the history. The servers the installation is shared with follow this setting.",
+  "Température sur 24 h : de {min} à {max}":
+    "Temperature over 24 h: {min} to {max}",
+  Moyenne: "Moderate",
+  "Température moyenne": "Mean temperature",
+  "Qualité de l'air": "Air quality",
+  "Purification arrêtée": "Purification off",
+  "Purification en marche": "Purification on",
+  "Purification automatique": "Automatic purification",
+  "Mesurée par le thermostat de la zone": "Measured by the zone's thermostat",
+  Maintenant: "Now",
+  "Pas de mesure": "No measure",
+  "Air de bonne qualité": "Good air quality",
+  "du temps mesuré sur la période": "of the measured time over the period",
+  "Qualité de l'air : {level}": "Air quality: {level}",
+  Bonne: "Good",
+  Mauvaise: "Poor",
+  "Humidité moyenne": "Mean humidity",
+  "Température, consigne (quand la zone est allumée), humidité et qualité de l'air":
+    "Temperature, setpoint (when the zone is on), humidity and air quality",
+  "Mesurée par le thermostat de la zone ; heure par heure dans l'historique":
+    "Measured by the zone's thermostat; hour by hour in the history",
+  "Glissez les poignées sous le graphique pour zoomer, touchez la légende pour masquer une courbe":
+    "Drag the handles under the chart to zoom, tap the legend to hide a curve",
 }
 
 export default en

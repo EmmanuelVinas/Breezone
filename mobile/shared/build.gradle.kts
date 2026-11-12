@@ -83,6 +83,8 @@ kotlin {
 
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.datetime)
+            // Charts: zoom, scroll and touch markers.
+            implementation(libs.vico.multiplatform)
             implementation(libs.ktor.client.core)
             // In-app demonstration server (store review, trying the app without hardware).
             implementation(libs.ktor.client.mock)

@@ -311,3 +311,54 @@ async fn offline_installation_is_reported() {
     let (s, _) = env.call("PATCH", &format!("/api/installations/{id}/zones/1/1"), Some(&token), Some(json!({"on":true}))).await;
     assert_eq!(s, StatusCode::NOT_FOUND);
 }
+
+#[tokio::test]
+async fn trends_daily_comfort_and_demand_recording() {
+    let env = start().await;
+    let (_, v) = env.call("POST", "/api/setup", None, Some(json!({"username":"admin","password":"motdepasse1"}))).await;
+    let token = v["access_token"].as_str().unwrap().to_string();
+    let t = Some(token.as_str());
+
+    // Not recorded unless asked.
+    let (s, v) = env.call("POST", "/api/installations", t, Some(json!({"name":"Maison","host":"127.0.0.1","port":env.mock_port}))).await;
+    assert_eq!(s, StatusCode::CREATED, "{v}");
+    assert_eq!(v["record_demand"], false);
+    let inst = v["id"].as_i64().unwrap();
+    let (_, history) = env.call("GET", &format!("/api/installations/{inst}/zones/1/1/history"), t, None).await;
+    assert_eq!(history[0]["demand_secs"], Value::Null, "{history}");
+
+    let body = json!({"name":"Maison","host":"127.0.0.1","port":env.mock_port,"record_demand":true});
+    let (s, v) = env.call("PUT", &format!("/api/installations/{inst}"), t, Some(body)).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    assert_eq!(v["record_demand"], true);
+    // Leaving it out keeps it.
+    let (_, v) = env.call("PUT", &format!("/api/installations/{inst}"), t, Some(json!({"name":"Maison","host":"127.0.0.1","port":env.mock_port}))).await;
+    assert_eq!(v["record_demand"], true);
+    let (_, list) = env.call("GET", "/api/installations", t, None).await;
+    assert_eq!(list[0]["record_demand"], true);
+
+    // One temperature trend per zone.
+    let (s, trends) = env.call("GET", &format!("/api/installations/{inst}/trends?hours=24"), t, None).await;
+    assert_eq!(s, StatusCode::OK, "{trends}");
+    let trends = trends.as_array().unwrap();
+    assert_eq!(trends.len(), 5);
+    let salon = trends.iter().find(|z| z["zone_id"] == 1).unwrap();
+    assert_eq!(salon["points"][0][1], 19.5);
+
+    // Today's comfort.
+    let (s, days) = env.call("GET", &format!("/api/installations/{inst}/zones/1/1/daily?days=7"), t, None).await;
+    assert_eq!(s, StatusCode::OK, "{days}");
+    let today = &days.as_array().unwrap()[0];
+    assert_eq!(today["min_temp"], 19.5);
+    assert_eq!(today["day"].as_str().unwrap().len(), 10, "{today}");
+
+    // Air quality of the thermostats that measure it.
+    let (_, inst_view) = env.call("GET", &format!("/api/installations/{inst}"), t, None).await;
+    let zones = inst_view["zones"].as_array().unwrap();
+    let salon = zones.iter().find(|z| z["zone_id"] == 1).unwrap();
+    assert_eq!(salon["air_quality"], json!({"level":"good","value":1,"mode":"auto","threshold_low":25,"threshold_high":50}));
+    assert_eq!(zones.iter().find(|z| z["zone_id"] == 3).unwrap()["air_quality"], Value::Null);
+    let (_, history) = env.call("GET", &format!("/api/installations/{inst}/zones/1/1/history"), t, None).await;
+    assert_eq!(history[0]["air_quality"], 1);
+    assert!(today["air_quality_secs"].is_object(), "{today}");
+}

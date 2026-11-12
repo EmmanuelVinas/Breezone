@@ -23,6 +23,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,6 +52,7 @@ import com.breezone.app.ui.label
 import com.breezone.app.ui.labelRes
 import com.breezone.app.ui.systemModePlacement
 import com.breezone.app.ui.theme.Fz
+import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
@@ -129,6 +131,16 @@ private fun InstallationZones(
     val modes = remember(inst.zones) { systemModePlacement(inst.zones) }
     val labelled = modes.systems > 1
     var pendingMode by remember { mutableStateOf<Pair<Zone, Mode>?>(null) }
+    var trends by remember(inst.id) { mutableStateOf<Map<Pair<Long, Long>, List<List<Double>>>>(emptyMap()) }
+    // History points are written every 5 minutes: no need to read the trends more often.
+    LaunchedEffect(serverId, inst.id) {
+        while (true) {
+            runCatching { hub.api(serverId)?.trends(inst.id) }.getOrNull()?.let { list ->
+                trends = list.associate { (it.systemId to it.zoneId) to it.points }
+            }
+            delay(300_000)
+        }
+    }
     val onMode: (Zone, Mode) -> Unit = { master, mode -> pendingMode = master to mode }
     pendingMode?.let { (master, mode) ->
         ModeConfirmation(
@@ -191,6 +203,7 @@ private fun InstallationZones(
                         onToggle = { hub.control(serverId, zone, ZoneCommand(on = it)) },
                         onSetpoint = { hub.control(serverId, zone, ZoneCommand(setpoint = it)) },
                         onClick = { onOpenZone(zone) },
+                        trend = trends[zone.systemId to zone.zoneId],
                     )
                 }
             }

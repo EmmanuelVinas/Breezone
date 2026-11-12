@@ -52,8 +52,23 @@ export type Zone = {
   cool_setpoint: number | null
   heat_setpoint: number | null
   demand: boolean
+  /** Thermostats with an air quality sensor only. */
+  air_quality: AirQuality | null
   battery_low: boolean
   errors: string[]
+}
+
+export type AirQualityLevel = "good" | "regular" | "bad"
+
+export type AirQuality = {
+  /** null while the sensor gives no measure. */
+  level: AirQualityLevel | null
+  /** Value read from the WebServer. */
+  value: number
+  /** Air purification. */
+  mode: "off" | "on" | "auto" | null
+  threshold_low: number | null
+  threshold_high: number | null
 }
 
 export type NodeState =
@@ -82,8 +97,19 @@ export type Installation = {
   controllable: boolean
   /** What the signed-in user may change on it. */
   rights: InstallationUserRights
+  /** The time each zone spends in demand is recorded (set on the server that owns it). */
+  record_demand: boolean
   connection: Connection
   zones: Zone[]
+}
+
+export type InstallationInput = {
+  name: string
+  host: string
+  port: number
+  enabled: boolean
+  /** Left out: unchanged. */
+  record_demand?: boolean
 }
 
 export type InstallationConfig = {
@@ -98,6 +124,7 @@ export type InstallationConfig = {
   cloud_id: string | null
   node_id: number | null
   remote_id: number | null
+  record_demand: boolean
 }
 
 /** This Breezone server, as other servers see it (federation, ADR 0008). */
@@ -294,6 +321,33 @@ export type Reading = {
   setpoint: number | null
   is_on: boolean | null
   mode: number | null
+  /** Seconds in demand since the previous point (null: not recorded). */
+  demand_secs: number | null
+  /** 1 good, 2 regular, 3 bad, 0 no measure; null: no sensor. */
+  air_quality: number | null
+}
+
+/** Room temperature of a zone over the last hours, a few points: `[ts, temperature]`. */
+export type ZoneTrend = {
+  system_id: number
+  zone_id: number
+  points: [number, number][]
+}
+
+/** Comfort of a zone over one local day (see docs/API.md). */
+export type DayStats = {
+  day: string
+  min_temp: number | null
+  max_temp: number | null
+  avg_temp: number | null
+  avg_humidity: number | null
+  recorded_secs: number
+  on_secs: number
+  comfort_secs: number
+  comfort: number | null
+  demand_secs: number | null
+  /** null when the zone has no air quality sensor. */
+  air_quality_secs: { good: number; regular: number; bad: number } | null
 }
 
 export type FeedEvent = {
@@ -682,16 +736,15 @@ export const api = {
     request<Installation>("POST", `/api/installations/${id}/refresh`),
   installations: () =>
     request<InstallationConfig[]>("GET", "/api/installations"),
-  createInstallation: (data: {
-    name: string
-    host: string
-    port: number
-    enabled: boolean
-  }) => request<Installation>("POST", "/api/installations", data),
-  updateInstallation: (
-    id: number,
-    data: { name: string; host: string; port: number; enabled: boolean }
-  ) => request<Installation>("PUT", `/api/installations/${id}`, data),
+  createInstallation: (data: InstallationInput) =>
+    request<Installation>("POST", "/api/installations", data),
+  updateInstallation: (id: number, data: InstallationInput) =>
+    request<Installation>("PUT", `/api/installations/${id}`, data),
+  trends: (id: number, hours = 24) =>
+    request<ZoneTrend[]>(
+      "GET",
+      `/api/installations/${id}/trends?hours=${hours}`
+    ),
   deleteInstallation: (id: number) =>
     request<void>("DELETE", `/api/installations/${id}`),
   /** Says which installation of the Airzone account it is (null = none). */
@@ -786,6 +839,14 @@ export const api = {
     request<Reading[]>(
       "GET",
       `/api/installations/${z.installation_id}/zones/${z.system_id}/${z.zone_id}/history?hours=${hours}`
+    ),
+  daily: (
+    z: { installation_id: number; system_id: number; zone_id: number },
+    days: number
+  ) =>
+    request<DayStats[]>(
+      "GET",
+      `/api/installations/${z.installation_id}/zones/${z.system_id}/${z.zone_id}/daily?days=${days}`
     ),
   batch: (actions: Action[]) =>
     request<{ results: ActionResult[] }>("POST", "/api/control/batch", {

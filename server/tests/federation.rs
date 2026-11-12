@@ -628,3 +628,30 @@ async fn airzone_schedules_of_a_shared_installation_are_changed_by_the_node_owni
     let (_, events) = office.call(Method::GET, "/api/events?limit=5", None).await;
     assert!(events.as_array().unwrap().iter().any(|e| e["actor"].as_str().unwrap_or_default().contains("nœud")), "{events}");
 }
+
+#[tokio::test]
+async fn a_shared_installation_records_the_demand_time_if_its_owner_does() {
+    let office = Node::start("demand-office", |c| c.scan_port = 9).await;
+    let home = Node::start("demand-home", |c| c.scan_port = 9).await;
+    let ws = serve(mock::router_with_mac(Arc::new(Mutex::new(mock::preset("bureau"))), "AA:BB:CC:DD:EE:11")).await;
+    let body = json!({"name": "Atelier", "host": "127.0.0.1", "port": ws, "record_demand": true});
+    let (_, v) = office.call(Method::POST, "/api/installations", Some(body)).await;
+    assert_eq!(v["record_demand"], true, "{v}");
+    office.call(Method::PUT, "/api/node", Some(json!({"name":"Bureau","public_url": office.base}))).await;
+    let (_, created) = office.call(Method::POST, "/api/shares", Some(json!({"label":"Maison","installation_ids": [v["id"]]}))).await;
+    let (_, node) = home.call(Method::POST, "/api/nodes", Some(json!({"token": created["token"]}))).await;
+    let node_id = node["id"].as_i64().unwrap();
+    let share_id = office.call(Method::GET, "/api/shares", None).await.1[0]["id"].as_i64().unwrap();
+    office.call(Method::POST, &format!("/api/shares/{share_id}/approve"), None).await;
+    let (_, node) = home.call(Method::POST, &format!("/api/nodes/{node_id}/refresh"), None).await;
+    let id = node["installations"][0]["id"].as_i64().unwrap();
+
+    let (_, inst) = home.call(Method::GET, &format!("/api/installations/{id}"), None).await;
+    assert_eq!(inst["record_demand"], true, "{inst}");
+    let (_, history) = home.call(Method::GET, &format!("/api/installations/{id}/zones/1/1/history"), None).await;
+    assert_eq!(history[0]["demand_secs"], 0, "{history}");
+
+    // The consuming node cannot change it.
+    let (_, v) = home.call(Method::PUT, &format!("/api/installations/{id}"), Some(json!({"name": "Atelier", "host": "", "record_demand": false}))).await;
+    assert_eq!(v["record_demand"], true, "{v}");
+}

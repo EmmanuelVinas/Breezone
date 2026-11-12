@@ -81,6 +81,8 @@ data class Zone(
     val speeds: List<Long> = emptyList(),
     val sleep: Long? = null,
     val demand: Boolean = false,
+    /** Thermostats with an air quality sensor only. */
+    val airQuality: AirQuality? = null,
     val batteryLow: Boolean = false,
     val errors: List<String> = emptyList(),
 ) {
@@ -101,6 +103,8 @@ data class Installation(
     /** False when read-only for this user, or shared read-only by its node. */
     val controllable: Boolean = true,
     val rights: InstallationUserRights = InstallationUserRights(),
+    /** The time each zone spends in demand is recorded with the history. */
+    val recordDemand: Boolean = false,
     val connection: Connection = Connection(),
     val zones: List<Zone> = emptyList(),
 )
@@ -157,6 +161,47 @@ data class Reading(
     val humidity: Long? = null,
     val setpoint: Double? = null,
     val isOn: Boolean? = null,
+    val demandSecs: Long? = null,
+    /** 1 good, 2 regular, 3 bad, 0 no measure; null: no sensor. */
+    val airQuality: Long? = null,
+)
+
+@Serializable
+data class AirQuality(
+    /** "good" | "regular" | "bad"; null while the sensor gives no measure. */
+    val level: String? = null,
+    val value: Long = 0,
+    /** Air purification: "off" | "on" | "auto". */
+    val mode: String? = null,
+    val thresholdLow: Long? = null,
+    val thresholdHigh: Long? = null,
+)
+
+@Serializable
+data class AirQualitySecs(val good: Long = 0, val regular: Long = 0, val bad: Long = 0)
+
+/** Room temperature of a zone over the last hours: `[ts, temperature]` points, oldest first. */
+@Serializable
+data class ZoneTrend(
+    val systemId: Long,
+    val zoneId: Long,
+    val points: List<List<Double>> = emptyList(),
+)
+
+/** Comfort of a zone over one local day of the server (see docs/API.md). */
+@Serializable
+data class DayStats(
+    val day: String,
+    val minTemp: Double? = null,
+    val maxTemp: Double? = null,
+    val avgTemp: Double? = null,
+    val avgHumidity: Double? = null,
+    val recordedSecs: Long = 0,
+    val onSecs: Long = 0,
+    val comfortSecs: Long = 0,
+    val comfort: Double? = null,
+    val demandSecs: Long? = null,
+    val airQualitySecs: AirQualitySecs? = null,
 )
 
 @Serializable

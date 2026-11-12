@@ -85,6 +85,12 @@ async fn users_only_see_and_drive_the_installations_given_to_them() {
     assert_eq!(s, StatusCode::NOT_FOUND);
     let (s, _) = user.call(Method::GET, &format!("/api/installations/{home}/zones/1/1/history"), None).await;
     assert_eq!(s, StatusCode::OK);
+    for path in ["trends", "zones/1/1/daily"] {
+        let (s, _) = user.call(Method::GET, &format!("/api/installations/{office}/{path}"), None).await;
+        assert_eq!(s, StatusCode::NOT_FOUND, "{path}");
+        let (s, _) = user.call(Method::GET, &format!("/api/installations/{home}/{path}"), None).await;
+        assert_eq!(s, StatusCode::OK, "{path}");
+    }
 
     // Read only: no command, no batch, no timer.
     let (s, v) = user.call(Method::PATCH, &format!("/api/installations/{home}/zones/1/1"), Some(json!({"on": false}))).await;

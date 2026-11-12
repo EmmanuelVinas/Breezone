@@ -632,6 +632,40 @@ const es: Record<string, string> = {
   "Zone introuvable.": "Zona no encontrada.",
   "Zone mise à jour": "Zona actualizada",
   Zones: "Zonas",
+  "Min – max": "Mín – máx",
+  Confort: "Confort",
+  "Confort jour par jour": "Confort día a día",
+  "Part du temps allumée où la température est à ±0,5° de la consigne":
+    "Parte del tiempo encendida con la temperatura a ±0,5° de la consigna",
+  "Allumée, par jour": "Encendida, por día",
+  "En demande, par jour": "En demanda, por día",
+  "Enregistrer le temps de demande des zones":
+    "Registrar el tiempo de demanda de las zonas",
+  "Durée pendant laquelle chaque zone demande du chaud ou du froid, gardée avec l'historique. Les serveurs à qui l'installation est partagée suivent ce réglage.":
+    "Tiempo durante el cual cada zona pide calor o frío, guardado con el historial. Los servidores con los que se comparte la instalación siguen este ajuste.",
+  "Température sur 24 h : de {min} à {max}":
+    "Temperatura en 24 h: de {min} a {max}",
+  Moyenne: "Regular",
+  "Température moyenne": "Temperatura media",
+  "Qualité de l'air": "Calidad del aire",
+  "Purification arrêtée": "Purificación apagada",
+  "Purification en marche": "Purificación encendida",
+  "Purification automatique": "Purificación automática",
+  "Mesurée par le thermostat de la zone": "Medida por el termostato de la zona",
+  Maintenant: "Ahora",
+  "Pas de mesure": "Sin medida",
+  "Air de bonne qualité": "Aire de buena calidad",
+  "du temps mesuré sur la période": "del tiempo medido en el periodo",
+  "Qualité de l'air : {level}": "Calidad del aire: {level}",
+  Bonne: "Buena",
+  Mauvaise: "Mala",
+  "Humidité moyenne": "Humedad media",
+  "Température, consigne (quand la zone est allumée), humidité et qualité de l'air":
+    "Temperatura, consigna (cuando la zona está encendida), humedad y calidad del aire",
+  "Mesurée par le thermostat de la zone ; heure par heure dans l'historique":
+    "Medida por el termostato de la zona; hora a hora en el historial",
+  "Glissez les poignées sous le graphique pour zoomer, touchez la légende pour masquer une courbe":
+    "Arrastre los controles bajo el gráfico para ampliar, toque la leyenda para ocultar una curva",
 }
 
 export default es

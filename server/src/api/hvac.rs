@@ -9,11 +9,12 @@ use crate::discovery;
 use crate::error::{ApiError, ApiResult};
 use crate::hub::{InstallationView, ZoneCommand, ZoneView};
 use crate::routines::{self, Action, ActionResult};
+use crate::stats::{self, DayStats};
 use crate::AppState;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::Json;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 pub async fn status(State(state): State<AppState>, user: AuthUser) -> ApiResult<Json<Vec<InstallationView>>> {
@@ -48,6 +49,10 @@ pub struct InstallationInput {
     pub port: i64,
     #[serde(default = "yes")]
     pub enabled: bool,
+    /// Record the time each zone spends in demand (installations of this server only).
+    /// Unchanged when absent.
+    #[serde(default)]
+    pub record_demand: Option<bool>,
 }
 
 fn default_port() -> i64 {
@@ -76,6 +81,9 @@ fn validate_installation(i: &InstallationInput) -> ApiResult<(String, String)> {
 pub async fn create_installation(State(state): State<AppState>, AdminUser(admin): AdminUser, Json(req): Json<InstallationInput>) -> ApiResult<(StatusCode, Json<InstallationView>)> {
     let (name, host) = validate_installation(&req)?;
     let inst = db::insert_installation(&state.db, &name, &host, req.port, req.enabled).await?;
+    if let Some(record) = req.record_demand {
+        db::set_installation_record_demand(&state.db, inst.id, record).await?;
+    }
     state.hub.reload_installations().await?;
     state.hub.log("system", "info", Some(inst.id), Some(&admin.username), crate::text!("Installation « {0} » ajoutée ({1}:{2})", "Installation “{0}” added ({1}:{2})", "Instalación «{0}» añadida ({1}:{2})", name, host, req.port), None).await;
     state.hub.poll_one(inst.id).await;
@@ -103,6 +111,10 @@ pub async fn update_installation(State(state): State<AppState>, admin: AuthUser,
         (name, current.host.clone(), current.port)
     };
     db::update_installation(&state.db, id, &name, &host, port, req.enabled).await?;
+    // A shared installation records the demand time if the server that owns it does.
+    if let Some(record) = req.record_demand.filter(|_| current.is_local()) {
+        db::set_installation_record_demand(&state.db, id, record).await?;
+    }
     state.hub.reload_installations().await?;
     state.hub.log("system", "info", Some(id), Some(&admin.username), crate::text!("Installation « {0} » modifiée", "Installation “{0}” changed", "Instalación «{0}» modificada", name), None).await;
     if req.enabled {
@@ -261,6 +273,79 @@ pub async fn zone_history(
     Access::of(&state.db, &user).await?.view(id)?;
     let hours = q.hours.clamp(1, 24 * 90);
     Ok(Json(db::readings(&state.db, id, system_id, zone_id, db::now() - hours * 3600).await?))
+}
+
+#[derive(Deserialize)]
+pub struct TrendQuery {
+    #[serde(default = "default_hours")]
+    pub hours: i64,
+    /// Points per zone.
+    #[serde(default = "default_points")]
+    pub points: i64,
+}
+
+fn default_points() -> i64 {
+    48
+}
+
+#[derive(Serialize)]
+pub struct ZoneTrend {
+    pub system_id: i64,
+    pub zone_id: i64,
+    /// Average room temperature per time slice, oldest first: `[ts, temperature]`.
+    pub points: Vec<(i64, f64)>,
+}
+
+/// Room temperature of every zone of an installation, a few points each (zone cards).
+pub async fn trends(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<i64>,
+    Query(q): Query<TrendQuery>,
+) -> ApiResult<Json<Vec<ZoneTrend>>> {
+    Access::of(&state.db, &user).await?.view(id)?;
+    let span = q.hours.clamp(1, 24 * 7) * 3600;
+    let bucket = span / q.points.clamp(6, 200);
+    let mut trends: Vec<ZoneTrend> = vec![];
+    for p in db::temperature_trends(&state.db, id, db::now() - span, bucket).await? {
+        let point = (p.bucket + bucket / 2, (p.room_temp * 10.0).round() / 10.0);
+        match trends.last_mut() {
+            Some(t) if t.system_id == p.system_id && t.zone_id == p.zone_id => t.points.push(point),
+            _ => trends.push(ZoneTrend { system_id: p.system_id, zone_id: p.zone_id, points: vec![point] }),
+        }
+    }
+    Ok(Json(trends))
+}
+
+#[derive(Deserialize)]
+pub struct DailyQuery {
+    #[serde(default = "default_days")]
+    pub days: i64,
+}
+
+fn default_days() -> i64 {
+    14
+}
+
+/// Comfort of a zone day by day (local days of the server's time zone), oldest first.
+pub async fn zone_daily(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((id, system_id, zone_id)): Path<(i64, i64, i64)>,
+    Query(q): Query<DailyQuery>,
+) -> ApiResult<Json<Vec<DayStats>>> {
+    Access::of(&state.db, &user).await?.view(id)?;
+    let days = q.days.clamp(1, 90);
+    let tz = state.cfg.timezone;
+    let now = db::now();
+    // Midnight, local time, `days - 1` days ago.
+    let first = chrono::Utc::now().with_timezone(&tz).date_naive() - chrono::Days::new(days as u64 - 1);
+    let since = first
+        .and_hms_opt(0, 0, 0)
+        .and_then(|t| t.and_local_timezone(tz).earliest())
+        .map_or(now - days * 86_400, |t| t.timestamp());
+    let readings = db::readings(&state.db, id, system_id, zone_id, since).await?;
+    Ok(Json(stats::daily(&readings, tz, state.cfg.history_interval_secs * 2, now)))
 }
 
 #[derive(Deserialize)]

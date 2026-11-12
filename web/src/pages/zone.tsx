@@ -11,21 +11,17 @@ import {
   Plus,
   Power,
 } from "lucide-react"
-import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts"
 import { toast } from "sonner"
 import { CommandIndicator } from "@/components/command-indicator"
 import type { Mode, Zone } from "@/lib/api"
 import { api } from "@/lib/api"
-import {
-  MODE_ICON,
-  MODE_LABEL,
-  MODE_TONE,
-  formatTemp,
-  time,
-} from "@/lib/format"
+import { MODE_ICON, MODE_LABEL, MODE_TONE, formatTemp } from "@/lib/format"
 import { useZoneControl } from "@/hooks/use-zone-control"
 import { useSetpointDraft } from "@/components/zone-card"
 import { SetpointDial } from "@/components/setpoint-dial"
+import { DailyComfort } from "@/components/daily-comfort"
+import { AirQualityCard } from "@/components/air-quality"
+import { ZoneHistory } from "@/components/zone-history"
 import { cn } from "@/lib/utils"
 import { ConfirmDialog } from "@/components/confirm"
 import { Button } from "@/components/ui/button"
@@ -36,12 +32,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "@/components/ui/chart"
-import type { ChartConfig } from "@/components/ui/chart"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Input } from "@/components/ui/input"
@@ -55,7 +45,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { locale, t } from "@/lib/i18n"
+import { t } from "@/lib/i18n"
 
 const COLOR_VAR: Record<Mode, string> = {
   stop: "--muted-foreground",
@@ -65,142 +55,6 @@ const COLOR_VAR: Record<Mode, string> = {
   dry: "--dry",
   aux_heating: "--heat",
   auto: "--primary",
-}
-
-const chartConfig = {
-  room_temp: { label: t("Température"), color: "var(--heat)" },
-  setpoint: { label: t("Consigne"), color: "var(--primary)" },
-  humidity: { label: t("Humidité"), color: "var(--cool)" },
-} satisfies ChartConfig
-
-function History({ zone }: { zone: Zone }) {
-  const [hours, setHours] = useState("24")
-  const history = useQuery({
-    queryKey: [
-      "history",
-      zone.installation_id,
-      zone.system_id,
-      zone.zone_id,
-      hours,
-    ],
-    queryFn: () => api.history(zone, Number(hours)),
-    refetchInterval: 60_000,
-  })
-  const data = (history.data ?? []).map((r) => ({
-    ...r,
-    setpoint: r.is_on ? r.setpoint : null,
-  }))
-  const tickFormat = (ts: number) =>
-    Number(hours) <= 24
-      ? time(ts)
-      : new Date(ts * 1000).toLocaleDateString(locale(), {
-          day: "2-digit",
-          month: "2-digit",
-        })
-  return (
-    <Card className="rounded-3xl">
-      <CardHeader className="flex flex-row items-start justify-between gap-4">
-        <div>
-          <CardTitle>{t("Historique")}</CardTitle>
-          <CardDescription>
-            {t("Température, consigne (quand la zone est allumée) et humidité")}
-          </CardDescription>
-        </div>
-        <ToggleGroup
-          type="single"
-          value={hours}
-          onValueChange={(v) => v && setHours(v)}
-          variant="outline"
-          size="sm"
-        >
-          <ToggleGroupItem value="24">{t("24 h")}</ToggleGroupItem>
-          <ToggleGroupItem value="168">{t("7 j")}</ToggleGroupItem>
-          <ToggleGroupItem value="720">{t("30 j")}</ToggleGroupItem>
-        </ToggleGroup>
-      </CardHeader>
-      <CardContent>
-        {history.isLoading ? (
-          <Skeleton className="h-64 w-full" />
-        ) : data.length < 2 ? (
-          <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
-            {t(
-              "Pas encore assez de relevés : ils s'accumulent toutes les 5 minutes."
-            )}
-          </div>
-        ) : (
-          <ChartContainer config={chartConfig} className="h-64 w-full">
-            <LineChart data={data} margin={{ left: 0, right: 8 }}>
-              <CartesianGrid vertical={false} />
-              <XAxis
-                dataKey="ts"
-                tickFormatter={tickFormat}
-                tickLine={false}
-                axisLine={false}
-                minTickGap={40}
-              />
-              <YAxis
-                yAxisId="t"
-                tickLine={false}
-                axisLine={false}
-                width={36}
-                domain={["dataMin - 1", "dataMax + 1"]}
-                tickFormatter={(v: number) => `${Math.round(v)}°`}
-              />
-              <YAxis
-                yAxisId="h"
-                orientation="right"
-                tickLine={false}
-                axisLine={false}
-                width={36}
-                domain={[0, 100]}
-                tickFormatter={(v: number) => `${v}%`}
-              />
-              <ChartTooltip
-                content={
-                  <ChartTooltipContent
-                    labelFormatter={(_, p) =>
-                      p?.[0]
-                        ? new Date(
-                            Number(p[0].payload.ts) * 1000
-                          ).toLocaleString("fr-FR")
-                        : ""
-                    }
-                  />
-                }
-              />
-              <Line
-                yAxisId="t"
-                dataKey="room_temp"
-                type="monotone"
-                stroke="var(--color-room_temp)"
-                strokeWidth={2.5}
-                dot={false}
-              />
-              <Line
-                yAxisId="t"
-                dataKey="setpoint"
-                type="stepAfter"
-                stroke="var(--color-setpoint)"
-                strokeWidth={2}
-                strokeDasharray="5 4"
-                dot={false}
-                connectNulls={false}
-              />
-              <Line
-                yAxisId="h"
-                dataKey="humidity"
-                type="monotone"
-                stroke="var(--color-humidity)"
-                strokeWidth={1.5}
-                dot={false}
-                opacity={0.7}
-              />
-            </LineChart>
-          </ChartContainer>
-        )}
-      </CardContent>
-    </Card>
-  )
 }
 
 function EditZone({ zone }: { zone: Zone }) {
@@ -488,7 +342,9 @@ function ZoneDetail({ zone }: { zone: Zone }) {
           </Card>
         )}
 
-        <History zone={zone} />
+        <ZoneHistory zone={zone} />
+        <DailyComfort zone={zone} />
+        {zone.air_quality && <AirQualityCard zone={zone} />}
       </div>
     </div>
   )

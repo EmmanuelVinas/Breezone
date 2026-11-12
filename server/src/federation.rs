@@ -283,6 +283,9 @@ pub struct FedInstallation {
     pub location: Option<String>,
     #[serde(default)]
     pub mac: Option<String>,
+    /// The owning node records the demand time of the zones: the consuming node does too.
+    #[serde(default)]
+    pub record_demand: bool,
     pub connection: FedConnection,
     /// Zones as read from the WebServer (Airzone format).
     #[serde(default)]

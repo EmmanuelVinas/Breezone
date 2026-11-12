@@ -204,6 +204,9 @@ class BreezoneApi(
         call(HttpMethod.Post, "/api/control/batch", FzJson.encodeToString(BatchBody.serializer(), BatchBody(actions)))
 
     suspend fun history(zone: Zone, hours: Int): List<Reading> = call(HttpMethod.Get, "${zonePath(zone)}/history?hours=$hours")
+    suspend fun daily(zone: Zone, days: Int): List<DayStats> = call(HttpMethod.Get, "${zonePath(zone)}/daily?days=$days")
+    suspend fun trends(installationId: Long, hours: Int = 24): List<ZoneTrend> =
+        call(HttpMethod.Get, "/api/installations/$installationId/trends?hours=$hours")
     suspend fun routines(): List<Routine> = call(HttpMethod.Get, "/api/routines")
     suspend fun createRoutine(input: RoutineInput): Routine =
         call(HttpMethod.Post, "/api/routines", FzJson.encodeToString(RoutineInput.serializer(), input))

@@ -52,6 +52,8 @@ import com.breezone.app.data.CommandStatus
 import com.breezone.app.data.Installation
 import com.breezone.app.data.Zone
 import com.breezone.app.resources.*
+import com.breezone.app.ui.airQualityColor
+import com.breezone.app.ui.airQualityLabel
 import com.breezone.app.ui.clampSetpoint
 import com.breezone.app.ui.formatTemp
 import com.breezone.app.ui.hueOf
@@ -224,6 +226,8 @@ fun ZoneCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     status: CommandStatus? = null,
+    /** Room temperature over the last 24 h: `[ts, temperature]`. */
+    trend: List<List<Double>>? = null,
 ) {
     val tone = zone.tone()
     val card = Fz.colors.card
@@ -268,6 +272,14 @@ fun ZoneCard(
                     } else {
                         Text(stringResource(Res.string.zone_off), color = Fz.colors.muted, fontSize = 11.sp)
                     }
+                    zone.airQuality?.level?.let { level ->
+                        Icon(
+                            FzIcons.Leaf,
+                            stringResource(Res.string.air_quality_badge, airQualityLabel(level)),
+                            tint = airQualityColor(level),
+                            modifier = Modifier.padding(start = 4.dp).size(12.dp),
+                        )
+                    }
                     if (zone.batteryLow) {
                         Icon(FzIcons.BatteryWarning, stringResource(Res.string.zone_battery_low), tint = Fz.colors.warning, modifier = Modifier.padding(start = 4.dp).size(12.dp))
                     }
@@ -292,6 +304,10 @@ fun ZoneCard(
                 Spacer(Modifier.width(3.dp))
                 Text(stringResource(Res.string.zone_humidity, zone.humidity.toInt()), fontSize = 12.sp, color = Fz.colors.muted)
             }
+        }
+        if (trend != null && trend.size > 1) {
+            Spacer(Modifier.height(8.dp))
+            Sparkline(trend, if (zone.on) tone else Fz.colors.muted.copy(alpha = 0.7f), Modifier.fillMaxWidth().height(28.dp))
         }
         Spacer(Modifier.height(10.dp))
         Row(

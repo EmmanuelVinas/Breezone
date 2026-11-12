@@ -1,6 +1,6 @@
 # Feuille de route
 
-État au 2026-11-08.
+État au 2026-11-11.
 
 ## Fait
 
@@ -17,6 +17,9 @@ routines, programmations).
 - **Interface web** et **application Android / iOS** (français, anglais, espagnol ; démo intégrée ;
 routines et programmations par installation) ; langue du web choisie dans le profil, messages du
 serveur dans la langue de chacun.
+- **Graphiques** : mini-courbe de 24 h sur chaque carte de zone, confort jour par jour (températures,
+part du temps à ±0,5° de la consigne), qualité de l'air des thermostats qui la mesurent, temps de
+demande des zones enregistré au choix par installation.
 - **Diffusion** : guide Synology, site breezone.cloud, kit de publication Google Play.
 
 ## À venir
@@ -25,8 +28,7 @@ serveur dans la langue de chacun.
 et distante avec bascule automatique, tests d'interface.
 - **Réorganiser ses zones** : changer l'ordre des zones et des groupes, déplacer une zone d'un groupe
 à l'autre, sur le web et dans l'application.
-- **Graphiques**  : confort jour par jour, mini-courbes sur les cartes,  
-qualité d'air, consommation.
+- **Consommation** : modules énergie (#39).
 - **Autres marques**:
   1. Mitsubishi Electric (Kumo / Comfort) : API locale de l'adaptateur Wi-Fi, non documentée mais
    suivie par pykumo et Home Assistant ; le cloud ne sert qu'aux identifiants.

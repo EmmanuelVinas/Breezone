@@ -280,6 +280,9 @@ pub struct Installation {
     pub node_id: Option<i64>,
     /// Id of the installation on that node.
     pub remote_id: Option<i64>,
+    /// Record the time each zone spends in demand (only used for the installations of this
+    /// server: a shared installation follows the server that owns it).
+    pub record_demand: bool,
 }
 
 impl Installation {
@@ -364,6 +367,11 @@ pub async fn set_installation_cloud_id(db: &Db, id: i64, cloud_id: &str) -> sqlx
     Ok(())
 }
 
+pub async fn set_installation_record_demand(db: &Db, id: i64, record: bool) -> sqlx::Result<()> {
+    sqlx::query("UPDATE installations SET record_demand = ? WHERE id = ?").bind(record).bind(id).execute(db).await?;
+    Ok(())
+}
+
 pub async fn set_installation_location(db: &Db, id: i64, location: Option<&str>) -> sqlx::Result<()> {
     sqlx::query("UPDATE installations SET location = ? WHERE id = ?").bind(location).bind(id).execute(db).await?;
     Ok(())
@@ -418,6 +426,10 @@ pub struct Reading {
     pub setpoint: Option<f64>,
     pub is_on: Option<bool>,
     pub mode: Option<i64>,
+    /// Seconds in demand since the previous point (`None`: not recorded).
+    pub demand_secs: Option<i64>,
+    /// Air quality read from the zone (`aq_quality`; `None`: no sensor).
+    pub air_quality: Option<i64>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -431,10 +443,12 @@ pub async fn insert_reading(
     setpoint: Option<f64>,
     is_on: bool,
     mode: Option<i64>,
+    demand_secs: Option<i64>,
+    air_quality: Option<i64>,
 ) -> sqlx::Result<()> {
     sqlx::query(
-        "INSERT INTO readings (installation_id, system_id, zone_id, ts, room_temp, humidity, setpoint, is_on, mode)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO readings (installation_id, system_id, zone_id, ts, room_temp, humidity, setpoint, is_on, mode, demand_secs, air_quality)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(installation_id)
     .bind(system_id)
@@ -445,6 +459,8 @@ pub async fn insert_reading(
     .bind(setpoint)
     .bind(is_on)
     .bind(mode)
+    .bind(demand_secs)
+    .bind(air_quality)
     .execute(db)
     .await?;
     Ok(())
@@ -452,12 +468,36 @@ pub async fn insert_reading(
 
 pub async fn readings(db: &Db, installation_id: i64, system_id: i64, zone_id: i64, since: i64) -> sqlx::Result<Vec<Reading>> {
     sqlx::query_as(
-        "SELECT ts, room_temp, humidity, setpoint, is_on, mode FROM readings
+        "SELECT ts, room_temp, humidity, setpoint, is_on, mode, demand_secs, air_quality FROM readings
          WHERE installation_id = ? AND system_id = ? AND zone_id = ? AND ts >= ? ORDER BY ts",
     )
     .bind(installation_id)
     .bind(system_id)
     .bind(zone_id)
+    .bind(since)
+    .fetch_all(db)
+    .await
+}
+
+/// Average room temperature of a zone over one time bucket.
+#[derive(Debug, Clone, FromRow)]
+pub struct TrendPoint {
+    pub system_id: i64,
+    pub zone_id: i64,
+    /// Start of the bucket.
+    pub bucket: i64,
+    pub room_temp: f64,
+}
+
+/// Room temperature of every zone of an installation since `since`, averaged per `bucket` seconds.
+pub async fn temperature_trends(db: &Db, installation_id: i64, since: i64, bucket: i64) -> sqlx::Result<Vec<TrendPoint>> {
+    sqlx::query_as(
+        "SELECT system_id, zone_id, (ts / ?1) * ?1 AS bucket, AVG(room_temp) AS room_temp FROM readings
+         WHERE installation_id = ?2 AND ts >= ?3 AND room_temp IS NOT NULL
+         GROUP BY system_id, zone_id, bucket ORDER BY system_id, zone_id, bucket",
+    )
+    .bind(bucket.max(1))
+    .bind(installation_id)
     .bind(since)
     .fetch_all(db)
     .await

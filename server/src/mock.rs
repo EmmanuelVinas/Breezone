@@ -39,6 +39,11 @@ fn zone(id: i64, name: &str, on: bool, temp: f64, humidity: i64, setpoint: f64, 
     }
 }
 
+/// A thermostat with an air quality sensor (like the Airzone Think with its purifier).
+fn with_air_quality(z: ZoneData, quality: i64) -> ZoneData {
+    ZoneData { aq_quality: Some(quality), aq_mode: Some(2), aq_threshold_low: Some(25), aq_threshold_high: Some(50), ..z }
+}
+
 /// Zones of a preset. "maison" mirrors a real two-floor installation.
 pub fn preset(name: &str) -> Vec<ZoneData> {
     match name {
@@ -48,8 +53,8 @@ pub fn preset(name: &str) -> Vec<ZoneData> {
             zone(3, "Accueil", true, 19.0, 46, 19.5, false),
         ],
         _ => vec![
-            zone(1, "Salon", true, 19.5, 39, 19.0, true),
-            zone(2, "Bureau", true, 19.5, 47, 16.0, false),
+            with_air_quality(zone(1, "Salon", true, 19.5, 39, 19.0, true), 1),
+            with_air_quality(zone(2, "Bureau", true, 19.5, 47, 16.0, false), 2),
             zone(3, "Chambre 1", true, 18.4, 45, 17.5, false),
             zone(4, "Chambre 2", false, 11.7, 60, 17.0, false),
             zone(5, "Dressing", false, 15.2, 56, 17.0, false),
@@ -167,7 +172,12 @@ pub fn spawn_simulation(state: MockState, period: Duration) {
         loop {
             ticker.tick().await;
             let mut zones = state.lock().unwrap();
+            let tick = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
             for z in zones.iter_mut() {
+                // Air quality changes every minute and a half, mostly good.
+                if z.aq_quality.is_some() {
+                    z.aq_quality = Some([1, 1, 1, 2, 2, 3][((tick / 97 + z.zone_id as u64) % 6) as usize]);
+                }
                 let temp = z.room_temp.unwrap_or(AMBIENT);
                 let sp = z.setpoint.unwrap_or(20.0);
                 let heating = z.is_on() && matches!(z.mode, Some(3) | Some(6) | Some(7));

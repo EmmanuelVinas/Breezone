@@ -78,8 +78,22 @@ pub struct ZoneView {
     pub heat_setpoint: Option<f64>,
     /// The zone is currently asking for heat/cold.
     pub demand: bool,
+    /// Air quality, for thermostats with a sensor.
+    pub air_quality: Option<AirQualityView>,
     pub battery_low: bool,
     pub errors: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AirQualityView {
+    /// "good" | "regular" | "bad"; `None` while the sensor gives no measure.
+    pub level: Option<&'static str>,
+    /// Value read from the WebServer (`aq_quality`).
+    pub value: i64,
+    /// Air purification: "off" | "on" | "auto".
+    pub mode: Option<&'static str>,
+    pub threshold_low: Option<i64>,
+    pub threshold_high: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -99,6 +113,9 @@ pub struct InstallationView {
     pub controllable: bool,
     /// What the user who reads it may change (see `Access::apply`).
     pub rights: InstallationUserRights,
+    /// The time each zone spends in demand is recorded with the history (set on the server that
+    /// owns the installation).
+    pub record_demand: bool,
     pub connection: ConnectionView,
     pub zones: Vec<ZoneView>,
 }
@@ -225,8 +242,18 @@ pub fn mode_label(m: OperationMode) -> Text {
 // Hub
 // ---------------------------------------------------------------------------------------
 
-/// Last history point recorded for a zone: (ts, setpoint, on, mode).
-type Recorded = (i64, Option<f64>, bool, Option<i64>);
+/// Last history point recorded for a zone: (ts, setpoint, on, mode, air quality).
+type Recorded = (i64, Option<f64>, bool, Option<i64>, Option<i64>);
+
+/// Time a zone spent in demand since its last history point, counted read after read.
+#[derive(Debug, Clone, Copy)]
+struct DemandClock {
+    /// Last successful read.
+    read_at: i64,
+    in_demand: bool,
+    /// Seconds in demand since the last history point.
+    secs: i64,
+}
 
 /// How an installation is reached.
 #[derive(Clone)]
@@ -250,6 +277,10 @@ struct InstState {
     controllable: bool,
     /// Last recorded history point per zone.
     last_recorded: HashMap<(i64, i64), Recorded>,
+    /// Record the demand time with the history: set here for a local installation, by the node
+    /// that owns it otherwise.
+    record_demand: bool,
+    demand: HashMap<(i64, i64), DemandClock>,
     /// Incremented when a command starts: a poll started before it carries stale values (the
     /// previous setpoint…) and must not overwrite what the command set.
     commands: u64,
@@ -261,6 +292,7 @@ impl InstState {
             (Some(node_id), Some(remote_id)) => Backend::Node { node_id, remote_id },
             _ => Backend::Local(AirzoneClient::new(&inst.host, inst.port as u16)),
         };
+        let record_demand = inst.is_local() && inst.record_demand;
         Self {
             inst,
             backend,
@@ -272,6 +304,8 @@ impl InstState {
             node,
             controllable,
             last_recorded: HashMap::new(),
+            record_demand,
+            demand: HashMap::new(),
             commands: 0,
         }
     }
@@ -306,21 +340,34 @@ impl InstState {
         }
     }
 
-    /// Stores a successful read and returns the zones whose history point is due.
-    fn apply_zones(&mut self, zones: Vec<ZoneData>, history_interval: i64) -> Vec<ZoneData> {
+    /// Stores a successful read and returns the zones whose history point is due, with their
+    /// time in demand since the previous point when the installation records it. A gap longer
+    /// than `max_gap` between two reads (installation unreachable) counts for nothing.
+    fn apply_zones(&mut self, zones: Vec<ZoneData>, history_interval: i64, max_gap: i64) -> Vec<(ZoneData, Option<i64>)> {
+        self.apply_zones_at(zones, history_interval, max_gap, db::now())
+    }
+
+    fn apply_zones_at(&mut self, zones: Vec<ZoneData>, history_interval: i64, max_gap: i64, now: i64) -> Vec<(ZoneData, Option<i64>)> {
         self.zones = zones;
-        let now = db::now();
         let mut due_zones = vec![];
         for z in &self.zones {
             let key = (z.system_id, z.zone_id);
-            let current = (z.setpoint, z.is_on(), z.mode);
+            let clock = self.demand.entry(key).or_insert(DemandClock { read_at: now, in_demand: false, secs: 0 });
+            let gap = now - clock.read_at;
+            if clock.in_demand && (0..=max_gap).contains(&gap) {
+                clock.secs += gap;
+            }
+            clock.read_at = now;
+            clock.in_demand = z.in_demand();
+            let current = (z.setpoint, z.is_on(), z.mode, z.aq_quality);
             let due = match self.last_recorded.get(&key) {
                 None => true,
-                Some((ts, sp, on, mode)) => now - ts >= history_interval || (*sp, *on, *mode) != current,
+                Some((ts, sp, on, mode, aq)) => now - ts >= history_interval || (*sp, *on, *mode, *aq) != current,
             };
             if due {
-                self.last_recorded.insert(key, (now, current.0, current.1, current.2));
-                due_zones.push(z.clone());
+                self.last_recorded.insert(key, (now, current.0, current.1, current.2, current.3));
+                let secs = std::mem::take(&mut clock.secs);
+                due_zones.push((z.clone(), self.record_demand.then_some(secs)));
             }
         }
         due_zones
@@ -333,6 +380,7 @@ impl InstState {
             name: self.inst.name.clone(),
             location: self.inst.location.clone(),
             mac: self.inst.mac.clone(),
+            record_demand: self.record_demand,
             connection: FedConnection { state: self.conn.state.to_string(), last_seen: self.conn.last_seen, last_error: self.conn.last_error.as_ref().map(Text::current) },
             zones: self.zones.clone(),
             meta: self
@@ -382,6 +430,7 @@ impl InstState {
             node: self.node.clone(),
             controllable: self.controllable,
             rights: InstallationUserRights::default(),
+            record_demand: self.record_demand,
             connection: self.conn.clone(),
             zones,
         }
@@ -436,7 +485,19 @@ fn zone_view(installation_id: i64, z: &ZoneData, is_master: bool, meta: Option<&
         double_setpoint: z.double_setpoint.unwrap_or(0) != 0,
         cool_setpoint: z.cool_setpoint,
         heat_setpoint: z.heat_setpoint,
-        demand: z.air_demand.unwrap_or(0) != 0 || z.floor_demand.unwrap_or(0) != 0,
+        demand: z.in_demand(),
+        air_quality: z.aq_quality.map(|value| AirQualityView {
+            level: z.air_quality_level(),
+            value,
+            mode: match z.aq_mode {
+                Some(0) => Some("off"),
+                Some(1) => Some("on"),
+                Some(2) => Some("auto"),
+                _ => None,
+            },
+            threshold_low: z.aq_threshold_low,
+            threshold_high: z.aq_threshold_high,
+        }),
         battery_low: z.battery == Some(0),
         errors,
     }
@@ -577,6 +638,9 @@ impl Hub {
                             && existing.inst.node_id == inst.node_id
                             && existing.inst.remote_id == inst.remote_id =>
                     {
+                        if inst.is_local() {
+                            existing.record_demand = inst.record_demand;
+                        }
                         existing.inst = inst;
                         existing.meta = meta.into_iter().map(|m| ((m.system_id, m.zone_id), m)).collect();
                         existing.node = node;
@@ -713,7 +777,7 @@ impl Hub {
         let latency = started.elapsed().as_millis() as u64;
 
         let mut logs: Vec<(&'static str, Text)> = vec![];
-        let mut to_record: Vec<ZoneData> = vec![];
+        let mut to_record: Vec<(ZoneData, Option<i64>)> = vec![];
         let view = {
             let mut state = self.state.write().await;
             let Some(s) = state.get_mut(&id) else { return };
@@ -738,7 +802,7 @@ impl Hub {
                     s.conn = ConnectionView { state: "online", last_seen: Some(db::now()), last_error: None, latency_ms: Some(latency) };
                     // A command was sent while this read was in flight: its values are stale.
                     if s.commands == commands {
-                        to_record = s.apply_zones(resp.zones(), self.cfg.history_interval_secs);
+                        to_record = s.apply_zones(resp.zones(), self.cfg.history_interval_secs, self.demand_max_gap());
                     }
                 }
                 Err(e) => {
@@ -766,9 +830,14 @@ impl Hub {
         }
     }
 
-    async fn record(&self, id: i64, zones: Vec<ZoneData>) {
-        for z in zones {
-            if let Err(e) = db::insert_reading(&self.db, id, z.system_id, z.zone_id, z.room_temp, z.humidity.filter(|h| *h > 0), z.setpoint, z.is_on(), z.mode).await {
+    /// Longest gap between two reads still counted as time in demand: a few missed polls.
+    fn demand_max_gap(&self) -> i64 {
+        (self.cfg.poll_interval_secs as i64 * 3).max(60)
+    }
+
+    async fn record(&self, id: i64, zones: Vec<(ZoneData, Option<i64>)>) {
+        for (z, demand_secs) in zones {
+            if let Err(e) = db::insert_reading(&self.db, id, z.system_id, z.zone_id, z.room_temp, z.humidity.filter(|h| *h > 0), z.setpoint, z.is_on(), z.mode, demand_secs, z.aq_quality).await {
                 tracing::error!("cannot record history: {e}");
             }
         }
@@ -903,7 +972,8 @@ impl Hub {
                 if stale {
                     // A command was sent meanwhile: keep the values it set.
                 } else if s.conn.state == "online" {
-                    records.push((s.inst.id, s.apply_zones(fed.zones, self.cfg.history_interval_secs)));
+                    s.record_demand = fed.record_demand;
+                    records.push((s.inst.id, s.apply_zones(fed.zones, self.cfg.history_interval_secs, self.demand_max_gap())));
                 } else {
                     s.zones = fed.zones;
                 }
@@ -1576,5 +1646,49 @@ mod tests {
     fn retries_a_node_that_does_not_answer_less_and_less_often() {
         let pauses: Vec<u64> = (1..=7).map(node_retry_secs).collect();
         assert_eq!(pauses, [10, 60, 120, 240, 300, 300, 300]);
+    }
+
+    fn local_state(record_demand: bool) -> InstState {
+        let inst = Installation {
+            id: 1,
+            name: "Maison".into(),
+            host: "127.0.0.1".into(),
+            port: 3000,
+            enabled: true,
+            created_at: 0,
+            location: None,
+            mac: None,
+            cloud_id: None,
+            node_id: None,
+            remote_id: None,
+            record_demand,
+        };
+        InstState::new(inst, vec![], None, true)
+    }
+
+    fn demanding(on: bool) -> Vec<ZoneData> {
+        vec![ZoneData { on: Some(1), setpoint: Some(20.0), air_demand: Some(on as i64), ..zone() }]
+    }
+
+    #[test]
+    fn counts_the_demand_time_between_history_points() {
+        let mut s = local_state(true);
+        let t = 1_000_000;
+        // First read: a point, nothing counted yet.
+        assert_eq!(s.apply_zones_at(demanding(true), 160, 60, t)[0].1, Some(0));
+        assert!(s.apply_zones_at(demanding(true), 160, 60, t + 10).is_empty());
+        assert!(s.apply_zones_at(demanding(false), 160, 60, t + 20).is_empty());
+        assert!(s.apply_zones_at(demanding(true), 160, 60, t + 30).is_empty());
+        // Unreachable for two minutes while in demand: the gap counts for nothing.
+        assert!(s.apply_zones_at(demanding(true), 160, 60, t + 150).is_empty());
+        let due = s.apply_zones_at(demanding(true), 160, 60, t + 160);
+        assert_eq!(due[0].1, Some(30), "10 + 10 s, then 10 s after the gap");
+        assert_eq!(s.apply_zones_at(demanding(true), 160, 60, t + 320)[0].1, Some(0), "counted again from the point");
+    }
+
+    #[test]
+    fn demand_is_not_recorded_unless_asked() {
+        let mut s = local_state(false);
+        assert_eq!(s.apply_zones_at(demanding(true), 300, 60, 1_000)[0].1, None);
     }
 }

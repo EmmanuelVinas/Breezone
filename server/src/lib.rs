@@ -17,6 +17,7 @@ pub mod hub;
 pub mod i18n;
 pub mod mock;
 pub mod routines;
+pub mod stats;
 pub mod timers;
 pub mod tls;
 

@@ -267,10 +267,13 @@ function ZoneGroup({
   readOnly,
   masters,
   labelled,
+  trends,
 }: {
   name: string | null
   zones: Zone[]
   readOnly: boolean
+  /** Room temperature of the last 24 h, by `system_id-zone_id`. */
+  trends: Map<string, [number, number][]>
   /** Systems whose zones all belong to this group: their mode selector sits on its row. */
   masters: Zone[]
   labelled: boolean
@@ -325,6 +328,7 @@ function ZoneGroup({
             key={`${z.system_id}-${z.zone_id}`}
             zone={z}
             readOnly={readOnly}
+            trend={trends.get(`${z.system_id}-${z.zone_id}`)}
           />
         ))}
       </div>
@@ -400,6 +404,23 @@ export function DashboardPage() {
   const modes = useMemo(
     () => systemModePlacement(selected?.zones ?? []),
     [selected]
+  )
+  // History points are written every 5 minutes: no need to read the trends more often.
+  const trendQuery = useQuery({
+    queryKey: ["trends", selected?.id],
+    queryFn: () => api.trends(selected!.id),
+    enabled: selected !== undefined,
+    refetchInterval: 300_000,
+  })
+  const trends = useMemo(
+    () =>
+      new Map(
+        (trendQuery.data ?? []).map((z) => [
+          `${z.system_id}-${z.zone_id}`,
+          z.points,
+        ])
+      ),
+    [trendQuery.data]
   )
 
   useEffect(() => {
@@ -544,6 +565,7 @@ export function DashboardPage() {
                     readOnly={!selected.controllable}
                     masters={modes.byGroup.get(g.name) ?? []}
                     labelled={modes.systems > 1}
+                    trends={trends}
                   />
                 ))
               )}

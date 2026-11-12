@@ -8,6 +8,10 @@ import com.breezone.app.data.Installation
 import com.breezone.app.data.Mode
 import com.breezone.app.data.Zone
 import com.breezone.app.resources.Res
+import com.breezone.app.resources.air_quality_bad
+import com.breezone.app.resources.air_quality_good
+import com.breezone.app.resources.air_quality_none
+import com.breezone.app.resources.air_quality_regular
 import com.breezone.app.resources.days_names
 import com.breezone.app.resources.installation_via
 import com.breezone.app.resources.mode_aux_heating
@@ -78,6 +82,25 @@ fun Mode.color(): Color = when (this) {
     Mode.Fan -> Fz.colors.fan
     Mode.Dry -> Fz.colors.dry
     Mode.Auto -> MaterialTheme.colorScheme.primary
+}
+
+/** Label of an air quality level ("good" | "regular" | "bad"; null: no measure). */
+@Composable
+fun airQualityLabel(level: String?): String = stringResource(
+    when (level) {
+        "good" -> Res.string.air_quality_good
+        "regular" -> Res.string.air_quality_regular
+        "bad" -> Res.string.air_quality_bad
+        else -> Res.string.air_quality_none
+    },
+)
+
+@Composable
+fun airQualityColor(level: String?): Color = when (level) {
+    "good" -> Fz.colors.success
+    "regular" -> Fz.colors.warning
+    "bad" -> MaterialTheme.colorScheme.error
+    else -> Fz.colors.muted
 }
 
 /** Accent of a zone: its mode color when on, muted when off. */

@@ -154,6 +154,31 @@
     <string name="zone_history_7d">7 d</string>
     <string name="zone_history_loading">Loading…</string>
     <string name="zone_history_empty">Not enough readings yet: one is recorded every 5 minutes.</string>
+    <string name="zone_history_hint">Pinch to zoom, touch the chart to read the values, tap the legend to hide a curve</string>
+    <string name="zone_comfort_title">Comfort day by day</string>
+    <string name="zone_comfort_hint">Share of the time on with the temperature within ±0.5° of the setpoint</string>
+    <string name="zone_comfort_7d">7 d</string>
+    <string name="zone_comfort_30d">30 d</string>
+    <string name="zone_comfort_share">Comfort</string>
+    <string name="zone_comfort_on">On, per day</string>
+    <string name="zone_comfort_demand">In demand, per day</string>
+    <string name="zone_comfort_percent">%1$d%</string>
+    <string name="zone_comfort_hours">%1$d h %2$s</string>
+    <string name="zone_comfort_legend_range">Min – max</string>
+    <string name="zone_comfort_legend_avg">Average</string>
+    <string name="air_quality_title">Air quality</string>
+    <string name="air_quality_hint">Measured by the zone’s thermostat</string>
+    <string name="air_quality_hint_days">Measured by the zone’s thermostat; hour by hour in the history</string>
+    <string name="air_quality_now">Now</string>
+    <string name="air_quality_good">Good</string>
+    <string name="air_quality_regular">Moderate</string>
+    <string name="air_quality_bad">Poor</string>
+    <string name="air_quality_none">No measure</string>
+    <string name="air_quality_mode_off">Purification off</string>
+    <string name="air_quality_mode_on">Purification on</string>
+    <string name="air_quality_mode_auto">Automatic purification</string>
+    <string name="air_quality_good_share">Good air quality</string>
+    <string name="air_quality_badge">Air quality: %1$s</string>
 
     <!-- Routines -->
     <string name="routines_new">New scene</string>

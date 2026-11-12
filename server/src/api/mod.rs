@@ -49,6 +49,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/installations/{id}/zones/{system_id}/{zone_id}", patch(hvac::control_zone))
         .route("/api/installations/{id}/zones/{system_id}/{zone_id}/meta", put(hvac::update_zone_meta))
         .route("/api/installations/{id}/zones/{system_id}/{zone_id}/history", get(hvac::zone_history))
+        .route("/api/installations/{id}/zones/{system_id}/{zone_id}/daily", get(hvac::zone_daily))
+        .route("/api/installations/{id}/trends", get(hvac::trends))
         .route("/api/control/batch", post(hvac::batch))
         .route("/api/discovery/scan", post(hvac::scan))
         .route("/api/discovery/settings", get(hvac::discovery_settings).put(hvac::save_discovery_settings))

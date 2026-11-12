@@ -8,7 +8,7 @@ import {
   Snowflake,
   Sparkles,
 } from "lucide-react"
-import type { Mode, Zone } from "@/lib/api"
+import type { AirQualityLevel, Mode, Zone } from "@/lib/api"
 import { lang, locale, t } from "@/lib/i18n"
 
 export const MODE_LABEL: Record<Mode, string> = {
@@ -43,6 +43,22 @@ export const MODE_TONE: Record<
   dry: { text: "text-dry", bg: "bg-dry/15", ring: "ring-dry/40" },
   aux_heating: { text: "text-heat", bg: "bg-heat/15", ring: "ring-heat/40" },
   auto: { text: "text-primary", bg: "bg-primary/15", ring: "ring-primary/40" },
+}
+
+export const AIR_QUALITY_LABEL: Record<AirQualityLevel, string> = {
+  good: t("Bonne"),
+  regular: t("Moyenne"),
+  bad: t("Mauvaise"),
+}
+
+/** Text color class and chart color of each air quality level. */
+export const AIR_QUALITY_TONE: Record<
+  AirQualityLevel,
+  { text: string; color: string }
+> = {
+  good: { text: "text-success", color: "var(--success)" },
+  regular: { text: "text-warning", color: "var(--warning)" },
+  bad: { text: "text-destructive", color: "var(--destructive)" },
 }
 
 export const DAY_LABEL = [
@@ -158,4 +174,21 @@ export function installationAddress(i: {
   node?: { name: string }
 }) {
   return i.node ? t("via {name}", { name: i.node.name }) : `${i.host}:${i.port}`
+}
+
+/** A duration in seconds: "45 min", "6 h 05". */
+export function duration(secs: number) {
+  const minutes = Math.round(secs / 60)
+  if (minutes < 60) return t("{n} min", { n: minutes })
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return m ? `${h} h ${String(m).padStart(2, "0")}` : `${h} h`
+}
+
+/** A share between 0 and 1 as a whole percentage: "82 %". */
+export function percent(v: number | null | undefined) {
+  if (v === null || v === undefined) return "–"
+  return lang() === "en"
+    ? `${Math.round(v * 100)}%`
+    : `${Math.round(v * 100)} %`
 }

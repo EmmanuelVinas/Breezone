@@ -87,9 +87,9 @@ de l'utilisateur ; les clients relisent alors `/api/me`.
 | GET 🔒 | `/api/status` | État complet : `[Installation]` |
 | GET 🔒 | `/api/installations/{id}` | Une `Installation` |
 | POST 🔒 | `/api/installations/{id}/refresh` | Interroge immédiatement le WebServer |
-| GET 🔒 | `/api/installations` | Configuration (`host`, `port`, `mac`, `location`, `enabled`, `cloud_id`, `node_id`, `remote_id`) |
-| POST 👑 | `/api/installations` | `{name, host, port?=3000, enabled?=true}` |
-| PUT 🛠 | `/api/installations/{id}` | Idem (installation via un nœud : seuls `name` et `enabled` changent) |
+| GET 🔒 | `/api/installations` | Configuration (`host`, `port`, `mac`, `location`, `enabled`, `cloud_id`, `node_id`, `remote_id`, `record_demand`) |
+| POST 👑 | `/api/installations` | `{name, host, port?=3000, enabled?=true, record_demand?=false}` |
+| PUT 🛠 | `/api/installations/{id}` | Idem, `record_demand` inchangé s'il est absent (installation via un nœud : seuls `name` et `enabled` changent) |
 | PUT 🛠 | `/api/installations/{id}/cloud` | `{cloud_id: string\|null}` : installation du compte Airzone à laquelle elle correspond (refusé si la MAC du WebServer prouve le contraire) → `Installation` |
 | DELETE 🛠 | `/api/installations/{id}` | Supprime (historique et réglages Breezone compris) |
 | POST 🛠 | `/api/installations/test` | `{host, port}` → `{ok, zones, webserver}` ou `{ok:false, error}` |
@@ -97,20 +97,42 @@ de l'utilisateur ; les clients relisent alors `/api/me`.
 | GET 🔒 / PUT 👑 | `/api/discovery/settings` | Réseau local du serveur : `{subnet}` → `{subnet, effective, in_container}` |
 | PATCH 🔒 | `/api/installations/{id}/zones/{system_id}/{zone_id}` | `ZoneCommand` → `Zone` mise à jour |
 | PUT 🔒 | `/api/installations/{id}/zones/{system_id}/{zone_id}/meta` | `{display_name?, group?, position?}` |
-| GET 🔒 | `/api/installations/{id}/zones/{system_id}/{zone_id}/history?hours=24` | `[{ts, room_temp, humidity, setpoint, is_on, mode}]` |
+| GET 🔒 | `/api/installations/{id}/zones/{system_id}/{zone_id}/history?hours=24` | `[{ts, room_temp, humidity, setpoint, is_on, mode, demand_secs, air_quality}]` (`hours` ≤ 2160) |
+| GET 🔒 | `/api/installations/{id}/zones/{system_id}/{zone_id}/daily?days=14` | Confort jour par jour : `[DayStats]`, du plus ancien au plus récent (`days` ≤ 90) |
+| GET 🔒 | `/api/installations/{id}/trends?hours=24&points=48` | Mini-courbes des cartes : `[{system_id, zone_id, points:[[ts, room_temp]]}]`, température moyenne par tranche (`hours` ≤ 168, `points` de 6 à 200) |
 | POST 🔒 | `/api/control/batch` | `{actions:[Action]}` → `{results:[{ok, error}]}` |
 
 `Installation` : `{id, name, location, host, port, enabled, access:"local"|"node", node?:{id, name, state},
-controllable, rights:{zones, routines, schedules, admin}, connection:{state:"online"|"offline"|"unknown", last_seen, last_error, latency_ms}, zones:[Zone]}`.
+controllable, rights:{zones, routines, schedules, admin}, record_demand, connection:{state:"online"|"offline"|"unknown", last_seen, last_error, latency_ms}, zones:[Zone]}`.
 `access: "node"` : installation jointe via un autre serveur Breezone (`host` = son adresse) ;
 `controllable: false` si ce serveur la partage en lecture seule.
+
+`record_demand` : le temps que chaque zone passe en demande (chaud ou froid) est enregistré avec
+l'historique, dans `demand_secs` (secondes en demande depuis le point précédent ; `null` quand il
+n'est pas enregistré). Il se règle sur le serveur qui possède l'installation ; les serveurs à qui
+elle est partagée suivent ce réglage.
+
+`DayStats` : `{day:"AAAA-MM-JJ", min_temp, max_temp, avg_temp, avg_humidity, recorded_secs, on_secs,
+comfort_secs, comfort, demand_secs, air_quality_secs}`, jours locaux du fuseau du serveur (`BREEZONE_TZ`). Chaque point
+d'historique vaut jusqu'au suivant (au plus deux intervalles d'historique). `on_secs` : temps allumée
+dans un mode qui régule la température (froid, chaud, appoint, auto) ; `comfort_secs` : la part de ce
+temps à ±0,5° de la consigne ; `comfort` = `comfort_secs / on_secs` (0 à 1, `null` si la zone n'a pas
+été allumée) ; `demand_secs` : `null` si la demande n'était pas enregistrée ; `air_quality_secs` :
+`{good, regular, bad}` en secondes, `null` si la zone ne mesure pas la qualité de l'air.
 
 Une installation ajoutée à la main (ou dont l'adresse change) est rattachée automatiquement à
 l'installation du compte Airzone qui a le même WebServer (MAC), sans nouvelle connexion à Airzone.
 
 `Zone` : `{installation_id, system_id, zone_id, name, airzone_name, group, position, on, room_temp, humidity,
 setpoint, min_temp, max_temp, step, units, mode, modes, is_master, speed, speeds, sleep, double_setpoint,
-cool_setpoint, heat_setpoint, demand, battery_low, errors}`.
+cool_setpoint, heat_setpoint, demand, air_quality, battery_low, errors}`.
+
+`air_quality` : `null` si le thermostat de la zone ne mesure pas la qualité de l'air (le WebServer
+n'envoie alors pas les champs `aq_*`), sinon `{level:"good"|"regular"|"bad"|null, value, mode:"off"|"on"|"auto"|null,
+threshold_low, threshold_high}`. `value` est la valeur lue (`aq_quality` : 1 bonne, 2 moyenne,
+3 mauvaise, 0 pas de mesure, d'où `level: null`) ; `mode` est celui de la purification de l'air.
+L'historique en garde la valeur dans `air_quality` (`null` : pas de capteur). L'endpoint `iaq` du
+WebServer n'est jamais appelé : il bloque certains firmwares.
 
 `ZoneCommand` (tous facultatifs) : `{on, setpoint, cool_setpoint, heat_setpoint, mode, speed, sleep}` avec
 `mode` ∈ `stop | cooling | heating | fan | dry | aux_heating | auto` (appliqué au système via sa zone

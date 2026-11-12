@@ -6,6 +6,28 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Charts (#30): a 24-hour temperature curve on every zone card (web and app), and the comfort of a
+  zone day by day on its page: minimum, maximum and mean temperature, share of the time on within
+  ±0.5° of the setpoint, time on, over 7 or 30 days.
+- Zone history: pinch or drag to zoom (app) or zoom bar (web), touch or hover for every value at that
+  time, tap the legend to hide a curve; the air quality of the zone shows as a colored band under the
+  curves, and a gap without readings breaks the lines instead of joining them. The comfort chart
+  also shows the mean humidity of each day. Charts use libraries (Recharts on the web, Vico in the
+  app) instead of hand drawing.
+- Air quality (#30), for the thermostats that measure it (other zones show nothing): a leaf on the
+  zone card colored by level (good, moderate, poor), a band of the level under the history curves,
+  and on the zone page the level now, the purification mode and the share of each level day by day. Read from the zone data the WebServer already sends; its `iaq` endpoint, which
+  stops some WebServers from answering, is never called.
+- Demand time: an installation can record how long each zone asks for heat or cold, with the
+  history (installation settings, off by default). It is set on the server that owns the
+  installation; the servers it is shared with follow it. Shown on the comfort chart, it prepares
+  the energy features.
+- API: `GET /api/installations/{id}/trends`, `GET /api/installations/{id}/zones/{s}/{z}/daily`,
+  `record_demand` on installations, `air_quality` on zones, `demand_secs` and `air_quality` in the
+  history.
+
 ## [0.7.4] - 2026-11-09
 
 ### Fixed
