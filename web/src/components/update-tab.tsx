@@ -163,7 +163,7 @@ export function UpdateTab() {
               <div className="tabular text-2xl font-semibold">{v.latest}</div>
             </div>
           )}
-          {v.latest && !v.available && (
+          {v.checked_at && !v.available && (
             <span className="inline-flex items-center gap-1.5 text-sm text-success">
               <CircleCheck className="size-4" /> {t("Breezone est à jour")}
             </span>

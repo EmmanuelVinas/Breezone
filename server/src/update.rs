@@ -516,14 +516,17 @@ impl Updater {
     pub fn view(&self) -> UpdateView {
         let s = self.status.lock().unwrap();
         let current = current_version();
-        let latest_version = s.latest.as_ref().and_then(|r| Version::parse(&r.tag_name));
+        // A release older than this build (installed from an image whose release is not
+        // published yet) is not "the latest version": it is not shown.
+        let release = s.latest.as_ref().filter(|r| Version::parse(&r.tag_name).is_some_and(|v| v >= current));
+        let latest_version = release.and_then(|r| Version::parse(&r.tag_name));
         let available = latest_version.is_some_and(|v| v > current);
-        let reason = if available { self.cannot_install(s.latest.as_ref()) } else { None };
+        let reason = if available { self.cannot_install(release) } else { None };
         UpdateView {
             current: current.to_string(),
             latest: latest_version.map(|v| v.to_string()),
-            notes: s.latest.as_ref().and_then(|r| r.body.clone()),
-            published_at: s.latest.as_ref().and_then(|r| r.published_at.clone()),
+            notes: release.and_then(|r| r.body.clone()),
+            published_at: release.and_then(|r| r.published_at.clone()),
             url: latest_version.map(|v| format!("https://github.com/{REPOSITORY}/releases/tag/v{v}")),
             available,
             can_install: available && reason.is_none(),
@@ -938,6 +941,7 @@ mod tests {
         updater.status.lock().unwrap().latest = Some(release("v0.0.1", &[]));
         let view = updater.view();
         assert!(!view.available && !view.can_install, "older than this build");
+        assert_eq!(view.latest, None, "an older release is not shown as the latest");
         updater.status.lock().unwrap().latest = Some(release("v99.0.0", &[]));
         let view = updater.view();
         assert!(view.available);
