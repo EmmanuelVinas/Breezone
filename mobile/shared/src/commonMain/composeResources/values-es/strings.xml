@@ -242,6 +242,7 @@
     <string name="update_server_text">El servidor (versión %1$s) es demasiado antiguo para esta aplicación. Actualice su imagen Docker (ghcr.io/emmanuelvinas/breezone:latest).</string>
     <string name="update_app_available">Una versión más reciente de la aplicación aporta nuevas funciones para este servidor.</string>
     <string name="settings_server_version">Servidor Breezone %1$s</string>
+    <string name="settings_server_update">Breezone %1$s disponible: actualice el servidor desde su interfaz web (Ajustes › Breezone).</string>
 
     <!-- Settings -->
     <string name="settings_title">Ajustes</string>

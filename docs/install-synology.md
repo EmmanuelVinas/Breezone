@@ -236,6 +236,15 @@ Sans ouvrir aucun port sur la box : ajoutez au projet le service `cloudflared` d
 
 ## 6. Mettre à jour
 
+**Depuis l'interface web** (à partir de la 0.9.0) : **Réglages › Breezone › Mettre à jour**, réservé
+aux administrateurs. Breezone télécharge la nouvelle version depuis son dépôt officiel, vérifie sa
+signature, sauvegarde la base dans `backups/` du volume, puis redémarre dessus en quelques secondes.
+Si elle ne démarre pas, Breezone revient seul à la version précédente. La version affichée par
+Container Manager reste celle de l'image : la vraie version est dans les réglages de Breezone.
+Pour retirer ce bouton : `BREEZONE_SELF_UPDATE=false` dans `.env`.
+
+Cela ne met à jour que Breezone. Pour mettre aussi à jour le système de l'image (de temps en temps) :
+
 **Container Manager › Projet › breezone › Action › Arrêter**, puis **Action › Construire** : l'image
 `latest` est téléchargée à nouveau et le conteneur recréé. Les données sont conservées dans le
 volume `breezone_data`.

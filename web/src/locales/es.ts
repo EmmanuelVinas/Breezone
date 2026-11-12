@@ -672,6 +672,51 @@ const es: Record<string, string> = {
   Refroidissement: "Refrigeración",
   "Chauffage et refroidissement estimés d'après l'écart à la consigne : enregistrez le temps de demande de l'installation pour les mesurer.":
     "Calefacción y refrigeración estimadas según la diferencia con la consigna: registre el tiempo de demanda de la instalación para medirlas.",
+  "Breezone {version} disponible": "Breezone {version} disponible",
+  "Les mises à jour depuis l'interface sont désactivées sur ce serveur (BREEZONE_SELF_UPDATE=false).":
+    "Las actualizaciones desde la interfaz están desactivadas en este servidor (BREEZONE_SELF_UPDATE=false).",
+  "Breezone ne publie pas de version pour ce système : mettez à jour l'image Docker.":
+    "Breezone no publica versión para este sistema: actualice la imagen Docker.",
+  "Ce serveur est une version de développement : mettez-le à jour depuis les sources.":
+    "Este servidor es una versión de desarrollo: actualícelo desde el código fuente.",
+  "Les fichiers de cette version ne sont pas encore publiés : réessayez dans quelques minutes.":
+    "Los archivos de esta versión aún no están publicados: inténtelo de nuevo en unos minutos.",
+  "Cette version n'a pas démarré sur ce serveur : elle n'est plus proposée. Mettez à jour l'image Docker, ou attendez la suivante.":
+    "Esta versión no arrancó en este servidor: ya no se propone. Actualice la imagen Docker o espere a la siguiente.",
+  "Breezone {version} est installé": "Breezone {version} está instalado",
+  "Breezone est à jour": "Breezone está actualizado",
+  "La mise à jour vers Breezone {version} a été annulée":
+    "La actualización a Breezone {version} se ha deshecho",
+  "Cette version n'a pas démarré : Breezone est revenu à la version {to}, avec la base de données d'avant la mise à jour.":
+    "Esta versión no arrancó: Breezone volvió a la versión {to}, con la base de datos de antes de la actualización.",
+  "Version de Breezone": "Versión de Breezone",
+  "Dernière recherche de mise à jour : {when}":
+    "Última búsqueda de actualizaciones: {when}",
+  "Breezone cherche une nouvelle version une fois par jour, sur son dépôt officiel.":
+    "Breezone busca una nueva versión una vez al día, en su repositorio oficial.",
+  "Version installée": "Versión instalada",
+  "Dernière version publiée": "Última versión publicada",
+  "Rechercher une mise à jour": "Buscar actualizaciones",
+  "Breezone {version} est disponible": "Breezone {version} está disponible",
+  "Le serveur et l'interface web sont mis à jour ensemble. Les applications mobiles se mettent à jour par leur magasin.":
+    "El servidor y la interfaz web se actualizan juntos. Las aplicaciones móviles se actualizan desde su tienda.",
+  "Téléchargement…": "Descargando…",
+  "Vérification de la signature, installation et sauvegarde de la base…":
+    "Comprobando la firma, instalando y guardando una copia de la base de datos…",
+  "Le serveur ne répond pas encore. S'il ne revient pas, redémarrez le conteneur : la version précédente reprendra automatiquement.":
+    "El servidor aún no responde. Si no vuelve, reinicie el contenedor: la versión anterior se reanudará sola.",
+  "Redémarrage sur la nouvelle version : la page se rechargera d'elle-même.":
+    "Reiniciando con la nueva versión: la página se recargará sola.",
+  "La mise à jour a échoué": "La actualización ha fallado",
+  "Breezone n'a pas changé de version.": "Breezone no ha cambiado de versión.",
+  "Avec Docker, vous pouvez aussi mettre à jour l'image : « docker compose pull && docker compose up -d », ou « Mettre à jour » dans Container Manager sur Synology.":
+    "Con Docker, también puede actualizar la imagen: «docker compose pull && docker compose up -d», o «Actualizar» en Container Manager en Synology.",
+  "Mettre à jour vers {version}": "Actualizar a {version}",
+  "Notes de version": "Notas de la versión",
+  "Mettre à jour vers Breezone {version} ?":
+    "¿Actualizar a Breezone {version}?",
+  "Breezone télécharge cette version depuis son dépôt officiel, vérifie sa signature, sauvegarde la base de données puis redémarre : quelques secondes d'interruption. Si la nouvelle version ne démarre pas, Breezone revient seul à la version actuelle.":
+    "Breezone descarga esta versión desde su repositorio oficial, comprueba su firma, guarda una copia de la base de datos y luego se reinicia: unos segundos de interrupción. Si la nueva versión no arranca, Breezone vuelve sola a la versión actual.",
 }
 
 export default es

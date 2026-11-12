@@ -659,9 +659,33 @@ export type ServerVersion = {
   min_client_api: number
 }
 
+/** Updates of Breezone itself (issue #40), for administrators. */
+export type UpdateView = {
+  current: string
+  latest: string | null
+  /** Release notes (Markdown). */
+  notes: string | null
+  published_at: string | null
+  url: string | null
+  available: boolean
+  can_install: boolean
+  reason: "disabled" | "platform" | "development" | "assets" | "failed" | null
+  state:
+    "idle" | "checking" | "downloading" | "installing" | "restarting" | "failed"
+  /** Download progress, 0 to 1. */
+  progress: number | null
+  error: string | null
+  checked_at: number | null
+  /** The last update did not start and was undone. */
+  rolled_back: { version: string; to: string } | null
+}
+
 export const api = {
   version: () =>
     request<ServerVersion>("GET", "/api/version", undefined, false),
+  update: () => request<UpdateView>("GET", "/api/system/update"),
+  checkUpdate: () => request<UpdateView>("POST", "/api/system/update/check"),
+  installUpdate: () => request<UpdateView>("POST", "/api/system/update"),
   setupStatus: () =>
     request<{ needs_setup: boolean }>("GET", "/api/setup", undefined, false),
   setup: async (username: string, password: string) => {

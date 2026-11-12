@@ -88,6 +88,7 @@ fun SettingsScreen(onAddServer: () -> Unit, onReauth: (String) -> Unit) {
                         )
                         if (s.authRequired) Caption(stringResource(Res.string.settings_session_expired), color = Fz.colors.warning)
                         s.serverVersion?.let { Caption(stringResource(Res.string.settings_server_version, it)) }
+                        if (s.user?.isAdmin == true && !s.authRequired) ServerUpdateNotice(hub, s.account.id)
                         when {
                             s.update == UpdateNeeded.App -> Caption(stringResource(Res.string.update_app_text), color = Fz.colors.warning)
                             s.update == UpdateNeeded.Server -> Caption(stringResource(Res.string.update_server_text, s.serverVersion ?: "?"), color = Fz.colors.warning)
@@ -127,6 +128,17 @@ fun SettingsScreen(onAddServer: () -> Unit, onReauth: (String) -> Unit) {
             onDismiss = { removing = null },
         )
     }
+}
+
+/** A newer Breezone for this server: installed from its web UI (administrators). */
+@Composable
+private fun ServerUpdateNotice(hub: Hub, serverId: String) {
+    var latest by remember(serverId) { mutableStateOf<String?>(null) }
+    LaunchedEffect(serverId) {
+        // Servers before 0.9.0 have no such route: nothing to show.
+        latest = runCatching { hub.api(serverId)?.serverUpdate() }.getOrNull()?.takeIf { it.available }?.latest
+    }
+    latest?.let { Caption(stringResource(Res.string.settings_server_update, it), color = MaterialTheme.colorScheme.primary) }
 }
 
 /**

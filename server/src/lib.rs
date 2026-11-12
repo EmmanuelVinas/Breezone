@@ -19,6 +19,7 @@ pub mod mock;
 pub mod routines;
 pub mod stats;
 pub mod timers;
+pub mod update;
 pub mod tls;
 
 use crate::auth::AuthService;
@@ -42,6 +43,8 @@ pub struct AppState {
     pub auth: Arc<AuthService>,
     /// Key encrypting the remembered Airzone Cloud credentials.
     pub cloud_key: Arc<[u8; 32]>,
+    /// Checks for and installs new releases (issue #40).
+    pub updater: Arc<update::Updater>,
 }
 
 /// Opens the database, applies migrations, bootstraps accounts/installations from the
@@ -54,7 +57,8 @@ pub async fn init_state(cfg: Config) -> anyhow::Result<AppState> {
     let auth = Arc::new(AuthService::new(&secret, cfg.access_token_ttl_secs, cfg.refresh_token_ttl_days));
     let cloud_key = Arc::new(cloud::derive_key(&secret));
     let hub = Hub::new(db.clone(), cfg.clone(), cloud_key.clone());
-    let state = AppState { db, cfg, hub, auth, cloud_key };
+    let updater = Arc::new(update::Updater::new(cfg.data_dir.clone(), cfg.self_update));
+    let state = AppState { db, cfg, hub, auth, cloud_key, updater };
     bootstrap(&state).await?;
     state.hub.reload_installations().await?;
     Ok(state)
@@ -141,17 +145,74 @@ pub fn spawn_background(state: &AppState) {
     tokio::spawn(cloud::run_auto_sync(state.clone()));
     tokio::spawn(airzone_schedules::run_sync(state.clone()));
     tokio::spawn(timers::run_loop(state.hub.clone(), state.db.clone()));
+    tokio::spawn(state.updater.clone().run_checks());
 }
 
 pub async fn run(cfg: Config) -> anyhow::Result<()> {
+    let own = update::current_version();
+    // A newer version installed from the web UI runs instead of this one (issue #40).
+    if let update::Launch::Switch { version, binary, web } = update::choose_at_start(&cfg.data_dir, own) {
+        tracing::info!("starting Breezone {version}, installed from the web UI");
+        let e = update::exec(&binary, &web);
+        tracing::error!("cannot start Breezone {version}: {e}; Breezone {own} runs");
+        update::abandon(&cfg.data_dir, &version);
+    }
     let addr = format!("{}:{}", cfg.bind, cfg.port);
+    let data_dir = cfg.data_dir.clone();
     let state = init_state(cfg).await?;
     spawn_background(&state);
+    report_update(&state, &data_dir, own);
     let listener = tokio::net::TcpListener::bind(&addr).await?;
-    tracing::info!("Breezone {} listening on http://{addr}", env!("CARGO_PKG_VERSION"));
-    axum::serve(listener, app(state).into_make_service_with_connect_info::<std::net::SocketAddr>())
-        .with_graceful_shutdown(shutdown_signal()).await?;
-    Ok(())
+    tracing::info!("Breezone {own} listening on http://{addr}");
+    let (stop, mut stopped) = tokio::sync::watch::channel(false);
+    let server = axum::serve(listener, app(state.clone()).into_make_service_with_connect_info::<std::net::SocketAddr>())
+        .with_graceful_shutdown(async move {
+            let _ = stopped.changed().await;
+        });
+    let server = tokio::spawn(async move { server.await });
+    let restart = tokio::select! {
+        _ = shutdown_signal() => false,
+        _ = state.updater.restart_requested() => true,
+    };
+    let _ = stop.send(true);
+    // Open WebSockets would keep the server up: they get a few seconds, then are dropped.
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(5), server).await;
+    if !restart {
+        return Ok(());
+    }
+    let Some((binary, web)) = state.updater.switch_target() else { return Ok(()) };
+    state.db.close().await;
+    tracing::info!("restarting on {}", binary.display());
+    let e = update::exec(&binary, &web);
+    if let Some(version) = binary.parent().and_then(|d| d.file_name()).map(|n| n.to_string_lossy().into_owned()) {
+        update::abandon(&data_dir, &version);
+    }
+    Err(anyhow::anyhow!("cannot start the new version: {e}"))
+}
+
+/// Reports an update undone at start, and keeps a new version once it has run long enough.
+fn report_update(state: &AppState, data_dir: &std::path::Path, own: update::Version) {
+    if let Some(r) = update::take_rolled_back(data_dir) {
+        let hub = state.hub.clone();
+        let text = crate::text!(
+            "Breezone {0} n'a pas démarré : retour à Breezone {1}, avec la base d'avant la mise à jour",
+            "Breezone {0} did not start: back to Breezone {1}, with the database from before the update",
+            "Breezone {0} no arrancó: vuelta a Breezone {1}, con la base de datos de antes de la actualización",
+            r.version,
+            r.to
+        );
+        tokio::spawn(async move { hub.log("system", "error", None, None, text, None).await });
+        state.updater.set_rolled_back(Some(r));
+    }
+    let hub = state.hub.clone();
+    let data_dir = data_dir.to_path_buf();
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(update::CONFIRM_AFTER_SECS)).await;
+        if update::confirm(&data_dir, own) {
+            hub.log("system", "info", None, None, crate::text!("Breezone mis à jour en {0}", "Breezone updated to {0}", "Breezone actualizado a {0}", own), None)
+                .await;
+        }
+    });
 }
 
 async fn shutdown_signal() {

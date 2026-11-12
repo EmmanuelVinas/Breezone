@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { NavLink, useNavigate } from "react-router"
+import { Link, NavLink, useNavigate } from "react-router"
 import {
   Activity,
   CalendarClock,
@@ -62,6 +62,16 @@ function LiveIndicator({ state }: { state: LiveState }) {
   )
 }
 
+/** A newer Breezone, for administrators (the server checks once a day). */
+function useAvailableUpdate(admin: boolean) {
+  return useQuery({
+    queryKey: ["system-update"],
+    queryFn: api.update,
+    enabled: admin,
+    staleTime: 3_600_000,
+  }).data
+}
+
 /** Version of the Breezone server this interface comes from (it changes only on an update). */
 function useServerVersion() {
   return useQuery({
@@ -83,6 +93,7 @@ export function AppShell({
   const navigate = useNavigate()
   const qc = useQueryClient()
   const version = useServerVersion()
+  const update = useAvailableUpdate(user?.role === "admin")
   useProfileLanguage()
   const dark =
     theme === "dark" ||
@@ -125,6 +136,14 @@ export function AppShell({
             <span className="text-xs text-muted-foreground/70">
               Breezone {version}
             </span>
+          )}
+          {update?.available && update.latest && (
+            <Link
+              to="/settings?tab=breezone"
+              className="text-xs font-medium text-primary hover:underline"
+            >
+              {t("Breezone {version} disponible", { version: update.latest })}
+            </Link>
           )}
         </div>
       </aside>

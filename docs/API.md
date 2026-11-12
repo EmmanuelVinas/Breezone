@@ -263,6 +263,28 @@ end, editable, note}`. Appels Airzone utilisés (comme l'application officielle,
 `prodctrl.airzonecloud.com`) : `GET|POST installations/{id}/schedules`,
 `PATCH|DELETE installations/{id}/schedule/{schedule id}` ; jours Airzone 0 = lundi … 6 = dimanche.
 
+## Mise à jour de Breezone 👑
+
+Issue #40. Les versions viennent du dépôt officiel seulement, signées par la clé du projet ; une
+version qui ne démarre pas est annulée au démarrage suivant (base restaurée, version précédente).
+
+| Méthode | Chemin | Description |
+|---------|--------|-------------|
+| GET | `/api/system/update` | `UpdateView` (le serveur cherche une version une fois par jour) |
+| POST | `/api/system/update/check` | Cherche une version maintenant → `UpdateView` (502 si GitHub ne répond pas) |
+| POST | `/api/system/update` | Installe la dernière version puis redémarre dessus → 202 `UpdateView` ; 409 s'il n'y a rien à installer ou si une installation est en cours |
+
+`UpdateView` : `{current, latest, notes, published_at, url, available, can_install, reason, state,
+progress, error, checked_at, rolled_back}`. `reason` (pourquoi `can_install` est faux) :
+`disabled` (`BREEZONE_SELF_UPDATE=false`), `platform` (pas de version pour ce système),
+`development` (build de développement), `assets` (fichiers pas encore publiés), `failed` (cette
+version n'a pas démarré ici). `state` : `idle`, `downloading` (`progress` de 0 à 1), `installing`,
+`restarting`, `failed` (`error`). Pendant `restarting`, le serveur s'arrête quelques secondes puis
+revient avec sa nouvelle version (`GET /api/version`). `rolled_back` : `{version, to}` si la dernière
+mise à jour n'a pas démarré et a été annulée.
+
+Le binaire répond à `breezone-server --version` (« Breezone x.y.z ») sans démarrer le serveur.
+
 ## Journal
 
 `GET 🔒 /api/events?limit=100&before=<id>&installation_id=` → `[{id, ts, kind, level, installation_id, actor, message, data}]`

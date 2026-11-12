@@ -31,6 +31,7 @@ import { dateTime, relativeTime } from "@/lib/format"
 import { PageHeader } from "@/components/app-shell"
 import { InstallationMap } from "@/components/installation-map"
 import { InstallationDialog } from "@/components/installation-dialog"
+import { UpdateTab } from "@/components/update-tab"
 import { ConnectionDot } from "@/components/connection-badge"
 import { Confirm } from "@/components/confirm"
 import { NodesTab, SharesTab } from "@/components/federation"
@@ -1188,6 +1189,7 @@ export function SettingsPage() {
         ]
       : []),
     ...(admin ? [{ id: "users", label: t("Utilisateurs") }] : []),
+    ...(admin ? [{ id: "breezone", label: "Breezone" }] : []),
     { id: "devices", label: t("Appareils") },
     { id: "account", label: t("Mon compte") },
   ]
@@ -1238,6 +1240,11 @@ export function SettingsPage() {
         {admin && (
           <TabsContent value="users">
             <UsersTab />
+          </TabsContent>
+        )}
+        {admin && (
+          <TabsContent value="breezone">
+            <UpdateTab />
           </TabsContent>
         )}
         <TabsContent value="devices">

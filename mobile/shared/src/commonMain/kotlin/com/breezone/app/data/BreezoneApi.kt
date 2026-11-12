@@ -197,6 +197,7 @@ class BreezoneApi(
 
     suspend fun me(): User = call<User>(HttpMethod.Get, "/api/me").also { user = it }
     suspend fun status(): List<Installation> = call(HttpMethod.Get, "/api/status")
+    suspend fun serverUpdate(): ServerUpdate = call(HttpMethod.Get, "/api/system/update")
     suspend fun control(zone: Zone, cmd: ZoneCommand): Zone =
         call(HttpMethod.Patch, zonePath(zone), FzJson.encodeToString(ZoneCommand.serializer(), cmd))
 

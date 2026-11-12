@@ -6,6 +6,7 @@ mod federation;
 mod hvac;
 mod routines;
 mod schedules;
+mod system;
 mod timers;
 mod ws;
 
@@ -89,6 +90,9 @@ pub fn router() -> Router<AppState> {
         .route("/api/airzone/schedules/sync", post(schedules::sync))
         .route("/api/airzone/schedules/{cloud_id}/{id}", put(schedules::update).delete(schedules::delete))
         .route("/api/airzone/schedules/{cloud_id}/{id}/enabled", put(schedules::set_enabled))
+        // Updates of Breezone itself (issue #40)
+        .route("/api/system/update", get(system::update_status).post(system::install))
+        .route("/api/system/update/check", post(system::check))
         // Live updates
         .route("/api/ws", get(ws::handler))
         // Unknown API routes must not fall back to the web UI.

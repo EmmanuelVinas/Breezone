@@ -168,6 +168,14 @@ data class Reading(
     val airQuality: Long? = null,
 )
 
+/** A newer release of the Breezone server (administrators, servers from 0.9.0). */
+@Serializable
+data class ServerUpdate(
+    val current: String = "",
+    val latest: String? = null,
+    val available: Boolean = false,
+)
+
 @Serializable
 data class AirQuality(
     /** "good" | "regular" | "bad"; null while the sensor gives no measure. */

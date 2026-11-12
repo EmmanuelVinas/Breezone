@@ -38,6 +38,13 @@ COPY server/ ./
 RUN touch src/main.rs src/lib.rs src/bin/mock_airzone.rs \
  && cargo build --release --locked --bins
 
+# --- Release files (self-update, issue #40) ------------------------------------------------
+# The server and the web UI only, exported by the release workflow to make the signed archive
+# that installations download (`--target release-files --output type=local`).
+FROM scratch AS release-files
+COPY --from=server /src/target/release/breezone-server /breezone-server
+COPY --from=web /web/dist /web
+
 # --- Runtime -------------------------------------------------------------------------------
 FROM alpine:3.22
 ARG VERSION=dev

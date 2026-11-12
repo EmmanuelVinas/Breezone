@@ -43,6 +43,9 @@ futures-util = "0.3.34"
 jsonwebtoken = { version = "11.1.0", default-features = false, features = ["rust_crypto"] }
 chacha20poly1305 = "0.11.0"
 ed25519-dalek = "3"
+# Self-update: release archives (.tar.gz).
+tar = "0.4"
+flate2 = "1"
 
 [profile.release]
 opt-level = "z"

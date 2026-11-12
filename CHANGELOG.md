@@ -6,6 +6,20 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Update Breezone from the web UI (#40): **Settings › Breezone** shows the installed version and the
+  latest release (checked once a day), and administrators install it in one click. The server and the
+  web UI are downloaded from the official repository only, their Ed25519 signature checked against
+  the project key compiled in, the database backed up, then the server restarts on the new version in
+  a few seconds, without Docker. A version that does not start is undone at the next start (database
+  restored, previous version). `BREEZONE_SELF_UPDATE=false` removes the button. The app tells
+  administrators when their server has an update. Each release now publishes signed
+  `breezone-<version>-linux-<arch>.tar.gz` archives.
+- Zone history: heating and cooling periods as bands under the curves (web and app), from the
+  recorded demand time, else estimated from the gap to the setpoint.
+- `breezone-server --version`.
+
 ## [0.8.0] - 2026-11-12
 
 ### Added

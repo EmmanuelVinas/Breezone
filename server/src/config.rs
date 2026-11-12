@@ -33,6 +33,9 @@ pub struct Config {
     pub scan_port: u16,
     /// Optional bootstrap list: "Maison=192.168.1.25,Bureau=192.168.1.40:3000".
     pub airzone_hosts: Vec<BootstrapInstallation>,
+    /// Updates can be installed from the web UI (`BREEZONE_SELF_UPDATE`, on by default). An
+    /// installed update keeps running even when it is turned off.
+    pub self_update: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -83,6 +86,7 @@ impl Config {
             airzone_hosts: var("BREEZONE_AIRZONE_HOSTS")
                 .map(|v| parse_bootstrap(&v))
                 .unwrap_or_default(),
+            self_update: !var("BREEZONE_SELF_UPDATE").is_some_and(|v| matches!(v.trim().to_lowercase().as_str(), "false" | "0" | "no" | "off")),
         }
     }
 
@@ -118,6 +122,7 @@ impl Config {
             admin_user: None,
             admin_password: None,
             airzone_hosts: vec![],
+            self_update: false,
         }
     }
 }

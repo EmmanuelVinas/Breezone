@@ -362,3 +362,30 @@ async fn trends_daily_comfort_and_demand_recording() {
     assert_eq!(history[0]["air_quality"], 1);
     assert!(today["air_quality_secs"].is_object(), "{today}");
 }
+
+#[tokio::test]
+async fn self_update_is_for_administrators_and_needs_a_newer_release() {
+    let env = start().await;
+    let (_, v) = env.call("POST", "/api/setup", None, Some(json!({"username":"admin","password":"motdepasse1"}))).await;
+    let token = v["access_token"].as_str().unwrap().to_string();
+    let t = Some(token.as_str());
+
+    let (s, v) = env.call("GET", "/api/system/update", t, None).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    assert_eq!(v["current"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(v["available"], false, "not checked yet: {v}");
+    assert_eq!(v["state"], "idle");
+    // Nothing to install: refused, nothing downloaded.
+    let (s, v) = env.call("POST", "/api/system/update", t, None).await;
+    assert_eq!(s, StatusCode::CONFLICT, "{v}");
+
+    // A user with access to an installation is not an administrator.
+    let (s, _) = env.call("POST", "/api/users", t, Some(json!({"username":"alice","password":"motdepasse1","role":"user"}))).await;
+    assert!(s.is_success());
+    let (_, v) = env.call("POST", "/api/auth/login", None, Some(json!({"username":"alice","password":"motdepasse1"}))).await;
+    let alice = v["access_token"].as_str().unwrap().to_string();
+    for (method, path) in [("GET", "/api/system/update"), ("POST", "/api/system/update"), ("POST", "/api/system/update/check")] {
+        let (s, _) = env.call(method, path, Some(&alice), None).await;
+        assert_eq!(s, StatusCode::FORBIDDEN, "{method} {path}");
+    }
+}

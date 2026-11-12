@@ -55,6 +55,25 @@ jobs:
           outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=${{ env.ARCH }}
           cache-to: type=gha,scope=${{ env.ARCH }},mode=max
+      # Self-update (issue #40): the same server and web UI as the image, from its build cache,
+      # packed for installations that update themselves. Signed in the github-release job.
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          target: release-files
+          build-args: VERSION=${{ github.ref_name }}
+          outputs: type=local,dest=/tmp/release-files
+          cache-from: type=gha,scope=${{ env.ARCH }}
+      - run: |
+          mkdir -p /tmp/archives
+          tar -czf "/tmp/archives/breezone-${GITHUB_REF_NAME#v}-linux-${ARCH}.tar.gz" -C /tmp/release-files breezone-server web
+      - uses: actions/upload-artifact@v7
+        with:
+          name: archive-${{ env.ARCH }}
+          path: /tmp/archives/*
+          if-no-files-found: error
+          retention-days: 1
       - run: |
           mkdir -p /tmp/digests
           touch "/tmp/digests/${DIGEST#sha256:}"
@@ -108,6 +127,46 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          path: /tmp/archives
+          pattern: archive-*
+          merge-multiple: true
+      # Installations refuse any archive the project's key did not sign (server/src/update.rs).
+      # The signed message names the version and the target, so an old archive cannot pass for a
+      # newer one.
+      - name: Sign the self-update archives
+        env:
+          SIGNING_KEY: ${{ secrets.BREEZONE_RELEASE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$SIGNING_KEY" || { echo "::error::the BREEZONE_RELEASE_SIGNING_KEY secret is not set"; exit 1; }
+          umask 077
+          printf '%s\n' "$SIGNING_KEY" > /tmp/release-key.pem
+          trap 'rm -f /tmp/release-key.pem' EXIT
+          expected=$(sed -n 's/^pub const RELEASE_PUBLIC_KEY: &str = "\(.*\)";/\1/p' server/src/update.rs)
+          actual=$(openssl pkey -in /tmp/release-key.pem -pubout -outform DER | tail -c 32 | base64 -w0)
+          test "$expected" = "$actual" || { echo "::error::the signing key is not the one of RELEASE_PUBLIC_KEY"; exit 1; }
+          version="${GITHUB_REF_NAME#v}"
+          cd /tmp/archives
+          for archive in breezone-*.tar.gz; do
+            target="${archive#breezone-${version}-}"
+            target="${target%.tar.gz}"
+            printf 'breezone %s %s\n%s\n' "$version" "$target" "$(sha256sum "$archive" | cut -d' ' -f1)" > message
+            openssl pkeyutl -sign -inkey /tmp/release-key.pem -rawin -in message -out signature
+            base64 -w0 signature > "$archive.sig"
+          done
+          rm -f message signature
+          ls -l
+      # The release notes are this version's section of the changelog: installations show them
+      # before updating (Settings › Breezone).
+      - name: Release notes from the changelog
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" 'index($0, "## [" v "]") == 1 {on=1; next} on && /^## \[/ {exit} on' CHANGELOG.md > /tmp/notes.md
+          test -s /tmp/notes.md || echo "See CHANGELOG.md." > /tmp/notes.md
       - uses: softprops/action-gh-release@v2
         with:
+          body_path: /tmp/notes.md
           generate_release_notes: true
+          files: /tmp/archives/*
