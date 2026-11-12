@@ -155,6 +155,10 @@
     <string name="zone_history_loading">Loading…</string>
     <string name="zone_history_empty">Not enough readings yet: one is recorded every 5 minutes.</string>
     <string name="zone_history_hint">Pinch to zoom, touch the chart to read the values, tap the legend to hide a curve</string>
+    <string name="history_state_heating">Heating</string>
+    <string name="history_state_cooling">Cooling</string>
+    <string name="history_state_comfort">Comfort</string>
+    <string name="history_states_estimated">Heating and cooling estimated from the gap to the setpoint: record the demand time of the installation to measure them.</string>
     <string name="zone_comfort_title">Comfort day by day</string>
     <string name="zone_comfort_hint">Share of the time on with the temperature within ±0.5° of the setpoint</string>
     <string name="zone_comfort_7d">7 d</string>

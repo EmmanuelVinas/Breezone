@@ -159,6 +159,10 @@
     <string name="zone_history_loading">Chargement…</string>
     <string name="zone_history_empty">Pas encore assez de relevés : ils s’accumulent toutes les 5 minutes.</string>
     <string name="zone_history_hint">Pincez pour zoomer, touchez la courbe pour lire les valeurs, touchez la légende pour masquer une courbe</string>
+    <string name="history_state_heating">Chauffage</string>
+    <string name="history_state_cooling">Refroidissement</string>
+    <string name="history_state_comfort">Confort</string>
+    <string name="history_states_estimated">Chauffage et refroidissement estimés d’après l’écart à la consigne : enregistrez le temps de demande de l’installation pour les mesurer.</string>
     <string name="zone_comfort_title">Confort jour par jour</string>
     <string name="zone_comfort_hint">Part du temps allumée où la température est à ±0,5° de la consigne</string>
     <string name="zone_comfort_7d">7 j</string>

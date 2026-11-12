@@ -206,6 +206,9 @@ object DemoServer {
                 humidity = 42 + ((i + seed) % 9).toLong(),
                 setpoint = if (on) zone.setpoint else null,
                 isOn = on,
+                mode = 3,
+                // Heating while below the setpoint, then at it.
+                demandSecs = if (on && base + wave < (zone.setpoint ?: 19.0) - 0.2) step else 0,
                 // Mostly good, regular in the evening, a bad moment around dinner.
                 airQuality = zone.airQuality?.let { if (hour == 19) 3 else if (hour in 17..22) 2 else 1 },
             )

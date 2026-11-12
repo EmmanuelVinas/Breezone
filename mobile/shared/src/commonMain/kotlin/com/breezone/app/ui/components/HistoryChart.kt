@@ -39,6 +39,9 @@ import com.patrykandpatrick.vico.multiplatform.common.data.ExtraStore
 import com.breezone.app.resources.Res
 import com.breezone.app.resources.air_quality_badge
 import com.breezone.app.resources.air_quality_title
+import com.breezone.app.resources.history_state_comfort
+import com.breezone.app.resources.history_state_cooling
+import com.breezone.app.resources.history_state_heating
 import com.breezone.app.resources.zone_humidity_label
 import com.breezone.app.resources.zone_setpoint
 import com.breezone.app.resources.zone_temperature
@@ -48,7 +51,36 @@ import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.round
 
-enum class HistorySeries { Temperature, Setpoint, Humidity, Air }
+enum class HistorySeries { Temperature, Setpoint, Humidity, Air, Periods }
+
+/** What a zone was doing until its next history point. */
+enum class ZoneState { Heating, Cooling, Comfort }
+
+/** Without a recorded demand time, a zone this far from its setpoint is taken as in demand (°). */
+private const val STATE_MARGIN = 0.5
+
+/**
+ * The state of each reading until the next one. In demand comes from the demand time recorded with
+ * the next reading (it covers the time since this one) when the installation records it, else from
+ * how far the temperature is from the setpoint. Off, fan and dry modes, and gaps, have no state.
+ */
+fun zoneStates(readings: List<Reading>): List<ZoneState?> = readings.mapIndexed { i, r ->
+    val temp = r.roomTemp
+    if (r.isOn != true || temp == null) return@mapIndexed null
+    val mode = r.mode?.toInt() ?: 0
+    val heating = mode == 3 || mode == 6
+    if (!heating && mode != 2 && mode != 7) return@mapIndexed null
+    val setpoint = r.setpoint ?: temp
+    val recorded = readings.getOrNull(i + 1)?.demandSecs
+    val demand = recorded?.let { it > 0 } ?: (temp < setpoint - STATE_MARGIN || temp > setpoint + STATE_MARGIN)
+    when {
+        !demand -> ZoneState.Comfort
+        heating -> ZoneState.Heating
+        mode == 2 -> ZoneState.Cooling
+        temp < setpoint -> ZoneState.Heating
+        else -> ZoneState.Cooling
+    }
+}
 
 /** Longest time between two readings still drawn as one line (they are 5 minutes apart). */
 private const val GAP_SECS = 1800L
@@ -56,6 +88,7 @@ private const val HOUR = 3600.0
 
 private val TempKinds = ExtraStore.Key<List<HistorySeries>>()
 private val AirLevels = ExtraStore.Key<List<Int>>()
+private val StateKinds = ExtraStore.Key<List<ZoneState>>()
 
 private val LEVELS = listOf("good", "regular", "bad")
 
@@ -93,6 +126,23 @@ private fun airRuns(readings: List<Reading>, t0: Long): List<Pair<Int, List<Pair
     return result.filter { it.second.size >= 2 }
 }
 
+/** Runs of the same state, each up to the next reading, as full-height bands (y = 100 on 0-100). */
+private fun stateRuns(readings: List<Reading>, t0: Long): List<Pair<ZoneState, List<Pair<Double, Double>>>> {
+    val states = zoneStates(readings)
+    val result = mutableListOf<Pair<ZoneState, MutableList<Pair<Double, Double>>>>()
+    readings.forEachIndexed { i, r ->
+        val x = round((r.ts - t0) / HOUR * 10_000) / 10_000
+        val previous = readings.getOrNull(i - 1)
+        val continues = previous != null && r.ts - previous.ts <= GAP_SECS
+        val last = result.lastOrNull()
+        if (continues && last != null && states[i - 1] == last.first) last.second.add(x to 100.0)
+        // Bands for heating and cooling only: none when the zone is off or at its setpoint.
+        val state = states[i]?.takeIf { it != ZoneState.Comfort }
+        if (state != null && !(continues && states[i - 1] == state)) result.add(state to mutableListOf(x to 100.0))
+    }
+    return result.filter { it.second.size >= 2 }
+}
+
 /**
  * Temperature and setpoint (left axis), humidity (right axis, 0-100 %) and air quality (a band at
  * the bottom). Pinch to zoom, drag to scroll, touch for the values. Hidden series stay in the
@@ -105,11 +155,13 @@ fun HistoryChart(readings: List<Reading>, hours: Int, hidden: Set<HistorySeries>
     val setpoint = remember(readings) { runs(readings, t0) { r -> r.setpoint.takeIf { r.isOn == true } } }
     val humidity = remember(readings) { runs(readings, t0) { r -> r.humidity?.toDouble() } }
     val air = remember(readings) { airRuns(readings, t0) }
+    val periods = remember(readings) { stateRuns(readings, t0) }
 
     val producer = remember { CartesianChartModelProducer() }
     LaunchedEffect(readings) {
         if (temperature.isEmpty()) return@LaunchedEffect
         producer.runTransaction {
+            if (periods.isNotEmpty()) lineSeries { periods.forEach { (_, s) -> series(s.map { it.first }, s.map { it.second }) } }
             lineSeries {
                 (temperature + setpoint).forEach { s -> series(s.map { it.first }, s.map { it.second }) }
             }
@@ -118,6 +170,7 @@ fun HistoryChart(readings: List<Reading>, hours: Int, hidden: Set<HistorySeries>
             extras {
                 it[TempKinds] = List(temperature.size) { HistorySeries.Temperature } + List(setpoint.size) { HistorySeries.Setpoint }
                 it[AirLevels] = air.map { (level, _) -> level }
+                it[StateKinds] = periods.map { (state, _) -> state }
             }
         }
     }
@@ -156,7 +209,33 @@ fun HistoryChart(readings: List<Reading>, hours: Int, hidden: Set<HistorySeries>
     val temps = (temperature + setpoint).flatten().map { it.second }
     val lo = floor(temps.minOrNull() ?: 0.0) - 1
     val hi = ceil(temps.maxOrNull() ?: 0.0) + 1
+    val stateColors = mapOf(ZoneState.Heating to heat, ZoneState.Cooling to cool, ZoneState.Comfort to Fz.colors.success)
+    val periodLines = ZoneState.entries.associateWith { state ->
+        LineCartesianLayer.rememberLine(
+            fill = LineCartesianLayer.LineFill.single(Fill(Color.Transparent)),
+            areaFill = LineCartesianLayer.AreaFill.single(
+                Fill(if (HistorySeries.Periods in hidden) Color.Transparent else stateColors.getValue(state).copy(alpha = 0.18f)),
+            ),
+            stroke = LineCartesianLayer.LineStroke.Continuous(thickness = 0.dp),
+            pointConnector = LineCartesianLayer.PointConnector.Sharp,
+        )
+    }
     val layers = buildList {
+        // Behind the curves, on the 0-100 scale of the right axis so that they take the whole height.
+        if (periods.isNotEmpty()) {
+            add(
+                rememberLineCartesianLayer(
+                    lineProvider = remember(periodLines) {
+                        LineCartesianLayer.LineProvider { index, extras ->
+                            periodLines.getValue(extras.getOrNull(StateKinds)?.getOrNull(index) ?: ZoneState.Comfort)
+                        }
+                    },
+                    pointSpacing = 4.dp,
+                    rangeProvider = remember { CartesianLayerRangeProvider.fixed(minY = 0.0, maxY = 100.0) },
+                    verticalAxisPosition = Axis.Position.Vertical.End,
+                ),
+            )
+        }
         add(
             rememberLineCartesianLayer(
                 lineProvider = remember(temperatureLine, setpointLine) {
@@ -202,15 +281,21 @@ fun HistoryChart(readings: List<Reading>, hours: Int, hidden: Set<HistorySeries>
         humidity = stringResource(Res.string.zone_humidity_label),
         air = stringResource(Res.string.air_quality_title),
         levels = LEVELS.map { stringResource(Res.string.air_quality_badge, airQualityLabel(it)) },
+        states = ZoneState.entries.map { stringResource(it.labelRes) },
     )
+    val states = remember(readings) { zoneStates(readings) }
     val marker = rememberTextMarker(readings, hidden, labels) { x ->
         val ts = t0 + (x * HOUR).toLong()
-        val r = readings.minByOrNull { abs(it.ts - ts) } ?: return@rememberTextMarker ""
+        val index = readings.indices.minByOrNull { abs(readings[it].ts - ts) } ?: return@rememberTextMarker ""
+        val r = readings[index]
         buildString {
             append(if (hours <= 24) clock(r.ts) else "${day(r.ts).dropLast(5)} ${clock(r.ts)}")
             if (HistorySeries.Temperature !in hidden) r.roomTemp?.let { append("\n${labels.temperature} ${formatTemp(it)}") }
             if (HistorySeries.Setpoint !in hidden && r.isOn == true) r.setpoint?.let { append("\n${labels.setpoint} ${formatTemp(it)}") }
             if (HistorySeries.Humidity !in hidden) r.humidity?.let { append("\n${labels.humidity} $it %") }
+            if (HistorySeries.Periods !in hidden) {
+                states[index]?.takeIf { it != ZoneState.Comfort }?.let { append("\n${labels.states[it.ordinal]}") }
+            }
             if (HistorySeries.Air !in hidden) {
                 r.airQuality?.toInt()?.takeIf { it in 1..3 }?.let { append("\n${labels.levels[it - 1]}") }
             }
@@ -258,7 +343,21 @@ fun HistoryChart(readings: List<Reading>, hours: Int, hidden: Set<HistorySeries>
     )
 }
 
-private data class HistoryLabels(val temperature: String, val setpoint: String, val humidity: String, val air: String, val levels: List<String>)
+private data class HistoryLabels(
+    val temperature: String,
+    val setpoint: String,
+    val humidity: String,
+    val air: String,
+    val levels: List<String>,
+    val states: List<String>,
+)
+
+val ZoneState.labelRes
+    get() = when (this) {
+        ZoneState.Heating -> Res.string.history_state_heating
+        ZoneState.Cooling -> Res.string.history_state_cooling
+        ZoneState.Comfort -> Res.string.history_state_comfort
+    }
 
 /** A setpoint holds until the next one: draw it as steps. */
 private val StepConnector = LineCartesianLayer.PointConnector { _, path, _, y1, x2, y2 ->

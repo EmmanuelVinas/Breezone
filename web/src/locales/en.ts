@@ -659,6 +659,12 @@ const en: Record<string, string> = {
     "Measured by the zone's thermostat; hour by hour in the history",
   "Glissez les poignées sous le graphique pour zoomer, touchez la légende pour masquer une courbe":
     "Drag the handles under the chart to zoom, tap the legend to hide a curve",
+  Périodes: "Periods",
+  Période: "Period",
+  Chauffage: "Heating",
+  Refroidissement: "Cooling",
+  "Chauffage et refroidissement estimés d'après l'écart à la consigne : enregistrez le temps de demande de l'installation pour les mesurer.":
+    "Heating and cooling estimated from the gap to the setpoint: record the demand time of the installation to measure them.",
 }
 
 export default en

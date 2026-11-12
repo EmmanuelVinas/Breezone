@@ -155,6 +155,10 @@
     <string name="zone_history_loading">Cargando…</string>
     <string name="zone_history_empty">Aún no hay suficientes lecturas: se registra una cada 5 minutos.</string>
     <string name="zone_history_hint">Pellizque para ampliar, toque el gráfico para leer los valores, toque la leyenda para ocultar una curva</string>
+    <string name="history_state_heating">Calefacción</string>
+    <string name="history_state_cooling">Refrigeración</string>
+    <string name="history_state_comfort">Confort</string>
+    <string name="history_states_estimated">Calefacción y refrigeración estimadas según la diferencia con la consigna: registre el tiempo de demanda de la instalación para medirlas.</string>
     <string name="zone_comfort_title">Confort día a día</string>
     <string name="zone_comfort_hint">Parte del tiempo encendida con la temperatura a ±0,5° de la consigna</string>
     <string name="zone_comfort_7d">7 d</string>

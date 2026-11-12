@@ -666,6 +666,12 @@ const es: Record<string, string> = {
     "Medida por el termostato de la zona; hora a hora en el historial",
   "Glissez les poignées sous le graphique pour zoomer, touchez la légende pour masquer une courbe":
     "Arrastre los controles bajo el gráfico para ampliar, toque la leyenda para ocultar una curva",
+  Périodes: "Periodos",
+  Période: "Periodo",
+  Chauffage: "Calefacción",
+  Refroidissement: "Refrigeración",
+  "Chauffage et refroidissement estimés d'après l'écart à la consigne : enregistrez le temps de demande de l'installation pour les mesurer.":
+    "Calefacción y refrigeración estimadas según la diferencia con la consigna: registre el tiempo de demanda de la instalación para medirlas.",
 }
 
 export default es

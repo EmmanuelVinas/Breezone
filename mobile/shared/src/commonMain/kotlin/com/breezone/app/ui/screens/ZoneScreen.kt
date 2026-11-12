@@ -64,6 +64,9 @@ import com.breezone.app.ui.components.DailyComfortChart
 import com.breezone.app.ui.components.DailyTemperatureChart
 import com.breezone.app.ui.components.HistoryChart
 import com.breezone.app.ui.components.HistorySeries
+import com.breezone.app.ui.components.ZoneState
+import com.breezone.app.ui.components.labelRes
+import com.breezone.app.ui.components.zoneStates
 import com.breezone.app.ui.components.SetpointDial
 import com.breezone.app.ui.components.rememberSetpointDraft
 import com.breezone.app.ui.formatTemp
@@ -268,7 +271,14 @@ private fun History(hub: Hub, serverId: String, zone: Zone) {
                 Caption(stringResource(Res.string.zone_history_hint))
                 HistoryChart(data, hours, hidden)
                 val toggle = { s: HistorySeries -> hidden = if (s in hidden) hidden - s else hidden + s }
+                val states = remember(data) { zoneStates(data).filter { it != null && it != ZoneState.Comfort }.toSet() }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    val stateColors = mapOf(ZoneState.Heating to Fz.colors.heat, ZoneState.Cooling to Fz.colors.cool, ZoneState.Comfort to Fz.colors.success)
+                    ZoneState.entries.filter { it in states }.forEach { state ->
+                        Legend(stateColors.getValue(state).copy(alpha = 0.5f), stringResource(state.labelRes), HistorySeries.Periods !in hidden) {
+                            toggle(HistorySeries.Periods)
+                        }
+                    }
                     Legend(Fz.colors.heat, stringResource(Res.string.zone_temperature), HistorySeries.Temperature !in hidden) { toggle(HistorySeries.Temperature) }
                     Legend(MaterialTheme.colorScheme.primary, stringResource(Res.string.zone_setpoint), HistorySeries.Setpoint !in hidden) { toggle(HistorySeries.Setpoint) }
                     if (data.any { it.humidity != null }) {
@@ -278,6 +288,7 @@ private fun History(hub: Hub, serverId: String, zone: Zone) {
                         Legend(Fz.colors.success, stringResource(Res.string.air_quality_title), HistorySeries.Air !in hidden) { toggle(HistorySeries.Air) }
                     }
                 }
+                if (states.isNotEmpty() && data.none { it.demandSecs != null }) Caption(stringResource(Res.string.history_states_estimated))
             }
         }
     }

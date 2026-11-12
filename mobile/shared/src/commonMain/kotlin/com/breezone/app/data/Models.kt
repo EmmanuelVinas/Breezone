@@ -161,6 +161,8 @@ data class Reading(
     val humidity: Long? = null,
     val setpoint: Double? = null,
     val isOn: Boolean? = null,
+    /** Airzone operation mode: 1 stop, 2 cooling, 3 heating, 4 fan, 5 dry, 6 auxiliary heating, 7 auto. */
+    val mode: Long? = null,
     val demandSecs: Long? = null,
     /** 1 good, 2 regular, 3 bad, 0 no measure; null: no sensor. */
     val airQuality: Long? = null,

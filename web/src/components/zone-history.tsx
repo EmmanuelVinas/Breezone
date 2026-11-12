@@ -22,6 +22,14 @@ import {
 import { locale, t } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import {
+  ZONE_STATES,
+  ZONE_STATE_COLOR,
+  ZONE_STATE_LABEL,
+  measuredStates,
+  zoneStates,
+  type ZoneState,
+} from "@/lib/zone-state"
+import {
   AIR_LEVELS,
   airQualitySeries,
   type AirSeriesPoint,
@@ -50,6 +58,12 @@ const chartConfig = {
   setpoint: { label: t("Consigne"), color: "var(--primary)" },
   humidity: { label: t("Humidité"), color: "var(--cool)" },
   ...Object.fromEntries(
+    ZONE_STATES.map((s) => [
+      `st_${s}`,
+      { label: ZONE_STATE_LABEL[s], color: ZONE_STATE_COLOR[s] },
+    ])
+  ),
+  ...Object.fromEntries(
     AIR_LEVELS.map((l) => [
       `aq_${l}`,
       { label: AIR_QUALITY_LABEL[l], color: AIR_QUALITY_TONE[l].color },
@@ -57,7 +71,11 @@ const chartConfig = {
   ),
 } satisfies ChartConfig
 
-type Series = "room_temp" | "setpoint" | "humidity" | "air"
+type Series = "room_temp" | "setpoint" | "humidity" | "air" | "state"
+
+type Point = AirSeriesPoint & {
+  state: ZoneState | null
+} & Partial<Record<`st_${ZoneState}`, number | null>>
 
 /** A gap without readings (installation unreachable) breaks the lines instead of joining them. */
 function withGaps(readings: Reading[]): Reading[] {
@@ -71,6 +89,9 @@ function withGaps(readings: Reading[]): Reading[] {
       humidity: null,
       setpoint: null,
       air_quality: null,
+      is_on: null,
+      mode: null,
+      demand_secs: null,
     }
     return [gap, r]
   })
@@ -93,9 +114,21 @@ export function ZoneHistory({ zone }: { zone: Zone }) {
   })
   const readings = withGaps(history.data ?? [])
   const air = !!zone.air_quality && readings.some((r) => r.air_quality)
-  const data: AirSeriesPoint[] = airQualitySeries(readings).map((r) => ({
+  const states = zoneStates(readings)
+  const shownStates = ZONE_STATES.filter((s) => states.includes(s))
+  // Like the air quality bands: a state also holds the next point, so that its step reaches it.
+  const data: Point[] = airQualitySeries(readings).map((r, i) => ({
     ...r,
     setpoint: r.is_on ? r.setpoint : null,
+    state: states[i],
+    ...Object.fromEntries(
+      ZONE_STATES.map((s) => [
+        `st_${s}`,
+        states[i] === s || (states[i - 1] === s && states[i] !== null)
+          ? 1
+          : null,
+      ])
+    ),
   }))
   // Several days: the hour too, as a zoom can show the same day twice.
   const tickFormat = (ts: number) =>
@@ -113,6 +146,15 @@ export function ZoneHistory({ zone }: { zone: Zone }) {
       return next
     })
   const legend: { key: Series; label: string; color: string }[] = [
+    ...(shownStates.length
+      ? [
+          {
+            key: "state" as const,
+            label: t("Périodes"),
+            color: ZONE_STATE_COLOR.heating,
+          },
+        ]
+      : []),
     { key: "room_temp", label: t("Température"), color: "var(--heat)" },
     { key: "setpoint", label: t("Consigne"), color: "var(--primary)" },
     { key: "humidity", label: t("Humidité"), color: "var(--cool)" },
@@ -195,6 +237,8 @@ export function ZoneHistory({ zone }: { zone: Zone }) {
                 domain={[0, 100]}
                 tickFormatter={(v: number) => `${v}%`}
               />
+              {/* Periods: bands over the whole height, behind the curves. */}
+              <YAxis yAxisId="st" hide width={0} domain={[0, 1]} />
               {/* Air quality: a band along the bottom of the plot. */}
               <YAxis yAxisId="aq" hide width={0} domain={[0, 16]} />
               <ChartTooltip
@@ -205,6 +249,24 @@ export function ZoneHistory({ zone }: { zone: Zone }) {
                     }
                     formatter={(value, name, item) => {
                       const key = String(name)
+                      if (key.startsWith("st_")) {
+                        const state = (item.payload as Point).state
+                        if (`st_${state}` !== key || !state) return null
+                        return (
+                          <div className="flex w-full items-center justify-between gap-4">
+                            <span className="flex items-center gap-1.5 text-muted-foreground">
+                              <span
+                                className="size-2 rounded-[2px]"
+                                style={{ background: ZONE_STATE_COLOR[state] }}
+                              />
+                              {t("Période")}
+                            </span>
+                            <span className="font-medium">
+                              {ZONE_STATE_LABEL[state]}
+                            </span>
+                          </div>
+                        )
+                      }
                       if (key.startsWith("aq_")) {
                         // One row for the level of this reading, not one per band.
                         const level = (item.payload as AirSeriesPoint).air_level
@@ -239,6 +301,20 @@ export function ZoneHistory({ zone }: { zone: Zone }) {
                   />
                 }
               />
+              {shownStates.map((s) => (
+                <Area
+                  key={s}
+                  yAxisId="st"
+                  dataKey={`st_${s}`}
+                  type="stepAfter"
+                  stroke="none"
+                  fill={`var(--color-st_${s})`}
+                  fillOpacity={0.22}
+                  isAnimationActive={false}
+                  hide={hidden.has("state")}
+                  activeDot={false}
+                />
+              ))}
               {air &&
                 AIR_LEVELS.map((l) => (
                   <Area
@@ -307,14 +383,35 @@ export function ZoneHistory({ zone }: { zone: Zone }) {
                 hidden.has(s.key) && "opacity-40"
               )}
             >
-              <span
-                className="size-2.5 rounded-sm"
-                style={{ background: s.color }}
-              />
-              {s.label}
+              {s.key === "state" ? (
+                shownStates.map((st) => (
+                  <span key={st} className="inline-flex items-center gap-1">
+                    <span
+                      className="size-2.5 rounded-sm opacity-60"
+                      style={{ background: ZONE_STATE_COLOR[st] }}
+                    />
+                    {ZONE_STATE_LABEL[st]}
+                  </span>
+                ))
+              ) : (
+                <>
+                  <span
+                    className="size-2.5 rounded-sm"
+                    style={{ background: s.color }}
+                  />
+                  {s.label}
+                </>
+              )}
             </button>
           ))}
         </div>
+        {shownStates.length > 0 && !measuredStates(readings) && (
+          <p className="text-center text-xs text-muted-foreground">
+            {t(
+              "Chauffage et refroidissement estimés d'après l'écart à la consigne : enregistrez le temps de demande de l'installation pour les mesurer."
+            )}
+          </p>
+        )}
       </CardContent>
     </Card>
   )
