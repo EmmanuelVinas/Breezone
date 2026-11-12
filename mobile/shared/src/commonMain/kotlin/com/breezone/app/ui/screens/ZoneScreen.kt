@@ -368,6 +368,13 @@ private fun AirQualitySection(hub: Hub, serverId: String, zone: Zone, air: AirQu
             delay(300_000)
         }
     }
+    // Shown only when the sensor measures something: now, or in the last 30 days.
+    var measuredThisMonth by remember(zone.installationId, zone.systemId, zone.zoneId) { mutableStateOf(false) }
+    LaunchedEffect(zone.installationId, zone.systemId, zone.zoneId) {
+        measuredThisMonth = runCatching { hub.api(serverId)?.daily(zone, 30) }.getOrNull().orEmpty()
+            .any { d -> d.airQualitySecs?.let { it.good + it.regular + it.bad > 0 } == true }
+    }
+    if (air.level == null && !measuredThisMonth) return
     val secs = stats.orEmpty().mapNotNull { it.airQualitySecs }
     val measured = secs.sumOf { it.good + it.regular + it.bad }
     val goodShare = if (measured > 0) secs.sumOf { it.good }.toDouble() / measured else null
