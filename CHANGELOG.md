@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-13
+
 ### Added
 
 - Beta channel: Settings › Breezone › « Recevoir les versions bêta ». A server on it is offered the
@@ -289,7 +291,8 @@ All notable changes are documented here. The format follows
 - Project renamed from FreeZone to Breezone (former `FREEZONE_*` variables and `freezone.db` are
   still recognised).
 
-[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/EmmanuelVinas/breezone/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.7.4...v0.8.0
