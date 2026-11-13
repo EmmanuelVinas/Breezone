@@ -1,4 +1,4 @@
-import type { ReactNode } from "react"
+import { useEffect, useRef, type ReactNode } from "react"
 import { Link, NavLink, useNavigate } from "react-router"
 import {
   Activity,
@@ -72,13 +72,23 @@ function useAvailableUpdate(admin: boolean) {
   }).data
 }
 
-/** Version of the Breezone server this interface comes from (it changes only on an update). */
+/**
+ * Version of the Breezone server. The web UI comes with the server: when the server is updated
+ * (from Settings › Breezone, or a new image), the page reloads to get the matching interface.
+ */
 function useServerVersion() {
-  return useQuery({
+  const version = useQuery({
     queryKey: ["server-version"],
     queryFn: api.version,
-    staleTime: Infinity,
+    refetchInterval: 60_000,
   }).data?.version
+  const loaded = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    if (!version) return
+    if (loaded.current === undefined) loaded.current = version
+    else if (version !== loaded.current) window.location.reload()
+  }, [version])
+  return version
 }
 
 export function AppShell({

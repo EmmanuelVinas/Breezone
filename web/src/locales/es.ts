@@ -685,6 +685,14 @@ const es: Record<string, string> = {
     "Esta versión no arrancó en este servidor: ya no se propone. Actualice la imagen Docker o espere a la siguiente.",
   "Breezone {version} est installé": "Breezone {version} está instalado",
   "Breezone est à jour": "Breezone está actualizado",
+  bêta: "beta",
+  "Recevoir les versions bêta": "Recibir las versiones beta",
+  "Les nouveautés avant tout le monde, avec un risque de défauts. Si une bêta ne démarre pas, Breezone revient seul à la version d'avant.":
+    "Las novedades antes que nadie, con riesgo de fallos. Si una beta no arranca, Breezone vuelve solo a la versión anterior.",
+  "Ce serveur reste sur cette bêta jusqu'à la prochaine version stable : revenir en arrière n'est pas possible, la base de données a pu évoluer.":
+    "Este servidor se queda en esta beta hasta la próxima versión estable: no es posible volver atrás, la base de datos ha podido cambiar.",
+  "C'est une version bêta : une fois installée, ce serveur ne pourra revenir qu'à une version plus récente.":
+    "Es una versión beta: una vez instalada, este servidor solo podrá pasar a una versión más reciente.",
   "La mise à jour vers Breezone {version} a été annulée":
     "La actualización a Breezone {version} se ha deshecho",
   "Cette version n'a pas démarré : Breezone est revenu à la version {to}, avec la base de données d'avant la mise à jour.":

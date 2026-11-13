@@ -6,6 +6,23 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Beta channel: Settings › Breezone › « Recevoir les versions bêta ». A server on it is offered the
+  pre-releases (`v1.0.0-beta.1`…) as well, installed from the web UI like any version (signed, undone
+  if it does not start); a « bêta » badge marks them. Leaving the channel never goes back to an older
+  version.
+- Releases: a pre-release tag (any branch, e.g. `beta`) publishes a GitHub pre-release and the
+  `:beta` Docker image only; `latest` and stable versions only come from main, and a stable tag
+  outside main is refused.
+
+### Fixed
+
+- Web UI: after an update from Settings › Breezone, the page did not reload once the server was back,
+  and kept the previous interface. It now waits for the new version, and any open page reloads by
+  itself when the server's version changes (checked every minute), after an update from the web UI
+  or a new Docker image alike.
+
 ## [0.9.1] - 2026-11-13
 
 ### Fixed

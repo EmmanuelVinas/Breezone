@@ -93,6 +93,7 @@ pub fn router() -> Router<AppState> {
         // Updates of Breezone itself (issue #40)
         .route("/api/system/update", get(system::update_status).post(system::install))
         .route("/api/system/update/check", post(system::check))
+        .route("/api/system/update/channel", put(system::set_channel))
         // Live updates
         .route("/api/ws", get(ws::handler))
         // Unknown API routes must not fall back to the web UI.

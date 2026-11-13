@@ -273,9 +273,16 @@ version qui ne démarre pas est annulée au démarrage suivant (base restaurée,
 | GET | `/api/system/update` | `UpdateView` (le serveur cherche une version une fois par jour) |
 | POST | `/api/system/update/check` | Cherche une version maintenant → `UpdateView` (502 si GitHub ne répond pas) |
 | POST | `/api/system/update` | Installe la dernière version puis redémarre dessus → 202 `UpdateView` ; 409 s'il n'y a rien à installer ou si une installation est en cours |
+| PUT | `/api/system/update/channel` | `{beta}` : rejoint ou quitte le canal bêta → `UpdateView` (la version trouvée sur l'autre canal est oubliée : relancer `check`) |
+
+Canal bêta : les préversions (`x.y.z-alpha.n`, `-beta.n`, `-rc.n`) sont des pré-releases GitHub,
+ignorées par `/releases/latest`. Un serveur inscrit au canal bêta lit toutes les releases et prend
+la plus récente, préversions comprises (ordre semver : `1.0.0-beta.2 < 1.0.0`). Quitter le canal ne
+fait pas revenir en arrière : le serveur reste sur sa bêta jusqu'à une version plus récente.
 
 `UpdateView` : `{current, latest, notes, published_at, url, available, can_install, reason, state,
-progress, error, checked_at, rolled_back}`. `reason` (pourquoi `can_install` est faux) :
+progress, error, checked_at, rolled_back, beta, prerelease}` (`beta` : inscrit au canal bêta ;
+`prerelease` : `latest` est une préversion). `reason` (pourquoi `can_install` est faux) :
 `disabled` (`BREEZONE_SELF_UPDATE=false`), `platform` (pas de version pour ce système),
 `development` (build de développement), `assets` (fichiers pas encore publiés), `failed` (cette
 version n'a pas démarré ici). `state` : `idle`, `downloading` (`progress` de 0 à 1), `installing`,

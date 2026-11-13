@@ -678,6 +678,10 @@ export type UpdateView = {
   checked_at: number | null
   /** The last update did not start and was undone. */
   rolled_back: { version: string; to: string } | null
+  /** This server also receives the pre-releases (beta channel). */
+  beta: boolean
+  /** `latest` is a pre-release. */
+  prerelease: boolean
 }
 
 export const api = {
@@ -686,6 +690,8 @@ export const api = {
   update: () => request<UpdateView>("GET", "/api/system/update"),
   checkUpdate: () => request<UpdateView>("POST", "/api/system/update/check"),
   installUpdate: () => request<UpdateView>("POST", "/api/system/update"),
+  setUpdateChannel: (beta: boolean) =>
+    request<UpdateView>("PUT", "/api/system/update/channel", { beta }),
   setupStatus: () =>
     request<{ needs_setup: boolean }>("GET", "/api/setup", undefined, false),
   setup: async (username: string, password: string) => {

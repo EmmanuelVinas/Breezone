@@ -26,7 +26,12 @@ use std::time::Duration;
 
 /// The official repository, the only source of updates.
 pub const REPOSITORY: &str = "EmmanuelVinas/breezone";
+/// The latest stable release: GitHub never answers a pre-release here.
 const LATEST_RELEASE: &str = "https://api.github.com/repos/EmmanuelVinas/breezone/releases/latest";
+/// The recent releases, pre-releases included (beta channel).
+const RELEASES: &str = "https://api.github.com/repos/EmmanuelVinas/breezone/releases?per_page=30";
+/// Setting (`settings` table) that subscribes this server to the beta channel: "beta" or absent.
+pub const CHANNEL_SETTING: &str = "update_channel";
 /// Hosts a request or a redirect may reach: GitHub's API, its pages, and its release file storage.
 const ALLOWED_HOSTS: &[&str] = &["api.github.com", "github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com"];
 /// Public key of the project's release signing key (raw Ed25519, base64). The private key only
@@ -41,28 +46,101 @@ const CHECK_EVERY: Duration = Duration::from_secs(24 * 3600);
 
 /// The version of this binary.
 pub fn current_version() -> Version {
-    Version::parse(env!("CARGO_PKG_VERSION")).expect("the crate version is x.y.z")
+    Version::parse(env!("CARGO_PKG_VERSION")).expect("the crate version is x.y.z or x.y.z-beta.n")
 }
 
 // ---------------------------------------------------------------------------------------
 // Versions, targets, addresses
 // ---------------------------------------------------------------------------------------
 
-/// `major.minor.patch`; a leading `v` is accepted, anything after the patch number is not.
+/// Stage of a pre-release, in release order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Version(pub u64, pub u64, pub u64);
+pub enum Stage {
+    Alpha,
+    Beta,
+    Rc,
+}
+
+impl Stage {
+    fn label(self) -> &'static str {
+        match self {
+            Stage::Alpha => "alpha",
+            Stage::Beta => "beta",
+            Stage::Rc => "rc",
+        }
+    }
+}
+
+/// `major.minor.patch`, or a pre-release of it: `-alpha.N`, `-beta.N` or `-rc.N` (the tags of
+/// the beta channel). A leading `v` is accepted, nothing else.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Version {
+    pub major: u64,
+    pub minor: u64,
+    pub patch: u64,
+    pub pre: Option<(Stage, u64)>,
+}
 
 impl Version {
+    pub fn new(major: u64, minor: u64, patch: u64) -> Self {
+        Self { major, minor, patch, pre: None }
+    }
+
     pub fn parse(s: &str) -> Option<Version> {
-        let mut parts = s.trim().trim_start_matches('v').split('.');
-        let v = Version(parts.next()?.parse().ok()?, parts.next()?.parse().ok()?, parts.next()?.parse().ok()?);
-        parts.next().is_none().then_some(v)
+        let s = s.trim().trim_start_matches('v');
+        let (core, pre) = match s.split_once('-') {
+            Some((core, pre)) => (core, Some(pre)),
+            None => (s, None),
+        };
+        let mut parts = core.split('.');
+        let mut v = Version::new(parts.next()?.parse().ok()?, parts.next()?.parse().ok()?, parts.next()?.parse().ok()?);
+        if parts.next().is_some() {
+            return None;
+        }
+        if let Some(pre) = pre {
+            let (label, n) = pre.split_once('.')?;
+            let stage = match label {
+                "alpha" => Stage::Alpha,
+                "beta" => Stage::Beta,
+                "rc" => Stage::Rc,
+                _ => return None,
+            };
+            v.pre = Some((stage, n.parse().ok()?));
+        }
+        Some(v)
+    }
+
+    pub fn is_prerelease(&self) -> bool {
+        self.pre.is_some()
+    }
+}
+
+/// Semantic versioning order: 1.0.0-alpha.1 < 1.0.0-beta.1 < 1.0.0-beta.2 < 1.0.0-rc.1 < 1.0.0.
+impl Ord for Version {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        use std::cmp::Ordering;
+        (self.major, self.minor, self.patch).cmp(&(other.major, other.minor, other.patch)).then_with(|| match (self.pre, other.pre) {
+            (None, None) => Ordering::Equal,
+            (None, Some(_)) => Ordering::Greater,
+            (Some(_), None) => Ordering::Less,
+            (Some(a), Some(b)) => a.cmp(&b),
+        })
+    }
+}
+
+impl PartialOrd for Version {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
 
 impl std::fmt::Display for Version {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}.{}.{}", self.0, self.1, self.2)
+        write!(f, "{}.{}.{}", self.major, self.minor, self.patch)?;
+        if let Some((stage, n)) = self.pre {
+            write!(f, "-{}.{n}", stage.label())?;
+        }
+        Ok(())
     }
 }
 
@@ -378,18 +456,21 @@ async fn binary_version(binary: &Path) -> Option<Version> {
 #[derive(Clone)]
 struct Source {
     latest_release: String,
+    releases: String,
     public_key: String,
 }
 
 impl Source {
     fn official() -> Self {
-        Self { latest_release: LATEST_RELEASE.into(), public_key: RELEASE_PUBLIC_KEY.into() }
+        Self { latest_release: LATEST_RELEASE.into(), releases: RELEASES.into(), public_key: RELEASE_PUBLIC_KEY.into() }
     }
 }
 
 #[derive(Debug, Clone, Deserialize)]
 struct GithubRelease {
     tag_name: String,
+    #[serde(default)]
+    draft: bool,
     #[serde(default)]
     body: Option<String>,
     #[serde(default)]
@@ -428,6 +509,15 @@ pub struct UpdateView {
     pub checked_at: Option<i64>,
     /// The last update was undone at start: `{version, to}`.
     pub rolled_back: Option<RolledBack>,
+    /// This server also receives the pre-releases (beta channel).
+    pub beta: bool,
+    /// `latest` is a pre-release.
+    pub prerelease: bool,
+}
+
+/// The newest of the releases, drafts left out.
+fn newest(releases: Vec<GithubRelease>) -> Option<GithubRelease> {
+    releases.into_iter().filter(|r| !r.draft).filter_map(|r| Version::parse(&r.tag_name).map(|v| (v, r))).max_by_key(|(v, _)| *v).map(|(_, r)| r)
 }
 
 struct Status {
@@ -443,6 +533,7 @@ struct Status {
 pub struct Updater {
     data_dir: PathBuf,
     enabled: bool,
+    beta: std::sync::atomic::AtomicBool,
     source: Source,
     http: reqwest::Client,
     status: Mutex<Status>,
@@ -479,6 +570,7 @@ impl Updater {
         Self {
             data_dir,
             enabled,
+            beta: std::sync::atomic::AtomicBool::new(false),
             source,
             http: http_client(),
             status: Mutex::new(Status { latest: None, checked_at: None, state: "idle", progress: None, error: None, switch_to: None }),
@@ -490,6 +582,23 @@ impl Updater {
     /// Records the update undone at start, to show it.
     pub fn set_rolled_back(&self, r: Option<RolledBack>) {
         *self.rolled_back.lock().unwrap() = r;
+    }
+
+    pub fn beta(&self) -> bool {
+        self.beta.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Joins or leaves the beta channel. The release found on the other channel is forgotten:
+    /// the next check looks again. Leaving never goes back: a server on a pre-release stays on it
+    /// until a newer version comes out (the database migrations cannot be undone).
+    pub fn set_beta(&self, beta: bool) {
+        if self.beta.swap(beta, std::sync::atomic::Ordering::Relaxed) != beta {
+            let mut s = self.status.lock().unwrap();
+            if matches!(s.state, "idle" | "failed") {
+                s.latest = None;
+                s.checked_at = None;
+            }
+        }
     }
 
     fn cannot_install(&self, latest: Option<&GithubRelease>) -> Option<&'static str> {
@@ -536,17 +645,17 @@ impl Updater {
             error: s.error.clone(),
             checked_at: s.checked_at,
             rolled_back: self.rolled_back.lock().unwrap().clone(),
+            beta: self.beta(),
+            prerelease: latest_version.is_some_and(|v| v.is_prerelease()),
         }
     }
 
-    /// Reads the latest release of the official repository.
-    pub async fn check(&self) -> Result<UpdateView, String> {
-        let url = reqwest::Url::parse(&self.source.latest_release).map_err(|e| e.to_string())?;
+    async fn get_json<T: serde::de::DeserializeOwned>(&self, url: &str) -> Result<T, String> {
+        let url = reqwest::Url::parse(url).map_err(|e| e.to_string())?;
         if !allowed_url(&url) {
             return Err("release address refused".into());
         }
-        let release: GithubRelease = self
-            .http
+        self.http
             .get(url)
             .header("Accept", "application/vnd.github+json")
             .send()
@@ -555,11 +664,25 @@ impl Updater {
             .map_err(|e| e.to_string())?
             .json()
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| e.to_string())
+    }
+
+    /// Reads the latest release of the official repository: the latest stable one, or on the
+    /// beta channel the newest one, pre-releases included.
+    pub async fn check(&self) -> Result<UpdateView, String> {
+        let beta = self.beta();
+        let release = if beta {
+            newest(self.get_json(&self.source.releases).await?).ok_or("no release")?
+        } else {
+            self.get_json(&self.source.latest_release).await?
+        };
         {
             let mut s = self.status.lock().unwrap();
-            s.latest = Some(release);
-            s.checked_at = Some(crate::db::now());
+            // The channel changed meanwhile: this answer is for the other one.
+            if self.beta() == beta {
+                s.latest = Some(release);
+                s.checked_at = Some(crate::db::now());
+            }
         }
         Ok(self.view())
     }
@@ -737,6 +860,32 @@ mod tests {
         assert_eq!(Version::parse("0.8"), None);
         assert_eq!(Version::parse("0.8.1-rc1"), None);
         assert_eq!(Version::parse("0.8.1.2"), None);
+    }
+
+    #[test]
+    fn pre_releases_come_before_their_version() {
+        assert!(v("1.0.0-alpha.1") < v("1.0.0-beta.1"));
+        assert!(v("1.0.0-beta.1") < v("1.0.0-beta.2"));
+        assert!(v("1.0.0-beta.2") < v("1.0.0-beta.10"));
+        assert!(v("1.0.0-beta.10") < v("1.0.0-rc.1"));
+        assert!(v("1.0.0-rc.1") < v("1.0.0"));
+        assert!(v("0.9.1") < v("1.0.0-beta.1"));
+        assert!(v("1.0.0") < v("1.0.1-beta.1"));
+        assert_eq!(v("v1.0.0-beta.2").to_string(), "1.0.0-beta.2");
+        assert!(v("1.0.0-beta.2").is_prerelease() && !v("1.0.0").is_prerelease());
+        assert_eq!(Version::parse("1.0.0-beta"), None, "a pre-release is numbered");
+        assert_eq!(Version::parse("1.0.0-dev.1"), None);
+        assert_eq!(Version::parse("1.0.0-beta.1.partial"), None, "an unfinished download's folder");
+    }
+
+    #[test]
+    fn the_beta_channel_takes_the_newest_release_drafts_aside() {
+        let release = |tag: &str, draft: bool| GithubRelease { tag_name: tag.into(), draft, body: None, published_at: None, assets: vec![] };
+        let pick = |rs: Vec<GithubRelease>| newest(rs).map(|r| r.tag_name);
+        assert_eq!(pick(vec![release("v0.9.1", false), release("v1.0.0-beta.2", false), release("v1.0.0-beta.1", false)]), Some("v1.0.0-beta.2".into()));
+        assert_eq!(pick(vec![release("v1.0.0-beta.2", false), release("v1.0.0", false)]), Some("v1.0.0".into()), "the stable version once out");
+        assert_eq!(pick(vec![release("v0.9.1", false), release("v1.0.0-beta.1", true)]), Some("v0.9.1".into()), "a draft is not published");
+        assert_eq!(pick(vec![release("nightly", false)]), None);
     }
 
     #[test]
@@ -931,9 +1080,10 @@ mod tests {
     #[test]
     fn an_older_or_unsigned_release_cannot_be_offered_for_install() {
         let dir = temp_dir("offer");
-        let updater = Updater::with_source(dir.clone(), true, Source { latest_release: LATEST_RELEASE.into(), public_key: RELEASE_PUBLIC_KEY.into() });
+        let updater = Updater::with_source(dir.clone(), true, Source::official());
         let release = |tag: &str, files: &[&str]| GithubRelease {
             tag_name: tag.into(),
+            draft: false,
             body: None,
             published_at: None,
             assets: files.iter().map(|f| GithubAsset { name: (*f).into() }).collect(),
@@ -949,5 +1099,13 @@ mod tests {
         let disabled = Updater::with_source(dir, false, Source::official());
         disabled.status.lock().unwrap().latest = Some(release("v99.0.0", &[]));
         assert_eq!(disabled.view().reason, Some("disabled"));
+
+        updater.status.lock().unwrap().latest = Some(release("v99.0.0-beta.1", &[]));
+        let view = updater.view();
+        assert!(view.available && view.prerelease);
+        assert_eq!(view.latest.as_deref(), Some("99.0.0-beta.1"));
+        // Changing channel forgets the release found on the other one.
+        updater.set_beta(true);
+        assert!(updater.view().beta && updater.view().latest.is_none());
     }
 }

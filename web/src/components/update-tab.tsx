@@ -25,7 +25,20 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Switch } from "@/components/ui/switch"
+
+const isPrerelease = (version: string) => version.includes("-")
+
+function BetaBadge() {
+  return (
+    <Badge variant="outline" className="border-warning/50 text-warning">
+      {t("bêta")}
+    </Badge>
+  )
+}
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
@@ -85,6 +98,9 @@ function useWaitForVersion(expected: string | null, active: boolean) {
 export function UpdateTab() {
   const qc = useQueryClient()
   const [confirm, setConfirm] = useState(false)
+  // Version being installed: waited for until the server answers with it, whatever the state the
+  // restarted server reports (it starts again "idle").
+  const [target, setTarget] = useState<string | null>(null)
   const status = useQuery({
     queryKey: ["system-update"],
     queryFn: api.update,
@@ -102,19 +118,32 @@ export function UpdateTab() {
     },
     onError: (e) => toast.error(errorText(e)),
   })
+  // Changing channel forgets the release found on the other one: look again at once.
+  const channel = useMutation({
+    mutationFn: api.setUpdateChannel,
+    onSuccess: (v) => {
+      qc.setQueryData(["system-update"], v)
+      check.mutate()
+    },
+    onError: (e) => toast.error(errorText(e)),
+  })
   const install = useMutation({
     mutationFn: api.installUpdate,
     onSuccess: (v) => qc.setQueryData(["system-update"], v),
+    onSettled: (_, error) => error && setTarget(null),
     onError: (e) => toast.error(errorText(e)),
   })
   const v = status.data
-  const restarting = v?.state === "restarting"
-  const timedOut = useWaitForVersion(v?.latest ?? null, restarting)
+  const failed = v?.state === "failed"
+  const restarting =
+    v?.state === "restarting" ||
+    (target !== null && !failed && v?.state === "idle")
+  const timedOut = useWaitForVersion(target, target !== null && !failed)
 
   if (status.isLoading || !v) return <Skeleton className="h-48 rounded-3xl" />
-  const busy = ["checking", "downloading", "installing", "restarting"].includes(
-    v.state
-  )
+  const busy =
+    restarting ||
+    ["checking", "downloading", "installing", "restarting"].includes(v.state)
 
   return (
     <div className="grid gap-6">
@@ -153,14 +182,24 @@ export function UpdateTab() {
             <div className="text-xs text-muted-foreground">
               {t("Version installée")}
             </div>
-            <div className="tabular text-2xl font-semibold">{v.current}</div>
+            <div className="flex items-center gap-2">
+              <span className="tabular text-2xl font-semibold">
+                {v.current}
+              </span>
+              {isPrerelease(v.current) && <BetaBadge />}
+            </div>
           </div>
           {v.latest && (
             <div>
               <div className="text-xs text-muted-foreground">
                 {t("Dernière version publiée")}
               </div>
-              <div className="tabular text-2xl font-semibold">{v.latest}</div>
+              <div className="flex items-center gap-2">
+                <span className="tabular text-2xl font-semibold">
+                  {v.latest}
+                </span>
+                {v.prerelease && <BetaBadge />}
+              </div>
             </div>
           )}
           {v.checked_at && !v.available && (
@@ -168,6 +207,33 @@ export function UpdateTab() {
               <CircleCheck className="size-4" /> {t("Breezone est à jour")}
             </span>
           )}
+        </CardContent>
+        <CardContent className="border-t pt-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="beta-channel">
+                {t("Recevoir les versions bêta")}
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                {t(
+                  "Les nouveautés avant tout le monde, avec un risque de défauts. Si une bêta ne démarre pas, Breezone revient seul à la version d'avant."
+                )}
+              </p>
+              {!v.beta && isPrerelease(v.current) && (
+                <p className="text-sm text-muted-foreground">
+                  {t(
+                    "Ce serveur reste sur cette bêta jusqu'à la prochaine version stable : revenir en arrière n'est pas possible, la base de données a pu évoluer."
+                  )}
+                </p>
+              )}
+            </div>
+            <Switch
+              id="beta-channel"
+              checked={v.beta}
+              disabled={channel.isPending || busy}
+              onCheckedChange={(beta) => channel.mutate(beta)}
+            />
+          </div>
         </CardContent>
         <CardFooter>
           <Button
@@ -286,11 +352,20 @@ export function UpdateTab() {
         title={t("Mettre à jour vers Breezone {version} ?", {
           version: v.latest ?? "",
         })}
-        description={t(
-          "Breezone télécharge cette version depuis son dépôt officiel, vérifie sa signature, sauvegarde la base de données puis redémarre : quelques secondes d'interruption. Si la nouvelle version ne démarre pas, Breezone revient seul à la version actuelle."
-        )}
+        description={
+          t(
+            "Breezone télécharge cette version depuis son dépôt officiel, vérifie sa signature, sauvegarde la base de données puis redémarre : quelques secondes d'interruption. Si la nouvelle version ne démarre pas, Breezone revient seul à la version actuelle."
+          ) +
+          (v.prerelease
+            ? " " +
+              t(
+                "C'est une version bêta : une fois installée, ce serveur ne pourra revenir qu'à une version plus récente."
+              )
+            : "")
+        }
         onConfirm={() => {
           setConfirm(false)
+          setTarget(v.latest)
           install.mutate()
         }}
         onCancel={() => setConfirm(false)}

@@ -25,6 +25,23 @@ pub async fn check(State(state): State<AppState>, _admin: AdminUser) -> ApiResul
     })
 }
 
+#[derive(serde::Deserialize)]
+pub struct ChannelInput {
+    pub beta: bool,
+}
+
+/// Joins or leaves the beta channel (pre-releases). The release found on the other channel is
+/// forgotten: the client then looks again (`POST /api/system/update/check`), or the daily check does.
+pub async fn set_channel(State(state): State<AppState>, _admin: AdminUser, Json(input): Json<ChannelInput>) -> ApiResult<Json<UpdateView>> {
+    if input.beta {
+        crate::db::set_setting(&state.db, crate::update::CHANNEL_SETTING, "beta").await?;
+    } else {
+        crate::db::delete_setting(&state.db, crate::update::CHANNEL_SETTING).await?;
+    }
+    state.updater.set_beta(input.beta);
+    Ok(Json(state.updater.view()))
+}
+
 /// Installs the latest release, then restarts on it. Answers at once; the progress shows in
 /// `GET /api/system/update`, and the server comes back with its new version.
 pub async fn install(State(state): State<AppState>, AdminUser(admin): AdminUser) -> ApiResult<(StatusCode, Json<UpdateView>)> {

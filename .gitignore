@@ -39,3 +39,6 @@ scripts/private/
 
 # Showcase site: styles compiled by site/build.sh (and by the Pages workflow)
 /site/assets/site.css
+
+# Local roadmap and mockups
+docs/roadmap/

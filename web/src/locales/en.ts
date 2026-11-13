@@ -678,6 +678,14 @@ const en: Record<string, string> = {
     "This version did not start on this server: it is no longer offered. Update the Docker image, or wait for the next one.",
   "Breezone {version} est installé": "Breezone {version} is installed",
   "Breezone est à jour": "Breezone is up to date",
+  bêta: "beta",
+  "Recevoir les versions bêta": "Receive beta versions",
+  "Les nouveautés avant tout le monde, avec un risque de défauts. Si une bêta ne démarre pas, Breezone revient seul à la version d'avant.":
+    "New features before everyone else, with a risk of bugs. If a beta does not start, Breezone goes back to the previous version on its own.",
+  "Ce serveur reste sur cette bêta jusqu'à la prochaine version stable : revenir en arrière n'est pas possible, la base de données a pu évoluer.":
+    "This server stays on this beta until the next stable version: going back is not possible, the database may have changed.",
+  "C'est une version bêta : une fois installée, ce serveur ne pourra revenir qu'à une version plus récente.":
+    "This is a beta version: once installed, this server can only move to a newer version.",
   "La mise à jour vers Breezone {version} a été annulée":
     "The update to Breezone {version} was undone",
   "Cette version n'a pas démarré : Breezone est revenu à la version {to}, avec la base de données d'avant la mise à jour.":

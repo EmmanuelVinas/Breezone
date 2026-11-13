@@ -379,13 +379,24 @@ async fn self_update_is_for_administrators_and_needs_a_newer_release() {
     let (s, v) = env.call("POST", "/api/system/update", t, None).await;
     assert_eq!(s, StatusCode::CONFLICT, "{v}");
 
+    // The beta channel is opt-in, and kept.
+    let (_, v) = env.call("GET", "/api/system/update", t, None).await;
+    assert_eq!(v["beta"], false);
+    let (s, v) = env.call("PUT", "/api/system/update/channel", t, Some(json!({"beta": true}))).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    assert_eq!(v["beta"], true);
+    let (_, v) = env.call("GET", "/api/system/update", t, None).await;
+    assert_eq!(v["beta"], true);
+    let (_, v) = env.call("PUT", "/api/system/update/channel", t, Some(json!({"beta": false}))).await;
+    assert_eq!(v["beta"], false);
+
     // A user with access to an installation is not an administrator.
     let (s, _) = env.call("POST", "/api/users", t, Some(json!({"username":"alice","password":"motdepasse1","role":"user"}))).await;
     assert!(s.is_success());
     let (_, v) = env.call("POST", "/api/auth/login", None, Some(json!({"username":"alice","password":"motdepasse1"}))).await;
     let alice = v["access_token"].as_str().unwrap().to_string();
-    for (method, path) in [("GET", "/api/system/update"), ("POST", "/api/system/update"), ("POST", "/api/system/update/check")] {
-        let (s, _) = env.call(method, path, Some(&alice), None).await;
+    for (method, path) in [("GET", "/api/system/update"), ("POST", "/api/system/update"), ("POST", "/api/system/update/check"), ("PUT", "/api/system/update/channel")] {
+        let (s, _) = env.call(method, path, Some(&alice), Some(json!({"beta": true}))).await;
         assert_eq!(s, StatusCode::FORBIDDEN, "{method} {path}");
     }
 }
