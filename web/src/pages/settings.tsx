@@ -32,6 +32,7 @@ import { PageHeader } from "@/components/app-shell"
 import { InstallationMap } from "@/components/installation-map"
 import { InstallationDialog } from "@/components/installation-dialog"
 import { UpdateTab } from "@/components/update-tab"
+import { ConfigTransfer } from "@/components/config-transfer"
 import { ModulesTab } from "@/components/modules-tab"
 import { ConnectionDot } from "@/components/connection-badge"
 import { Confirm } from "@/components/confirm"
@@ -1281,8 +1282,9 @@ export function SettingsPage() {
           </TabsContent>
         )}
         {admin && (
-          <TabsContent value="breezone">
+          <TabsContent value="breezone" className="grid gap-6">
             <UpdateTab />
+            <ConfigTransfer />
           </TabsContent>
         )}
         <TabsContent value="devices">

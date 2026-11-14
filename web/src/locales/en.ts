@@ -1024,6 +1024,30 @@ const en: Record<string, string> = {
   "Sans pièce": "No room",
   "{n} allumée": "{n} on",
   "{n} allumées": "{n} on",
+  Configuration: "Configuration",
+  "Configuration importée": "Configuration imported",
+  "Ce fichier n'est pas une configuration Breezone.":
+    "This file is not a Breezone configuration.",
+  "Saisissez à nouveau le mot de passe du compte Airzone (Réglages › Modules › Airzone).":
+    "Type the password of the Airzone account again (Settings › Modules › Airzone).",
+  "Appairez à nouveau « {name} » (Réglages › Modules).":
+    "Pair “{name}” again (Settings › Modules).",
+  "Donnez un mot de passe à « {name} » (Réglages › Utilisateurs).":
+    "Give “{name}” a password (Settings › Users).",
+  "Un fichier avec tout ce qui a été réglé : installations, modules, appareils et pièces, automatismes, utilisateurs et leurs droits. Pour restaurer ce serveur ou passer sur une autre machine.":
+    "A file with everything set up: installations, modules, devices and rooms, automations, users and their rights. To restore this server or move to another machine.",
+  "Il ne contient aucun secret ni historique : ni mots de passe, ni clés des modules, ni partages entre serveurs, ni relevés. Importé sur ce même serveur, ce qu'il a déjà est gardé ; ailleurs, il faudra les ressaisir.":
+    "It holds no secret and no history: no passwords, no module keys, no sharing between servers, no readings. Imported on this same server, what it already has is kept; elsewhere, they will have to be typed again.",
+  "Configuration importée : reste à faire":
+    "Configuration imported: still to do",
+  "Configuration importée : rien d'autre à faire":
+    "Configuration imported: nothing else to do",
+  Exporter: "Export",
+  "Importer…": "Import…",
+  "Remplacer la configuration de ce serveur ?":
+    "Replace the configuration of this server?",
+  "Les installations, modules, appareils, pièces, automatismes et droits de ce serveur sont remplacés par ceux de « {name} ». Les utilisateurs du fichier sont ajoutés ou mis à jour, aucun n'est supprimé. Les partages entre serveurs ne changent pas.":
+    "The installations, modules, devices, rooms, automations and rights of this server are replaced with those of “{name}”. The users of the file are added or updated, none is deleted. Sharing between servers does not change.",
 }
 
 export default en

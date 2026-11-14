@@ -6,6 +6,24 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.6] - 2026-11-14
+
+### Added
+
+- Export and import of the configuration (Settings › Breezone), to restore a server or move it to
+  another machine: installations, modules, devices and rooms, routines and timers, users and their
+  rights, a few settings. The file holds no secret (passwords, Airzone account password, HomeKit
+  pairings, Hue key, federation keys) and no history. An import replaces that configuration; on the
+  same server, the secrets and history of what comes back are kept; elsewhere, a list says what to
+  type again.
+
+### Fixed
+
+- A HomeKit pairing started and never finished no longer keeps the accessory busy: it is given up
+  after 2 minutes, or as soon as the add dialog closes. An accessory busy with another pairing says
+  so instead of « Réponse inattendue ». The `Host` header no longer carries the port, as the
+  reference controllers send it.
+
 ## [0.11.0-beta.5] - 2026-11-14
 
 ### Changed

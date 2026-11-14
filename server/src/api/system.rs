@@ -48,3 +48,44 @@ pub async fn install(State(state): State<AppState>, AdminUser(admin): AdminUser)
     state.updater.start_install(state.db.clone(), state.hub.clone(), admin.username.clone()).map_err(ApiError::conflict)?;
     Ok((StatusCode::ACCEPTED, Json(state.updater.view())))
 }
+
+/// The configuration of this server as a file (no secret, no history): `breezone-config-<date>.json`.
+pub async fn export_config(State(state): State<AppState>, _admin: AdminUser) -> ApiResult<impl axum::response::IntoResponse> {
+    let file = crate::backup::export(&state.db, env!("CARGO_PKG_VERSION")).await?;
+    let date = chrono::Local::now().format("%Y-%m-%d");
+    let disposition = format!("attachment; filename=\"breezone-config-{date}.json\"");
+    Ok(([(axum::http::header::CONTENT_DISPOSITION, disposition)], Json(file)))
+}
+
+/// Replaces the configuration with an exported one, then takes it into account at once.
+pub async fn import_config(State(state): State<AppState>, AdminUser(admin): AdminUser, Json(file): Json<serde_json::Value>) -> ApiResult<Json<crate::backup::Imported>> {
+    use crate::backup::ImportError;
+    let imported = crate::backup::import(&state.db, &file, admin.id).await.map_err(|e| match e {
+        ImportError::Invalid(why) => ApiError::bad_request(crate::text!(
+            "Ce fichier n'est pas une configuration Breezone valable : {0}",
+            "This file is not a valid Breezone configuration: {0}",
+            "Este archivo no es una configuración Breezone válida: {0}",
+            why
+        )),
+        ImportError::Newer => ApiError::bad_request(crate::text!(
+            "Cette configuration vient d'une version plus récente de Breezone : mettez d'abord ce serveur à jour.",
+            "This configuration comes from a newer Breezone: update this server first.",
+            "Esta configuración viene de una versión más reciente de Breezone: actualice primero este servidor."
+        )),
+        ImportError::Db(e) => e.into(),
+    })?;
+    state.hub.reload_installations().await?;
+    state.drivers.reload().await?;
+    state.updater.set_beta(crate::db::get_setting(&state.db, crate::update::CHANNEL_SETTING).await?.as_deref() == Some("beta"));
+    let _ = crate::db::insert_event(
+        &state.db,
+        "system",
+        "info",
+        None,
+        Some(&admin.username),
+        &crate::text!("Configuration importée", "Configuration imported", "Configuración importada"),
+        None,
+    )
+    .await;
+    Ok(Json(imported))
+}

@@ -142,7 +142,7 @@ pub struct StartInput {
 /// Pairings started, by accessory address, until their code is typed.
 static STARTED: std::sync::LazyLock<tokio::sync::Mutex<std::collections::HashMap<String, (std::time::Instant, crate::homekit::PairSetup)>>> =
     std::sync::LazyLock::new(Default::default);
-const STARTED_FOR: std::time::Duration = std::time::Duration::from_secs(300);
+const STARTED_FOR: std::time::Duration = std::time::Duration::from_secs(120);
 
 fn accessory_host(host: &str) -> ApiResult<&str> {
     let host = host.trim();
@@ -158,7 +158,17 @@ pub async fn start_homekit_pairing(_admin: AdminUser, Json(input): Json<StartInp
     // A pairing left half-done keeps the accessory busy: the previous one is dropped first.
     STARTED.lock().await.retain(|h, (at, _)| h != host && at.elapsed() < STARTED_FOR);
     let setup = crate::homekit::PairSetup::start(host, input.flags & 1 == 1).await.map_err(|e| ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, e.explain()))?;
-    STARTED.lock().await.insert(host.to_string(), (std::time::Instant::now(), setup));
+    let at = std::time::Instant::now();
+    STARTED.lock().await.insert(host.to_string(), (at, setup));
+    // Never typed: the accessory is freed, else it refuses any other pairing.
+    let host = host.to_string();
+    tokio::spawn(async move {
+        tokio::time::sleep(STARTED_FOR).await;
+        let mut started = STARTED.lock().await;
+        if started.get(&host).is_some_and(|(t, _)| *t == at) {
+            started.remove(&host);
+        }
+    });
     Ok(StatusCode::NO_CONTENT)
 }
 

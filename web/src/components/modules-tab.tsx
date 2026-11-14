@@ -831,6 +831,14 @@ function AddModuleDialog({
   const products = scan.data?.products ?? []
   // A HomeKit accessory being paired, and the code typed.
   const [pairing, setPairing] = useState<FoundProduct | null>(null)
+  // Closing the dialog gives up the pairing started: the accessory is free again.
+  const pairingHost = pairing?.host
+  useEffect(() => {
+    if (!pairingHost) return
+    return () => {
+      api.cancelHomekitPairing(pairingHost).catch(() => {})
+    }
+  }, [pairingHost])
   // A Hue bridge being added (its button to press).
   const [linking, setLinking] = useState<FoundProduct | null>(null)
   const link = useMutation({
@@ -855,15 +863,9 @@ function AddModuleDialog({
     },
   })
   const startPairing = (p: FoundProduct) => {
-    if (pairing && pairing.host !== p.host)
-      api.cancelHomekitPairing(pairing.host).catch(() => {})
     setPairing(p)
     setCode("")
     start.mutate(p)
-  }
-  const stopPairing = () => {
-    if (pairing) api.cancelHomekitPairing(pairing.host).catch(() => {})
-    setPairing(null)
   }
   const pair = useMutation({
     mutationFn: (p: FoundProduct) =>
@@ -1070,7 +1072,11 @@ function AddModuleDialog({
                     )}
                     {t("Appairer")}
                   </Button>
-                  <Button type="button" variant="ghost" onClick={stopPairing}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setPairing(null)}
+                  >
                     {t("Annuler")}
                   </Button>
                 </div>

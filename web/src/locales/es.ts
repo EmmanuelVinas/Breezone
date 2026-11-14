@@ -1033,6 +1033,30 @@ const es: Record<string, string> = {
   "Sans pièce": "Sin habitación",
   "{n} allumée": "{n} encendida",
   "{n} allumées": "{n} encendidas",
+  Configuration: "Configuración",
+  "Configuration importée": "Configuración importada",
+  "Ce fichier n'est pas une configuration Breezone.":
+    "Este archivo no es una configuración Breezone.",
+  "Saisissez à nouveau le mot de passe du compte Airzone (Réglages › Modules › Airzone).":
+    "Escriba de nuevo la contraseña de la cuenta Airzone (Ajustes › Módulos › Airzone).",
+  "Appairez à nouveau « {name} » (Réglages › Modules).":
+    "Empareje de nuevo «{name}» (Ajustes › Módulos).",
+  "Donnez un mot de passe à « {name} » (Réglages › Utilisateurs).":
+    "Dé una contraseña a «{name}» (Ajustes › Usuarios).",
+  "Un fichier avec tout ce qui a été réglé : installations, modules, appareils et pièces, automatismes, utilisateurs et leurs droits. Pour restaurer ce serveur ou passer sur une autre machine.":
+    "Un archivo con todo lo configurado: instalaciones, módulos, aparatos y estancias, automatismos, usuarios y sus derechos. Para restaurar este servidor o pasar a otra máquina.",
+  "Il ne contient aucun secret ni historique : ni mots de passe, ni clés des modules, ni partages entre serveurs, ni relevés. Importé sur ce même serveur, ce qu'il a déjà est gardé ; ailleurs, il faudra les ressaisir.":
+    "No contiene secretos ni historial: ni contraseñas, ni claves de los módulos, ni usos compartidos entre servidores, ni lecturas. Importado en este mismo servidor, se conserva lo que ya tiene; en otro, habrá que volver a introducirlos.",
+  "Configuration importée : reste à faire":
+    "Configuración importada: queda por hacer",
+  "Configuration importée : rien d'autre à faire":
+    "Configuración importada: nada más que hacer",
+  Exporter: "Exportar",
+  "Importer…": "Importar…",
+  "Remplacer la configuration de ce serveur ?":
+    "¿Reemplazar la configuración de este servidor?",
+  "Les installations, modules, appareils, pièces, automatismes et droits de ce serveur sont remplacés par ceux de « {name} ». Les utilisateurs du fichier sont ajoutés ou mis à jour, aucun n'est supprimé. Les partages entre serveurs ne changent pas.":
+    "Las instalaciones, módulos, aparatos, estancias, automatismos y derechos de este servidor se reemplazan por los de «{name}». Los usuarios del archivo se añaden o actualizan, ninguno se elimina. Los usos compartidos entre servidores no cambian.",
 }
 
 export default es

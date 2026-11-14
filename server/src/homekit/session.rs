@@ -182,7 +182,9 @@ impl Connection {
     }
 
     pub async fn request(&mut self, method: &str, path: &str, content_type: Option<&str>, body: &[u8]) -> Result<Response, HapError> {
-        let mut head = format!("{method} {path} HTTP/1.1\r\nHost: {}\r\n", self.host);
+        // Without the port, as the reference controllers do: some accessories reject it.
+        let host = self.host.rsplit_once(':').map_or(self.host.as_str(), |(h, _)| h);
+        let mut head = format!("{method} {path} HTTP/1.1\r\nHost: {host}\r\n");
         if let Some(ct) = content_type {
             head += &format!("Content-Type: {ct}\r\n");
         }
@@ -199,7 +201,15 @@ impl Connection {
     /// A pairing step: TLV in, TLV out.
     pub async fn tlv(&mut self, path: &str, items: &[(u8, &[u8])]) -> Result<Vec<(u8, Vec<u8>)>, HapError> {
         let resp = self.request("POST", path, Some("application/pairing+tlv8"), &tlv::encode(items)).await?;
+        let items = tlv::decode(&resp.body).unwrap_or_default();
         if !(200..300).contains(&resp.status) {
+            if let Some(code) = tlv::get(&items, tlv::ERROR).and_then(|c| c.first()) {
+                return Err(HapError::Accessory(*code));
+            }
+            // 429: a pairing with another controller is under way.
+            if resp.status == 429 {
+                return Err(HapError::Accessory(7));
+            }
             return Err(HapError::Protocol(format!("{path}: HTTP {}", resp.status)));
         }
         let items = tlv::decode(&resp.body).map_err(HapError::Protocol)?;

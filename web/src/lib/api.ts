@@ -606,6 +606,20 @@ export class ApiError extends Error {
   }
 }
 
+/** What an import of the configuration changed, and what is left to do by hand. */
+export interface ConfigImported {
+  installations: number
+  modules: number
+  devices: number
+  routines: number
+  /** Users added without a password: an administrator gives them one. */
+  without_password: string[]
+  /** Modules to pair again (HomeKit, Hue). */
+  to_pair: string[]
+  /** The Airzone account needs its password again. */
+  airzone_password: boolean
+}
+
 export async function request<T>(
   method: string,
   path: string,
@@ -899,6 +913,11 @@ export const api = {
     code: string
     flags: number
   }) => request<SourceView>("POST", "/api/homekit/pair", input),
+  /** The configuration of this server as a file (no secret, no history). */
+  exportConfig: () => request<unknown>("GET", "/api/system/config"),
+  /** Replaces the configuration with an exported one. */
+  importConfig: (file: unknown) =>
+    request<ConfigImported>("POST", "/api/system/config", file),
   /** Starts pairing: an accessory with a screen shows its code now. */
   startHomekitPairing: (input: { host: string; flags: number }) =>
     request<void>("POST", "/api/homekit/pair/start", input),
