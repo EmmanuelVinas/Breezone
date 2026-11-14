@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.5] - 2026-11-14
+
 ### Changed
 
 - Settings: the Nodes and Shares tabs become a single Servers tab, in three sections: « Ce serveur »,
