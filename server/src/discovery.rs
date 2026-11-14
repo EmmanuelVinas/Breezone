@@ -1,5 +1,6 @@
-//! LAN discovery of Airzone WebServers: scans a subnet for hosts answering the local API
-//! on port 3000.
+//! LAN discovery: scans a subnet for the products Breezone supports. Each address is asked, in
+//! parallel, whether it is an Airzone WebServer (local API, port 3000) or a Shelly (`/shelly`, port
+//! 80), and products are identified down to the model.
 
 use crate::airzone::AirzoneClient;
 use serde::Serialize;
@@ -59,7 +60,7 @@ pub async fn scan(subnet: Option<&str>, port: u16) -> Result<Vec<Found>, String>
         None => default_subnet().ok_or("cannot determine the local network, please provide a subnet")?,
     };
     let hosts = hosts_in(&subnet)?;
-    let limit = Arc::new(Semaphore::new(64));
+    let limit = Arc::new(Semaphore::new(SCAN_PARALLEL));
     let mut tasks = Vec::with_capacity(hosts.len());
     for host in hosts {
         let limit = limit.clone();
@@ -78,21 +79,33 @@ pub async fn scan(subnet: Option<&str>, port: u16) -> Result<Vec<Found>, String>
     Ok(found)
 }
 
+/// Addresses asked at the same time.
+const SCAN_PARALLEL: usize = 128;
+/// A port that does not accept a connection within this delay is closed. Generous on purpose:
+/// asking many addresses at once floods the address resolution (ARP) of the network, and a real
+/// device then takes several hundred milliseconds to answer (measured: a Shelly missed at 800 ms,
+/// found at 1.5 s; the former 400 ms missed devices).
+const CONNECT_WITHIN: Duration = Duration::from_millis(1500);
+
+async fn is_open(host: &str, port: u16) -> bool {
+    matches!(tokio::time::timeout(CONNECT_WITHIN, TcpStream::connect(format!("{host}:{port}"))).await, Ok(Ok(_)))
+}
+
 /// Checks whether `host:port` is an Airzone WebServer. Any HTTP service may listen on port
 /// 3000: only answers carrying the Airzone signature (`mac` / `ws_type`, or HVAC zones) count.
+/// The WebServer's own description answers fast; the zones are only counted, briefly.
 pub async fn probe(host: &str, port: u16) -> Option<Found> {
-    let addr = format!("{host}:{port}");
-    let open = tokio::time::timeout(Duration::from_millis(400), TcpStream::connect(&addr)).await;
-    if !matches!(open, Ok(Ok(_))) {
+    if !is_open(host, port).await {
         return None;
     }
     let client = AirzoneClient::new(host, port);
-    let info = tokio::time::timeout(Duration::from_secs(3), client.webserver_info())
+    let info = tokio::time::timeout(Duration::from_secs(2), client.webserver_info())
         .await
         .ok()
         .and_then(|r| r.ok())
         .filter(is_airzone_webserver);
-    let zones = tokio::time::timeout(Duration::from_secs(4), client.read_all())
+    // Older WebServers have no description: only their zones tell.
+    let zones = tokio::time::timeout(Duration::from_millis(if info.is_some() { 1500 } else { 2500 }), client.read_all())
         .await
         .ok()
         .and_then(|r| r.ok())
@@ -110,6 +123,92 @@ pub async fn probe(host: &str, port: u16) -> Option<Found> {
         firmware: field("ws_firmware"),
         zones,
     })
+}
+
+/// A product found on the network, of a supported brand.
+#[derive(Debug, Clone, Serialize)]
+pub struct Product {
+    /// "airzone" | "shelly"
+    pub brand: &'static str,
+    /// What adds it: "airzone" (an installation) or the driver of a source.
+    pub driver: &'static str,
+    /// Name of the model ("Shelly Pro 3EM", "Airzone WebServer").
+    pub model: String,
+    pub host: String,
+    pub port: u16,
+    pub mac: Option<String>,
+    /// Stable id of the device (Shelly), to recognise it if its address changes.
+    pub device_id: Option<String>,
+    pub firmware: Option<String>,
+    /// Profile, number of zones, why it is not supported…
+    pub note: Option<String>,
+    /// Breezone can drive it.
+    pub supported: bool,
+}
+
+/// Every supported product on `subnet`, each address asked for every brand at once.
+pub async fn scan_products(subnet: &str, airzone_port: u16) -> Result<Vec<Product>, String> {
+    let hosts = hosts_in(subnet)?;
+    let limit = Arc::new(Semaphore::new(SCAN_PARALLEL));
+    let mut tasks = Vec::with_capacity(hosts.len());
+    for host in hosts {
+        let limit = limit.clone();
+        tasks.push(tokio::spawn(async move {
+            let _permit = limit.acquire().await.ok()?;
+            let host = host.to_string();
+            let (airzone, shelly) = tokio::join!(probe(&host, airzone_port), async {
+                if is_open(&host, 80).await {
+                    crate::drivers::shelly::probe(&host).await
+                } else {
+                    None
+                }
+            });
+            let mut found = vec![];
+            if let Some(a) = airzone {
+                let note = match (&a.ws_type, a.zones) {
+                    (Some(t), Some(z)) => Some(format!("{t} · {z} zones")),
+                    (Some(t), None) => Some(t.clone()),
+                    (None, Some(z)) => Some(format!("{z} zones")),
+                    _ => None,
+                };
+                found.push(Product {
+                    brand: "airzone",
+                    driver: "airzone",
+                    model: "Airzone WebServer".into(),
+                    host: a.host,
+                    port: a.port,
+                    mac: a.mac,
+                    device_id: None,
+                    firmware: a.firmware,
+                    note,
+                    supported: true,
+                });
+            }
+            if let Some(s) = shelly {
+                found.push(Product {
+                    brand: "shelly",
+                    driver: "shelly",
+                    model: s.model,
+                    host: host.clone(),
+                    port: 80,
+                    mac: s.mac,
+                    device_id: Some(s.id),
+                    firmware: s.firmware,
+                    note: s.note,
+                    supported: s.supported,
+                });
+            }
+            Some(found)
+        }));
+    }
+    let mut found = vec![];
+    for t in tasks {
+        if let Ok(Some(f)) = t.await {
+            found.extend(f);
+        }
+    }
+    found.sort_by_key(|p| (p.host.parse::<Ipv4Addr>().map(u32::from).unwrap_or(0), p.brand));
+    Ok(found)
 }
 
 /// `POST /api/v1/webserver` of an Airzone WebServer returns its MAC address and type.

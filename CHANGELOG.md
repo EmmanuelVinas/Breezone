@@ -8,6 +8,26 @@ All notable changes are documented here. The format follows
 
 ### Added
 
+- Drivers (ADR 0013): a common interface for every source of devices, with Shelly as the first one
+  (Plus, Pro, Gen3, Gen4, local RPC API): a Pro 3EM gives a three-phase meter, plugs and relays give
+  switchable relays that measure their power. Sources are configured by administrators
+  (`/api/sources`), read every 5 seconds, and their devices are listed with the zones in
+  `/api/devices`. A single route applies an action of a device's trait whatever its source
+  (`/api/devices/{id}/actions`): it drives an Airzone zone as well as a Shelly relay. New traits:
+  `energy.power`, `energy.meter`, `switch.relay`.
+- Network scanner for every supported brand (`/api/discovery/products`): each address is asked at once
+  whether it is an Airzone WebServer or a Shelly, and products are identified down to the model
+  (« Shelly Pro 3EM, monophasé : 3 voies indépendantes »), with those already added marked.
+
+### Fixed
+
+- Network scan: devices were missed when many addresses were asked at once (a real device can take
+  several hundred milliseconds to accept a connection then); it waits longer per address and asks
+  more of them in parallel, about 3 seconds for a /24. The Airzone scan no longer reads every zone
+  of each WebServer found before answering.
+
+### Added
+
 - Home model (ADR 0013), with nothing changed in the interface yet: Airzone zones are now also
   devices of the trait `climate.zone@1`, with a stable id, and can be named and placed in rooms
   (`/api/devices`, `/api/rooms`). The catalog of traits (`server/contracts/traits`, served at

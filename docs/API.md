@@ -166,6 +166,33 @@ avec un identifiant stable. Les routes des zones restent celles qui les pilotent
 | POST 👑 | `/api/rooms` | `{name, position?}` → 201 |
 | PUT 👑 · DELETE 👑 | `/api/rooms/{id}` | Renommer, réordonner, supprimer (ses appareils restent, sans pièce) |
 
+| POST 🔒 | `/api/devices/{id}/actions` | `{trait, action, params}` : action d'un trait de l'appareil, quelle que soit sa source (`climate.zone` / `set` pour une zone Airzone, avec les droits de l'installation ; `switch.relay` / `set` pour un relais Shelly, réservé aux administrateurs pour l'instant). Paramètre inconnu → `422 unsupported` ; manquant ou mal typé → `400` → appareil à jour |
+
+### Sources d'appareils 👑
+
+Une **source** est un matériel lu par un **pilote** (ADR 0013) : par exemple un Shelly à
+192.168.1.40. Ses appareils apparaissent dans `/api/devices`.
+
+| Méthode | Chemin | Description |
+|---------|--------|-------------|
+| GET 👑 | `/api/drivers` | Pilotes disponibles : `[{id, label, provides, config:[{name, type, optional, label}]}]` |
+| GET 👑 | `/api/sources` | `[{id, driver, name, config, enabled, created_at, status:{state, last_seen, last_error, model, firmware}, devices}]` (`state` : `online`, `offline`, `error`, `disabled`, `unknown`) |
+| POST 👑 | `/api/sources` | `{driver, name, config, enabled?}` : configuration vérifiée, source lue aussitôt → 201 |
+| PUT 👑 · DELETE 👑 | `/api/sources/{id}` | Modifier (le pilote ne change pas) ; supprimer, avec ses appareils |
+| POST 👑 | `/api/sources/{id}/refresh` | Relire maintenant |
+
+| POST 👑 | `/api/discovery/products` | `{subnet?}` → `{subnet, duration_ms, products:[{brand, driver, model, host, port, mac, device_id, firmware, note, supported, added}]}` : tous les produits pris en charge du réseau (WebServers Airzone, Shelly…), identifiés jusqu'au modèle, et s'ils sont déjà ajoutés |
+
+Le scanner interroge chaque adresse pour toutes les marques à la fois (128 adresses en parallèle,
+environ 3 s pour un /24) : port 3000 pour Airzone, `GET /shelly` sur le port 80 pour Shelly.
+
+Pilote `shelly` (Plus, Pro, Gen3, Gen4, API RPC locale) : `config: {host, device_id?}`. Avec
+`device_id` (fourni par le scanner), un autre appareil qui répondrait à cette adresse est refusé.
+Les modèles sont reconnus par leur application (`Shelly Pro 3EM`, en triphasé ou en monophasé à
+3 voies, `Shelly Plus Plug S`…) ; la 1re génération est détectée mais pas encore prise en charge. Composants lus :
+`em:N` (Pro 3EM, `energy.power` + `energy.meter`), `em1:N` (Pro EM), `switch:N` (`switch.relay`,
+avec puissance et énergie s'ils sont mesurés), `pm1:N`. Lecture toutes les 5 s.
+
 Les types web et mobile sont générés depuis `server/contracts/traits/` :
 `BREEZONE_WRITE_GENERATED=1 cargo test --test generated` (dans `server/`).
 

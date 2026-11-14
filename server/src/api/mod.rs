@@ -7,6 +7,7 @@ mod home;
 mod hvac;
 mod routines;
 mod schedules;
+mod sources;
 mod system;
 mod timers;
 mod ws;
@@ -97,6 +98,12 @@ pub fn router() -> Router<AppState> {
         .route("/api/traits", get(home::traits))
         .route("/api/devices", get(home::list_devices))
         .route("/api/devices/{id}", put(home::update_device))
+        .route("/api/devices/{id}/actions", post(home::act))
+        .route("/api/drivers", get(sources::drivers))
+        .route("/api/sources", get(sources::list).post(sources::create))
+        .route("/api/sources/{id}", put(sources::update).delete(sources::delete))
+        .route("/api/sources/{id}/refresh", post(sources::refresh))
+        .route("/api/discovery/products", post(sources::scan))
         .route("/api/rooms", get(home::list_rooms).post(home::create_room))
         .route("/api/rooms/{id}", put(home::update_room).delete(home::delete_room))
         .route("/api/system/update", get(system::update_status).post(system::install))
