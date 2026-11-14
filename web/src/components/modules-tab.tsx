@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   AirVent,
   Blinds,
+  Lightbulb,
   Home,
   Link2,
   Loader2,
@@ -82,6 +83,22 @@ const BY_ADDRESS = [
   { driver: "hoymiles", label: "Hoymiles (DTU)" },
 ]
 
+/** A light's state in a few words: "allumée · 50 %". */
+function d_light(s: Record<string, unknown>) {
+  if (
+    typeof s.on !== "boolean" ||
+    (s.reachable === undefined &&
+      s.brightness === undefined &&
+      s.color_temp === undefined)
+  )
+    return null
+  if (s.reachable === false) return t("ne répond pas")
+  if (!s.on) return t("éteinte")
+  return typeof s.brightness === "number"
+    ? t("allumée · {n} %", { n: s.brightness })
+    : t("allumée")
+}
+
 function watts(v: unknown) {
   if (typeof v !== "number") return null
   return Math.abs(v) >= 1000
@@ -150,6 +167,7 @@ function DeviceRow({
       : "none"
   const s = device.state ?? {}
   const values = [
+    d_light(s),
     typeof s.position === "number"
       ? s.position === 0
         ? t("fermé")
@@ -166,7 +184,11 @@ function DeviceRow({
       ? (CHARGER_STATUS[s.status] ?? s.status)
       : null,
     watts(s.power),
-    typeof s.on === "boolean" ? (s.on ? t("allumé") : t("éteint")) : null,
+    typeof s.on === "boolean" && !d_light(s)
+      ? s.on
+        ? t("allumé")
+        : t("éteint")
+      : null,
     kwh(s.energy_in) && t("{value} consommés", { value: kwh(s.energy_in)! }),
     typeof s.energy_out === "number" && s.energy_out > 0
       ? t("{value} injectés", { value: kwh(s.energy_out)! })
@@ -367,6 +389,21 @@ const DRIVER: Record<
     ),
     note: t(
       "L'API locale de la Trydan n'a pas de mot de passe : tout appareil du réseau local peut la piloter. Réservez-lui une adresse IP fixe (bail DHCP) ; si elle change, « Rechercher » retrouve la borne."
+    ),
+  },
+  hue: {
+    icon: Lightbulb,
+    tone: "bg-warning/15 text-warning",
+    connection: t(
+      "API locale du pont Hue : ajouté avec son bouton, sans compte Philips Hue"
+    ),
+    every: t("toutes les 5 s"),
+    reads: t(
+      "état, intensité, température de blanc et couleur de chaque lumière, et si elle répond"
+    ),
+    writes: t("marche et arrêt, intensité, température de blanc et couleur"),
+    note: t(
+      "Les lampes, pièces et scènes restent gérées par l'application Hue : Breezone les lit et les pilote, sans rien y changer."
     ),
   },
   homekit: {
@@ -794,6 +831,20 @@ function AddModuleDialog({
   const products = scan.data?.products ?? []
   // A HomeKit accessory being paired, and the code typed.
   const [pairing, setPairing] = useState<FoundProduct | null>(null)
+  // A Hue bridge being added (its button to press).
+  const [linking, setLinking] = useState<FoundProduct | null>(null)
+  const link = useMutation({
+    mutationFn: (p: FoundProduct) =>
+      api.linkHue({ host: p.host, name: p.model }),
+    onSuccess: (s) => {
+      toast.success(t("« {name} » ajouté", { name: s.name }))
+      qc.invalidateQueries({ queryKey: ["sources"] })
+      qc.invalidateQueries({ queryKey: ["devices"] })
+      setLinking(null)
+      onClose()
+    },
+    onError: (e) => toast.error(errorText(e)),
+  })
   const [code, setCode] = useState("")
   const pair = useMutation({
     mutationFn: (p: FoundProduct) =>
@@ -825,6 +876,16 @@ function AddModuleDialog({
       return <Badge variant="outline">{t("Appairé ailleurs")}</Badge>
     if (!p.supported)
       return <Badge variant="outline">{t("Non pris en charge")}</Badge>
+    if (p.brand === "hue")
+      return (
+        <Button
+          size="sm"
+          variant={linking?.host === p.host ? "secondary" : "default"}
+          onClick={() => setLinking(p)}
+        >
+          <Plus /> {t("Ajouter")}
+        </Button>
+      )
     if (p.brand === "homekit")
       return (
         <Button
@@ -863,7 +924,7 @@ function AddModuleDialog({
           <DialogTitle>{t("Ajouter un module")}</DialogTitle>
           <DialogDescription>
             {t(
-              "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan, clés Wi-Fi Hoymiles et accessoires HomeKit (Legrand, VELUX…)."
+              "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan, clés Wi-Fi Hoymiles, ponts Philips Hue et accessoires HomeKit (Legrand, VELUX…)."
             )}
           </DialogDescription>
         </DialogHeader>
@@ -911,6 +972,34 @@ function AddModuleDialog({
               {action(p)}
             </div>
           ))}
+          {linking && (
+            <div className="grid gap-3 rounded-2xl border border-primary/40 bg-primary/5 p-3">
+              <div className="text-sm font-medium">
+                {t("Ajouter « {name} »", { name: linking.model })}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  "Appuyez sur le bouton rond, au centre du pont Hue, puis cliquez sur « Ajouter » dans les 30 secondes. Vos lampes, pièces et scènes restent comme dans l'application Hue."
+                )}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  disabled={link.isPending}
+                  onClick={() => link.mutate(linking)}
+                >
+                  {link.isPending ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <Plus />
+                  )}
+                  {t("Ajouter")}
+                </Button>
+                <Button variant="ghost" onClick={() => setLinking(null)}>
+                  {t("Annuler")}
+                </Button>
+              </div>
+            </div>
+          )}
           {pairing && (
             <form
               className="grid gap-3 rounded-2xl border border-primary/40 bg-primary/5 p-3"

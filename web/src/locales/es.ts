@@ -999,8 +999,40 @@ const es: Record<string, string> = {
   "Saisissez le code HomeKit à 8 chiffres, imprimé sur l'appareil ou sa notice. Rien ne change dans l'application du fabricant : vos équipements restent configurés comme aujourd'hui.":
     "Escriba el código HomeKit de 8 cifras, impreso en el aparato o su manual. Nada cambia en la aplicación del fabricante: sus equipos siguen configurados como hoy.",
   "Code HomeKit": "Código HomeKit",
-  "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan, clés Wi-Fi Hoymiles et accessoires HomeKit (Legrand, VELUX…).":
-    "Breezone busca en la red los productos que sabe controlar: WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), cargadores V2C Trydan, llaves Wi-Fi Hoymiles y accesorios HomeKit (Legrand, VELUX…).",
+  Lumières: "Luces",
+  "ne répond pas": "no responde",
+  éteinte: "apagada",
+  "allumée · {n} %": "encendida · {n} %",
+  allumée: "encendida",
+  "API locale du pont Hue : ajouté avec son bouton, sans compte Philips Hue":
+    "API local del puente Hue: añadido con su botón, sin cuenta Philips Hue",
+  "état, intensité, température de blanc et couleur de chaque lumière, et si elle répond":
+    "estado, intensidad, temperatura de blanco y color de cada luz, y si responde",
+  "marche et arrêt, intensité, température de blanc et couleur":
+    "encendido y apagado, intensidad, temperatura de blanco y color",
+  "Les lampes, pièces et scènes restent gérées par l'application Hue : Breezone les lit et les pilote, sans rien y changer.":
+    "Las lámparas, habitaciones y escenas siguen gestionadas por la aplicación Hue: Breezone las lee y controla, sin cambiar nada.",
+  "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan, clés Wi-Fi Hoymiles, ponts Philips Hue et accessoires HomeKit (Legrand, VELUX…).":
+    "Breezone busca en la red los productos que sabe controlar: WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), cargadores V2C Trydan, llaves Wi-Fi Hoymiles, puentes Philips Hue y accesorios HomeKit (Legrand, VELUX…).",
+  "Ajouter « {name} »": "Añadir «{name}»",
+  "Appuyez sur le bouton rond, au centre du pont Hue, puis cliquez sur « Ajouter » dans les 30 secondes. Vos lampes, pièces et scènes restent comme dans l'application Hue.":
+    "Pulse el botón redondo en el centro del puente Hue y haga clic en «Añadir» en 30 segundos. Sus lámparas, habitaciones y escenas siguen como en la aplicación Hue.",
+  "Ne répond pas": "No responde",
+  Couleur: "Color",
+  "Blanc chaud": "Blanco cálido",
+  "Blanc neutre": "Blanco neutro",
+  "Blanc froid": "Blanco frío",
+  "Intensité de {name}": "Intensidad de {name}",
+  "Température de blanc": "Temperatura de blanco",
+  Couleurs: "Colores",
+  "Couleur {c}": "Color {c}",
+  "{lit} allumée(s) sur {total}": "{lit} encendida(s) de {total}",
+  "Aucune lumière": "Ninguna luz",
+  "Ajoutez votre pont Philips Hue dans Réglages › Modules : Breezone le trouve sur le réseau.":
+    "Añada su puente Philips Hue en Ajustes › Módulos: Breezone lo encuentra en la red.",
+  "Sans pièce": "Sin habitación",
+  "{n} allumée": "{n} encendida",
+  "{n} allumées": "{n} encendidas",
 }
 
 export default es

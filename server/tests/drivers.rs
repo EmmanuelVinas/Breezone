@@ -559,3 +559,106 @@ async fn a_lost_source_is_found_again_at_its_new_address() {
     let (_, events) = server.call("GET", "/api/events", t, None).await;
     assert!(events.to_string().contains("127.0.0.1:9"), "the move is in the activity: {events}");
 }
+
+#[derive(Clone, Default)]
+struct HueBridge {
+    pressed: Arc<Mutex<bool>>,
+    lights: Arc<Mutex<Value>>,
+}
+
+/// A Hue bridge (local API v1) with a color light and a dimmable one.
+async fn fake_hue(bridge: HueBridge) -> u16 {
+    use axum::extract::Path;
+    use axum::routing::{post, put};
+    *bridge.lights.lock().unwrap() = json!({
+        "1": {"name": "Plafonnier", "type": "Extended color light", "state": {"on": true, "bri": 127, "ct": 366, "xy": [0.4573, 0.41], "colormode": "ct", "hue": 8418, "sat": 140, "reachable": true},
+              "capabilities": {"control": {"ct": {"min": 153, "max": 500}}}},
+        "2": {"name": "Lampe de chevet", "type": "Dimmable light", "state": {"on": false, "bri": 254, "reachable": true}}
+    });
+    let config = json!({"name": "Hue Bridge", "bridgeid": "001788FFFE6DBD26", "modelid": "BSB002", "swversion": "1978688000", "apiversion": "1.78.0"});
+    let c1 = config.clone();
+    let router = Router::new()
+        .route("/api/config", get(move || async move { Json(c1) }))
+        .route(
+            "/api",
+            post(|State(b): State<HueBridge>| async move {
+                if *b.pressed.lock().unwrap() {
+                    Json(json!([{"success": {"username": "Breezone-key-1234"}}]))
+                } else {
+                    Json(json!([{"error": {"type": 101, "address": "", "description": "link button not pressed"}}]))
+                }
+            }),
+        )
+        .route(
+            "/api/{key}/config",
+            get(move |Path(key): Path<String>| async move {
+                if key == "Breezone-key-1234" {
+                    Json(config)
+                } else {
+                    Json(json!([{"error": {"type": 1}}]))
+                }
+            }),
+        )
+        .route("/api/{key}/lights", get(|State(b): State<HueBridge>| async move { Json(b.lights.lock().unwrap().clone()) }))
+        .route(
+            "/api/{key}/lights/{id}/state",
+            put(|State(b): State<HueBridge>, Path((_, id)): Path<(String, String)>, Json(cmd): Json<Value>| async move {
+                let mut lights = b.lights.lock().unwrap();
+                for (k, v) in cmd.as_object().unwrap() {
+                    lights[&id]["state"][k] = v.clone();
+                    if k == "xy" {
+                        lights[&id]["state"]["colormode"] = json!("xy");
+                    }
+                }
+                Json(json!([{"success": cmd}]))
+            }),
+        )
+        .with_state(bridge);
+    serve(router).await
+}
+
+#[tokio::test]
+async fn a_hue_bridge_is_added_with_its_button_and_drives_its_lights() {
+    let bridge = HueBridge::default();
+    let port = fake_hue(bridge.clone()).await;
+    let (server, token) = Server::start().await;
+    let t = Some(token.as_str());
+    let host = format!("127.0.0.1:{port}");
+
+    // Not without its button.
+    let (s, v) = server.call("POST", "/api/hue/link", t, Some(json!({"host": host, "name": "Philips Hue"}))).await;
+    assert_eq!(s, StatusCode::CONFLICT, "{v}");
+    assert_eq!(v["code"], "button");
+    let (s, _) = server.call("POST", "/api/sources", t, Some(json!({"driver":"hue","name":"x","config":{"host": host}}))).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST, "no bridge without its key");
+
+    *bridge.pressed.lock().unwrap() = true;
+    let (s, source) = server.call("POST", "/api/hue/link", t, Some(json!({"host": host, "name": "Philips Hue"}))).await;
+    assert_eq!(s, StatusCode::CREATED, "{source}");
+    assert_eq!(source["status"]["state"], "online", "{source}");
+    assert_eq!(source["status"]["model"], "Philips Hue BSB002 (2 lumières)");
+    assert_eq!(source["config"]["device_id"], "001788FFFE6DBD26");
+    assert!(!source.to_string().contains("Breezone-key-1234"), "the key is never shown: {source}");
+
+    let (_, devices) = server.call("GET", "/api/devices", t, None).await;
+    let light = |name: &str| devices.as_array().unwrap().iter().find(|d| d["name"] == name).unwrap().clone();
+    let ceiling = light("Plafonnier");
+    assert_eq!(ceiling["traits"], json!(["light@1"]));
+    assert_eq!((ceiling["state"]["on"].clone(), ceiling["state"]["brightness"].clone(), ceiling["state"]["color_temp"].clone()), (json!(true), json!(50), json!(2732)));
+    let bedside = light("Lampe de chevet");
+    assert_eq!(bedside["state"]["on"], false);
+    assert!(bedside["state"].get("color_temp").is_none());
+
+    let act = |id: &Value, params: Value| (format!("/api/devices/{id}/actions"), json!({"trait": "light", "action": "set", "params": params}));
+    let (path, body) = act(&bedside["id"], json!({"brightness": 30}));
+    let (s, d) = server.call("POST", &path, t, Some(body)).await;
+    assert_eq!(s, StatusCode::OK, "{d}");
+    assert_eq!((d["state"]["on"].clone(), d["state"]["brightness"].clone()), (json!(true), json!(30)), "a brightness lights it");
+    let (path, body) = act(&ceiling["id"], json!({"color": "#ff0000"}));
+    let (_, d) = server.call("POST", &path, t, Some(body)).await;
+    assert_eq!(d["state"]["mode"], "color");
+    assert!(d["state"]["color"].as_str().unwrap().starts_with("#ff"), "{d}");
+    let (path, body) = act(&ceiling["id"], json!({"on": false, "flash": true}));
+    let (s, _) = server.call("POST", &path, t, Some(body)).await;
+    assert_eq!(s, StatusCode::UNPROCESSABLE_ENTITY, "unknown parameter");
+}

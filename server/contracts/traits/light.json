@@ -1,0 +1,27 @@
+{
+  "trait": "light",
+  "version": 1,
+  "label": { "fr": "Lumière", "en": "Light", "es": "Luz" },
+  "state": [
+    { "name": "on", "type": "bool", "label": { "fr": "Allumée", "en": "On", "es": "Encendida" } },
+    { "name": "brightness", "type": "integer", "unit": "%", "min": 0, "max": 100, "optional": true, "label": { "fr": "Intensité", "en": "Brightness", "es": "Intensidad" } },
+    { "name": "color_temp", "type": "integer", "unit": "K", "optional": true, "label": { "fr": "Température de blanc", "en": "White temperature", "es": "Temperatura de blanco" } },
+    { "name": "color_temp_min", "type": "integer", "unit": "K", "optional": true, "label": { "fr": "Blanc le plus chaud", "en": "Warmest white", "es": "Blanco más cálido" } },
+    { "name": "color_temp_max", "type": "integer", "unit": "K", "optional": true, "label": { "fr": "Blanc le plus froid", "en": "Coolest white", "es": "Blanco más frío" } },
+    { "name": "color", "type": "string", "optional": true, "label": { "fr": "Couleur", "en": "Color", "es": "Color" } },
+    { "name": "mode", "type": "enum", "values": ["white", "color"], "optional": true, "label": { "fr": "Mode", "en": "Mode", "es": "Modo" } },
+    { "name": "reachable", "type": "bool", "optional": true, "label": { "fr": "Joignable", "en": "Reachable", "es": "Accesible" } }
+  ],
+  "actions": [
+    {
+      "name": "set",
+      "label": { "fr": "Régler", "en": "Set", "es": "Ajustar" },
+      "params": [
+        { "name": "on", "type": "bool", "optional": true, "label": { "fr": "Allumée", "en": "On", "es": "Encendida" } },
+        { "name": "brightness", "type": "integer", "unit": "%", "min": 1, "max": 100, "optional": true, "label": { "fr": "Intensité", "en": "Brightness", "es": "Intensidad" } },
+        { "name": "color_temp", "type": "integer", "unit": "K", "min": 1500, "max": 9000, "optional": true, "label": { "fr": "Température de blanc", "en": "White temperature", "es": "Temperatura de blanco" } },
+        { "name": "color", "type": "string", "optional": true, "label": { "fr": "Couleur (#rrvvbb)", "en": "Color (#rrggbb)", "es": "Color (#rrvvaa)" } }
+      ]
+    }
+  ]
+}

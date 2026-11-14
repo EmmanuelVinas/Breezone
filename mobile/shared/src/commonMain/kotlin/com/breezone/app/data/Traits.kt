@@ -136,6 +136,34 @@ data class EvChargerSetAutoLimit(
     val on: Boolean? = null,
 )
 
+@Serializable
+enum class LightMode {
+    @SerialName("white") White,
+    @SerialName("color") Color,
+}
+
+/** Light (`light@1`): state. */
+@Serializable
+data class LightState(
+    val on: Boolean = false,
+    val brightness: Long? = null,
+    val colorTemp: Long? = null,
+    val colorTempMin: Long? = null,
+    val colorTempMax: Long? = null,
+    val color: String? = null,
+    val mode: LightMode? = null,
+    val reachable: Boolean? = null,
+)
+
+/** Light (`light@1`): action `set`. */
+@Serializable
+data class LightSet(
+    val on: Boolean? = null,
+    val brightness: Long? = null,
+    val colorTemp: Long? = null,
+    val color: String? = null,
+)
+
 /** Solar inverter (`solar.inverter@1`): state. */
 @Serializable
 data class SolarInverterState(
@@ -182,4 +210,4 @@ data class SwitchRelaySet(
 )
 
 /** Traits described by this version (`trait@version`). */
-val TRAITS = listOf("climate.zone@1", "cover.position@1", "energy.meter@1", "ev.charger@1", "solar.inverter@1", "solar.panel@1", "energy.power@1", "switch.relay@1")
+val TRAITS = listOf("climate.zone@1", "cover.position@1", "energy.meter@1", "ev.charger@1", "light@1", "solar.inverter@1", "solar.panel@1", "energy.power@1", "switch.relay@1")

@@ -204,6 +204,7 @@ Une **source** est un matériel lu par un **pilote** (ADR 0013) : par exemple un
 | POST 👑 | `/api/sources/{id}/refresh` | Relire maintenant |
 | POST 👑 | `/api/sources/{id}/locate` | Chercher son matériel sur le réseau par son identité (`device_id`) et le suivre s'il a changé d'adresse (« Rechercher ») → la source et `moved` |
 | POST 👑 | `/api/homekit/pair` | `{host, name, code, flags?}` : appaire Breezone à un accessoire HomeKit trouvé par le scanner (`host` « ip:port », `flags` ses indicateurs) avec son code à 8 chiffres, puis l'ajoute comme module → 201 la source ; code incorrect, trop d'essais, déjà appairé ailleurs → 422 avec l'explication |
+| POST 👑 | `/api/hue/link` | `{host, name}` : ajoute un pont Philips Hue trouvé par le scanner ; il donne une clé d'accès dans les 30 secondes après l'appui sur son bouton → 201 la source ; bouton non pressé → 409 (`code` : `button`) |
 
 | POST 👑 | `/api/discovery/products` | `{subnet?}` → `{subnet, duration_ms, products:[{brand, driver, model, host, port, mac, device_id, firmware, note, supported, added}]}` : tous les produits pris en charge du réseau (WebServers Airzone, Shelly…), identifiés jusqu'au modèle, et s'ils sont déjà ajoutés |
 
@@ -223,6 +224,14 @@ Les modèles sont reconnus par leur application (`Shelly Pro 3EM`, en triphasé 
 3 voies, `Shelly Plus Plug S`…) ; la 1re génération est détectée mais pas encore prise en charge. Composants lus :
 `em:N` (Pro 3EM, `energy.power` + `energy.meter`), `em1:N` (Pro EM), `switch:N` (`switch.relay`,
 avec puissance et énergie s'ils sont mesurés), `pm1:N`. Lecture toutes les 5 s.
+
+Pilote `hue` (pont Philips Hue, API locale version 1 en HTTP) : `config: {host, device_id}` (le
+`bridgeid`) ; la clé d'accès, donnée par le pont après l'appui sur son bouton, est le secret de la
+source, chiffré, jamais renvoyé. Chaque lampe devient un appareil `light@1` : `on`, `brightness`
+(1 à 100 %), `color_temp` (kelvins, avec `color_temp_min` et `color_temp_max`), `color` (« #rrggbb »),
+`mode` (`white`, `color`), `reachable` ; seulement ce que la lampe gère. Action `set {on?, brightness?,
+color_temp?, color?}` : régler l'intensité, le blanc ou la couleur allume la lampe. Lecture toutes les
+5 s. Les lampes, pièces et scènes restent gérées par l'application Hue.
 
 Pilote `homekit` (accessoires et ponts HomeKit en IP : passerelle Legrand Home + Control, VELUX App
 Control…) : Breezone est un contrôleur HomeKit. Il s'appaire avec le code de l'accessoire (SRP-6a,

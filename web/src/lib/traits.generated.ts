@@ -113,6 +113,34 @@ export type EvChargerSetAutoLimit = {
   on: boolean
 }
 
+/** Light (`light@1`): state. */
+export type LightState = {
+  /** On */
+  on: boolean
+  /** Brightness (%) */
+  brightness: number | null
+  /** White temperature (K) */
+  color_temp: number | null
+  /** Warmest white (K) */
+  color_temp_min: number | null
+  /** Coolest white (K) */
+  color_temp_max: number | null
+  /** Color */
+  color: string | null
+  /** Mode */
+  mode: "white" | "color" | null
+  /** Reachable */
+  reachable: boolean | null
+}
+
+/** Light (`light@1`): action `set`. */
+export type LightSet = {
+  on?: boolean
+  brightness?: number
+  color_temp?: number
+  color?: string
+}
+
 /** Solar inverter (`solar.inverter@1`): state. */
 export type SolarInverterState = {
   /** Production today (kWh) */
@@ -173,4 +201,4 @@ export type SwitchRelaySet = {
 }
 
 /** Traits described by this version (`trait@version`). */
-export const TRAITS = ["climate.zone@1", "cover.position@1", "energy.meter@1", "ev.charger@1", "solar.inverter@1", "solar.panel@1", "energy.power@1", "switch.relay@1"] as const
+export const TRAITS = ["climate.zone@1", "cover.position@1", "energy.meter@1", "ev.charger@1", "light@1", "solar.inverter@1", "solar.panel@1", "energy.power@1", "switch.relay@1"] as const

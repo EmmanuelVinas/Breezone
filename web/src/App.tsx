@@ -35,6 +35,9 @@ const ChargingPage = lazy(() =>
 const SolarPage = lazy(() =>
   import("@/pages/solar").then((m) => ({ default: m.SolarPage }))
 )
+const LightsPage = lazy(() =>
+  import("@/pages/lights").then((m) => ({ default: m.LightsPage }))
+)
 const SettingsPage = lazy(() =>
   import("@/pages/settings").then((m) => ({ default: m.SettingsPage }))
 )
@@ -64,6 +67,7 @@ function Protected() {
           <Route path="/energie" element={<EnergyPage />} />
           <Route path="/recharge" element={<ChargingPage />} />
           <Route path="/solaire" element={<SolarPage />} />
+          <Route path="/lumieres" element={<LightsPage />} />
           <Route path="/programmations" element={<SchedulesPage />} />
           <Route path="/routines" element={<RoutinesPage />} />
           <Route path="/activity" element={<ActivityPage />} />

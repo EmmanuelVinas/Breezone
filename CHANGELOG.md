@@ -8,6 +8,11 @@ All notable changes are documented here. The format follows
 
 ### Added
 
+- Philips Hue: the bridge is found by the scanner and added with its button (its local API, no Hue
+  account), each lamp becomes a `light` device (new trait: on, brightness, white temperature, color,
+  only what the lamp has). Lights page (web), as in the mockups: lamps by room with « Tout allumer » and
+  « Tout éteindre », a card per lamp tinted with its light, and the detail of the lamp chosen
+  (brightness, white temperature, colors).
 - HomeKit controller: Breezone pairs with a HomeKit accessory or bridge (a Legrand Home + Control
   gateway, a VELUX gateway…) with its 8-digit code, then reads and drives it on the local network
   through encrypted sessions, without Apple Home or any account. The scanner finds the accessories

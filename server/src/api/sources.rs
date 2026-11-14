@@ -166,6 +166,40 @@ pub async fn pair_homekit(State(state): State<AppState>, _admin: AdminUser, Json
     }
 }
 
+#[derive(Deserialize)]
+pub struct LinkInput {
+    pub host: String,
+    pub name: String,
+}
+
+/// Adds a Hue bridge: it gives Breezone an access key in the 30 seconds after its button is
+/// pressed (as for the Hue app).
+pub async fn link_hue(State(state): State<AppState>, _admin: AdminUser, Json(input): Json<LinkInput>) -> ApiResult<(StatusCode, Json<SourceView>)> {
+    let host = input.host.trim();
+    if host.is_empty() || !host.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | ':')) {
+        return Err(ApiError::bad_request("invalid bridge address"));
+    }
+    let (bridge, key) = crate::drivers::hue::link(host).await.map_err(|e| match e {
+        crate::drivers::hue::LinkError::ButtonNotPressed => ApiError::new(
+            StatusCode::CONFLICT,
+            crate::text!(
+                "Appuyez sur le bouton rond du pont Hue, puis cliquez sur « Ajouter » dans les 30 secondes.",
+                "Press the round button of the Hue bridge, then click « Add » within 30 seconds.",
+                "Pulse el botón redondo del puente Hue y haga clic en «Añadir» en 30 segundos."
+            ),
+        )
+        .with_detail("code", "button"),
+        crate::drivers::hue::LinkError::Other(m) => {
+            ApiError::new(StatusCode::BAD_GATEWAY, crate::text!("Le pont Hue ne répond pas : {0}", "The Hue bridge does not answer: {0}", "El puente Hue no responde: {0}", m))
+        }
+    })?;
+    let name: String = input.name.trim().chars().take(60).collect();
+    let config = serde_json::json!({"host": host, "device_id": bridge.id}).to_string();
+    let id = db::insert_source(&state.db, "hue", if name.is_empty() { "Philips Hue" } else { &name }, &config).await?;
+    db::set_source_secret(&state.db, id, Some(&crate::cloud::encrypt(&state.cloud_key, &key))).await?;
+    Ok((StatusCode::CREATED, Json(polled(&state, id).await?)))
+}
+
 /// Reads the source now (« Tester » / « Actualiser »).
 pub async fn refresh(State(state): State<AppState>, _admin: AdminUser, Path(id): Path<i64>) -> ApiResult<Json<SourceView>> {
     db::source_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("source not found"))?;

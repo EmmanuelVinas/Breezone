@@ -118,7 +118,7 @@ pub async fn probe(host: &str, port: u16) -> Option<Found> {
 /// A product found on the network, of a supported brand.
 #[derive(Debug, Clone, Serialize)]
 pub struct Product {
-    /// "airzone" | "shelly" | "v2c" | "hoymiles" | "homekit"
+    /// "airzone" | "shelly" | "v2c" | "hoymiles" | "homekit" | "hue"
     pub brand: &'static str,
     /// What adds it: "airzone" (an installation) or the driver of a source.
     pub driver: &'static str,
@@ -153,13 +153,13 @@ pub async fn scan_products(subnet: &str, airzone_port: u16) -> Result<Vec<Produc
         tasks.push(tokio::spawn(async move {
             let _permit = limit.acquire().await.ok()?;
             let host = host.to_string();
-            let (airzone, (shelly, trydan), hoymiles) = tokio::join!(
+            let (airzone, (shelly, trydan, hue), hoymiles) = tokio::join!(
                 probe(&host, airzone_port),
                 async {
                     if is_open(&host, 80).await {
-                        tokio::join!(crate::drivers::shelly::probe(&host), crate::drivers::trydan::probe(&host))
+                        tokio::join!(crate::drivers::shelly::probe(&host), crate::drivers::trydan::probe(&host), crate::drivers::hue::probe(&host))
                     } else {
-                        (None, None)
+                        (None, None, None)
                     }
                 },
                 async {
@@ -218,6 +218,24 @@ pub async fn scan_products(subnet: &str, airzone_port: u16) -> Result<Vec<Produc
                     device_id: (!t.id.is_empty()).then_some(t.id),
                     firmware: t.firmware,
                     note: t.note,
+                    supported: true,
+                    flags: 0,
+                });
+            }
+            if let Some(b) = hue {
+                found.push(Product {
+                    brand: "hue",
+                    driver: "hue",
+                    model: format!("Philips Hue {}", if b.model.is_empty() { "Bridge".to_string() } else { format!("Bridge ({})", b.model) }),
+                    host: host.clone(),
+                    port: 80,
+                    mac: None,
+                    device_id: Some(b.id),
+                    firmware: b.firmware,
+                    note: Some(match b.api {
+                        Some(api) => format!("« {} » · API {api} · appuyez sur son bouton pour l'ajouter", b.name),
+                        None => format!("« {} » · appuyez sur son bouton pour l'ajouter", b.name),
+                    }),
                     supported: true,
                     flags: 0,
                 });

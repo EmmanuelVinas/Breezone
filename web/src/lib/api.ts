@@ -778,7 +778,7 @@ export type SourceInput = {
 
 /** A supported product found on the network. */
 export type FoundProduct = {
-  brand: "airzone" | "shelly" | "v2c" | "hoymiles" | "homekit"
+  brand: "airzone" | "shelly" | "v2c" | "hoymiles" | "homekit" | "hue"
   driver: string
   model: string
   host: string
@@ -889,6 +889,9 @@ export const api = {
   updateSource: (id: number, input: SourceInput) =>
     request<SourceView>("PUT", `/api/sources/${id}`, input),
   deleteSource: (id: number) => request<void>("DELETE", `/api/sources/${id}`),
+  /** Adds a Hue bridge: its round button pressed in the last 30 seconds. */
+  linkHue: (input: { host: string; name: string }) =>
+    request<SourceView>("POST", "/api/hue/link", input),
   /** Pairs Breezone with a HomeKit accessory (its 8-digit code), then adds it as a module. */
   pairHomekit: (input: {
     host: string

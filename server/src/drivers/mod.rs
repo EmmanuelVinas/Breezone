@@ -8,6 +8,7 @@
 
 pub mod homekit;
 pub mod hoymiles;
+pub mod hue;
 pub mod shelly;
 pub mod trydan;
 
@@ -103,7 +104,7 @@ pub struct DriverInfo {
 }
 
 pub fn available() -> Vec<DriverInfo> {
-    vec![shelly::info(), trydan::info(), hoymiles::info(), homekit::info()]
+    vec![shelly::info(), trydan::info(), hoymiles::info(), homekit::info(), hue::info()]
 }
 
 /// The driver of a source, from its configuration and its secret (decrypted).
@@ -113,6 +114,7 @@ pub fn create(driver: &str, config: &Value, secret: Option<&str>) -> Result<Arc<
         "trydan" => Ok(Arc::new(trydan::Trydan::new(config)?)),
         "hoymiles" => Ok(Arc::new(hoymiles::Hoymiles::new(config)?)),
         "homekit" => Ok(Arc::new(homekit::HomeKit::new(config, secret)?)),
+        "hue" => Ok(Arc::new(hue::Hue::new(config, secret)?)),
         other => Err(format!("unknown driver: {other}")),
     }
 }
