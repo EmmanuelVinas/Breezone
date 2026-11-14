@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.3] - 2026-11-14
+
 ### Added
 
 - Solar page (web), for the detail: the production now and today, self-consumption and what is

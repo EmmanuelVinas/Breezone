@@ -1,6 +1,6 @@
 [package]
 name = "breezone-server"
-version = "0.11.0-beta.2"
+version = "0.11.0-beta.3"
 edition = "2021"
 description = "Breezone — self-hosted hub that drives the local Airzone API and serves the mobile app and web UI"
 default-run = "breezone-server"
