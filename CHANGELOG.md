@@ -6,6 +6,15 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.7] - 2026-11-14
+
+### Fixed
+
+- HomeKit pairing of Legrand accessories (Home + Control gateway, Ecometer): they refused Breezone's
+  controller identifier, which was not a UUID, and the pairing ended in « Code incorrect » although
+  the code was right. Breezone now gives a UUID, as Apple's controllers do. A refusal after the code
+  is accepted no longer says the code is wrong.
+
 ## [0.11.0-beta.6] - 2026-11-14
 
 ### Added

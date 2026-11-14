@@ -90,6 +90,13 @@ pub fn setup_code(typed: &str) -> Option<String> {
     Some(format!("{}-{}-{}", &digits[..3], &digits[3..5], &digits[5..]))
 }
 
+fn uuid_v4(mut b: [u8; 16]) -> String {
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    let h = hex::encode_upper(b);
+    format!("{}-{}-{}-{}-{}", &h[..8], &h[8..12], &h[12..16], &h[16..20], &h[20..])
+}
+
 /// Pair Setup (HAP, chapter 5.6) in one go, for an accessory whose code is printed.
 pub async fn pair_setup(addr: &str, code: &str, with_auth: bool) -> Result<Pairing, HapError> {
     PairSetup::start(addr, with_auth).await?.finish(code).await
@@ -125,7 +132,8 @@ impl PairSetup {
         }
 
         // Breezone's long-term identity for this accessory.
-        let controller_id = format!("breezone-{}", hex::encode(crate::auth::random_bytes::<6>()));
+        // A UUID, as Apple's controllers send it: some accessories (Legrand) refuse anything else.
+        let controller_id = uuid_v4(crate::auth::random_bytes::<16>());
         let me = SigningKey::from_bytes(&crate::auth::random_bytes::<32>());
         let ltpk = me.verifying_key().to_bytes();
         let x = hkdf("Pair-Setup-Controller-Sign-Salt", &agreed.key, "Pair-Setup-Controller-Sign-Info");
@@ -137,7 +145,11 @@ impl PairSetup {
         let inner = tlv::encode(&[(tlv::IDENTIFIER, controller_id.as_bytes()), (tlv::PUBLIC_KEY, &ltpk), (tlv::SIGNATURE, &signature)]);
         let key = hkdf("Pair-Setup-Encrypt-Salt", &agreed.key, "Pair-Setup-Encrypt-Info");
         let sealed = seal(&key, label("PS-Msg05"), &[], &inner);
-        let m6 = conn.tlv("/pair-setup", &[(tlv::STATE, &[5]), (tlv::ENCRYPTED_DATA, &sealed)]).await?;
+        // The code was right: a refusal now is about Breezone's identity, not the code.
+        let m6 = conn.tlv("/pair-setup", &[(tlv::STATE, &[5]), (tlv::ENCRYPTED_DATA, &sealed)]).await.map_err(|e| match e {
+            HapError::Accessory(code) => HapError::Protocol(format!("code accepted, identity refused (M6, error {code})")),
+            e => e,
+        })?;
 
         let sealed = tlv::get(&m6, tlv::ENCRYPTED_DATA).ok_or_else(|| HapError::Protocol("pair-setup: no data".into()))?;
         let inner = tlv::decode(&open(&key, label("PS-Msg06"), &[], sealed)?).map_err(HapError::Protocol)?;
