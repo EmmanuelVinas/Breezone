@@ -184,6 +184,11 @@ pub struct HistoryQuery {
     pub hours: i64,
     #[serde(default = "default_points")]
     pub points: i64,
+    /// A period instead of the last hours (timestamps), e.g. a local day.
+    pub from: Option<i64>,
+    pub until: Option<i64>,
+    /// Seconds per point (default: the period divided by `points`).
+    pub bucket: Option<i64>,
 }
 
 fn default_hours() -> i64 {
@@ -203,17 +208,30 @@ pub struct HistoryView {
     pub series: BTreeMap<String, Vec<(i64, f64)>>,
 }
 
-/// The history of a device: every number of its state, over the last hours.
+/// The history of a device: every number of its state, over the last hours or a given period.
 pub async fn device_history(State(state): State<AppState>, user: AuthUser, Path(id): Path<i64>, Query(q): Query<HistoryQuery>) -> ApiResult<Json<HistoryView>> {
     let device = db::device_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("device"))?;
     if let Some(inst) = device.installation_id {
         Access::of(&state.db, &user).await?.view(inst)?;
     }
-    let span = q.hours.clamp(1, 24 * 31) * 3600;
-    let bucket = (span / q.points.clamp(6, 500)).max(60);
-    let now = db::now();
-    let from = (now - span).div_euclid(bucket) * bucket;
-    let samples = db::device_samples(&state.db, &[id], &[], from, now + 1).await?;
+    let (from, until, bucket) = match (q.from, q.until) {
+        (Some(from), Some(until)) => {
+            if until <= from {
+                return Err(ApiError::bad_request("until must come after from"));
+            }
+            let span = (until - from).min(31 * 86_400);
+            let bucket = q.bucket.unwrap_or(span / q.points.clamp(6, 500)).clamp(60, span);
+            (from, from + span, bucket)
+        }
+        (None, None) => {
+            let span = q.hours.clamp(1, 24 * 31) * 3600;
+            let bucket = q.bucket.unwrap_or(span / q.points.clamp(6, 500)).max(60);
+            let now = db::now();
+            ((now - span).div_euclid(bucket) * bucket, now + 1, bucket)
+        }
+        _ => return Err(ApiError::bad_request("from and until go together")),
+    };
+    let samples = db::device_samples(&state.db, &[id], &[], from, until).await?;
     // Per field and bucket: (sum, count, last).
     let mut acc: BTreeMap<String, BTreeMap<i64, (f64, u32, f64)>> = BTreeMap::new();
     for s in samples {

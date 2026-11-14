@@ -8,9 +8,12 @@ All notable changes are documented here. The format follows
 
 ### Added
 
-- Solar page (web): the production now and today, self-consumption and what is returned, each
-  inverter with its temperature, voltage and frequency, its panels laid out with their power, voltage,
-  current and production, today's curve beside the consumption, and the last 30 days.
+- Solar page (web), for the detail: the production now and today, self-consumption and what is
+  returned, each inverter with its temperature, voltage and frequency, its panels with their power,
+  voltage, current and production, the power of each panel along the day (a curve per panel), today's
+  production beside the consumption, and the last 30 days. The energy page keeps the solar production
+  (figures, flow, curve, days) and leads to it.
+- Device history over a period (`/api/devices/{id}/history?from=&until=&bucket=`), e.g. a local day.
 - The menu in sections, as in the mockups: Home (energy, solar, charging), Automations, Server
   (modules, settings).
 

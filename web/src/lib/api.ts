@@ -845,6 +845,12 @@ export type DeviceHistory = {
 
 export const api = {
   devices: () => request<DeviceView[]>("GET", "/api/devices"),
+  /** The history of a device over a period (timestamps), `bucket` seconds per point. */
+  deviceHistoryBetween: (id: number, from: number, until: number, bucket: number) =>
+    request<DeviceHistory>(
+      "GET",
+      `/api/devices/${id}/history?from=${from}&until=${until}&bucket=${bucket}`
+    ),
   deviceHistory: (id: number, hours = 24, points = 96) =>
     request<DeviceHistory>(
       "GET",

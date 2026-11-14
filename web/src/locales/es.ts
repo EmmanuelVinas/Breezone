@@ -866,7 +866,6 @@ const es: Record<string, string> = {
   "{value} aujourd'hui": "{value} hoy",
   "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan et clés Wi-Fi Hoymiles.":
     "Breezone busca en la red los productos que sabe controlar: WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), cargadores V2C Trydan y llaves Wi-Fi Hoymiles.",
-  "Panneaux solaires": "Paneles solares",
   "{kwh} aujourd'hui": "{kwh} hoy",
   "{n} panneau": "{n} panel",
   "{n} panneaux": "{n} paneles",
@@ -972,6 +971,11 @@ const es: Record<string, string> = {
   "Toujours compter": "Contar siempre",
   "Non comptée : « {name} » mesure déjà la production":
     "No contada: «{name}» ya mide la producción",
+  "Total des panneaux": "Total de los paneles",
+  "Production par panneau": "Producción por panel",
+  "Puissance de chaque panneau toutes les 15 minutes":
+    "Potencia de cada panel cada 15 minutos",
+  maintenant: "ahora",
 }
 
 export default es

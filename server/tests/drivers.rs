@@ -241,6 +241,14 @@ async fn the_measures_have_a_history_and_make_the_energy_of_the_home() {
     assert_eq!(h["bucket"], 60);
     assert_eq!(h["series"]["power"][0][1], 2410.5, "{h}");
     assert!(h["series"]["energy_in"][0][1].as_f64().unwrap() > 1234.567, "{h}");
+    // Over a given period, with its own buckets.
+    let from = h["series"]["power"][0][0].as_i64().unwrap() - 3600;
+    let (s, p) = server.call("GET", &format!("/api/devices/{meter}/history?from={from}&until={}&bucket=900", from + 7200), t, None).await;
+    assert_eq!(s, StatusCode::OK, "{p}");
+    assert_eq!(p["bucket"], 900);
+    assert_eq!(p["series"]["power"][0][1], 2410.5, "{p}");
+    let (s, _) = server.call("GET", &format!("/api/devices/{meter}/history?from={from}"), t, None).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
     let (s, _) = server.call("GET", "/api/devices/999999/history", t, None).await;
     assert_eq!(s, StatusCode::NOT_FOUND);
 
