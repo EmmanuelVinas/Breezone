@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.10] - 2026-11-14
+
 ### Added
 
 - Settings › Rooms: the rooms of the house (create, rename, order, delete; the objects of a deleted
