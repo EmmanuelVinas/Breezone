@@ -155,7 +155,7 @@ function RemoteTile({ inst }: { inst: CloudInstallation }) {
           <DialogTitle>{inst.name}</DialogTitle>
           <DialogDescription>
             {t(
-              "Cette installation figure dans votre compte Airzone, mais ce serveur Breezone ne joint pas son WebServer. S'il est sur le même réseau, indiquez son adresse locale ; s'il est sur un autre site, ajoutez le serveur Breezone installé là-bas (Réglages › Nœuds)."
+              "Cette installation figure dans votre compte Airzone, mais ce serveur Breezone ne joint pas son WebServer. S'il est sur le même réseau, indiquez son adresse locale ; s'il est sur un autre site, ajoutez le serveur Breezone installé là-bas (Réglages › Serveurs)."
             )}
           </DialogDescription>
         </DialogHeader>

@@ -105,10 +105,10 @@ pub fn lookup(source: &str) -> Option<Text> {
             "HTTP is only accepted towards a local address: use the https:// address of the server",
             "HTTP solo se acepta hacia una dirección local: use la dirección https:// del servidor",
         ),
-        "indiquez l'adresse à laquelle l'autre serveur joindra celui-ci (Réglages › Partages › Adresse publique)" => (
-            "indiquez l'adresse à laquelle l'autre serveur joindra celui-ci (Réglages › Partages › Adresse publique)",
-            "enter the address at which the other server will reach this one (Settings › Shares › Public address)",
-            "indique la dirección con la que el otro servidor llegará a este (Ajustes › Compartidos › Dirección pública)",
+        "indiquez l'adresse à laquelle l'autre serveur joindra celui-ci (Réglages › Serveurs › Adresse publique)" => (
+            "indiquez l'adresse à laquelle l'autre serveur joindra celui-ci (Réglages › Serveurs › Adresse publique)",
+            "enter the address at which the other server will reach this one (Settings › Servers › Public address)",
+            "indique la dirección con la que el otro servidor llegará a este (Ajustes › Servidores › Dirección pública)",
         ),
         "indiquez le réseau à analyser, par exemple 192.168.1.0/24" => (
             "indiquez le réseau à analyser, par exemple 192.168.1.0/24",
@@ -145,10 +145,10 @@ pub fn lookup(source: &str) -> Option<Text> {
             "unknown or already used invitation: create a new share",
             "invitación desconocida o ya utilizada: cree un nuevo uso compartido",
         ),
-        "jeton d'invitation invalide : copiez-le en entier depuis Réglages › Partages du serveur qui partage" => (
-            "jeton d'invitation invalide : copiez-le en entier depuis Réglages › Partages du serveur qui partage",
-            "invalid invitation token: copy it entirely from Settings › Shares on the sharing server",
-            "token de invitación no válido: cópielo entero desde Ajustes › Compartidos del servidor que comparte",
+        "jeton d'invitation invalide : copiez-le en entier depuis Réglages › Serveurs du serveur qui partage" => (
+            "jeton d'invitation invalide : copiez-le en entier depuis Réglages › Serveurs du serveur qui partage",
+            "invalid invitation token: copy it entirely from Settings › Servers on the sharing server",
+            "token de invitación no válido: cópielo entero desde Ajustes › Servidores del servidor que comparte",
         ),
         "l'autre serveur n'a pas envoyé sa clé publique : mettez-le à jour" => (
             "l'autre serveur n'a pas envoyé sa clé publique : mettez-le à jour",

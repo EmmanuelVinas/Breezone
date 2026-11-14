@@ -196,7 +196,7 @@ pub async fn create_share(State(state): State<AppState>, AdminUser(admin): Admin
     let url = match req.url.as_deref().map(str::trim).filter(|u| !u.is_empty()) {
         Some(u) => federation::normalize_url(u)?,
         None => {
-            me.public_url.clone().ok_or_else(|| ApiError::bad_request("indiquez l'adresse à laquelle l'autre serveur joindra celui-ci (Réglages › Partages › Adresse publique)"))?
+            me.public_url.clone().ok_or_else(|| ApiError::bad_request("indiquez l'adresse à laquelle l'autre serveur joindra celui-ci (Réglages › Serveurs › Adresse publique)"))?
         }
     };
     let (code, hash) = federation::new_pairing_code();
@@ -454,7 +454,7 @@ pub async fn add_node(State(state): State<AppState>, AdminUser(admin): AdminUser
                 None => me
                     .public_url
                     .clone()
-                    .ok_or_else(|| ApiError::bad_request("indiquez l'adresse à laquelle l'autre serveur joindra celui-ci (Réglages › Partages › Adresse publique)"))?,
+                    .ok_or_else(|| ApiError::bad_request("indiquez l'adresse à laquelle l'autre serveur joindra celui-ci (Réglages › Serveurs › Adresse publique)"))?,
             };
             let mut ids = r.installation_ids.clone();
             ids.sort_unstable();
@@ -515,9 +515,9 @@ pub async fn add_node(State(state): State<AppState>, AdminUser(admin): AdminUser
             None,
             Some(&admin.username),
             crate::text!(
-                "Nœud « {0} » ajouté : en attente d'acceptation sur ce serveur (Réglages › Partages)",
-                "Node “{0}” added: waiting for approval on that server (Settings › Shares)",
-                "Nodo «{0}» añadido: pendiente de aceptación en ese servidor (Ajustes › Compartidos)",
+                "Nœud « {0} » ajouté : en attente d'acceptation sur ce serveur (Réglages › Serveurs)",
+                "Node “{0}” added: waiting for approval on that server (Settings › Servers)",
+                "Nodo «{0}» añadido: pendiente de aceptación en ese servidor (Ajustes › Servidores)",
                 paired.name
             ),
             None,
@@ -826,9 +826,9 @@ pub async fn pair(State(state): State<AppState>, signed: Signed) -> ApiResult<Js
             None,
             None,
             crate::text!(
-                "Le serveur « {0} » ({2}) demande l'accès au partage « {1} » : acceptez ou refusez dans Réglages › Partages",
-                "Server “{0}” ({2}) asks for access to share “{1}”: accept or refuse in Settings › Shares",
-                "El servidor «{0}» ({2}) pide acceso al uso compartido «{1}»: acepte o rechace en Ajustes › Compartidos",
+                "Le serveur « {0} » ({2}) demande l'accès au partage « {1} » : acceptez ou refusez dans Réglages › Serveurs",
+                "Server “{0}” ({2}) asks for access to share “{1}”: accept or refuse in Settings › Servers",
+                "El servidor «{0}» ({2}) pide acceso al uso compartido «{1}»: acepte o rechace en Ajustes › Servidores",
                 name,
                 share.label,
                 from

@@ -387,7 +387,7 @@ function LinkDialog({
           <div className="grid gap-3">
             <p className="text-sm text-muted-foreground">
               {t(
-                "Sur le serveur Breezone de ce site : Réglages › Partages › Nouveau partage, puis ajoutez son jeton ici. Ses installations sont reliées automatiquement (même WebServer)."
+                "Sur le serveur Breezone de ce site : Réglages › Serveurs › Nouveau partage, puis ajoutez son jeton ici. Ses installations sont reliées automatiquement (même WebServer)."
               )}
             </p>
             {(nodes.data ?? []).map((n) => (
@@ -414,7 +414,7 @@ function LinkDialog({
                   <AlertTitle>{t("En attente d'acceptation")}</AlertTitle>
                   <AlertDescription>
                     {t(
-                      "« {name} » doit encore accepter votre demande : sur ce serveur-là, Réglages › Partages › Accepter. Ses installations apparaîtront ensuite ici.",
+                      "« {name} » doit encore accepter votre demande : sur ce serveur-là, Réglages › Serveurs › Accepter. Ses installations apparaîtront ensuite ici.",
                       {
                         name: n.name,
                       }
