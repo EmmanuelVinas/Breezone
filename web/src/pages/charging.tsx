@@ -16,7 +16,8 @@ import {
 import type { DeviceView } from "@/lib/api"
 import { api, currentUser } from "@/lib/api"
 import { CHARGER_STATUS, CHARGER_TONE } from "@/lib/charger"
-import { duration, time } from "@/lib/format"
+import { duration, relativeTime, time } from "@/lib/format"
+import { cn } from "@/lib/utils"
 import { locale, t } from "@/lib/i18n"
 import { PageHeader } from "@/components/app-shell"
 import { Badge } from "@/components/ui/badge"
@@ -64,6 +65,7 @@ type ChargerState = {
   auto_limit?: boolean
   energy_goal?: number
   power?: number
+  current?: number
 }
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
@@ -86,6 +88,8 @@ function shownStatus(s: ChargerState) {
   const plugged = s.status === "plugged" || s.status === "charging"
   return s.paused && plugged ? "paused" : (s.status ?? "fault")
 }
+
+const DRIVER_LABEL: Record<string, string> = { trydan: "V2C Trydan" }
 
 const STATUS_TITLE: Record<string, string> = {
   ...CHARGER_STATUS,
@@ -246,24 +250,50 @@ function StartDialog({
 }
 
 const curveConfig = {
+  surplus: { label: t("Surplus solaire"), color: "var(--warning)" },
   power: { label: t("Puissance de charge"), color: "var(--primary)" },
 } satisfies ChartConfig
 
+/**
+ * The charging power over the last 24 hours, and the solar surplus of today (what the home
+ * returns to the grid, plus what the charger takes): it needs a main meter and a solar measure.
+ */
 function PowerCurve({ device }: { device: DeviceView }) {
   const history = useQuery({
     queryKey: ["device-history", device.id, 24],
     queryFn: () => api.deviceHistory(device.id, 24, 96),
     refetchInterval: 60_000,
   })
-  const points = (history.data?.series.power ?? []).map(([ts, w]) => ({
-    ts,
-    power: w / 1000,
-  }))
+  const live = useQuery({ queryKey: ["energy-live"], queryFn: api.energyLive })
+  const withSurplus = !!live.data?.roles.grid && !!live.data?.roles.solar
+  const day = useQuery({
+    queryKey: ["energy-day", "today"],
+    queryFn: () => api.energyDay(),
+    enabled: withSurplus,
+    refetchInterval: 60_000,
+  })
+  const grid = new Map(
+    (day.data?.points ?? [])
+      .filter((p) => p.grid !== null)
+      .map((p) => [p.ts, p.grid!])
+  )
+  const points = (history.data?.series.power ?? []).map(([ts, w]) => {
+    const g = grid.get(ts)
+    return {
+      ts,
+      power: w / 1000,
+      surplus: g === undefined ? null : Math.max(0, -g + w) / 1000,
+    }
+  })
   return (
     <Card className="rounded-3xl">
       <CardHeader>
         <CardTitle>{t("Dernières 24 heures")}</CardTitle>
-        <CardDescription>{t("Puissance de charge")}</CardDescription>
+        <CardDescription>
+          {withSurplus
+            ? t("Puissance de charge et surplus solaire disponible")
+            : t("Puissance de charge")}
+        </CardDescription>
       </CardHeader>
       <CardContent>
         {history.isLoading ? (
@@ -295,7 +325,7 @@ function PowerCurve({ device }: { device: DeviceView }) {
                 tickLine={false}
                 axisLine={false}
                 width={56}
-                tickFormatter={(v: number) => `${number(v, 1)} kW`}
+                tickFormatter={(v: number) => kw(v * 1000)}
               />
               <ChartTooltip
                 content={
@@ -303,14 +333,35 @@ function PowerCurve({ device }: { device: DeviceView }) {
                     labelFormatter={(_, p) =>
                       p?.[0] ? time(Number(p[0].payload.ts)) : ""
                     }
-                    formatter={(value) => (
-                      <span className="tabular font-medium">
-                        {kw(Number(value) * 1000)}
-                      </span>
+                    formatter={(value, name, item) => (
+                      <div className="flex w-full items-center justify-between gap-4">
+                        <span className="flex items-center gap-1.5 text-muted-foreground">
+                          <span
+                            className="size-2 rounded-[2px]"
+                            style={{ background: item.color }}
+                          />
+                          {curveConfig[name as keyof typeof curveConfig]?.label}
+                        </span>
+                        <span className="tabular font-medium">
+                          {kw(Number(value) * 1000)}
+                        </span>
+                      </div>
                     )}
                   />
                 }
               />
+              {withSurplus && (
+                <Area
+                  dataKey="surplus"
+                  type="monotone"
+                  stroke="var(--color-surplus)"
+                  fill="var(--color-surplus)"
+                  fillOpacity={0.14}
+                  strokeWidth={1.5}
+                  connectNulls={false}
+                  isAnimationActive={false}
+                />
+              )}
               <Area
                 dataKey="power"
                 type="stepAfter"
@@ -328,7 +379,14 @@ function PowerCurve({ device }: { device: DeviceView }) {
   )
 }
 
-function LimitCard({ device, admin }: { device: DeviceView; admin: boolean }) {
+/** The current Breezone asks for, and a link to the module (who sets the current, address). */
+function SettingsCard({
+  device,
+  admin,
+}: {
+  device: DeviceView
+  admin: boolean
+}) {
   const s = (device.state ?? {}) as ChargerState
   const act = useAct(device)
   const min = s.limit_min ?? 6
@@ -340,39 +398,17 @@ function LimitCard({ device, admin }: { device: DeviceView; admin: boolean }) {
   return (
     <Card className="rounded-3xl">
       <CardHeader>
-        <CardTitle>{t("Intensité de charge")}</CardTitle>
+        <CardTitle>{t("Réglages de la borne")}</CardTitle>
         <CardDescription>
-          {t("Qui décide de l'intensité pendant la charge")}
+          {s.auto_limit
+            ? t(
+                "La borne adapte l'intensité selon sa propre pince (mode dynamique)."
+              )
+            : t("Intensité maximale demandée par Breezone pendant la charge")}
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-5">
-        {s.auto_limit !== undefined && (
-          <ToggleGroup
-            type="single"
-            variant="outline"
-            size="sm"
-            value={s.auto_limit ? "charger" : "breezone"}
-            disabled={disabled}
-            onValueChange={(v) =>
-              v &&
-              act.mutate({
-                action: "set_auto_limit",
-                params: { on: v === "charger" },
-              })
-            }
-            className="justify-start"
-          >
-            <ToggleGroupItem value="charger">{t("La borne")}</ToggleGroupItem>
-            <ToggleGroupItem value="breezone">Breezone</ToggleGroupItem>
-          </ToggleGroup>
-        )}
-        {s.auto_limit ? (
-          <p className="text-sm text-muted-foreground">
-            {t(
-              "La borne adapte l'intensité selon sa propre pince (mode dynamique). Choisissez Breezone pour fixer un maximum."
-            )}
-          </p>
-        ) : (
+        {!s.auto_limit && (
           <div className="grid gap-2">
             <div className="flex items-center justify-between text-sm">
               <span>{t("Intensité maximale")}</span>
@@ -401,12 +437,59 @@ function LimitCard({ device, admin }: { device: DeviceView; admin: boolean }) {
             </div>
           </div>
         )}
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-muted/60 px-3 py-2.5 text-sm">
+          <span className="text-muted-foreground">
+            {t("Plage de la borne : {min}–{max} A", { min, max })}
+          </span>
+          {admin && device.source_id !== null && (
+            <Link
+              to={`/settings?tab=modules&module=${device.source_id}`}
+              className="font-medium text-primary hover:underline"
+            >
+              {t("Réglages du module ›")}
+            </Link>
+          )}
+        </div>
       </CardContent>
     </Card>
   )
 }
 
-function ChargerCard({ device }: { device: DeviceView }) {
+/** The states every charger shares, whatever its brand. */
+function StatesCard() {
+  return (
+    <Card className="rounded-3xl">
+      <CardHeader>
+        <CardTitle>{t("États de la borne")}</CardTitle>
+        <CardDescription>
+          {t(
+            "Vocabulaire commun à toutes les bornes, quel que soit le protocole"
+          )}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-wrap gap-2">
+        {Object.entries(STATUS_TITLE).map(([k, label]) => (
+          <Badge key={k} variant="outline" className="gap-1.5">
+            <span
+              className="size-2 rounded-full"
+              style={{ background: CHARGER_TONE[k] }}
+            />
+            {label}
+          </Badge>
+        ))}
+      </CardContent>
+    </Card>
+  )
+}
+
+/** `readAt`: when the state was read (seconds). */
+function ChargerCard({
+  device,
+  readAt,
+}: {
+  device: DeviceView
+  readAt: number
+}) {
   const admin = currentUser()?.role === "admin"
   const s = (device.state ?? {}) as ChargerState
   const status = device.available ? shownStatus(s) : "fault"
@@ -419,6 +502,12 @@ function ChargerCard({ device }: { device: DeviceView }) {
       ? Math.min(1, s.session_energy / s.energy_goal)
       : null
   const disabled = !admin || !device.available || act.isPending
+  // With an energy goal and a car charging: when it is reached at the current power.
+  const left = s.energy_goal ? s.energy_goal - (s.session_energy ?? 0) : null
+  const finish =
+    charging && left !== null && left > 0 && (s.power ?? 0) > 100
+      ? time(Math.round(readAt + (left / (s.power! / 1000)) * 3600))
+      : null
 
   return (
     <div className="grid gap-4">
@@ -515,10 +604,15 @@ function ChargerCard({ device }: { device: DeviceView }) {
               )}
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
             <Tile
               label={t("Puissance")}
               value={kw(s.power)}
+              sub={
+                typeof s.current === "number" && s.current > 0
+                  ? `${number(s.current, 1)} A`
+                  : undefined
+              }
               color={charging ? "var(--primary)" : undefined}
             />
             <Tile
@@ -540,8 +634,18 @@ function ChargerCard({ device }: { device: DeviceView }) {
               }
             />
             <Tile
-              label={t("Plage")}
-              value={`${s.limit_min ?? "–"}–${s.limit_max ?? "–"} A`}
+              label={t("Objectif")}
+              value={
+                s.energy_goal
+                  ? `+${kwh(s.energy_goal - (s.session_energy ?? 0) > 0 ? s.energy_goal - (s.session_energy ?? 0) : 0)}`
+                  : "–"
+              }
+              sub={s.energy_goal ? t("restants") : t("aucun")}
+            />
+            <Tile
+              label={t("Fin estimée")}
+              value={finish ?? "–"}
+              sub={finish ? t("au rythme actuel") : undefined}
             />
           </div>
           {progress !== null && (
@@ -564,12 +668,13 @@ function ChargerCard({ device }: { device: DeviceView }) {
       </Card>
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <PowerCurve device={device} />
-        <LimitCard
+        <SettingsCard
           key={`${s.limit}-${s.auto_limit}`}
           device={device}
           admin={admin}
         />
       </div>
+      <StatesCard />
       {starting && (
         <StartDialog
           device={device}
@@ -596,7 +701,43 @@ export function ChargingPage() {
       <PageHeader
         title={t("Recharge")}
         description={
-          chargers.length ? t("Mis à jour toutes les 5 s") : undefined
+          chargers.length === 1
+            ? [
+                chargers[0].name,
+                DRIVER_LABEL[chargers[0].source] ?? chargers[0].source,
+                typeof chargers[0].state?.limit_max === "number"
+                  ? t("{kw} kW max", {
+                      kw: number(
+                        ((chargers[0].state.limit_max as number) * 230) / 1000,
+                        1
+                      ),
+                    })
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")
+            : undefined
+        }
+        actions={
+          chargers.length > 0 && (
+            <Badge variant="outline" className="gap-1.5">
+              <span
+                className={cn(
+                  "size-2 rounded-full",
+                  chargers.every((c) => c.available)
+                    ? "bg-success"
+                    : "bg-destructive"
+                )}
+              />
+              {chargers.every((c) => c.available)
+                ? t("Connectée")
+                : t("Injoignable")}{" "}
+              ·{" "}
+              {t("relevé {when}", {
+                when: relativeTime(devices.dataUpdatedAt / 1000),
+              })}
+            </Badge>
+          )
         }
       />
       {devices.isLoading ? (
@@ -627,7 +768,11 @@ export function ChargingPage() {
       ) : (
         <div className="grid gap-8">
           {chargers.map((d) => (
-            <ChargerCard key={d.id} device={d} />
+            <ChargerCard
+              key={d.id}
+              device={d}
+              readAt={devices.dataUpdatedAt / 1000}
+            />
           ))}
         </div>
       )}

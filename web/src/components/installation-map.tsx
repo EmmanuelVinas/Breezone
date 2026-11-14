@@ -682,7 +682,7 @@ export function InstallationMap({
         {!list.length && !all.length && (
           <p className="text-sm text-muted-foreground">
             {t(
-              "Aucune installation : connectez votre compte Airzone (onglet « Compte Airzone »), ou ajoutez-en une."
+              "Aucune installation : connectez votre compte Airzone (onglet « Compte Airzone » ci-dessus), ou ajoutez-en une."
             )}
           </p>
         )}

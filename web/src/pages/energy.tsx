@@ -19,6 +19,7 @@ import {
   BatteryCharging,
   ChevronLeft,
   ChevronRight,
+  Download,
   Gauge,
   Home,
   Leaf,
@@ -54,9 +55,34 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 
-type Period = "day" | "week" | "month"
+type Period = "day" | "week" | "month" | "year"
 
-const PERIOD_DAYS: Record<Period, number> = { day: 1, week: 7, month: 30 }
+const PERIOD_DAYS: Record<Period, number> = {
+  day: 1,
+  week: 7,
+  month: 30,
+  year: 365,
+}
+
+/** Products providing the measures, as named in the page header. */
+const DRIVER_LABEL: Record<string, string> = {
+  shelly: "Shelly",
+  hoymiles: "Hoymiles",
+  trydan: "V2C Trydan",
+}
+
+/** Downloads rows as a CSV file (separator `;`, read by spreadsheets in every language). */
+function downloadCsv(name: string, rows: (string | number | null)[][]) {
+  const text = rows
+    .map((r) => r.map((v) => (v === null ? "" : String(v))).join(";"))
+    .join("\n")
+  const url = URL.createObjectURL(new Blob([text], { type: "text/csv" }))
+  const a = document.createElement("a")
+  a.href = url
+  a.download = name
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 const COLOR = {
   solar: "var(--warning)",
@@ -337,7 +363,7 @@ function FlowNode({
   )
 }
 
-function FlowCard({ live }: { live: EnergyLive }) {
+function FlowCard({ live, solarSub }: { live: EnergyLive; solarSub?: string }) {
   const { roles } = live
   const sources: ReactNode[] = []
   if (roles.solar)
@@ -347,6 +373,7 @@ function FlowCard({ live }: { live: EnergyLive }) {
           icon={Sun}
           label={t("Solaire")}
           value={watts(live.solar)}
+          sub={solarSub}
           color={COLOR.solar}
         />
         <FlowLink power={live.solar} toward="right" color={COLOR.solar} />
@@ -684,7 +711,7 @@ function Legend({ items }: { items: { label: string; color: string }[] }) {
 }
 
 const barsConfig = {
-  self_consumed: { label: t("Solaire consommé"), color: COLOR.solar },
+  self_consumed: { label: t("Autoconsommée"), color: COLOR.solar },
   discharged: { label: t("Batterie"), color: COLOR.battery },
   from_grid: { label: t("Réseau électrique"), color: COLOR.grid },
   consumption: { label: t("Consommation"), color: COLOR.grid },
@@ -694,26 +721,45 @@ const barsConfig = {
   },
 } satisfies ChartConfig
 
+/** Days grouped by month ("YYYY-MM"), for a year. */
+function byMonth(days: DayEnergy[]): DayEnergy[] {
+  const months: DayEnergy[][] = []
+  for (const d of days) {
+    const last = months[months.length - 1]
+    if (last && last[0].day.slice(0, 7) === d.day.slice(0, 7)) last.push(d)
+    else months.push([d])
+  }
+  return months.map((m) => ({ ...total(m), day: m[0].day.slice(0, 7) }))
+}
+
+function barLabel(day: string, style: "long" | "short") {
+  if (day.length === 7)
+    return new Date(`${day}-15T12:00:00`).toLocaleDateString(
+      locale(),
+      style === "long" ? { month: "long", year: "numeric" } : { month: "short" }
+    )
+  return dayLabel(day, style)
+}
+
+/**
+ * With a solar production: what it gave each day, used on the spot or returned (as the mockup).
+ * Without: the energy the home used each day.
+ */
 function DayBars({ days, live }: { days: DayEnergy[]; live: EnergyLive }) {
   const { roles } = live
-  const data = days.map((d) => {
-    const solar = roles.solar ? (d.self_consumed ?? 0) : 0
-    const battery = roles.battery ? (d.discharged ?? 0) : 0
-    return {
-      day: d.day,
-      self_consumed: roles.solar ? solar : null,
-      discharged: roles.battery ? battery : null,
-      from_grid: roles.grid
-        ? Math.max(0, (d.consumption ?? 0) - solar - battery)
-        : null,
-      consumption: roles.grid ? null : d.consumption,
-      exported: roles.solar ? d.exported : null,
-    }
-  })
+  const rows = days.length > 62 ? byMonth(days) : days
+  const data = rows.map((d) => ({
+    day: d.day,
+    self_consumed: roles.solar ? (d.self_consumed ?? 0) : null,
+    discharged: null as number | null,
+    from_grid: null as number | null,
+    consumption: roles.solar ? null : d.consumption,
+    exported: roles.solar ? (d.exported ?? 0) : null,
+  }))
   const keys = (
     ["self_consumed", "discharged", "from_grid", "consumption"] as const
   ).filter((k) => data.some((d) => d[k] !== null))
-  const withExport = data.some((d) => (d.exported ?? 0) > 0)
+  const withExport = roles.solar
   const top = Math.max(
     0,
     ...data.map((d) => keys.reduce((a, k) => a + (d[k] ?? 0), 0)),
@@ -723,11 +769,11 @@ function DayBars({ days, live }: { days: DayEnergy[]; live: EnergyLive }) {
   return (
     <Card className="rounded-3xl">
       <CardHeader>
-        <CardTitle>{t("Par jour")}</CardTitle>
+        <CardTitle>{rows !== days ? t("Par mois") : t("Par jour")}</CardTitle>
         <CardDescription>
           {roles.solar
-            ? t("D'où vient l'énergie consommée, et ce qui est injecté")
-            : t("Énergie consommée chaque jour")}
+            ? t("Production : autoconsommée et injectée")
+            : t("Énergie consommée")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -736,7 +782,7 @@ function DayBars({ days, live }: { days: DayEnergy[]; live: EnergyLive }) {
             <CartesianGrid vertical={false} />
             <XAxis
               dataKey="day"
-              tickFormatter={(d: string) => dayLabel(d, "short")}
+              tickFormatter={(d: string) => barLabel(d, "short")}
               tickLine={false}
               axisLine={false}
               minTickGap={16}
@@ -750,7 +796,7 @@ function DayBars({ days, live }: { days: DayEnergy[]; live: EnergyLive }) {
             <ChartTooltip
               content={
                 <ChartTooltipContent
-                  labelFormatter={(d) => dayLabel(String(d), "long")}
+                  labelFormatter={(d) => barLabel(String(d), "long")}
                   formatter={(value, name, item) => (
                     <div className="flex w-full items-center justify-between gap-4">
                       <span className="flex items-center gap-1.5 text-muted-foreground">
@@ -774,13 +820,14 @@ function DayBars({ days, live }: { days: DayEnergy[]; live: EnergyLive }) {
                 dataKey={k}
                 stackId="used"
                 fill={`var(--color-${k})`}
-                radius={i === keys.length - 1 ? [6, 6, 0, 0] : 0}
+                radius={i === keys.length - 1 && !withExport ? [6, 6, 0, 0] : 0}
                 isAnimationActive={false}
               />
             ))}
             {withExport && (
               <Bar
                 dataKey="exported"
+                stackId="used"
                 fill="var(--color-exported)"
                 radius={[6, 6, 0, 0]}
                 isAnimationActive={false}
@@ -1106,9 +1153,10 @@ export function EnergyPage() {
     queryFn: api.devices,
     refetchInterval: 5_000,
   })
+  const count = period === "year" ? 365 : 30
   const days = useQuery({
-    queryKey: ["energy-days", 30],
-    queryFn: () => api.energyDays(30),
+    queryKey: ["energy-days", count],
+    queryFn: () => api.energyDays(count),
     refetchInterval: 60_000,
   })
   const dayTotals = useQuery({
@@ -1126,9 +1174,54 @@ export function EnergyPage() {
       : shown.length
         ? total(shown)
         : undefined
-  const measured = (devices.data ?? []).filter(
+  const all = devices.data ?? []
+  const measured = all.filter(
     (d) => d.source_id !== null && d.traits.includes("energy.power@1")
   )
+  const products = [
+    ...new Set(
+      measured
+        .filter((d) => d.role)
+        .map((d) => DRIVER_LABEL[d.source] ?? d.source)
+    ),
+  ]
+  const panels = all.filter((d) => d.traits.includes("solar.panel@1")).length
+  const exportCsv = () => {
+    if (period === "day" && dayTotals.data)
+      downloadCsv(`breezone-energie-${date}.csv`, [
+        ["heure", "reseau_w", "solaire_w", "batterie_w", "maison_w"],
+        ...dayTotals.data.points.map((p) => [
+          time(p.ts),
+          p.grid,
+          p.solar,
+          p.battery,
+          p.home,
+        ]),
+      ])
+    else
+      downloadCsv(`breezone-energie-${shown[0]?.day ?? today}-${today}.csv`, [
+        [
+          "jour",
+          "consommation_kwh",
+          "importe_kwh",
+          "injecte_kwh",
+          "production_kwh",
+          "autoconsomme_kwh",
+          "charge_kwh",
+          "decharge_kwh",
+        ],
+        ...shown.map((d) => [
+          d.day,
+          d.consumption,
+          d.imported,
+          d.exported,
+          d.production,
+          d.self_consumed,
+          d.charged,
+          d.discharged,
+        ]),
+      ])
+  }
 
   return (
     <>
@@ -1136,23 +1229,31 @@ export function EnergyPage() {
         title={t("Énergie")}
         description={
           measured.length
-            ? tn(measured.length, "{n} mesure", "{n} mesures") +
-              (l?.roles.grid ? ` · ${t("compteur général")}` : "")
+            ? [
+                ...products,
+                tn(measured.length, "{n} mesure", "{n} mesures"),
+              ].join(" · ")
             : undefined
         }
         actions={
           anyRole && (
-            <ToggleGroup
-              type="single"
-              variant="outline"
-              size="sm"
-              value={period}
-              onValueChange={(v) => v && setPeriod(v as Period)}
-            >
-              <ToggleGroupItem value="day">{t("Jour")}</ToggleGroupItem>
-              <ToggleGroupItem value="week">{t("7 jours")}</ToggleGroupItem>
-              <ToggleGroupItem value="month">{t("30 jours")}</ToggleGroupItem>
-            </ToggleGroup>
+            <>
+              <ToggleGroup
+                type="single"
+                variant="outline"
+                size="sm"
+                value={period}
+                onValueChange={(v) => v && setPeriod(v as Period)}
+              >
+                <ToggleGroupItem value="day">{t("Jour")}</ToggleGroupItem>
+                <ToggleGroupItem value="week">{t("7 jours")}</ToggleGroupItem>
+                <ToggleGroupItem value="month">{t("30 jours")}</ToggleGroupItem>
+                <ToggleGroupItem value="year">{t("Année")}</ToggleGroupItem>
+              </ToggleGroup>
+              <Button variant="outline" size="sm" onClick={exportCsv}>
+                <Download /> {t("Exporter CSV")}
+              </Button>
+            </>
           )
         }
       />
@@ -1167,7 +1268,12 @@ export function EnergyPage() {
           ) : (
             <Skeleton className="mb-6 h-24 w-full rounded-3xl" />
           )}
-          <FlowCard live={l} />
+          <FlowCard
+            live={l}
+            solarSub={
+              panels ? tn(panels, "{n} panneau", "{n} panneaux") : undefined
+            }
+          />
           {period === "day" ? (
             <DayCurve date={date} today={today} onDate={setDate} live={l} />
           ) : null}

@@ -6,6 +6,19 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Settings › Modules (web), as in the mockups: the list of modules on the left, Airzone first, and
+  the detail of the chosen one on the right: its connection (address, search, test, state, firmware,
+  last reading), who sets the charging current for a charger, its devices, and what the module reads
+  and writes. Airzone is a module like the others: its installations and the Airzone account are in
+  its detail; the « Compte Airzone » and « Installations » tabs are gone (old links still lead there).
+- Energy page (web): the products measuring in the header, a Year period (bars per month), CSV export,
+  and with a solar production, the bars show it used on the spot or returned, as in the mockups.
+- Charging page (web): the charger and its maximum power in the header with when it was read, goal
+  and estimated end, the solar surplus beside the charging power, charger settings with a link to the
+  module, and the states shared by every charger.
+
 ## [0.11.0-beta.1] - 2026-11-14
 
 ### Added

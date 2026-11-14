@@ -104,8 +104,6 @@ const en: Record<string, string> = {
   "Ajouter une installation hors Airzone":
     "Add an installation outside Airzone",
   "Ajoutez au moins une zone à piloter.": "Add at least one zone to drive.",
-  "Ajoutez maintenant vos installations : le plus simple est de connecter votre compte Airzone (onglet « Compte Airzone »), Breezone trouvera vos WebServers sur le réseau et importera vos groupes.":
-    "Now add your installations: the easiest is to connect your Airzone account (“Airzone account” tab), Breezone will find your WebServers on the network and import your groups.",
   "Alertes Airzone": "Airzone alerts",
   "Allumage inchangé": "On/off unchanged",
   Allumée: "On",
@@ -126,8 +124,6 @@ const en: Record<string, string> = {
   "Aucun accès": "No access",
   "Aucun autre serveur pour l'instant.": "No other server yet.",
   "Aucune installation": "No installation",
-  "Aucune installation : connectez votre compte Airzone (onglet « Compte Airzone »), ou ajoutez-en une.":
-    "No installation: connect your Airzone account (“Airzone account” tab), or add one.",
   "Aucune installation dans ce compte.": "No installation in this account.",
   "Aucune installation libre sur ce serveur : choisissez une autre façon.":
     "No free installation on this server: choose another way.",
@@ -713,7 +709,6 @@ const en: Record<string, string> = {
   "Autres usages": "Other uses",
   "Pièce : {name}": "Room: {name}",
   "« {name} » retiré": "“{name}” removed",
-  "vu {when}": "seen {when}",
   "Ses appareils disparaissent de Breezone, avec leurs réglages. Le matériel n'est pas modifié.":
     "Its devices leave Breezone, with their settings. The hardware is not changed.",
   "Aucun appareil lu pour l'instant.": "No device read yet.",
@@ -728,10 +723,6 @@ const en: Record<string, string> = {
     "Searching the network… (a few seconds)",
   "Aucun produit trouvé sur {subnet}.": "No product found on {subnet}.",
   Modules: "Modules",
-  "Les produits que Breezone lit et pilote en plus d'Airzone. Donnez un rôle à chaque mesure d'énergie : la page Énergie s'en sert.":
-    "The products Breezone reads and drives besides Airzone. Give each energy measure a role: the energy page uses it.",
-  "Aucun module pour l'instant : « Ajouter un module » cherche ceux de votre réseau.":
-    "No module yet: “Add a module” looks for those on your network.",
   "Recevoir les versions bêta": "Receive beta versions",
   "Les nouveautés avant tout le monde, avec un risque de défauts. Si une bêta ne démarre pas, Breezone revient seul à la version d'avant.":
     "New features before everyone else, with a risk of bugs. If a beta does not start, Breezone goes back to the previous version on its own.",
@@ -800,12 +791,8 @@ const en: Record<string, string> = {
   "Jour suivant": "Next day",
   "Pas encore de relevés ce jour-là : ils s'accumulent toutes les 5 minutes.":
     "No readings that day yet: they build up every 5 minutes.",
-  "Solaire consommé": "Solar used",
   Injecté: "Returned",
   "Par jour": "Per day",
-  "D'où vient l'énergie consommée, et ce qui est injecté":
-    "Where the energy used comes from, and what is returned",
-  "Énergie consommée chaque jour": "Energy used each day",
   "Où va l'énergie": "Where the energy goes",
   "Consommation du jour par usage": "Today's consumption by use",
   "Consommation de la période par usage": "Consumption over the period by use",
@@ -823,7 +810,6 @@ const en: Record<string, string> = {
   "Ajoutez un compteur (Shelly Pro 3EM, Pro EM, prise…) dans Réglages › Modules, puis dites ce que mesure chaque voie : le réseau, la production solaire, ou la consommation d'un appareil.":
     "Add a meter (Shelly Pro 3EM, Pro EM, plug…) in Settings › Modules, then say what each channel measures: the grid, the solar production, or the consumption of a device.",
   "Ouvrir Réglages › Modules": "Open Settings › Modules",
-  "compteur général": "main meter",
   Jour: "Day",
   "7 jours": "7 days",
   "30 jours": "30 days",
@@ -855,12 +841,6 @@ const en: Record<string, string> = {
   "kWh ajoutés": "kWh added",
   "Puissance de charge": "Charging power",
   "Dernières 24 heures": "Last 24 hours",
-  "Intensité de charge": "Charging current",
-  "Qui décide de l'intensité pendant la charge":
-    "Who decides the current while charging",
-  "La borne": "The charger",
-  "La borne adapte l'intensité selon sa propre pince (mode dynamique). Choisissez Breezone pour fixer un maximum.":
-    "The charger adapts the current from its own clamp (dynamic mode). Choose Breezone to set a maximum.",
   "Session : {duration}": "Session: {duration}",
   "Aucune session en cours": "No session in progress",
   Verrouillée: "Locked",
@@ -870,7 +850,6 @@ const en: Record<string, string> = {
   "réglée par la borne": "set by the charger",
   "maximum fixé par Breezone": "maximum set by Breezone",
   Plage: "Range",
-  "Mis à jour toutes les 5 s": "Updated every 5 s",
   "Aucune borne": "No charger",
   "Ajoutez votre borne (V2C Trydan) dans Réglages › Modules : Breezone la trouve sur le réseau.":
     "Add your charger (V2C Trydan) in Settings › Modules: Breezone finds it on the network.",
@@ -883,6 +862,80 @@ const en: Record<string, string> = {
   "{kwh} aujourd'hui": "{kwh} today",
   "{n} panneau": "{n} panel",
   "{n} panneaux": "{n} panels",
+  "Aucune installation : connectez votre compte Airzone (onglet « Compte Airzone » ci-dessus), ou ajoutez-en une.":
+    "No installation: connect your Airzone account (“Airzone account” tab above), or add one.",
+  "1 appareil": "1 device",
+  "{n} appareils": "{n} devices",
+  "1 installation": "1 installation",
+  "Ajoutez maintenant vos installations : le plus simple est de connecter votre compte Airzone (module Airzone, onglet « Compte Airzone »), Breezone trouvera vos WebServers sur le réseau et importera vos groupes.":
+    "Now add your installations: the easiest is to connect your Airzone account (Airzone module, “Airzone account” tab); Breezone will find your WebServers on the network and import your groups.",
+  "« {name} » répond": "“{name}” answers",
+  "API HTTP locale de la borne : aucun compte ni réglage dans V2C Cloud":
+    "Local HTTP API of the charger: no account or setting in V2C Cloud",
+  "API RPC locale du Shelly : aucun compte Shelly Cloud nécessaire":
+    "Local RPC API of the Shelly: no Shelly Cloud account needed",
+  "Breezone désactive le mode dynamique de la borne et règle lui-même l'intensité.":
+    "Breezone turns the charger's dynamic mode off and sets the current itself.",
+  "Breezone ne fait que lire : utile si la borne a déjà sa pince de mesure et que ses réglages vous conviennent.":
+    "Breezone only reads: useful if the charger already has its clamp and its settings suit you.",
+  "Ce que fait le module": "What the module does",
+  "Climatisation · intégré à Breezone":
+    "Air conditioning · built into Breezone",
+  "Dernier relevé": "Last reading",
+  Écrit: "Writes",
+  "état, véhicule branché, puissance, énergie et durée de la session, intensité, pause, verrou":
+    "state, vehicle plugged in, power, session energy and duration, current, pause, lock",
+  État: "State",
+  Firmware: "Firmware",
+  "intensité (6 à 32 A), lancement et arrêt de la charge, verrou, mode dynamique":
+    "current (6 to 32 A), start and stop of the charge, lock, dynamic mode",
+  "L'API locale de la Trydan n'a pas de mot de passe : tout appareil du réseau local peut la piloter. Réservez-lui une adresse IP fixe (bail DHCP) ; si elle change, « Rechercher » retrouve la borne.":
+    "The Trydan's local API has no password: any device on the local network can drive it. Reserve it a fixed IP address (DHCP lease); if it changes, “Search” finds the charger again.",
+  "La borne (mode dynamique V2C)": "The charger (V2C dynamic mode)",
+  "La Trydan a son propre mode solaire (« dynamique ») : un seul des deux doit piloter.":
+    "The Trydan has its own solar mode (“dynamic”): only one of the two must drive it.",
+  Lu: "Reads",
+  "marche et arrêt des relais": "relays on and off",
+  "Nommez chaque appareil et dites ce que mesure chaque voie : la page Énergie s'en sert.":
+    "Name each device and say what each channel measures: the energy page uses it.",
+  "Nommez chaque appareil.": "Name each device.",
+  "Protocole local de la clé Wi-Fi (port 10081) : aucun compte S-Miles Cloud nécessaire":
+    "Local protocol of the Wi-Fi stick (port 10081): no S-Miles Cloud account needed",
+  "puissance, tension, fréquence, température et production de chaque micro-onduleur ; puissance et production de chaque panneau":
+    "power, voltage, frequency, temperature and production of each micro-inverter; power and production of each panel",
+  "puissance, tension, intensité, énergie consommée et injectée de chaque voie ; état des relais":
+    "power, voltage, current, energy consumed and returned on each channel; relay state",
+  "Qui règle l'intensité ?": "Who sets the current?",
+  Relevé: "Reading",
+  "rien : lecture seule": "nothing: read only",
+  "toutes les 30 s (la clé supporte mal les relevés fréquents)":
+    "every 30 s (the stick copes badly with frequent readings)",
+  "toutes les 5 s": "every 5 s",
+  "Surplus solaire": "Solar surplus",
+  "Puissance de charge et surplus solaire disponible":
+    "Charging power and available solar surplus",
+  "Réglages de la borne": "Charger settings",
+  "Intensité maximale demandée par Breezone pendant la charge":
+    "Maximum current Breezone asks for while charging",
+  "Plage de la borne : {min}–{max} A": "Charger range: {min}–{max} A",
+  "Réglages du module ›": "Module settings ›",
+  "États de la borne": "Charger states",
+  "Vocabulaire commun à toutes les bornes, quel que soit le protocole":
+    "Shared by every charger, whatever its protocol",
+  Objectif: "Goal",
+  restants: "left",
+  aucun: "none",
+  "Fin estimée": "Estimated end",
+  "au rythme actuel": "at the current rate",
+  "{kw} kW max": "{kw} kW max",
+  "relevé {when}": "read {when}",
+  Autoconsommée: "Self-consumed",
+  "Par mois": "Per month",
+  "Production : autoconsommée et injectée":
+    "Production: self-consumed and returned",
+  "Énergie consommée": "Energy used",
+  Année: "Year",
+  "Exporter CSV": "Export CSV",
 }
 
 export default en

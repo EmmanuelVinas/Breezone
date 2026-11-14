@@ -138,7 +138,7 @@ export function SetupPage() {
       throw new Error(t("Les mots de passe ne correspondent pas"))
     await api.setup(username, password)
     await qc.invalidateQueries({ queryKey: ["setup"] })
-    navigate("/settings?tab=cloud&welcome=1", { replace: true })
+    navigate("/settings?tab=modules&airzone=cloud&welcome=1", { replace: true })
   })
   return (
     <AuthLayout

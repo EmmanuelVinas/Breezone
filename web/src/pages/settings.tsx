@@ -1177,12 +1177,45 @@ function LanguageCard() {
   )
 }
 
+/** The configuration of the Airzone module: its installations and the Airzone account. */
+function AirzoneConfig({
+  section,
+  openAccess,
+}: {
+  section: "installations" | "cloud"
+  openAccess: string | null
+}) {
+  const [value, setValue] = useState<string>(section)
+  return (
+    <Tabs value={value} onValueChange={setValue}>
+      <TabsList className="mb-4">
+        <TabsTrigger value="installations">{t("Installations")}</TabsTrigger>
+        <TabsTrigger value="cloud">{t("Compte Airzone")}</TabsTrigger>
+      </TabsList>
+      <TabsContent value="installations">
+        <InstallationsTab openAccess={openAccess} />
+      </TabsContent>
+      <TabsContent value="cloud">
+        <CloudTab admin />
+      </TabsContent>
+    </Tabs>
+  )
+}
+
 export function SettingsPage() {
   const [params, setParams] = useSearchParams()
   const admin = currentUser()?.role === "admin"
+  // Airzone is a module: its installations and account are in Modules (old links still work).
+  const legacy = params.get("tab")
+  const airzone =
+    legacy === "cloud" || legacy === "installations"
+      ? legacy
+      : params.get("airzone") === "cloud"
+        ? "cloud"
+        : params.get("airzone")
+          ? "installations"
+          : null
   const tabs = [
-    { id: "cloud", label: t("Compte Airzone") },
-    ...(admin ? [{ id: "installations", label: t("Installations") }] : []),
     ...(admin
       ? [
           { id: "nodes", label: t("Nœuds") },
@@ -1195,9 +1228,12 @@ export function SettingsPage() {
     { id: "devices", label: t("Appareils") },
     { id: "account", label: t("Mon compte") },
   ]
-  const tab = tabs.some((x) => x.id === params.get("tab"))
-    ? params.get("tab")!
-    : tabs[0].id
+  const tab =
+    airzone && admin
+      ? "modules"
+      : tabs.some((x) => x.id === params.get("tab"))
+        ? params.get("tab")!
+        : tabs[0].id
 
   return (
     <>
@@ -1208,7 +1244,7 @@ export function SettingsPage() {
           <AlertTitle>{t("Compte créé 🎉")}</AlertTitle>
           <AlertDescription>
             {t(
-              "Ajoutez maintenant vos installations : le plus simple est de connecter votre compte Airzone (onglet « Compte Airzone »), Breezone trouvera vos WebServers sur le réseau et importera vos groupes."
+              "Ajoutez maintenant vos installations : le plus simple est de connecter votre compte Airzone (module Airzone, onglet « Compte Airzone »), Breezone trouvera vos WebServers sur le réseau et importera vos groupes."
             )}
           </AlertDescription>
         </Alert>
@@ -1221,14 +1257,6 @@ export function SettingsPage() {
             </TabsTrigger>
           ))}
         </TabsList>
-        {admin && (
-          <TabsContent value="installations">
-            <InstallationsTab openAccess={params.get("access")} />
-          </TabsContent>
-        )}
-        <TabsContent value="cloud">
-          <CloudTab admin={admin} />
-        </TabsContent>
         {admin && (
           <TabsContent value="nodes">
             <NodesTab />
@@ -1246,7 +1274,15 @@ export function SettingsPage() {
         )}
         {admin && (
           <TabsContent value="modules">
-            <ModulesTab />
+            <ModulesTab
+              initial={airzone ? "airzone" : undefined}
+              airzone={
+                <AirzoneConfig
+                  section={airzone ?? "installations"}
+                  openAccess={params.get("access")}
+                />
+              }
+            />
           </TabsContent>
         )}
         {admin && (

@@ -162,7 +162,7 @@ function RemoteTile({ inst }: { inst: CloudInstallation }) {
         {admin && (
           <Button asChild>
             <Link
-              to={`/settings?tab=installations&access=${encodeURIComponent(inst.cloud_id)}`}
+              to={`/settings?tab=modules&airzone=installations&access=${encodeURIComponent(inst.cloud_id)}`}
             >
               {t("Configurer l'accès local")}
             </Link>
@@ -352,10 +352,12 @@ function EmptyState() {
       {admin && (
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <Button asChild>
-            <Link to="/settings?tab=cloud">{t("Importer depuis Airzone")}</Link>
+            <Link to="/settings?tab=modules&airzone=cloud">
+              {t("Importer depuis Airzone")}
+            </Link>
           </Button>
           <Button asChild variant="outline">
-            <Link to="/settings?tab=installations">
+            <Link to="/settings?tab=modules&airzone=installations">
               <Search /> {t("Rechercher sur le réseau")}
             </Link>
           </Button>
