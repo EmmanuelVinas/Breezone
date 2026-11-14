@@ -20,6 +20,7 @@ pub mod mock;
 pub mod routines;
 pub mod stats;
 pub mod timers;
+pub mod traits;
 pub mod update;
 pub mod tls;
 

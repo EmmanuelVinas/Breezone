@@ -6,6 +6,13 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Home model (ADR 0013), with nothing changed in the interface yet: Airzone zones are now also
+  devices of the trait `climate.zone@1`, with a stable id, and can be named and placed in rooms
+  (`/api/devices`, `/api/rooms`). The catalog of traits (`server/contracts/traits`, served at
+  `/api/traits`) is the single contract from which the web and mobile types are generated.
+
 ### Changed
 
 - Zone page (web and app): the air quality section only shows when the thermostat has measured the

@@ -1,0 +1,33 @@
+{
+  "trait": "climate.zone",
+  "version": 1,
+  "label": { "fr": "Climatisation", "en": "Air conditioning", "es": "Climatización" },
+  "state": [
+    { "name": "on", "type": "bool", "label": { "fr": "Allumée", "en": "On", "es": "Encendida" } },
+    { "name": "room_temp", "type": "number", "unit": "°C", "optional": true, "label": { "fr": "Température", "en": "Temperature", "es": "Temperatura" } },
+    { "name": "humidity", "type": "integer", "unit": "%", "optional": true, "label": { "fr": "Humidité", "en": "Humidity", "es": "Humedad" } },
+    { "name": "setpoint", "type": "number", "unit": "°C", "optional": true, "label": { "fr": "Consigne", "en": "Setpoint", "es": "Consigna" } },
+    { "name": "cool_setpoint", "type": "number", "unit": "°C", "optional": true, "label": { "fr": "Consigne froid", "en": "Cooling setpoint", "es": "Consigna frío" } },
+    { "name": "heat_setpoint", "type": "number", "unit": "°C", "optional": true, "label": { "fr": "Consigne chaud", "en": "Heating setpoint", "es": "Consigna calor" } },
+    { "name": "mode", "type": "enum", "optional": true, "values": ["stop", "cooling", "heating", "fan", "dry", "aux_heating", "auto"], "label": { "fr": "Mode", "en": "Mode", "es": "Modo" } },
+    { "name": "speed", "type": "integer", "optional": true, "label": { "fr": "Ventilation", "en": "Fan speed", "es": "Ventilación" } },
+    { "name": "sleep", "type": "integer", "unit": "min", "optional": true, "label": { "fr": "Veille", "en": "Sleep", "es": "Reposo" } },
+    { "name": "demand", "type": "bool", "label": { "fr": "En demande", "en": "In demand", "es": "En demanda" } },
+    { "name": "air_quality", "type": "enum", "optional": true, "values": ["good", "regular", "bad"], "label": { "fr": "Qualité de l'air", "en": "Air quality", "es": "Calidad del aire" } }
+  ],
+  "actions": [
+    {
+      "name": "set",
+      "label": { "fr": "Régler", "en": "Set", "es": "Ajustar" },
+      "params": [
+        { "name": "on", "type": "bool", "optional": true, "label": { "fr": "Allumer", "en": "Switch on", "es": "Encender" } },
+        { "name": "setpoint", "type": "number", "unit": "°C", "optional": true, "label": { "fr": "Consigne", "en": "Setpoint", "es": "Consigna" } },
+        { "name": "cool_setpoint", "type": "number", "unit": "°C", "optional": true, "label": { "fr": "Consigne froid", "en": "Cooling setpoint", "es": "Consigna frío" } },
+        { "name": "heat_setpoint", "type": "number", "unit": "°C", "optional": true, "label": { "fr": "Consigne chaud", "en": "Heating setpoint", "es": "Consigna calor" } },
+        { "name": "mode", "type": "enum", "optional": true, "values": ["stop", "cooling", "heating", "fan", "dry", "aux_heating", "auto"], "label": { "fr": "Mode", "en": "Mode", "es": "Modo" } },
+        { "name": "speed", "type": "integer", "optional": true, "label": { "fr": "Ventilation", "en": "Fan speed", "es": "Ventilación" } },
+        { "name": "sleep", "type": "integer", "unit": "min", "optional": true, "label": { "fr": "Veille", "en": "Sleep", "es": "Reposo" } }
+      ]
+    }
+  ]
+}

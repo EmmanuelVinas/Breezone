@@ -22,6 +22,7 @@ const APPLIED: &[(&str, &str)] = &[
     ("0015_installation_rights.sql", "907cad13e1aa809cd27a71a5985f54659d385933bb0d563157f49f777dfda4f0"),
     ("0016_demand_and_air_quality.sql", "d3ad3a5d199a523f47e061b45230c88a3d1e6694ee7599d4c2579ee9324c741b"),
     ("0017_peer_capabilities.sql", "9b135c73021f66192d96bc83809f27a49791847a25c22d4e1b7af77484684831"),
+    ("0018_rooms_and_devices.sql", "f673b07b67d64f5d68c0a5f22244642d82a51eb5304a65af4d3172d51e3b4681"),
 ];
 
 #[test]

@@ -82,6 +82,8 @@ impl Capabilities {
                 ("demand", 1),
                 ("self_update", 1),
                 ("update.beta", 1),
+                // Rooms, devices and the catalog of traits (ADR 0013): /api/rooms, /api/devices, /api/traits.
+                ("home.devices", 1),
             ]
             .into_iter()
             .map(|(k, v)| (k.to_string(), v))

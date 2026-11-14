@@ -1307,3 +1307,76 @@ pub async fn set_airzone_routines(db: &Db, cloud_id: &str, data: &str) -> sqlx::
 pub async fn list_airzone_routines(db: &Db) -> sqlx::Result<Vec<(String, String)>> {
     sqlx::query_as("SELECT cloud_id, data FROM airzone_routines").fetch_all(db).await
 }
+
+// ---------------------------------------------------------------------------------------
+// Rooms and devices (ADR 0013)
+// ---------------------------------------------------------------------------------------
+
+#[derive(Debug, Clone, FromRow, Serialize)]
+pub struct Room {
+    pub id: i64,
+    pub name: String,
+    pub position: i64,
+    pub created_at: i64,
+}
+
+pub async fn list_rooms(db: &Db) -> sqlx::Result<Vec<Room>> {
+    sqlx::query_as("SELECT * FROM rooms ORDER BY position, name").fetch_all(db).await
+}
+
+pub async fn room_by_id(db: &Db, id: i64) -> sqlx::Result<Option<Room>> {
+    sqlx::query_as("SELECT * FROM rooms WHERE id = ?").bind(id).fetch_optional(db).await
+}
+
+pub async fn insert_room(db: &Db, name: &str, position: i64) -> sqlx::Result<Room> {
+    let id = sqlx::query("INSERT INTO rooms (name, position, created_at) VALUES (?, ?, ?)").bind(name).bind(position).bind(now()).execute(db).await?.last_insert_rowid();
+    Ok(room_by_id(db, id).await?.expect("room just inserted"))
+}
+
+pub async fn update_room(db: &Db, id: i64, name: &str, position: i64) -> sqlx::Result<bool> {
+    Ok(sqlx::query("UPDATE rooms SET name = ?, position = ? WHERE id = ?").bind(name).bind(position).bind(id).execute(db).await?.rows_affected() > 0)
+}
+
+/// The devices of the room stay, without a room.
+pub async fn delete_room(db: &Db, id: i64) -> sqlx::Result<bool> {
+    Ok(sqlx::query("DELETE FROM rooms WHERE id = ?").bind(id).execute(db).await?.rows_affected() > 0)
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct Device {
+    pub id: i64,
+    pub source: String,
+    pub source_ref: String,
+    pub installation_id: Option<i64>,
+    pub kind: String,
+    pub name: Option<String>,
+    pub room_id: Option<i64>,
+    pub position: i64,
+    pub created_at: i64,
+}
+
+/// Records a device if it is new (its id then stays the same for good).
+pub async fn ensure_device(db: &Db, source: &str, source_ref: &str, installation_id: Option<i64>, kind: &str) -> sqlx::Result<()> {
+    sqlx::query("INSERT OR IGNORE INTO devices (source, source_ref, installation_id, kind, created_at) VALUES (?, ?, ?, ?, ?)")
+        .bind(source)
+        .bind(source_ref)
+        .bind(installation_id)
+        .bind(kind)
+        .bind(now())
+        .execute(db)
+        .await?;
+    Ok(())
+}
+
+pub async fn list_devices(db: &Db) -> sqlx::Result<Vec<Device>> {
+    sqlx::query_as("SELECT * FROM devices ORDER BY position, id").fetch_all(db).await
+}
+
+pub async fn device_by_id(db: &Db, id: i64) -> sqlx::Result<Option<Device>> {
+    sqlx::query_as("SELECT * FROM devices WHERE id = ?").bind(id).fetch_optional(db).await
+}
+
+pub async fn update_device(db: &Db, id: i64, name: Option<&str>, room_id: Option<i64>, position: i64) -> sqlx::Result<()> {
+    sqlx::query("UPDATE devices SET name = ?, room_id = ?, position = ? WHERE id = ?").bind(name).bind(room_id).bind(position).bind(id).execute(db).await?;
+    Ok(())
+}

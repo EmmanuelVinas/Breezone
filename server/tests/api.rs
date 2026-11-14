@@ -409,3 +409,72 @@ async fn self_update_is_for_administrators_and_needs_a_newer_release() {
         assert_eq!(s, StatusCode::FORBIDDEN, "{method} {path}");
     }
 }
+
+#[tokio::test]
+async fn zones_are_devices_in_rooms() {
+    let env = start().await;
+    let (_, v) = env.call("POST", "/api/setup", None, Some(json!({"username":"admin","password":"motdepasse1"}))).await;
+    let token = v["access_token"].as_str().unwrap().to_string();
+    let t = Some(token.as_str());
+    let (_, inst) = env.call("POST", "/api/installations", t, Some(json!({"name":"Maison","host":"127.0.0.1","port":env.mock_port}))).await;
+    let inst = inst["id"].as_i64().unwrap();
+
+    // The catalog describes the trait the zones have.
+    let (s, traits) = env.call("GET", "/api/traits", t, None).await;
+    assert_eq!(s, StatusCode::OK);
+    let climate = traits.as_array().unwrap().iter().find(|t| t["trait"] == "climate.zone").unwrap();
+    assert_eq!(climate["version"], 1);
+    assert_eq!(climate["label"]["fr"], "Climatisation");
+
+    // Every zone is a device of that trait, with its state.
+    let (s, devices) = env.call("GET", "/api/devices", t, None).await;
+    assert_eq!(s, StatusCode::OK, "{devices}");
+    let (_, status) = env.call("GET", "/api/status", t, None).await;
+    let zone_count = status[0]["zones"].as_array().unwrap().len();
+    let devices = devices.as_array().unwrap().clone();
+    assert_eq!(devices.len(), zone_count);
+    let salon = devices.iter().find(|d| d["reference"]["zone_id"] == 1).unwrap().clone();
+    assert_eq!(salon["kind"], "climate.zone");
+    assert_eq!(salon["traits"], json!(["climate.zone@1"]));
+    assert_eq!(salon["installation_id"], inst);
+    assert_eq!(salon["available"], true);
+    assert!(salon["state"]["on"].is_boolean() && salon["state"]["setpoint"].is_number(), "{salon}");
+    // Ids are stable.
+    let (_, again) = env.call("GET", "/api/devices", t, None).await;
+    assert_eq!(again.as_array().unwrap().iter().map(|d| d["id"].clone()).collect::<Vec<_>>(), devices.iter().map(|d| d["id"].clone()).collect::<Vec<_>>());
+
+    // Rooms: created by an administrator, a device is named and placed in one.
+    let (s, room) = env.call("POST", "/api/rooms", t, Some(json!({"name":"  Salon  "}))).await;
+    assert_eq!(s, StatusCode::CREATED);
+    assert_eq!(room["name"], "Salon");
+    let (s, _) = env.call("POST", "/api/rooms", t, Some(json!({"name":" "}))).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+    let id = salon["id"].as_i64().unwrap();
+    let (s, d) = env.call("PUT", &format!("/api/devices/{id}"), t, Some(json!({"name":"Séjour","room_id": room["id"]}))).await;
+    assert_eq!(s, StatusCode::OK, "{d}");
+    assert_eq!(d["name"], "Séjour");
+    assert_eq!(d["room_id"], room["id"]);
+    let (s, _) = env.call("PUT", &format!("/api/devices/{id}"), t, Some(json!({"room_id": 999}))).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST, "unknown room");
+    // Without a custom name, the zone's name comes back.
+    let (_, d) = env.call("PUT", &format!("/api/devices/{id}"), t, Some(json!({"name":"", "room_id": room["id"]}))).await;
+    assert_eq!(d["name"], salon["name"]);
+    // Deleting the room keeps the device, without a room.
+    let (s, _) = env.call("DELETE", &format!("/api/rooms/{}", room["id"]), t, None).await;
+    assert_eq!(s, StatusCode::NO_CONTENT);
+    let (_, devices) = env.call("GET", "/api/devices", t, None).await;
+    assert_eq!(devices.as_array().unwrap().iter().find(|d| d["id"] == id).unwrap()["room_id"], Value::Null);
+
+    // A user sees only the devices of the installations open to them, and cannot manage rooms.
+    let (s, _) = env.call("POST", "/api/users", t, Some(json!({"username":"bob","password":"motdepasse1","role":"user"}))).await;
+    assert!(s.is_success());
+    let (_, v) = env.call("POST", "/api/auth/login", None, Some(json!({"username":"bob","password":"motdepasse1"}))).await;
+    let bob = v["access_token"].as_str().unwrap().to_string();
+    let (_, devices) = env.call("GET", "/api/devices", Some(&bob), None).await;
+    assert_eq!(devices, json!([]), "no installation open to bob");
+    let (s, _) = env.call("POST", "/api/rooms", Some(&bob), Some(json!({"name":"Garage"}))).await;
+    assert_eq!(s, StatusCode::FORBIDDEN);
+    // An installation that is not open to bob does not exist for him (same as its zones).
+    let (s, _) = env.call("PUT", &format!("/api/devices/{id}"), Some(&bob), Some(json!({"name":"x"}))).await;
+    assert_eq!(s, StatusCode::NOT_FOUND);
+}

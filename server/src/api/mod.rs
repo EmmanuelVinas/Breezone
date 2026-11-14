@@ -3,6 +3,7 @@
 mod account;
 mod cloud;
 mod federation;
+mod home;
 mod hvac;
 mod routines;
 mod schedules;
@@ -93,6 +94,11 @@ pub fn router() -> Router<AppState> {
         .route("/api/airzone/schedules/{cloud_id}/{id}/enabled", put(schedules::set_enabled))
         // Updates of Breezone itself (issue #40)
         .route("/api/capabilities", get(capabilities))
+        .route("/api/traits", get(home::traits))
+        .route("/api/devices", get(home::list_devices))
+        .route("/api/devices/{id}", put(home::update_device))
+        .route("/api/rooms", get(home::list_rooms).post(home::create_room))
+        .route("/api/rooms/{id}", put(home::update_room).delete(home::delete_room))
         .route("/api/system/update", get(system::update_status).post(system::install))
         .route("/api/system/update/check", post(system::check))
         .route("/api/system/update/channel", put(system::set_channel))

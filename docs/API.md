@@ -152,6 +152,23 @@ maître) et `sleep` ∈ `0 | 30 | 60 | 90`.
 
 `Action` : `ZoneCommand` + `{installation_id, system_id, zone_id}`.
 
+## Pièces et appareils (ADR 0013)
+
+Les zones Airzone sont aussi des **appareils** du trait `climate.zone@1`, enregistrés automatiquement
+avec un identifiant stable. Les routes des zones restent celles qui les pilotent.
+
+| Méthode | Chemin | Description |
+|---------|--------|-------------|
+| GET 🔒 | `/api/traits` | Catalogue des traits : `[{trait, version, label{fr,en,es}, state:[champ], actions:[{name, label, params:[champ]}]}]`, champ = `{name, type (bool·integer·number·string·enum), unit?, values?, min?, max?, optional, label}`. Sert aussi de descripteur pour un trait inconnu du client |
+| GET 🔒 | `/api/devices` | Appareils visibles par l'utilisateur : `[{id, kind, traits, source, installation_id, reference, name, room_id, position, available, state}]` (`state` : valeurs décrites par le catalogue ; `available` faux si la source ne fournit plus l'appareil) |
+| PUT 🔒 | `/api/devices/{id}` | `{name?, room_id?, position?}` : nom personnalisé (vide = celui de la source) et pièce. Même droit que pour renommer les zones de l'installation |
+| GET 🔒 | `/api/rooms` | `[{id, name, position, created_at}]` |
+| POST 👑 | `/api/rooms` | `{name, position?}` → 201 |
+| PUT 👑 · DELETE 👑 | `/api/rooms/{id}` | Renommer, réordonner, supprimer (ses appareils restent, sans pièce) |
+
+Les types web et mobile sont générés depuis `server/contracts/traits/` :
+`BREEZONE_WRITE_GENERATED=1 cargo test --test generated` (dans `server/`).
+
 ## Routines (scènes, exécutées par Breezone)
 
 Lancées à la demande seulement ; les programmations à heure fixe sont celles d'Airzone (voir
