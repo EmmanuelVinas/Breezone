@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.2] - 2026-11-14
+
 ### Changed
 
 - Settings › Modules (web), as in the mockups: the list of modules on the left, Airzone first, and
