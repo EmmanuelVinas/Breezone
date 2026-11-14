@@ -8,6 +8,7 @@ import { api, currentUser } from "@/lib/api"
 import { t, tn } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { PageHeader } from "@/components/app-shell"
+import { Level } from "@/components/level"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -193,7 +194,19 @@ function LightCard({
   )
 }
 
-function Detail({ light, canDrive }: { light: DeviceView; canDrive: boolean }) {
+/** The brand of a light's module, for the detail's subtitle. */
+const BRAND: Record<string, string> = { hue: "Philips Hue" }
+
+/** The detail of a light, as in the mockups: big brightness bar, white gradient, colors. */
+function Detail({
+  light,
+  room,
+  canDrive,
+}: {
+  light: DeviceView
+  room: string | null
+  canDrive: boolean
+}) {
   const s = stateOf(light)
   const set = useSet()
   const [brightness, setBrightness] = useState<number | null>(null)
@@ -203,6 +216,10 @@ function Detail({ light, canDrive }: { light: DeviceView; canDrive: boolean }) {
   const min = s.color_temp_min ?? 2000
   const max = s.color_temp_max ?? 6500
   const disabled = !canDrive || !light.available || set.isPending
+  const level = brightness ?? s.brightness ?? 0
+  const kelvin = temp ?? s.color_temp ?? min
+  const send = (params: Record<string, unknown>, done: () => void) =>
+    set.mutate({ id: light.id, params }, { onSettled: done })
   return (
     <Card
       className="rounded-3xl lg:sticky lg:top-4"
@@ -217,7 +234,11 @@ function Detail({ light, canDrive }: { light: DeviceView; canDrive: boolean }) {
       <CardHeader className="flex flex-row items-start justify-between gap-3">
         <div className="min-w-0">
           <CardTitle className="truncate">{light.name}</CardTitle>
-          <CardDescription>{describe(s)}</CardDescription>
+          <CardDescription>
+            {[room, BRAND[light.source] ?? light.source]
+              .filter(Boolean)
+              .join(" · ")}
+          </CardDescription>
         </div>
         <Switch
           checked={!!s.on}
@@ -229,63 +250,69 @@ function Detail({ light, canDrive }: { light: DeviceView; canDrive: boolean }) {
       </CardHeader>
       <CardContent className="grid gap-6">
         {typeof s.brightness === "number" && (
-          <div className="grid gap-2">
-            <div className="flex items-baseline justify-between">
-              <span className="text-xs text-muted-foreground">
-                {t("Intensité")}
-              </span>
-              <span className="tabular font-heading text-3xl font-semibold">
-                {lit ? `${brightness ?? s.brightness} %` : "–"}
-              </span>
-            </div>
-            <Slider
+          <div className="flex justify-center py-2">
+            <Level
+              vertical
               min={1}
               max={100}
-              step={1}
-              value={[brightness ?? s.brightness]}
+              value={level}
               disabled={disabled}
-              onValueChange={([v]) => setBrightness(v)}
-              onValueCommit={([v]) =>
-                set.mutate(
-                  { id: light.id, params: { brightness: v } },
-                  { onSettled: () => setBrightness(null) }
-                )
+              label={t("Intensité de {name}", { name: light.name })}
+              valueText={`${level} %`}
+              onChange={setBrightness}
+              onCommit={(v) =>
+                send({ brightness: v }, () => setBrightness(null))
               }
-              aria-label={t("Intensité")}
-            />
+              className="h-64 w-30 overflow-hidden rounded-[36px] bg-muted"
+            >
+              <div
+                className="absolute inset-x-0 bottom-0 transition-[height] duration-150"
+                style={{
+                  height: `${lit ? level : 0}%`,
+                  background: `linear-gradient(180deg, color-mix(in oklch, ${color} 70%, white), ${color})`,
+                }}
+              />
+              <div
+                className={cn(
+                  "tabular absolute inset-0 grid place-items-center font-heading text-3xl font-bold",
+                  lit && level > 45 ? "text-neutral-800" : "text-foreground"
+                )}
+              >
+                {lit ? `${level} %` : t("Éteinte")}
+              </div>
+            </Level>
           </div>
         )}
         {typeof s.color_temp === "number" && (
           <div className="grid gap-2">
-            <div className="flex items-baseline justify-between text-xs text-muted-foreground">
-              <span>{t("Température de blanc")}</span>
-              <span className="tabular">{temp ?? s.color_temp} K</span>
-            </div>
-            <div
-              className="rounded-full p-1"
+            <span className="text-xs text-muted-foreground">
+              {t("Température de blanc · {k} K", {
+                k: kelvin.toLocaleString("fr-FR"),
+              })}
+            </span>
+            <Level
+              min={min}
+              max={max}
+              step={50}
+              value={kelvin}
+              disabled={disabled}
+              label={t("Température de blanc")}
+              valueText={`${kelvin} K`}
+              onChange={setTemp}
+              onCommit={(v) => send({ color_temp: v }, () => setTemp(null))}
+              className="h-3.5 rounded-full"
               style={{
                 background: `linear-gradient(90deg, ${kelvinColor(min)}, ${kelvinColor((min + max) / 2)}, ${kelvinColor(max)})`,
               }}
             >
-              <Slider
-                min={min}
-                max={max}
-                step={50}
-                value={[temp ?? s.color_temp]}
-                disabled={disabled}
-                onValueChange={([v]) => setTemp(v)}
-                onValueCommit={([v]) =>
-                  set.mutate(
-                    { id: light.id, params: { color_temp: v } },
-                    { onSettled: () => setTemp(null) }
-                  )
-                }
-                aria-label={t("Température de blanc")}
+              <span
+                className="absolute top-1/2 size-5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground shadow-[0_0_0_3px_oklch(0_0_0/30%)]"
+                style={{ left: `${((kelvin - min) / (max - min)) * 100}%` }}
               />
-            </div>
+            </Level>
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>{t("Chaud")}</span>
-              <span>{t("Froid")}</span>
+              <span>{t("Blanc chaud")}</span>
+              <span>{t("Blanc froid")}</span>
             </div>
           </div>
         )}
@@ -301,6 +328,9 @@ function Detail({ light, canDrive }: { light: DeviceView; canDrive: boolean }) {
                   type="button"
                   disabled={disabled}
                   aria-label={t("Couleur {c}", { c })}
+                  aria-pressed={
+                    s.mode === "color" && s.color?.toLowerCase() === c
+                  }
                   onClick={() =>
                     set.mutate({ id: light.id, params: { color: c } })
                   }
@@ -308,7 +338,7 @@ function Detail({ light, canDrive }: { light: DeviceView; canDrive: boolean }) {
                     "size-8 rounded-full transition-transform hover:scale-110 disabled:opacity-50",
                     s.mode === "color" &&
                       s.color?.toLowerCase() === c &&
-                      "ring-2 ring-foreground ring-offset-2 ring-offset-card"
+                      "ring-3 ring-foreground"
                   )}
                   style={{ background: c }}
                 />
@@ -541,7 +571,16 @@ export function LightsPage() {
               )
             })}
           </div>
-          {shown && <Detail key={shown.id} light={shown} canDrive={admin} />}
+          {shown && (
+            <Detail
+              key={shown.id}
+              light={shown}
+              room={
+                rooms.data?.find((r) => r.id === shown.room_id)?.name ?? null
+              }
+              canDrive={admin}
+            />
+          )}
         </div>
       )}
     </>

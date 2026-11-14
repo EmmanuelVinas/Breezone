@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router"
+import {
+  lastInstallationId,
+  rememberInstallation,
+} from "@/lib/selected-installation"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   CloudOff,
@@ -51,8 +55,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { t, tn } from "@/lib/i18n"
-
-const LAST_KEY = "breezone.last_installation"
 
 /** A stable hue per installation, like the colored cards of the official app. */
 function hue(seed: string) {
@@ -398,7 +400,7 @@ export function DashboardPage() {
   const installations = useMemo(() => status.data ?? [], [status.data])
   const remote = (cloud.data?.installations ?? []).filter((c) => !c.reachable)
   const selectedId = Number(
-    params.id ?? localStorage.getItem(LAST_KEY) ?? installations[0]?.id
+    params.id ?? lastInstallationId() ?? installations[0]?.id
   )
   const selected =
     installations.find((i) => i.id === selectedId) ?? installations[0]
@@ -426,7 +428,7 @@ export function DashboardPage() {
   )
 
   useEffect(() => {
-    if (selected) localStorage.setItem(LAST_KEY, String(selected.id))
+    if (selected) rememberInstallation(selected.id)
     if (
       params.id &&
       installations.length &&

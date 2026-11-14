@@ -6,6 +6,17 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The installation chosen in « Mes installations » shows in small under « Installations » in the
+  menu. Settings › Rooms only lists the zones of that installation (with the modules of this server);
+  for an installation reached through another Breezone server, it says its rooms are set there.
+- The room of an object, and the role or measure of an energy channel, show the choice at once with a
+  spinner until it is saved, instead of the former value for a moment.
+- Lights page: the detail of a light follows the mockups: its room and brand under its name, the big
+  brightness bar filled with its light (drag it, or use the arrow keys), the white temperature as a
+  warm-to-cool gradient with its value in kelvins, and the color swatches.
+
 ## [0.11.0-beta.10] - 2026-11-14
 
 ### Added

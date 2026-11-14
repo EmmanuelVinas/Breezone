@@ -1111,6 +1111,11 @@ const es: Record<string, string> = {
   Pièces: "Estancias",
   "Monter dans la liste": "Subir en la lista",
   "Descendre dans la liste": "Bajar en la lista",
+  "Température de blanc · {k} K": "Temperatura de blanco · {k} K",
+  "Installation choisie": "Instalación elegida",
+  "Pièces de « {name} »": "Estancias de «{name}»",
+  "Cette installation est reliée par un autre serveur Breezone : ses pièces et leurs objets se règlent sur ce serveur-là. Choisissez une installation de ce serveur dans « Mes installations » pour régler les siennes.":
+    "Esta instalación se alcanza a través de otro servidor Breezone: sus estancias y sus objetos se configuran en ese servidor. Elija una instalación de este servidor en «Mis instalaciones» para configurar las suyas.",
 }
 
 export default es

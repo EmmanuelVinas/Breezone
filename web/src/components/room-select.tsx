@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { Plus } from "lucide-react"
+import { Loader2, Plus } from "lucide-react"
 import { toast } from "sonner"
 import type { Room } from "@/lib/api"
 import { api } from "@/lib/api"
@@ -59,17 +59,26 @@ export function RoomSelect({
     },
     onError: (e) => toast.error(errorText(e)),
   })
+  // While saving: the room chosen shows at once, with a spinner, until the devices are read again.
+  const shown = place.isPending ? place.variables : roomId
   return (
     <>
       <Select
-        value={roomId ? String(roomId) : "none"}
+        value={shown ? String(shown) : "none"}
         onValueChange={(v) =>
           v === NEW
             ? setNaming(true)
             : place.mutate(v === "none" ? null : Number(v))
         }
       >
-        <SelectTrigger className={className} aria-label={t("Pièce")}>
+        <SelectTrigger
+          className={className}
+          aria-label={t("Pièce")}
+          aria-busy={place.isPending || undefined}
+        >
+          {place.isPending && (
+            <Loader2 className="animate-spin text-muted-foreground" />
+          )}
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

@@ -21,6 +21,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 import type { LiveState } from "@/hooks/use-live"
 import { ANDROID_APP_URL, api, currentUser } from "@/lib/api"
 import { cn } from "@/lib/utils"
+import { useSelectedInstallationId } from "@/lib/selected-installation"
 import { useTheme } from "@/components/theme-provider"
 import { Brand, BrandMark } from "@/components/brand"
 import { Button } from "@/components/ui/button"
@@ -239,6 +240,17 @@ export function AppShell({
     (theme === "system" &&
       window.matchMedia("(prefers-color-scheme: dark)").matches)
 
+  // The installation chosen in « Mes installations », under the menu entry.
+  const chosenId = useSelectedInstallationId()
+  const status = useQuery({
+    queryKey: ["status"],
+    queryFn: api.status,
+    staleTime: 60_000,
+  }).data
+  const chosen =
+    status?.find((x) => x.id === chosenId) ??
+    (status?.length ? status[0] : null)
+
   const logout = async () => {
     await api.logout()
     qc.clear()
@@ -275,6 +287,15 @@ export function AppShell({
                   {n.label}
                 </NavLink>
               ))}
+              {i === 0 && chosen && (
+                <Link
+                  to={`/installations/${chosen.id}`}
+                  className="-mt-1 truncate pr-3 pl-10.5 text-xs text-muted-foreground hover:text-foreground"
+                  title={t("Installation choisie")}
+                >
+                  {chosen.name}
+                </Link>
+              )}
             </div>
           ))}
         </nav>

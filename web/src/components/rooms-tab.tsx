@@ -4,6 +4,7 @@ import { ArrowDown, ArrowUp, House, Loader2, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import type { DeviceView, Room } from "@/lib/api"
 import { api } from "@/lib/api"
+import { useSelectedInstallationId } from "@/lib/selected-installation"
 import { t, tn } from "@/lib/i18n"
 import { Confirm } from "@/components/confirm"
 import { RoomSelect } from "@/components/room-select"
@@ -224,11 +225,22 @@ export function RoomsTab() {
     queryKey: ["installations"],
     queryFn: api.installations,
   })
+  const status = useQuery({ queryKey: ["status"], queryFn: api.status })
+  const chosenId = useSelectedInstallationId()
+  const chosen =
+    status.data?.find((x) => x.id === chosenId) ?? status.data?.[0] ?? null
   const [unplaced, setUnplaced] = useState(false)
   if (rooms.isLoading || devices.isLoading)
     return <Skeleton className="h-72 w-full rounded-3xl" />
   const list = rooms.data ?? []
-  const all = (devices.data ?? []).filter((d) => !unplaced || !d.room_id)
+  // The zones of the installation chosen only, and only when it is this server's: one through
+  // another Breezone server has its rooms there. The modules are this server's.
+  const all = (devices.data ?? []).filter(
+    (d) =>
+      (!unplaced || !d.room_id) &&
+      (d.installation_id === null ||
+        (d.installation_id === chosen?.id && chosen.access === "local"))
+  )
   // One group per Airzone installation and per module, in the order they come.
   const groups: {
     key: string
@@ -261,6 +273,22 @@ export function RoomsTab() {
   const counts = new Map<number, number>()
   for (const d of devices.data ?? [])
     if (d.room_id) counts.set(d.room_id, (counts.get(d.room_id) ?? 0) + 1)
+
+  if (chosen?.access === "node")
+    return (
+      <Card className="rounded-3xl">
+        <CardHeader>
+          <CardTitle>
+            {t("Pièces de « {name} »", { name: chosen.name })}
+          </CardTitle>
+          <CardDescription>
+            {t(
+              "Cette installation est reliée par un autre serveur Breezone : ses pièces et leurs objets se règlent sur ce serveur-là. Choisissez une installation de ce serveur dans « Mes installations » pour régler les siennes."
+            )}
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    )
 
   return (
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">

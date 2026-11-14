@@ -158,15 +158,30 @@ function DeviceRow({
     onSuccess: () => qc.invalidateQueries({ queryKey: ["devices"] }),
     onError: (e) => toast.error(errorText(e)),
   })
+  // While saving: what was chosen shows at once, with a spinner on its select.
+  const pending = save.isPending ? save.variables : undefined
+  const busy = (key: string) => !!pending && key in pending
+  const role =
+    pending && "role" in pending ? (pending.role ?? null) : device.role
+  const measuresDevice =
+    pending && "measures_device_id" in pending
+      ? (pending.measures_device_id ?? null)
+      : device.measures.device_id
+  const measuresRoom =
+    pending && "measures_room_id" in pending
+      ? (pending.measures_room_id ?? null)
+      : device.measures.room_id
+  const spinner = (key: string) =>
+    busy(key) && <Loader2 className="animate-spin text-muted-foreground" />
   const measuresEnergy = device.traits.some((x) =>
     x.startsWith("energy.power@")
   )
   const counting = isInverter(device) ? inverterCounting(device, devices) : null
   const inverters = devices.filter((d) => d.id !== device.id && isInverter(d))
-  const target = device.measures.device_id
-    ? `d:${device.measures.device_id}`
-    : device.measures.room_id
-      ? `r:${device.measures.room_id}`
+  const target = measuresDevice
+    ? `d:${measuresDevice}`
+    : measuresRoom
+      ? `r:${measuresRoom}`
       : "none"
   const s = device.state ?? {}
   const values = [
@@ -233,12 +248,13 @@ function DeviceRow({
           </div>
           {(!counting.counted || counting.forced) && (
             <Select
-              value={device.role === "solar" ? "always" : "auto"}
+              value={role === "solar" ? "always" : "auto"}
               onValueChange={(v) =>
                 save.mutate({ role: v === "always" ? "solar" : null })
               }
             >
               <SelectTrigger className="w-48" aria-label={t("Rôle")}>
+                {spinner("role")}
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -252,12 +268,13 @@ function DeviceRow({
       {measuresEnergy && !isInverter(device) && (
         <div className="flex flex-wrap items-center gap-2">
           <Select
-            value={device.role ?? "none"}
+            value={role ?? "none"}
             onValueChange={(v) =>
               save.mutate({ role: v === "none" ? null : (v as MeasureRole) })
             }
           >
             <SelectTrigger className="w-48" aria-label={t("Rôle")}>
+              {spinner("role")}
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -270,13 +287,9 @@ function DeviceRow({
               )}
             </SelectContent>
           </Select>
-          {device.role === "solar" && inverters.length > 0 && (
+          {role === "solar" && inverters.length > 0 && (
             <Select
-              value={
-                device.measures.device_id
-                  ? `d:${device.measures.device_id}`
-                  : "none"
-              }
+              value={measuresDevice ? `d:${measuresDevice}` : "none"}
               onValueChange={(v) =>
                 save.mutate({
                   measures_device_id: v.startsWith("d:")
@@ -286,6 +299,7 @@ function DeviceRow({
               }
             >
               <SelectTrigger className="w-56" aria-label={t("Production de")}>
+                {spinner("measures_device_id")}
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -300,7 +314,7 @@ function DeviceRow({
               </SelectContent>
             </Select>
           )}
-          {device.role === "consumption" && (
+          {role === "consumption" && (
             <Select
               value={target}
               onValueChange={(v) =>
@@ -315,6 +329,7 @@ function DeviceRow({
               }
             >
               <SelectTrigger className="w-56" aria-label={t("Mesure")}>
+                {spinner("measures_device_id")}
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
