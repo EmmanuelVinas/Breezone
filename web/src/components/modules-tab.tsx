@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react"
 import { coverKind, coverState, coverText, isCover } from "@/lib/covers"
+import { RoomSelect } from "@/components/room-select"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   AirVent,
@@ -339,24 +340,12 @@ function DeviceRow({
         </div>
       )}
       {!measuresEnergy && (
-        <Select
-          value={device.room_id ? String(device.room_id) : "none"}
-          onValueChange={(v) =>
-            save.mutate({ room_id: v === "none" ? null : Number(v) })
-          }
-        >
-          <SelectTrigger className="w-48" aria-label={t("Pièce")}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">{t("Sans pièce")}</SelectItem>
-            {rooms.map((r) => (
-              <SelectItem key={r.id} value={String(r.id)}>
-                {r.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <RoomSelect
+          deviceId={device.id}
+          roomId={device.room_id}
+          rooms={rooms}
+          className="w-48"
+        />
       )}
     </div>
   )

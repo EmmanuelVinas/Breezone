@@ -6,6 +6,15 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Settings › Rooms: the rooms of the house (create, rename, order, delete; the objects of a deleted
+  room stay, without a room), and every object of every module (Airzone zones by installation, Hue
+  lights, HomeKit shutters…) with its room, « sans pièce seulement » to see what is left to place.
+  For Hue, its own rooms are taken from there too.
+- A room is created from the room choice itself (« Nouvelle pièce… »), in Settings › Modules and on
+  the Shutters page: until now no screen could create one, so only « Sans pièce » was offered.
+
 ## [0.11.0-beta.9] - 2026-11-14
 
 ### Added

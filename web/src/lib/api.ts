@@ -906,6 +906,11 @@ export const api = {
   updateDevice: (id: number, input: DeviceInput) =>
     request<DeviceView>("PUT", `/api/devices/${id}`, input),
   rooms: () => request<Room[]>("GET", "/api/rooms"),
+  createRoom: (input: { name: string; position: number }) =>
+    request<Room>("POST", "/api/rooms", input),
+  updateRoom: (id: number, input: { name: string; position: number }) =>
+    request<Room>("PUT", `/api/rooms/${id}`, input),
+  deleteRoom: (id: number) => request<void>("DELETE", `/api/rooms/${id}`),
   drivers: () => request<DriverInfo[]>("GET", "/api/drivers"),
   sources: () => request<SourceView[]>("GET", "/api/sources"),
   createSource: (input: SourceInput) =>

@@ -10,6 +10,7 @@ import { coverKind, coverState, coverText, isCover, isOpen } from "@/lib/covers"
 import { t, tn } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { PageHeader } from "@/components/app-shell"
+import { RoomSelect } from "@/components/room-select"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -18,13 +19,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Slider } from "@/components/ui/slider"
 
@@ -187,18 +181,11 @@ function Detail({
   canDrive: boolean
   admin: boolean
 }) {
-  const qc = useQueryClient()
   const command = useCommand()
   const s = coverState(device)
   const [draft, setDraft] = useState<number | null>(null)
   const position = draft ?? s.position ?? 0
   const room = rooms.find((r) => r.id === device.room_id)
-  const move = useMutation({
-    mutationFn: (room_id: number | null) =>
-      api.updateDevice(device.id, { room_id }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["devices"] }),
-    onError: (e) => toast.error(errorText(e)),
-  })
   const disabled = !canDrive || !device.available || command.isPending
   return (
     <Card className="rounded-3xl lg:sticky lg:top-4">
@@ -249,24 +236,11 @@ function Detail({
         {admin && (
           <div className="grid gap-1.5">
             <span className="text-xs text-muted-foreground">{t("Pièce")}</span>
-            <Select
-              value={device.room_id ? String(device.room_id) : "none"}
-              onValueChange={(v) =>
-                move.mutate(v === "none" ? null : Number(v))
-              }
-            >
-              <SelectTrigger aria-label={t("Pièce")}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">{t("Sans pièce")}</SelectItem>
-                {rooms.map((r) => (
-                  <SelectItem key={r.id} value={String(r.id)}>
-                    {r.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <RoomSelect
+              deviceId={device.id}
+              roomId={device.room_id}
+              rooms={rooms}
+            />
           </div>
         )}
       </CardContent>

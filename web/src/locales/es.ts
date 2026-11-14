@@ -1085,6 +1085,32 @@ const es: Record<string, string> = {
     "Nombre cada aparato y elija su estancia.",
   "Reprendre les pièces Hue": "Tomar las estancias de Hue",
   "Scène « {name} » activée": "Escena «{name}» activada",
+  "Nouvelle pièce…": "Nueva estancia…",
+  "Nouvelle pièce": "Nueva estancia",
+  "L'appareil y est rangé dès sa création.":
+    "El aparato se coloca en ella en cuanto se crea.",
+  "Salon, Chambre parents…": "Salón, Dormitorio principal…",
+  "Nom de la pièce": "Nombre de la estancia",
+  "« {name} » supprimée": "«{name}» eliminada",
+  "Ses objets restent, sans pièce : vous pourrez les ranger ailleurs.":
+    "Sus objetos se quedan, sin estancia: podrá colocarlos en otra.",
+  "Airzone · {name}": "Airzone · {name}",
+  "Pièces de la maison": "Estancias de la casa",
+  "Les mêmes pièces pour tous les modules : climatisation, lumières, volets… L'ordre est celui des pages.":
+    "Las mismas estancias para todos los módulos: climatización, luces, persianas… El orden es el de las páginas.",
+  "Aucune pièce pour l'instant.": "Ninguna estancia por ahora.",
+  "Objets des modules": "Objetos de los módulos",
+  "Chaque module a ses propres objets, et parfois ses propres pièces : rangez-les dans celles de la maison.":
+    "Cada módulo tiene sus propios objetos, y a veces sus propias estancias: colóquelos en las de la casa.",
+  "Sans pièce seulement": "Solo sin estancia",
+  "Tous les objets ont une pièce.": "Todos los objetos tienen estancia.",
+  "Aucun objet pour l'instant : ajoutez un module.":
+    "Ningún objeto por ahora: añada un módulo.",
+  "{n} objet": "{n} objeto",
+  "{n} objets": "{n} objetos",
+  Pièces: "Estancias",
+  "Monter dans la liste": "Subir en la lista",
+  "Descendre dans la liste": "Bajar en la lista",
 }
 
 export default es

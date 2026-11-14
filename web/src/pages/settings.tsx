@@ -33,6 +33,7 @@ import { InstallationMap } from "@/components/installation-map"
 import { InstallationDialog } from "@/components/installation-dialog"
 import { UpdateTab } from "@/components/update-tab"
 import { ConfigTransfer } from "@/components/config-transfer"
+import { RoomsTab } from "@/components/rooms-tab"
 import { ModulesTab } from "@/components/modules-tab"
 import { ConnectionDot } from "@/components/connection-badge"
 import { Confirm } from "@/components/confirm"
@@ -1220,6 +1221,7 @@ export function SettingsPage() {
     ...(admin ? [{ id: "servers", label: t("Serveurs") }] : []),
     ...(admin ? [{ id: "users", label: t("Utilisateurs") }] : []),
     ...(admin ? [{ id: "modules", label: t("Modules") }] : []),
+    ...(admin ? [{ id: "rooms", label: t("Pièces") }] : []),
     ...(admin ? [{ id: "breezone", label: "Breezone" }] : []),
     { id: "devices", label: t("Appareils") },
     { id: "account", label: t("Mon compte") },
@@ -1279,6 +1281,11 @@ export function SettingsPage() {
                 />
               }
             />
+          </TabsContent>
+        )}
+        {admin && (
+          <TabsContent value="rooms">
+            <RoomsTab />
           </TabsContent>
         )}
         {admin && (

@@ -1075,6 +1075,32 @@ const en: Record<string, string> = {
     "Name each device and choose its room.",
   "Reprendre les pièces Hue": "Take the Hue rooms",
   "Scène « {name} » activée": "Scene “{name}” on",
+  "Nouvelle pièce…": "New room…",
+  "Nouvelle pièce": "New room",
+  "L'appareil y est rangé dès sa création.":
+    "The device goes in it as soon as it is created.",
+  "Salon, Chambre parents…": "Living room, Main bedroom…",
+  "Nom de la pièce": "Room name",
+  "« {name} » supprimée": "“{name}” deleted",
+  "Ses objets restent, sans pièce : vous pourrez les ranger ailleurs.":
+    "Its objects stay, without a room: you can put them elsewhere.",
+  "Airzone · {name}": "Airzone · {name}",
+  "Pièces de la maison": "Rooms of the house",
+  "Les mêmes pièces pour tous les modules : climatisation, lumières, volets… L'ordre est celui des pages.":
+    "The same rooms for every module: air conditioning, lights, shutters… The order is the one of the pages.",
+  "Aucune pièce pour l'instant.": "No rooms yet.",
+  "Objets des modules": "Objects of the modules",
+  "Chaque module a ses propres objets, et parfois ses propres pièces : rangez-les dans celles de la maison.":
+    "Each module has its own objects, and sometimes its own rooms: put them in the rooms of the house.",
+  "Sans pièce seulement": "Without a room only",
+  "Tous les objets ont une pièce.": "Every object has a room.",
+  "Aucun objet pour l'instant : ajoutez un module.":
+    "No objects yet: add a module.",
+  "{n} objet": "{n} object",
+  "{n} objets": "{n} objects",
+  Pièces: "Rooms",
+  "Monter dans la liste": "Move up the list",
+  "Descendre dans la liste": "Move down the list",
 }
 
 export default en
