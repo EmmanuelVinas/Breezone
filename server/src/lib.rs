@@ -12,6 +12,7 @@ pub mod cloud;
 pub mod config;
 pub mod db;
 pub mod discovery;
+pub mod drivers;
 pub mod error;
 pub mod federation;
 pub mod hub;
@@ -47,6 +48,8 @@ pub struct AppState {
     pub cloud_key: Arc<[u8; 32]>,
     /// Checks for and installs new releases (issue #40).
     pub updater: Arc<update::Updater>,
+    /// Sources of devices read by drivers (ADR 0013).
+    pub drivers: Arc<drivers::Runtime>,
 }
 
 /// Opens the database, applies migrations, bootstraps accounts/installations from the
@@ -61,7 +64,9 @@ pub async fn init_state(cfg: Config) -> anyhow::Result<AppState> {
     let hub = Hub::new(db.clone(), cfg.clone(), cloud_key.clone());
     let updater = Arc::new(update::Updater::new(cfg.data_dir.clone(), cfg.self_update));
     updater.set_beta(db::get_setting(&db, update::CHANNEL_SETTING).await?.as_deref() == Some("beta"));
-    let state = AppState { db, cfg, hub, auth, cloud_key, updater };
+    let drivers = Arc::new(drivers::Runtime::new(db.clone()));
+    drivers.reload().await?;
+    let state = AppState { db, cfg, hub, auth, cloud_key, updater, drivers };
     bootstrap(&state).await?;
     state.hub.reload_installations().await?;
     Ok(state)
@@ -145,6 +150,7 @@ pub fn spawn_background(state: &AppState) {
     tokio::spawn(state.hub.clone().run_poller());
     tokio::spawn(state.hub.clone().run_node_links());
     tokio::spawn(state.hub.clone().run_maintenance());
+    tokio::spawn(state.drivers.clone().run());
     tokio::spawn(cloud::run_auto_sync(state.clone()));
     tokio::spawn(airzone_schedules::run_sync(state.clone()));
     tokio::spawn(timers::run_loop(state.hub.clone(), state.db.clone()));

@@ -1,0 +1,10 @@
+{
+  "trait": "energy.meter",
+  "version": 1,
+  "label": { "fr": "Compteur d'énergie", "en": "Energy meter", "es": "Contador de energía" },
+  "state": [
+    { "name": "energy_in", "type": "number", "unit": "kWh", "label": { "fr": "Énergie consommée", "en": "Energy consumed", "es": "Energía consumida" } },
+    { "name": "energy_out", "type": "number", "unit": "kWh", "optional": true, "label": { "fr": "Énergie injectée", "en": "Energy returned", "es": "Energía inyectada" } }
+  ],
+  "actions": []
+}

@@ -7,7 +7,12 @@ use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
 
 /// Every trait file, embedded at build time (the tests check that none is forgotten).
-const FILES: &[(&str, &str)] = &[("climate.zone.json", include_str!("../contracts/traits/climate.zone.json"))];
+const FILES: &[(&str, &str)] = &[
+    ("climate.zone.json", include_str!("../contracts/traits/climate.zone.json")),
+    ("energy.meter.json", include_str!("../contracts/traits/energy.meter.json")),
+    ("energy.power.json", include_str!("../contracts/traits/energy.power.json")),
+    ("switch.relay.json", include_str!("../contracts/traits/switch.relay.json")),
+];
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Label {

@@ -160,8 +160,8 @@ avec un identifiant stable. Les routes des zones restent celles qui les pilotent
 | Méthode | Chemin | Description |
 |---------|--------|-------------|
 | GET 🔒 | `/api/traits` | Catalogue des traits : `[{trait, version, label{fr,en,es}, state:[champ], actions:[{name, label, params:[champ]}]}]`, champ = `{name, type (bool·integer·number·string·enum), unit?, values?, min?, max?, optional, label}`. Sert aussi de descripteur pour un trait inconnu du client |
-| GET 🔒 | `/api/devices` | Appareils visibles par l'utilisateur : `[{id, kind, traits, source, installation_id, reference, name, room_id, position, available, state}]` (`state` : valeurs décrites par le catalogue ; `available` faux si la source ne fournit plus l'appareil) |
-| PUT 🔒 | `/api/devices/{id}` | `{name?, room_id?, position?}` : nom personnalisé (vide = celui de la source) et pièce. Même droit que pour renommer les zones de l'installation |
+| GET 🔒 | `/api/devices` | Appareils visibles par l'utilisateur : `[{id, kind, traits, source, source_id, installation_id, reference, name, room_id, role, measures:{device_id, room_id}, position, available, state}]` (`state` : valeurs décrites par le catalogue ; `available` faux si la source ne fournit plus l'appareil) |
+| PUT 🔒 | `/api/devices/{id}` | `{name?, room_id?, position?, role?, measures_device_id?, measures_room_id?}` : seuls les champs donnés changent (`null` efface). Nom personnalisé (vide = celui de la source), pièce, et pour une mesure d'énergie son **rôle** : `grid` (réseau, toute la maison), `solar`, `battery` ou `consumption` (consommation d'un appareil ou d'une pièce ; sans cible : autres usages). Même droit que pour renommer les zones de l'installation ; administrateurs pour les appareils des sources |
 | GET 🔒 | `/api/rooms` | `[{id, name, position, created_at}]` |
 | POST 👑 | `/api/rooms` | `{name, position?}` → 201 |
 | PUT 👑 · DELETE 👑 | `/api/rooms/{id}` | Renommer, réordonner, supprimer (ses appareils restent, sans pièce) |

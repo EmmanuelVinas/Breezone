@@ -1,0 +1,17 @@
+{
+  "trait": "switch.relay",
+  "version": 1,
+  "label": { "fr": "Relais", "en": "Relay", "es": "Relé" },
+  "state": [
+    { "name": "on", "type": "bool", "label": { "fr": "Allumé", "en": "On", "es": "Encendido" } }
+  ],
+  "actions": [
+    {
+      "name": "set",
+      "label": { "fr": "Allumer ou éteindre", "en": "Switch on or off", "es": "Encender o apagar" },
+      "params": [
+        { "name": "on", "type": "bool", "label": { "fr": "Allumé", "en": "On", "es": "Encendido" } }
+      ]
+    }
+  ]
+}

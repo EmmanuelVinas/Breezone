@@ -705,6 +705,44 @@ const es: Record<string, string> = {
     "Todavía no en «{name}»: {list}. Actualícelo.",
   "« {name} » sait aussi : {list}. Mettez à jour ce serveur pour en profiter.":
     "«{name}» también sabe: {list}. Actualice este servidor para aprovecharlo.",
+  "Simple mesure": "Medida simple",
+  "Réseau (général)": "Red (general)",
+  "Production solaire": "Producción solar",
+  Batterie: "Batería",
+  "Consommation de…": "Consumo de…",
+  Désactivé: "Desactivado",
+  allumé: "encendido",
+  éteint: "apagado",
+  "{value} consommés": "{value} consumidos",
+  "{value} injectés": "{value} inyectados",
+  Indisponible: "No disponible",
+  Mesure: "Mide",
+  "Autres usages": "Otros usos",
+  "Pièce : {name}": "Habitación: {name}",
+  "« {name} » retiré": "«{name}» retirado",
+  "vu {when}": "visto {when}",
+  "Ses appareils disparaissent de Breezone, avec leurs réglages. Le matériel n'est pas modifié.":
+    "Sus aparatos desaparecen de Breezone, con sus ajustes. El equipo no se modifica.",
+  "Aucun appareil lu pour l'instant.": "Ningún aparato leído por ahora.",
+  "« {name} » ajouté": "«{name}» añadido",
+  "« {name} » ajouté, mais ne répond pas pour l'instant":
+    "«{name}» añadido, pero no responde por ahora",
+  "Onglet Installations": "Pestaña Instalaciones",
+  "Non pris en charge": "No compatible",
+  "Ajouter un module": "Añadir un módulo",
+  "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone et Shelly (Plus, Pro, Gen3, Gen4).":
+    "Breezone busca en la red los productos que sabe controlar: WebServers Airzone y Shelly (Plus, Pro, Gen3, Gen4).",
+  Réseau: "Red",
+  "Recherche sur le réseau… (quelques secondes)":
+    "Buscando en la red… (unos segundos)",
+  "Aucun produit trouvé sur {subnet}.":
+    "Ningún producto encontrado en {subnet}.",
+  "Ou par son adresse (Shelly)": "O por su dirección (Shelly)",
+  Modules: "Módulos",
+  "Les produits que Breezone lit et pilote en plus d'Airzone. Donnez un rôle à chaque mesure d'énergie : la page Énergie s'en sert.":
+    "Los productos que Breezone lee y controla además de Airzone. Dé un papel a cada medida de energía: la página Energía lo usa.",
+  "Aucun module pour l'instant : « Ajouter un module » cherche ceux de votre réseau.":
+    "Ningún módulo por ahora: «Añadir un módulo» busca los de su red.",
   "Recevoir les versions bêta": "Recibir las versiones beta",
   "Les nouveautés avant tout le monde, avec un risque de défauts. Si une bêta ne démarre pas, Breezone revient seul à la version d'avant.":
     "Las novedades antes que nadie, con riesgo de fallos. Si una beta no arranca, Breezone vuelve solo a la versión anterior.",

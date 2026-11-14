@@ -37,5 +37,40 @@ export type ClimateZoneSet = {
   sleep?: number
 }
 
+/** Energy meter (`energy.meter@1`): state. */
+export type EnergyMeterState = {
+  /** Energy consumed (kWh) */
+  energy_in: number
+  /** Energy returned (kWh) */
+  energy_out: number | null
+}
+
+/** Power (`energy.power@1`): state. */
+export type EnergyPowerState = {
+  /** Power (W) */
+  power: number
+  /** Phase A (W) */
+  power_a: number | null
+  /** Phase B (W) */
+  power_b: number | null
+  /** Phase C (W) */
+  power_c: number | null
+  /** Voltage (V) */
+  voltage: number | null
+  /** Current (A) */
+  current: number | null
+}
+
+/** Relay (`switch.relay@1`): state. */
+export type SwitchRelayState = {
+  /** On */
+  on: boolean
+}
+
+/** Relay (`switch.relay@1`): action `set`. */
+export type SwitchRelaySet = {
+  on: boolean
+}
+
 /** Traits described by this version (`trait@version`). */
-export const TRAITS = ["climate.zone@1"] as const
+export const TRAITS = ["climate.zone@1", "energy.meter@1", "energy.power@1", "switch.relay@1"] as const

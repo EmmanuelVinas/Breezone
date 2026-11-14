@@ -706,7 +706,111 @@ export type UpdateView = {
   prerelease: boolean
 }
 
+/** Role of an energy measure (energy page). */
+export type MeasureRole = "grid" | "solar" | "battery" | "consumption"
+
+/** A device (ADR 0013): an Airzone zone, a Shelly channel or relay… described by its traits. */
+export type DeviceView = {
+  id: number
+  kind: string
+  traits: string[]
+  source: string
+  source_id: number | null
+  installation_id: number | null
+  reference: unknown
+  name: string
+  room_id: number | null
+  role: MeasureRole | null
+  measures: { device_id: number | null; room_id: number | null }
+  position: number
+  available: boolean
+  state: Record<string, unknown> | null
+}
+
+/** Only the fields given change; `null` clears. */
+export type DeviceInput = {
+  name?: string | null
+  room_id?: number | null
+  position?: number
+  role?: MeasureRole | null
+  measures_device_id?: number | null
+  measures_room_id?: number | null
+}
+
+export type Room = {
+  id: number
+  name: string
+  position: number
+  created_at: number
+}
+
+export type DriverInfo = {
+  id: string
+  label: string
+  provides: string[]
+  models: string[]
+  config: { name: string; type: string; optional: boolean; label: string }[]
+}
+
+export type SourceView = {
+  id: number
+  driver: string
+  name: string
+  config: Record<string, unknown>
+  enabled: boolean
+  created_at: number
+  status: {
+    state: "online" | "offline" | "error" | "disabled" | "unknown"
+    last_seen: number | null
+    last_error: string | null
+    model: string | null
+    firmware: string | null
+  }
+  devices: number
+}
+
+export type SourceInput = {
+  driver: string
+  name: string
+  config: Record<string, unknown>
+  enabled?: boolean
+}
+
+/** A supported product found on the network. */
+export type FoundProduct = {
+  brand: "airzone" | "shelly"
+  driver: string
+  model: string
+  host: string
+  port: number
+  mac: string | null
+  device_id: string | null
+  firmware: string | null
+  note: string | null
+  supported: boolean
+  added: boolean
+}
+
 export const api = {
+  devices: () => request<DeviceView[]>("GET", "/api/devices"),
+  updateDevice: (id: number, input: DeviceInput) =>
+    request<DeviceView>("PUT", `/api/devices/${id}`, input),
+  rooms: () => request<Room[]>("GET", "/api/rooms"),
+  drivers: () => request<DriverInfo[]>("GET", "/api/drivers"),
+  sources: () => request<SourceView[]>("GET", "/api/sources"),
+  createSource: (input: SourceInput) =>
+    request<SourceView>("POST", "/api/sources", input),
+  updateSource: (id: number, input: SourceInput) =>
+    request<SourceView>("PUT", `/api/sources/${id}`, input),
+  deleteSource: (id: number) => request<void>("DELETE", `/api/sources/${id}`),
+  refreshSource: (id: number) =>
+    request<SourceView>("POST", `/api/sources/${id}/refresh`),
+  scanProducts: (subnet?: string) =>
+    request<{ subnet: string; duration_ms: number; products: FoundProduct[] }>(
+      "POST",
+      "/api/discovery/products",
+      subnet ? { subnet } : {}
+    ),
   version: () =>
     request<ServerVersion>("GET", "/api/version", undefined, false),
   update: () => request<UpdateView>("GET", "/api/system/update"),

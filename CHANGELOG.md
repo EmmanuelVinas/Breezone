@@ -19,6 +19,11 @@ All notable changes are documented here. The format follows
   whether it is an Airzone WebServer or a Shelly, and products are identified down to the model
   (« Shelly Pro 3EM, monophasé : 3 voies indépendantes »), with those already added marked.
 
+- Settings › Modules (web): the sources of devices with their state, « Ajouter un module » that
+  scans the network and adds a Shelly in one click (or by its address), and each energy measure
+  named and given a role: grid (whole home), solar production, battery, or the consumption of a
+  device or a room. The energy page will rely on these roles.
+
 ### Fixed
 
 - Network scan: devices were missed when many addresses were asked at once (a real device can take

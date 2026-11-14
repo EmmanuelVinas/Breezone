@@ -67,7 +67,12 @@ impl Capabilities {
             breezone: version.to_string(),
             channel: if version.is_prerelease() { "beta" } else { "stable" }.into(),
             protocol: Protocol { current: PROTOCOL, min: PROTOCOL_MIN },
-            traits: BTreeMap::from([("climate.zone".into(), vec![1])]),
+            traits: BTreeMap::from([
+                ("climate.zone".into(), vec![1]),
+                ("energy.meter".into(), vec![1]),
+                ("energy.power".into(), vec![1]),
+                ("switch.relay".into(), vec![1]),
+            ]),
             features: [
                 ("federation.watch", 1),
                 ("federation.control", 1),
@@ -84,12 +89,22 @@ impl Capabilities {
                 ("update.beta", 1),
                 // Rooms, devices and the catalog of traits (ADR 0013): /api/rooms, /api/devices, /api/traits.
                 ("home.devices", 1),
+                // Sources read by drivers (Shelly…) and the generic action on a device's trait.
+                ("home.sources", 1),
+                ("devices.actions", 1),
             ]
             .into_iter()
             .map(|(k, v)| (k.to_string(), v))
             .collect(),
             // Airzone is built in: it is announced like the modules to come.
-            modules: vec![ModuleInfo { id: "airzone".into(), version: version.to_string(), provides: vec!["climate.zone@1".into()] }],
+            modules: vec![
+                ModuleInfo { id: "airzone".into(), version: version.to_string(), provides: vec!["climate.zone@1".into()] },
+                ModuleInfo {
+                    id: "shelly".into(),
+                    version: version.to_string(),
+                    provides: vec!["energy.power@1".into(), "energy.meter@1".into(), "switch.relay@1".into()],
+                },
+            ],
             caps_rev: String::new(),
         };
         caps.caps_rev = caps.compute_rev();
@@ -237,7 +252,9 @@ mod tests {
         let local = Capabilities::local();
         let c = local.compatibility(&Capabilities::legacy());
         assert_eq!(c.state, "limited");
-        assert_eq!(c.missing, vec!["federation.hello@1".to_string()]);
+        for item in ["federation.hello@1", "energy.power@1", "energy.meter@1", "switch.relay@1"] {
+            assert!(c.missing.contains(&item.to_string()), "{item} is missing on a legacy peer: {c:?}");
+        }
         assert!(c.newer.is_empty());
         assert_eq!(local.compatibility(&local).state, "compatible");
     }

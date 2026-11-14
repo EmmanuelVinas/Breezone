@@ -134,6 +134,24 @@ async fn a_shelly_source_provides_devices_driven_through_their_traits() {
     let (s, _) = server.call("POST", &format!("/api/devices/{}/actions", meter["id"]), t, Some(json!({"trait":"switch.relay","action":"set","params":{"on":true}}))).await;
     assert_eq!(s, StatusCode::UNPROCESSABLE_ENTITY, "the meter has no relay");
 
+    // Roles of the energy measures (energy page): the meter is the whole home, the relay's own
+    // measure is the consumption of a device.
+    let meter_id = meter["id"].as_i64().unwrap();
+    let (s, d) = server.call("PUT", &format!("/api/devices/{meter_id}"), t, Some(json!({"role":"grid"}))).await;
+    assert_eq!(s, StatusCode::OK, "{d}");
+    assert_eq!(d["role"], "grid");
+    let (s, d) = server.call("PUT", &format!("/api/devices/{relay_id}"), t, Some(json!({"role":"consumption","measures_device_id": meter_id}))).await;
+    assert_eq!(s, StatusCode::OK, "{d}");
+    assert_eq!(d["measures"]["device_id"], meter_id);
+    let (s, _) = server.call("PUT", &format!("/api/devices/{relay_id}"), t, Some(json!({"role":"consumption","measures_device_id": relay_id}))).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST, "not itself");
+    let (s, _) = server.call("PUT", &format!("/api/devices/{meter_id}"), t, Some(json!({"role":"magic"}))).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+    // Only consumption points to what it measures.
+    let (_, d) = server.call("PUT", &format!("/api/devices/{meter_id}"), t, Some(json!({"role":"solar","measures_device_id": relay_id}))).await;
+    assert_eq!(d["role"], "solar");
+    assert_eq!(d["measures"]["device_id"], Value::Null);
+
     // A user sees the devices but neither drives them nor manages the sources (for now).
     server.call("POST", "/api/users", t, Some(json!({"username":"bob","password":"motdepasse1","role":"user"}))).await;
     let (_, v) = server.call("POST", "/api/auth/login", None, Some(json!({"username":"bob","password":"motdepasse1"}))).await;

@@ -698,6 +698,43 @@ const en: Record<string, string> = {
     "Not on “{name}” yet: {list}. Update it.",
   "« {name} » sait aussi : {list}. Mettez à jour ce serveur pour en profiter.":
     "“{name}” can also do: {list}. Update this server to use it.",
+  "Simple mesure": "Plain measure",
+  "Réseau (général)": "Grid (whole home)",
+  "Production solaire": "Solar production",
+  Batterie: "Battery",
+  "Consommation de…": "Consumption of…",
+  Désactivé: "Disabled",
+  allumé: "on",
+  éteint: "off",
+  "{value} consommés": "{value} consumed",
+  "{value} injectés": "{value} returned",
+  Indisponible: "Unavailable",
+  Mesure: "Measures",
+  "Autres usages": "Other uses",
+  "Pièce : {name}": "Room: {name}",
+  "« {name} » retiré": "“{name}” removed",
+  "vu {when}": "seen {when}",
+  "Ses appareils disparaissent de Breezone, avec leurs réglages. Le matériel n'est pas modifié.":
+    "Its devices leave Breezone, with their settings. The hardware is not changed.",
+  "Aucun appareil lu pour l'instant.": "No device read yet.",
+  "« {name} » ajouté": "“{name}” added",
+  "« {name} » ajouté, mais ne répond pas pour l'instant":
+    "“{name}” added, but it does not answer for now",
+  "Onglet Installations": "Installations tab",
+  "Non pris en charge": "Not supported",
+  "Ajouter un module": "Add a module",
+  "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone et Shelly (Plus, Pro, Gen3, Gen4).":
+    "Breezone looks on the network for the products it can drive: Airzone WebServers and Shelly (Plus, Pro, Gen3, Gen4).",
+  Réseau: "Network",
+  "Recherche sur le réseau… (quelques secondes)":
+    "Searching the network… (a few seconds)",
+  "Aucun produit trouvé sur {subnet}.": "No product found on {subnet}.",
+  "Ou par son adresse (Shelly)": "Or by its address (Shelly)",
+  Modules: "Modules",
+  "Les produits que Breezone lit et pilote en plus d'Airzone. Donnez un rôle à chaque mesure d'énergie : la page Énergie s'en sert.":
+    "The products Breezone reads and drives besides Airzone. Give each energy measure a role: the energy page uses it.",
+  "Aucun module pour l'instant : « Ajouter un module » cherche ceux de votre réseau.":
+    "No module yet: “Add a module” looks for those on your network.",
   "Recevoir les versions bêta": "Receive beta versions",
   "Les nouveautés avant tout le monde, avec un risque de défauts. Si une bêta ne démarre pas, Breezone revient seul à la version d'avant.":
     "New features before everyone else, with a risk of bugs. If a beta does not start, Breezone goes back to the previous version on its own.",

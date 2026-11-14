@@ -51,5 +51,35 @@ data class ClimateZoneSet(
     val sleep: Long? = null,
 )
 
+/** Energy meter (`energy.meter@1`): state. */
+@Serializable
+data class EnergyMeterState(
+    val energyIn: Double = 0.0,
+    val energyOut: Double? = null,
+)
+
+/** Power (`energy.power@1`): state. */
+@Serializable
+data class EnergyPowerState(
+    val power: Double = 0.0,
+    val powerA: Double? = null,
+    val powerB: Double? = null,
+    val powerC: Double? = null,
+    val voltage: Double? = null,
+    val current: Double? = null,
+)
+
+/** Relay (`switch.relay@1`): state. */
+@Serializable
+data class SwitchRelayState(
+    val on: Boolean = false,
+)
+
+/** Relay (`switch.relay@1`): action `set`. */
+@Serializable
+data class SwitchRelaySet(
+    val on: Boolean? = null,
+)
+
 /** Traits described by this version (`trait@version`). */
-val TRAITS = listOf("climate.zone@1")
+val TRAITS = listOf("climate.zone@1", "energy.meter@1", "energy.power@1", "switch.relay@1")

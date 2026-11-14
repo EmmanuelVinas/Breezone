@@ -1,0 +1,14 @@
+{
+  "trait": "energy.power",
+  "version": 1,
+  "label": { "fr": "Puissance", "en": "Power", "es": "Potencia" },
+  "state": [
+    { "name": "power", "type": "number", "unit": "W", "label": { "fr": "Puissance", "en": "Power", "es": "Potencia" } },
+    { "name": "power_a", "type": "number", "unit": "W", "optional": true, "label": { "fr": "Phase A", "en": "Phase A", "es": "Fase A" } },
+    { "name": "power_b", "type": "number", "unit": "W", "optional": true, "label": { "fr": "Phase B", "en": "Phase B", "es": "Fase B" } },
+    { "name": "power_c", "type": "number", "unit": "W", "optional": true, "label": { "fr": "Phase C", "en": "Phase C", "es": "Fase C" } },
+    { "name": "voltage", "type": "number", "unit": "V", "optional": true, "label": { "fr": "Tension", "en": "Voltage", "es": "Tensión" } },
+    { "name": "current", "type": "number", "unit": "A", "optional": true, "label": { "fr": "Intensité", "en": "Current", "es": "Intensidad" } }
+  ],
+  "actions": []
+}
