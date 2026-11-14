@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.11] - 2026-11-14
+
 ### Changed
 
 - The installation chosen in « Mes installations » shows in small under « Installations » in the
