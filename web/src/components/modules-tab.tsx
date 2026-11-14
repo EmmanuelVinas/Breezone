@@ -846,6 +846,25 @@ function AddModuleDialog({
     onError: (e) => toast.error(errorText(e)),
   })
   const [code, setCode] = useState("")
+  const start = useMutation({
+    mutationFn: (p: FoundProduct) =>
+      api.startHomekitPairing({ host: p.host, flags: p.flags }),
+    onError: (e) => {
+      toast.error(errorText(e))
+      setPairing(null)
+    },
+  })
+  const startPairing = (p: FoundProduct) => {
+    if (pairing && pairing.host !== p.host)
+      api.cancelHomekitPairing(pairing.host).catch(() => {})
+    setPairing(p)
+    setCode("")
+    start.mutate(p)
+  }
+  const stopPairing = () => {
+    if (pairing) api.cancelHomekitPairing(pairing.host).catch(() => {})
+    setPairing(null)
+  }
   const pair = useMutation({
     mutationFn: (p: FoundProduct) =>
       api.pairHomekit({
@@ -861,7 +880,11 @@ function AddModuleDialog({
       setPairing(null)
       onClose()
     },
-    onError: (e) => toast.error(errorText(e)),
+    onError: (e, p) => {
+      toast.error(errorText(e))
+      // The accessory ends the pairing on a wrong code: a new one starts (and shows a new code).
+      startPairing(p)
+    },
   })
 
   const action = (p: FoundProduct) => {
@@ -891,10 +914,7 @@ function AddModuleDialog({
         <Button
           size="sm"
           variant={pairing?.host === p.host ? "secondary" : "default"}
-          onClick={() => {
-            setPairing(p)
-            setCode("")
-          }}
+          onClick={() => startPairing(p)}
         >
           <Link2 /> {t("Appairer")}
         </Button>
@@ -1015,41 +1035,46 @@ function AddModuleDialog({
               </div>
               <p className="text-xs text-muted-foreground">
                 {t(
-                  "Saisissez le code HomeKit à 8 chiffres, imprimé sur l'appareil ou sa notice. Rien ne change dans l'application du fabricant : vos équipements restent configurés comme aujourd'hui."
+                  "Saisissez le code HomeKit à 8 chiffres : celui qui vient de s'afficher sur l'écran de l'appareil s'il en a un, sinon celui imprimé sur l'appareil ou sa notice. Rien ne change dans l'application du fabricant : vos équipements restent configurés comme aujourd'hui."
                 )}
               </p>
-              <div className="flex flex-wrap gap-2">
-                <Input
-                  value={code}
-                  autoFocus
-                  inputMode="numeric"
-                  autoComplete="off"
-                  placeholder="123-45-678"
-                  aria-label={t("Code HomeKit")}
-                  className="w-40 font-mono"
-                  onChange={(e) => setCode(e.target.value)}
-                />
-                <Button
-                  type="submit"
-                  disabled={
-                    pair.isPending || code.replace(/\D/g, "").length !== 8
-                  }
-                >
-                  {pair.isPending ? (
-                    <Loader2 className="animate-spin" />
-                  ) : (
-                    <Link2 />
-                  )}
-                  {t("Appairer")}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setPairing(null)}
-                >
-                  {t("Annuler")}
-                </Button>
-              </div>
+              {start.isPending ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" />
+                  {t("Démarrage de l'appairage…")}
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  <Input
+                    value={code}
+                    autoFocus
+                    inputMode="numeric"
+                    autoComplete="off"
+                    placeholder="123-45-678"
+                    aria-label={t("Code HomeKit")}
+                    className="w-40 font-mono"
+                    onChange={(e) => setCode(e.target.value)}
+                  />
+                  <Button
+                    type="submit"
+                    disabled={
+                      pair.isPending ||
+                      !start.isSuccess ||
+                      code.replace(/\D/g, "").length !== 8
+                    }
+                  >
+                    {pair.isPending ? (
+                      <Loader2 className="animate-spin" />
+                    ) : (
+                      <Link2 />
+                    )}
+                    {t("Appairer")}
+                  </Button>
+                  <Button type="button" variant="ghost" onClick={stopPairing}>
+                    {t("Annuler")}
+                  </Button>
+                </div>
+              )}
             </form>
           )}
         </div>

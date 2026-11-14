@@ -8,16 +8,16 @@ const en: Record<string, string> = {
     "“{name}”: {failed} action(s) failed",
   "« {name} » activée chez Airzone": "“{name}” enabled on Airzone",
   "« {name} » désactivée chez Airzone": "“{name}” disabled on Airzone",
-  "« {name} » doit encore accepter votre demande : sur ce serveur-là, Réglages › Partages › Accepter. Ses installations apparaîtront ensuite ici.":
-    "“{name}” still has to accept your request: on that server, Settings › Shares › Accept. Its installations will then show here.",
+  "« {name} » doit encore accepter votre demande : sur ce serveur-là, Réglages › Serveurs › Accepter. Ses installations apparaîtront ensuite ici.":
+    "“{name}” still has to accept your request: on that server, Settings › Servers › Accept. Its installations will then show here.",
   "« {name} » est pilotée par ce serveur ({local})":
     "“{name}” is driven by this server ({local})",
   "« {name} » est reliée": "“{name}” is linked",
   "« {name} » exécutée": "“{name}” run",
-  "« {name} » ne partage pas ses installations en retour. Pour les voir ici : sur ce serveur-là, Réglages › Partages › Nouveau partage, puis ajoutez le jeton dans Réglages › Nœuds.":
-    "“{name}” does not share its installations back. To see them here: on that server, Settings › Shares › New share, then add the token in Settings › Nodes.",
-  "« {name} » vous partage aussi ses installations : choisissez celles à afficher dans Réglages › Nœuds.":
-    "“{name}” also shares its installations with you: choose which ones to show in Settings › Nodes.",
+  "« {name} » ne partage pas ses installations en retour. Pour les voir ici : sur ce serveur-là, Réglages › Serveurs › Nouveau partage, puis ajoutez le jeton dans Réglages › Serveurs.":
+    "“{name}” does not share its installations back. To see them here: on that server, Settings › Servers › New share, then add the token in Settings › Servers.",
+  "« {name} » vous partage aussi ses installations : choisissez celles à afficher dans Réglages › Serveurs.":
+    "“{name}” also shares its installations with you: choose which ones to show in Settings › Servers.",
   "(vous)": "(you)",
   "{days} à {time}": "{days} at {time}",
   "{h} h": "{h} h",
@@ -138,7 +138,6 @@ const en: Record<string, string> = {
   Auto: "Auto",
   "Automatique ({name})": "Automatic ({name})",
   "Autre serveur Breezone": "Another Breezone server",
-  "Autres serveurs Breezone": "Other Breezone servers",
   Baisser: "Lower",
   "Bienvenue 👋": "Welcome 👋",
   "Breezone pilote vos installations Airzone en local, sans abonnement ni cloud.":
@@ -159,8 +158,8 @@ const en: Record<string, string> = {
     "This server drives it directly (IP address).",
   "Ce serveur n'est partagé avec aucun autre.":
     "This server is not shared with any other.",
-  "Ce serveur propose un partage réciproque. Il verra les installations cochées dès qu'il aura accepté votre demande ; vous pourrez révoquer ce partage dans Réglages › Partages.":
-    "This server offers a reciprocal share. It will see the checked installations once it has accepted your request; you can revoke this share in Settings › Shares.",
+  "Ce serveur propose un partage réciproque. Il verra les installations cochées dès qu'il aura accepté votre demande ; vous pourrez révoquer ce partage dans Réglages › Serveurs.":
+    "This server offers a reciprocal share. It will see the checked installations once it has accepted your request; you can revoke this share in Settings › Servers.",
   "Celle de l'interface web et des messages du serveur. L'application mobile suit la langue du téléphone.":
     "The one of the web UI and of the server messages. The mobile app follows the phone's language.",
   "Celle du jeton, sinon par ex. http://192.168.1.20:8427":
@@ -180,8 +179,8 @@ const en: Record<string, string> = {
   "Ces réglages sont propres à Breezone. Nom Airzone d'origine : « {name} ».":
     "These settings belong to Breezone. Original Airzone name: “{name}”.",
   "Cet appareil": "This device",
-  "Cette installation figure dans votre compte Airzone, mais ce serveur Breezone ne joint pas son WebServer. S'il est sur le même réseau, indiquez son adresse locale ; s'il est sur un autre site, ajoutez le serveur Breezone installé là-bas (Réglages › Nœuds).":
-    "This installation is in your Airzone account, but this Breezone server does not reach its WebServer. If it is on the same network, enter its local address; if it is on another site, add the Breezone server installed there (Settings › Nodes).",
+  "Cette installation figure dans votre compte Airzone, mais ce serveur Breezone ne joint pas son WebServer. S'il est sur le même réseau, indiquez son adresse locale ; s'il est sur un autre site, ajoutez le serveur Breezone installé là-bas (Réglages › Serveurs).":
+    "This installation is in your Airzone account, but this Breezone server does not reach its WebServer. If it is on the same network, enter its local address; if it is on another site, add the Breezone server installed there (Settings › Servers).",
   "Cette scène ne pourra plus être lancée.": "This scene can no longer be run.",
   "Changer de compte": "Change account",
   "Changer de thème": "Change theme",
@@ -319,8 +318,8 @@ const en: Record<string, string> = {
   "Identifiants non mémorisés": "Credentials not remembered",
   "Il n'a pas accepté le partage réciproque.":
     "It did not accept the reciprocal share.",
-  "Il vous partage aussi ses installations : elles apparaîtront dans Nœuds dès que vous accepterez.":
-    "It also shares its installations with you: they will show in Nodes as soon as you accept.",
+  "Il vous partage aussi ses installations : elles apparaîtront dans « Quels serveurs partagent avec celui-ci » dès que vous accepterez.":
+    "It also shares its installations with you: they will show under “Which servers share with this one” as soon as you accept.",
   "Importées de votre compte Airzone, avec la façon dont ce serveur joint leur WebServer.":
     "Imported from your Airzone account, with the way this server reaches their WebServer.",
   "Importer depuis Airzone": "Import from Airzone",
@@ -356,10 +355,10 @@ const en: Record<string, string> = {
   "Jusqu'à révocation": "Until revoked",
   "L'autre serveur perd l'accès à ces installations immédiatement.":
     "The other server loses access to these installations at once.",
-  "L'autre serveur pourra aussi vous partager ses installations : elles apparaîtront dans Nœuds une fois la demande acceptée.":
-    "The other server may also share its installations with you: they will show in Nodes once the request is accepted.",
-  "L'installation est sur un autre site, pilotée par le serveur Breezone installé là-bas. Sur ce serveur : Réglages › Partages › Nouveau partage, puis ajoutez son jeton ici. Les installations partagées sont reconnues automatiquement (même WebServer).":
-    "The installation is on another site, driven by the Breezone server installed there. On that server: Settings › Shares › New share, then add its token here. Shared installations are recognised automatically (same WebServer).",
+  "L'autre serveur pourra aussi vous partager ses installations : elles apparaîtront dans « Quels serveurs partagent avec celui-ci » une fois la demande acceptée.":
+    "The other server may also share its installations with you: they will show under “Which servers share with this one” once the request is accepted.",
+  "L'installation est sur un autre site, pilotée par le serveur Breezone installé là-bas. Sur ce serveur : Réglages › Serveurs › Nouveau partage, puis ajoutez son jeton ici. Les installations partagées sont reconnues automatiquement (même WebServer).":
+    "The installation is on another site, driven by the Breezone server installed there. On that server: Settings › Servers › New share, then add its token here. Shared installations are recognised automatically (same WebServer).",
   "La programmation est supprimée de votre compte Airzone.":
     "The schedule is deleted from your Airzone account.",
   "La synchronisation s'arrête. Vos installations et groupes restent dans Breezone.":
@@ -436,7 +435,6 @@ const en: Record<string, string> = {
   "Mot de passe Airzone": "Airzone password",
   "Mot de passe modifié — vos autres appareils ont été déconnectés":
     "Password changed — your other devices were signed out",
-  Nœuds: "Nodes",
   Nom: "Name",
   "Nom affiché": "Displayed name",
   Non: "No",
@@ -461,7 +459,6 @@ const en: Record<string, string> = {
   "Partage révoqué": "Share revoked",
   "Partager aussi mes installations avec « {name} »":
     "Also share my installations with “{name}”",
-  Partages: "Shares",
   "Pas de réponse": "No answer",
   "Pas encore assez de relevés : ils s'accumulent toutes les 5 minutes.":
     "Not enough readings yet: they accumulate every 5 minutes.",
@@ -493,13 +490,15 @@ const en: Record<string, string> = {
   Refuser: "Refuse",
   "Refuser la demande de « {name} » ?": "Refuse the request of “{name}”?",
   Réglages: "Settings",
+  Serveurs: "Servers",
+  "Quels serveurs partagent avec celui-ci": "Which servers share with this one",
   "Réglages de l'installation": "Installation settings",
   Relier: "Link",
   "Relier « {name} »": "Link “{name}”",
   "Relier « {name} » à Airzone": "Link “{name}” to Airzone",
   "Renommer et regrouper les zones": "Rename and regroup the zones",
-  "Renseignez d'abord l'adresse publique de ce serveur (Réglages › Partages › Ce serveur) : l'autre serveur en a besoin pour le joindre.":
-    "First set the public address of this server (Settings › Shares › This server): the other server needs it to reach it.",
+  "Renseignez d'abord l'adresse publique de ce serveur (Réglages › Serveurs › Ce serveur) : l'autre serveur en a besoin pour le joindre.":
+    "First set the public address of this server (Settings › Servers › This server): the other server needs it to reach it.",
   "Réseau de ce serveur": "This server's network",
   "Réseau du serveur : {subnet}": "Server network: {subnet}",
   "Réseau du serveur : automatique": "Server network: automatic",
@@ -529,8 +528,8 @@ const en: Record<string, string> = {
     "Server “{name}” added: accept the request on that server to see its installations",
   "Serveur Breezone {version}": "Breezone server {version}",
   "Serveur enregistré": "Server saved",
-  "Ses installations apparaîtront quand « {name} » aura accepté la demande (Réglages › Partages sur ce serveur)":
-    "Its installations will show when “{name}” has accepted the request (Settings › Shares on that server)",
+  "Ses installations apparaîtront quand « {name} » aura accepté la demande (Réglages › Serveurs sur ce serveur)":
+    "Its installations will show when “{name}” has accepted the request (Settings › Servers on that server)",
   "Ses installations disparaîtront de ce serveur (historique local compris). Pensez à révoquer le partage sur l'autre serveur.":
     "Its installations will disappear from this server (local history included). Remember to revoke the share on the other server.",
   "Son historique et ses réglages Breezone seront supprimés.":
@@ -543,12 +542,12 @@ const en: Record<string, string> = {
   "Supprimer « {name} » ?": "Delete “{name}”?",
   "Supprimer {name} ?": "Delete {name}?",
   Sur: "On",
-  "Sur l'autre serveur Breezone : Réglages › Nœuds › Ajouter, puis collez ce jeton (ou scannez le QR code avec l'application). Il est utilisable une seule fois, pendant 15 minutes, et ne contient aucune clé d'accès. Vous devrez ensuite accepter la demande ici, dans « À qui ce serveur est partagé ».":
-    "On the other Breezone server: Settings › Nodes › Add, then paste this token (or scan the QR code with the app). It can be used only once, for 15 minutes, and holds no access key. You will then have to accept the request here, in “Who this server is shared with”.",
-  "Sur le serveur Breezone de ce site : Réglages › Partages › Nouveau partage, puis ajoutez son jeton ici. Ses installations sont reliées automatiquement (même WebServer).":
-    "On the Breezone server of that site: Settings › Shares › New share, then add its token here. Its installations are linked automatically (same WebServer).",
-  "Sur le serveur de l'autre site : Réglages › Partages › Nouveau partage. Collez ici le jeton obtenu (valable 15 minutes, une seule fois), puis acceptez la demande sur ce serveur-là. Ses installations apparaîtront alors ici. Les deux serveurs se reconnaissent ensuite par une signature : aucune clé ne circule.":
-    "On the server of the other site: Settings › Shares › New share. Paste the token here (valid 15 minutes, once), then accept the request on that server. Its installations will then show here. Both servers then recognise each other by a signature: no key travels.",
+  "Sur l'autre serveur Breezone : Réglages › Serveurs › Ajouter, puis collez ce jeton (ou scannez le QR code avec l'application). Il est utilisable une seule fois, pendant 15 minutes, et ne contient aucune clé d'accès. Vous devrez ensuite accepter la demande ici, dans « À qui ce serveur est partagé ».":
+    "On the other Breezone server: Settings › Servers › Add, then paste this token (or scan the QR code with the app). It can be used only once, for 15 minutes, and holds no access key. You will then have to accept the request here, in “Who this server is shared with”.",
+  "Sur le serveur Breezone de ce site : Réglages › Serveurs › Nouveau partage, puis ajoutez son jeton ici. Ses installations sont reliées automatiquement (même WebServer).":
+    "On the Breezone server of that site: Settings › Servers › New share, then add its token here. Its installations are linked automatically (same WebServer).",
+  "Sur le serveur de l'autre site : Réglages › Serveurs › Nouveau partage. Collez ici le jeton obtenu (valable 15 minutes, une seule fois), puis acceptez la demande sur ce serveur-là. Ses installations apparaîtront alors ici. Les deux serveurs se reconnaissent ensuite par une signature : aucune clé ne circule.":
+    "On the server of the other site: Settings › Servers › New share. Paste the token here (valid 15 minutes, once), then accept the request on that server. Its installations will then show here. Both servers then recognise each other by a signature: no key travels.",
   "Synchro quotidienne": "Daily sync",
   "Synchronisation terminée": "Synchronisation done",
   "Synchroniser maintenant": "Synchronise now",
@@ -987,8 +986,9 @@ const en: Record<string, string> = {
   "Appairé ailleurs": "Paired elsewhere",
   Appairer: "Pair",
   "Appairer « {name} » avec Breezone": "Pair “{name}” with Breezone",
-  "Saisissez le code HomeKit à 8 chiffres, imprimé sur l'appareil ou sa notice. Rien ne change dans l'application du fabricant : vos équipements restent configurés comme aujourd'hui.":
-    "Type the 8-digit HomeKit code, printed on the device or its manual. Nothing changes in the manufacturer's app: your equipment stays set up as it is.",
+  "Saisissez le code HomeKit à 8 chiffres : celui qui vient de s'afficher sur l'écran de l'appareil s'il en a un, sinon celui imprimé sur l'appareil ou sa notice. Rien ne change dans l'application du fabricant : vos équipements restent configurés comme aujourd'hui.":
+    "Type the 8-digit HomeKit code: the one just shown on the device's screen if it has one, else the one printed on the device or its manual. Nothing changes in the manufacturer's app: your equipment stays set up as it is.",
+  "Démarrage de l'appairage…": "Starting the pairing…",
   "Code HomeKit": "HomeKit code",
   Lumières: "Lights",
   "ne répond pas": "not answering",

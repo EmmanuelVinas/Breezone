@@ -383,7 +383,24 @@ mod tests {
         let (s, _, v) = call("POST", "/api/homekit/pair", t, Some(json!({"host": host, "name": "Legrand", "code": "111-11-111", "flags": 1}))).await;
         assert_eq!(s, 422);
         assert!(v.to_string().contains("Code incorrect") || v.to_string().contains("Wrong code"), "{v}");
-        let (s, text, source) = call("POST", "/api/homekit/pair", t, Some(json!({"host": host, "name": "Legrand", "code": "03145154", "flags": 1}))).await;
+        // With a screen, the code shown changes when a pairing starts: it is typed afterwards.
+        fake.state.lock().unwrap().screen = true;
+        let (s, _, _) = call("POST", "/api/homekit/pair/start", t, Some(json!({"host": host, "flags": 1}))).await;
+        assert_eq!(s, 204);
+        let shown = fake.state.lock().unwrap().shown.clone().unwrap();
+        // Started again (the dialog reopened): the first one is dropped, a new code shows.
+        let (s, _, _) = call("POST", "/api/homekit/pair/start", t, Some(json!({"host": host, "flags": 1}))).await;
+        assert_eq!(s, 204);
+        let (s, _, v) = call("POST", "/api/homekit/pair", t, Some(json!({"host": host, "name": "Legrand", "code": shown}))).await;
+        assert_eq!(s, 422, "the code of the dropped pairing: {v}");
+        let (s, _, _) = call("POST", "/api/homekit/pair/start", t, Some(json!({"host": host, "flags": 1}))).await;
+        assert_eq!(s, 204);
+        let (s, _, _) = call("POST", "/api/homekit/pair/cancel", t, Some(json!({"host": host}))).await;
+        assert_eq!(s, 204);
+        let (s, _, _) = call("POST", "/api/homekit/pair/start", t, Some(json!({"host": host, "flags": 1}))).await;
+        assert_eq!(s, 204);
+        let shown = fake.state.lock().unwrap().shown.clone().unwrap();
+        let (s, text, source) = call("POST", "/api/homekit/pair", t, Some(json!({"host": host, "name": "Legrand", "code": shown, "flags": 1}))).await;
         assert_eq!(s, 201, "{text}");
         assert_eq!(source["status"]["state"], "online", "{source}");
         assert_eq!(source["config"]["device_id"], "AA:BB:CC:DD:EE:FF");

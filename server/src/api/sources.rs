@@ -132,8 +132,45 @@ pub struct PairInput {
     pub flags: u32,
 }
 
-/// Pairs Breezone with a HomeKit accessory with its setup code, then adds it as a source. Nothing
-/// else changes on the accessory: what its own app set up stays as it is.
+#[derive(Deserialize)]
+pub struct StartInput {
+    pub host: String,
+    #[serde(default)]
+    pub flags: u32,
+}
+
+/// Pairings started, by accessory address, until their code is typed.
+static STARTED: std::sync::LazyLock<tokio::sync::Mutex<std::collections::HashMap<String, (std::time::Instant, crate::homekit::PairSetup)>>> =
+    std::sync::LazyLock::new(Default::default);
+const STARTED_FOR: std::time::Duration = std::time::Duration::from_secs(300);
+
+fn accessory_host(host: &str) -> ApiResult<&str> {
+    let host = host.trim();
+    if host.is_empty() || !host.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | ':')) {
+        return Err(ApiError::bad_request("invalid accessory address"));
+    }
+    Ok(host)
+}
+
+/// Starts pairing with a HomeKit accessory: one with a screen shows its code now.
+pub async fn start_homekit_pairing(_admin: AdminUser, Json(input): Json<StartInput>) -> ApiResult<StatusCode> {
+    let host = accessory_host(&input.host)?;
+    // A pairing left half-done keeps the accessory busy: the previous one is dropped first.
+    STARTED.lock().await.retain(|h, (at, _)| h != host && at.elapsed() < STARTED_FOR);
+    let setup = crate::homekit::PairSetup::start(host, input.flags & 1 == 1).await.map_err(|e| ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, e.explain()))?;
+    STARTED.lock().await.insert(host.to_string(), (std::time::Instant::now(), setup));
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Gives up a started pairing: the accessory is free again.
+pub async fn cancel_homekit_pairing(_admin: AdminUser, Json(input): Json<StartInput>) -> StatusCode {
+    STARTED.lock().await.remove(input.host.trim());
+    StatusCode::NO_CONTENT
+}
+
+/// Pairs Breezone with a HomeKit accessory with its setup code (the pairing started for it, or a
+/// new one), then adds it as a source. Nothing else changes on the accessory: what its own app set
+/// up stays as it is.
 pub async fn pair_homekit(State(state): State<AppState>, _admin: AdminUser, Json(input): Json<PairInput>) -> ApiResult<(StatusCode, Json<SourceView>)> {
     let code = crate::homekit::setup_code(&input.code).ok_or_else(|| {
         ApiError::bad_request(crate::text!(
@@ -142,12 +179,14 @@ pub async fn pair_homekit(State(state): State<AppState>, _admin: AdminUser, Json
             "El código HomeKit tiene 8 cifras (por ejemplo 123-45-678)."
         ))
     })?;
-    let host = input.host.trim();
-    if host.is_empty() || !host.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | ':')) {
-        return Err(ApiError::bad_request("invalid accessory address"));
-    }
+    let host = accessory_host(&input.host)?;
     let name: String = input.name.trim().chars().take(60).collect();
-    let pairing = crate::homekit::pair_setup(host, &code, input.flags & 1 == 1).await.map_err(|e| ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, e.explain()))?;
+    let started = STARTED.lock().await.remove(host).filter(|(at, _)| at.elapsed() < STARTED_FOR);
+    let paired = match started {
+        Some((_, setup)) => setup.finish(&code).await,
+        None => crate::homekit::pair_setup(host, &code, input.flags & 1 == 1).await,
+    };
+    let pairing = paired.map_err(|e| ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, e.explain()))?;
     let config = serde_json::json!({"host": host, "device_id": pairing.accessory_id}).to_string();
     let secret = crate::cloud::encrypt(&state.cloud_key, &serde_json::to_string(&pairing).unwrap_or_default());
     let stored = async {

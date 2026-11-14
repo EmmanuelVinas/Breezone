@@ -104,6 +104,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/sources/{id}/refresh", post(sources::refresh))
         .route("/api/sources/{id}/locate", post(sources::locate))
         .route("/api/homekit/pair", post(sources::pair_homekit))
+        .route("/api/homekit/pair/start", post(sources::start_homekit_pairing))
+        .route("/api/homekit/pair/cancel", post(sources::cancel_homekit_pairing))
         .route("/api/hue/link", post(sources::link_hue))
         .route("/api/discovery/products", post(sources::scan))
         .route("/api/rooms", get(home::list_rooms).post(home::create_room))

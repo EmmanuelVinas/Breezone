@@ -90,56 +90,75 @@ pub fn setup_code(typed: &str) -> Option<String> {
     Some(format!("{}-{}-{}", &digits[..3], &digits[3..5], &digits[5..]))
 }
 
-/// Pair Setup (HAP, chapter 5.6), with the accessory's setup code. `with_auth`: the accessory
-/// announces Apple authentication (feature flag 1), as most certified ones do.
+/// Pair Setup (HAP, chapter 5.6) in one go, for an accessory whose code is printed.
 pub async fn pair_setup(addr: &str, code: &str, with_auth: bool) -> Result<Pairing, HapError> {
-    let mut conn = Connection::connect(addr).await?;
-    let method = [if with_auth { 1u8 } else { 0 }];
-    let m2 = conn.tlv("/pair-setup", &[(tlv::STATE, &[1]), (tlv::METHOD, &method)]).await?;
-    let salt = tlv::get(&m2, tlv::SALT).ok_or_else(|| HapError::Protocol("pair-setup: no salt".into()))?.to_vec();
-    let b_pub = tlv::get(&m2, tlv::PUBLIC_KEY).ok_or_else(|| HapError::Protocol("pair-setup: no public key".into()))?.to_vec();
+    PairSetup::start(addr, with_auth).await?.finish(code).await
+}
 
-    let client = srp::Client::new(&crate::auth::random_bytes::<32>());
-    let agreed = client.agree(&salt, &b_pub, code).map_err(HapError::Protocol)?;
-    let m4 = conn.tlv("/pair-setup", &[(tlv::STATE, &[3]), (tlv::PUBLIC_KEY, &client.public), (tlv::PROOF, &agreed.proof)]).await?;
-    if tlv::get(&m4, tlv::PROOF) != Some(agreed.expected.as_slice()) {
-        return Err(HapError::Protocol("the accessory's proof does not match".into()));
+/// A pairing started on an accessory, waiting for its code. An accessory with a screen shows a
+/// new code each time a pairing starts: the code is only asked once it is shown.
+pub struct PairSetup {
+    conn: Connection,
+    salt: Vec<u8>,
+    b_pub: Vec<u8>,
+}
+
+impl PairSetup {
+    /// `with_auth`: the accessory announces Apple authentication (feature flag 1), as most
+    /// certified ones do.
+    pub async fn start(addr: &str, with_auth: bool) -> Result<Self, HapError> {
+        let mut conn = Connection::connect(addr).await?;
+        let method = [if with_auth { 1u8 } else { 0 }];
+        let m2 = conn.tlv("/pair-setup", &[(tlv::STATE, &[1]), (tlv::METHOD, &method)]).await?;
+        let salt = tlv::get(&m2, tlv::SALT).ok_or_else(|| HapError::Protocol("pair-setup: no salt".into()))?.to_vec();
+        let b_pub = tlv::get(&m2, tlv::PUBLIC_KEY).ok_or_else(|| HapError::Protocol("pair-setup: no public key".into()))?.to_vec();
+        Ok(Self { conn, salt, b_pub })
     }
 
-    // Breezone's long-term identity for this accessory.
-    let controller_id = format!("breezone-{}", hex::encode(crate::auth::random_bytes::<6>()));
-    let me = SigningKey::from_bytes(&crate::auth::random_bytes::<32>());
-    let ltpk = me.verifying_key().to_bytes();
-    let x = hkdf("Pair-Setup-Controller-Sign-Salt", &agreed.key, "Pair-Setup-Controller-Sign-Info");
-    let mut info = x.to_vec();
-    info.extend_from_slice(controller_id.as_bytes());
-    info.extend_from_slice(&ltpk);
-    use ed25519_dalek::Signer;
-    let signature = me.sign(&info).to_bytes();
-    let inner = tlv::encode(&[(tlv::IDENTIFIER, controller_id.as_bytes()), (tlv::PUBLIC_KEY, &ltpk), (tlv::SIGNATURE, &signature)]);
-    let key = hkdf("Pair-Setup-Encrypt-Salt", &agreed.key, "Pair-Setup-Encrypt-Info");
-    let sealed = seal(&key, label("PS-Msg05"), &[], &inner);
-    let m6 = conn.tlv("/pair-setup", &[(tlv::STATE, &[5]), (tlv::ENCRYPTED_DATA, &sealed)]).await?;
+    pub async fn finish(self, code: &str) -> Result<Pairing, HapError> {
+        let Self { mut conn, salt, b_pub } = self;
+        let client = srp::Client::new(&crate::auth::random_bytes::<32>());
+        let agreed = client.agree(&salt, &b_pub, code).map_err(HapError::Protocol)?;
+        let m4 = conn.tlv("/pair-setup", &[(tlv::STATE, &[3]), (tlv::PUBLIC_KEY, &client.public), (tlv::PROOF, &agreed.proof)]).await?;
+        if tlv::get(&m4, tlv::PROOF) != Some(agreed.expected.as_slice()) {
+            return Err(HapError::Protocol("the accessory's proof does not match".into()));
+        }
 
-    let sealed = tlv::get(&m6, tlv::ENCRYPTED_DATA).ok_or_else(|| HapError::Protocol("pair-setup: no data".into()))?;
-    let inner = tlv::decode(&open(&key, label("PS-Msg06"), &[], sealed)?).map_err(HapError::Protocol)?;
-    let accessory_id = tlv::get(&inner, tlv::IDENTIFIER).ok_or_else(|| HapError::Protocol("pair-setup: no identifier".into()))?;
-    let accessory_ltpk = tlv::get(&inner, tlv::PUBLIC_KEY).ok_or_else(|| HapError::Protocol("pair-setup: no key".into()))?;
-    let pairing = Pairing {
-        accessory_id: String::from_utf8_lossy(accessory_id).into_owned(),
-        accessory_ltpk: hex::encode(accessory_ltpk),
-        controller_id,
-        controller_ltsk: hex::encode(me.to_bytes()),
-    };
-    let signature =
-        tlv::get(&inner, tlv::SIGNATURE).and_then(|s| ed25519_dalek::Signature::from_slice(s).ok()).ok_or_else(|| HapError::Protocol("pair-setup: no signature".into()))?;
-    let x = hkdf("Pair-Setup-Accessory-Sign-Salt", &agreed.key, "Pair-Setup-Accessory-Sign-Info");
-    let mut info = x.to_vec();
-    info.extend_from_slice(accessory_id);
-    info.extend_from_slice(accessory_ltpk);
-    use ed25519_dalek::Verifier;
-    pairing.accessory_key()?.verify(&info, &signature).map_err(|_| HapError::Protocol("the accessory's signature does not match".into()))?;
-    Ok(pairing)
+        // Breezone's long-term identity for this accessory.
+        let controller_id = format!("breezone-{}", hex::encode(crate::auth::random_bytes::<6>()));
+        let me = SigningKey::from_bytes(&crate::auth::random_bytes::<32>());
+        let ltpk = me.verifying_key().to_bytes();
+        let x = hkdf("Pair-Setup-Controller-Sign-Salt", &agreed.key, "Pair-Setup-Controller-Sign-Info");
+        let mut info = x.to_vec();
+        info.extend_from_slice(controller_id.as_bytes());
+        info.extend_from_slice(&ltpk);
+        use ed25519_dalek::Signer;
+        let signature = me.sign(&info).to_bytes();
+        let inner = tlv::encode(&[(tlv::IDENTIFIER, controller_id.as_bytes()), (tlv::PUBLIC_KEY, &ltpk), (tlv::SIGNATURE, &signature)]);
+        let key = hkdf("Pair-Setup-Encrypt-Salt", &agreed.key, "Pair-Setup-Encrypt-Info");
+        let sealed = seal(&key, label("PS-Msg05"), &[], &inner);
+        let m6 = conn.tlv("/pair-setup", &[(tlv::STATE, &[5]), (tlv::ENCRYPTED_DATA, &sealed)]).await?;
+
+        let sealed = tlv::get(&m6, tlv::ENCRYPTED_DATA).ok_or_else(|| HapError::Protocol("pair-setup: no data".into()))?;
+        let inner = tlv::decode(&open(&key, label("PS-Msg06"), &[], sealed)?).map_err(HapError::Protocol)?;
+        let accessory_id = tlv::get(&inner, tlv::IDENTIFIER).ok_or_else(|| HapError::Protocol("pair-setup: no identifier".into()))?;
+        let accessory_ltpk = tlv::get(&inner, tlv::PUBLIC_KEY).ok_or_else(|| HapError::Protocol("pair-setup: no key".into()))?;
+        let pairing = Pairing {
+            accessory_id: String::from_utf8_lossy(accessory_id).into_owned(),
+            accessory_ltpk: hex::encode(accessory_ltpk),
+            controller_id,
+            controller_ltsk: hex::encode(me.to_bytes()),
+        };
+        let signature =
+            tlv::get(&inner, tlv::SIGNATURE).and_then(|s| ed25519_dalek::Signature::from_slice(s).ok()).ok_or_else(|| HapError::Protocol("pair-setup: no signature".into()))?;
+        let x = hkdf("Pair-Setup-Accessory-Sign-Salt", &agreed.key, "Pair-Setup-Accessory-Sign-Info");
+        let mut info = x.to_vec();
+        info.extend_from_slice(accessory_id);
+        info.extend_from_slice(accessory_ltpk);
+        use ed25519_dalek::Verifier;
+        pairing.accessory_key()?.verify(&info, &signature).map_err(|_| HapError::Protocol("the accessory's signature does not match".into()))?;
+        Ok(pairing)
+    }
 }
 
 /// Removes Breezone's own pairing from the accessory (and nothing else): the accessory forgets
@@ -173,6 +192,9 @@ pub(crate) mod fake {
         /// (aid, iid) → value of the characteristics written.
         pub written: Vec<(u64, u64, Value)>,
         pub position: i64,
+        /// Has a screen: shows a new code each time a pairing starts.
+        pub screen: bool,
+        pub shown: Option<String>,
     }
 
     pub struct Fake {
@@ -279,7 +301,16 @@ pub(crate) mod fake {
                     if paired {
                         tlv::encode(&[(tlv::STATE, &[2]), (tlv::ERROR, &[6])])
                     } else {
-                        let server = srp::Server::new(&[5; 16], CODE, &[7; 32]);
+                        let code = {
+                            let mut st = state.lock().unwrap();
+                            if st.screen {
+                                let n = st.shown.as_deref().map_or(0, |c| c.replace('-', "").parse::<u32>().unwrap() + 1);
+                                let digits = format!("{:08}", 20_000_000 + n);
+                                st.shown = Some(format!("{}-{}-{}", &digits[..3], &digits[3..5], &digits[5..]));
+                            }
+                            st.shown.clone().unwrap_or_else(|| CODE.to_string())
+                        };
+                        let server = srp::Server::new(&[5; 16], &code, &[7; 32]);
                         let a = tlv::encode(&[(tlv::STATE, &[2]), (tlv::SALT, &server.salt), (tlv::PUBLIC_KEY, &server.public)]);
                         srp = Some(server);
                         a

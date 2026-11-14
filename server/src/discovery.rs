@@ -264,7 +264,9 @@ pub async fn scan_products(subnet: &str, airzone_port: u16) -> Result<Vec<Produc
             found.extend(f);
         }
     }
-    for a in homekit.await.unwrap_or_default() {
+    let native: Vec<String> = found.iter().map(|p| ip_of(&p.host).to_string()).collect();
+    // A Hue bridge (and others) also answers as a HomeKit accessory: its own driver is better.
+    for a in homekit.await.unwrap_or_default().into_iter().filter(|a| !native.iter().any(|n| n == ip_of(&a.host))) {
         let kind = match a.category {
             Some(2) => "pont",
             Some(14) => "volet",
@@ -293,6 +295,10 @@ pub async fn scan_products(subnet: &str, airzone_port: u16) -> Result<Vec<Produc
     }
     found.sort_by_key(|p| (p.host.split(':').next().and_then(|h| h.parse::<Ipv4Addr>().ok()).map(u32::from).unwrap_or(0), p.brand));
     Ok(found)
+}
+
+fn ip_of(host: &str) -> &str {
+    host.split(':').next().unwrap_or(host)
 }
 
 /// `POST /api/v1/webserver` of an Airzone WebServer returns its MAC address and type.

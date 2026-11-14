@@ -899,6 +899,11 @@ export const api = {
     code: string
     flags: number
   }) => request<SourceView>("POST", "/api/homekit/pair", input),
+  /** Starts pairing: an accessory with a screen shows its code now. */
+  startHomekitPairing: (input: { host: string; flags: number }) =>
+    request<void>("POST", "/api/homekit/pair/start", input),
+  cancelHomekitPairing: (host: string) =>
+    request<void>("POST", "/api/homekit/pair/cancel", { host }),
   /** Looks for the source's hardware on the network, and follows it if its address changed. */
   locateSource: (id: number) =>
     request<SourceView & { moved: boolean }>(

@@ -6,6 +6,23 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Settings: the Nodes and Shares tabs become a single Servers tab, in three sections: « Ce serveur »,
+  « À qui ce serveur est partagé » and « Quels serveurs partagent avec celui-ci ». Messages that
+  pointed to Settings › Shares or Settings › Nodes now point to Settings › Servers (the old
+  `?tab=nodes` and `?tab=shares` links still open it).
+- Switches waiting for the server (lamps, relays, charger lock, Airzone schedules, beta channel)
+  show a spinner in their thumb instead of turning grey with a “forbidden” cursor.
+
+### Fixed
+
+- HomeKit pairing of an accessory with a screen (Legrand Ecometer): such an accessory shows a new
+  code each time a pairing starts, so the code typed beforehand was always refused. « Appairer » now
+  starts the pairing first, then asks for the code shown; a wrong code starts a new pairing.
+- The scanner no longer offers to pair a Hue bridge through HomeKit: it also answers as a HomeKit
+  accessory, and its own driver is found at the same address.
+
 ## [0.11.0-beta.4] - 2026-11-14
 
 ### Added
