@@ -6,6 +6,18 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Shutters page (web), as in the mockups: shutters by room with « Tout ouvrir » and « Tout fermer »,
+  a card per shutter showing how far it is open with ▲ ■ ▼, and the detail of the one chosen
+  (position, open, stop, close, its room). In the menu when a module provides shutters.
+
+### Changed
+
+- HomeKit: a device takes its accessory's name (« Rolling shutter switch 1 ») rather than its
+  service's (« Window covering »), and its kind says what it is: shutter, roof window or door
+  (shown in Settings › Modules).
+
 ## [0.11.0-beta.7] - 2026-11-14
 
 ### Fixed

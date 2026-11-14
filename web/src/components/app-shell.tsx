@@ -4,6 +4,7 @@ import {
   Activity,
   CalendarClock,
   LayoutGrid,
+  Blinds,
   Lightbulb,
   LogOut,
   Moon,
@@ -40,7 +41,7 @@ type NavItem = {
   icon: typeof Zap
   end: boolean
   /** Shown only when a module provides it, or to administrators. */
-  when?: "energy" | "solar" | "charger" | "light" | "admin"
+  when?: "energy" | "solar" | "charger" | "light" | "cover" | "admin"
 }
 
 /** The menu, in sections as in the mockups; a section without an item is not shown. */
@@ -67,6 +68,13 @@ const NAV: { title: string | null; items: NavItem[] }[] = [
         icon: Lightbulb,
         end: false,
         when: "light",
+      },
+      {
+        to: "/volets",
+        label: t("Volets"),
+        icon: Blinds,
+        end: false,
+        when: "cover",
       },
       {
         to: "/solaire",
@@ -152,6 +160,7 @@ function useModules() {
     charger: !!devices?.some((d) => d.traits.includes("ev.charger@1")),
     solar: !!devices?.some((d) => d.traits.includes("solar.inverter@1")),
     light: !!devices?.some((d) => d.traits.includes("light@1")),
+    cover: !!devices?.some((d) => d.traits.includes("cover.position@1")),
   }
 }
 
@@ -206,6 +215,7 @@ export function AppShell({
     (n.when === "energy" && energy) ||
     (n.when === "solar" && modules.solar) ||
     (n.when === "light" && modules.light) ||
+    (n.when === "cover" && modules.cover) ||
     (n.when === "charger" && modules.charger) ||
     (n.when === "admin" && user?.role === "admin")
   const sections = NAV.map((s) => ({

@@ -1295,7 +1295,8 @@ pub async fn set_device_role(db: &Db, id: i64, role: Option<&str>, device: Optio
 
 /// Records a device of a source if it is new (its id then stays the same for good).
 pub async fn ensure_source_device(db: &Db, source_id: i64, driver: &str, reference: &str, kind: &str) -> sqlx::Result<()> {
-    sqlx::query("INSERT OR IGNORE INTO devices (source, source_ref, source_id, kind, created_at) VALUES (?, ?, ?, ?, ?)")
+    // The kind may get finer with a new version (a shutter, not just a cover): it follows.
+    sqlx::query("INSERT INTO devices (source, source_ref, source_id, kind, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (source, source_ref) DO UPDATE SET kind = excluded.kind")
         .bind(driver)
         .bind(format!("{source_id}/{reference}"))
         .bind(source_id)

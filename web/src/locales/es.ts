@@ -976,11 +976,6 @@ const es: Record<string, string> = {
   "« {name} » répond à la même adresse":
     "«{name}» responde en la misma dirección",
   "« {name} » introuvable sur le réseau": "«{name}» no encontrado en la red",
-  fermé: "cerrado",
-  ouvert: "abierto",
-  "ouvert à {n} %": "abierto al {n} %",
-  "s'ouvre": "abriéndose",
-  "se ferme": "cerrándose",
   "HomeKit en local : appairé avec le code de l'accessoire, sans Apple Maison ni compte":
     "HomeKit local: emparejado con el código del accesorio, sin Apple Casa ni cuenta",
   "toutes les 10 s": "cada 10 s",
@@ -1057,6 +1052,32 @@ const es: Record<string, string> = {
     "¿Reemplazar la configuración de este servidor?",
   "Les installations, modules, appareils, pièces, automatismes et droits de ce serveur sont remplacés par ceux de « {name} ». Les utilisateurs du fichier sont ajoutés ou mis à jour, aucun n'est supprimé. Les partages entre serveurs ne changent pas.":
     "Las instalaciones, módulos, aparatos, estancias, automatismos y derechos de este servidor se reemplazan por los de «{name}». Los usuarios del archivo se añaden o actualizan, ninguno se elimina. Los usos compartidos entre servidores no cambian.",
+  "{n} ouvert": "{n} abierta",
+  "{n} ouverts": "{n} abiertas",
+  "{n} volet": "{n} persiana",
+  "{n} volets": "{n} persianas",
+  "{open} ouvert(s) sur {total}": "{open} abierta(s) de {total}",
+  "Appairez votre passerelle Legrand ou VELUX dans Réglages › Modules, avec son code HomeKit.":
+    "Empareje su pasarela Legrand o VELUX en Ajustes › Módulos, con su código HomeKit.",
+  "Aucun volet": "Ninguna persiana",
+  "Fenêtre de toit": "Ventana de tejado",
+  Fermé: "Cerrada",
+  "Ouvert à {n} %": "Abierta al {n} %",
+  Ouvert: "Abierta",
+  "Ouverture de {name}": "Apertura de {name}",
+  Ouvrir: "Abrir",
+  Pièce: "Estancia",
+  Porte: "Puerta",
+  Position: "Posición",
+  "S'ouvre… {n} %": "Abriéndose… {n} %",
+  "S'ouvre…": "Abriéndose…",
+  "Se ferme… {n} %": "Cerrándose… {n} %",
+  "Se ferme…": "Cerrándose…",
+  Stop: "Parar",
+  "Tout fermer": "Cerrar todo",
+  "Tout ouvrir": "Abrir todo",
+  "Volet roulant": "Persiana enrollable",
+  Volets: "Persianas",
 }
 
 export default es

@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react"
+import { coverKind, coverState, coverText, isCover } from "@/lib/covers"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   AirVent,
@@ -168,18 +169,9 @@ function DeviceRow({
   const s = device.state ?? {}
   const values = [
     d_light(s),
-    typeof s.position === "number"
-      ? s.position === 0
-        ? t("fermé")
-        : s.position === 100
-          ? t("ouvert")
-          : t("ouvert à {n} %", { n: s.position })
+    isCover(device)
+      ? `${coverKind(device)} · ${coverText(coverState(device))}`
       : null,
-    s.moving === "opening"
-      ? t("s'ouvre")
-      : s.moving === "closing"
-        ? t("se ferme")
-        : null,
     typeof s.status === "string"
       ? (CHARGER_STATUS[s.status] ?? s.status)
       : null,

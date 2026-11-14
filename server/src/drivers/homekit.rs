@@ -94,16 +94,24 @@ fn layout(database: &Value) -> Layout {
         for s in &services {
             let Some(siid) = s["iid"].as_u64() else { continue };
             let kind = s["type"].as_str().map(short).unwrap_or_default();
+            // One device per accessory: its own name ("Rolling shutter switch 1"), the service's
+            // is generic ("Window covering").
             let name = match (text(s, hap::NAME), several) {
-                (Some(n), _) => n,
+                (Some(n), true) => n,
                 (None, true) => format!("{accessory_name} {siid}"),
-                (None, false) => accessory_name.clone(),
+                (_, false) => accessory_name.clone(),
             };
             let reference = format!("{aid}.{siid}");
             let (tracked, traits, device_kind) = match kind.as_str() {
                 hap::WINDOW_COVERING | hap::WINDOW | hap::DOOR => {
                     let (Some(current), Some(target)) = (iid(s, hap::CURRENT_POSITION), iid(s, hap::TARGET_POSITION)) else { continue };
-                    (Kind::Cover { current, target, state: iid(s, hap::POSITION_STATE), hold: iid(s, hap::HOLD_POSITION) }, "cover.position@1", "cover.position")
+                    // The kind tells a shutter or blind from a roof window (VELUX) or a door.
+                    let device_kind = match kind.as_str() {
+                        hap::WINDOW => "window",
+                        hap::DOOR => "door",
+                        _ => "shutter",
+                    };
+                    (Kind::Cover { current, target, state: iid(s, hap::POSITION_STATE), hold: iid(s, hap::HOLD_POSITION) }, "cover.position@1", device_kind)
                 }
                 hap::SWITCH | hap::OUTLET | hap::LIGHTBULB => {
                     let Some(on) = iid(s, hap::ON) else { continue };
@@ -235,7 +243,7 @@ impl Driver for HomeKit {
             // The database again: accessories may have been added in their own app.
             *self.layout.lock().await = None;
             let l = self.layout().await?;
-            let covers = l.devices.iter().filter(|(d, _)| d.kind == "cover.position").count();
+            let covers = l.devices.iter().filter(|(d, _)| d.traits.iter().any(|t| t.starts_with("cover.position"))).count();
             let note = format!("{covers} volet{} · {} autre{}", if covers > 1 { "s" } else { "" }, l.devices.len() - covers, if l.devices.len() - covers > 1 { "s" } else { "" });
             Ok(Described {
                 model: format!("{} ({note})", l.model),
@@ -315,6 +323,7 @@ mod tests {
             {"aid": 2, "services": [
                 {"iid": 1, "type": "0000003E-0000-1000-8000-0026BB765291", "characteristics": [{"iid": 2, "type": "00000023-0000-1000-8000-0026BB765291", "value": "Volet salon"}]},
                 {"iid": 8, "type": "0000008C-0000-1000-8000-0026BB765291", "characteristics": [
+                    {"iid": 13, "type": "00000023-0000-1000-8000-0026BB765291", "value": "Window covering"},
                     {"iid": 9, "type": "0000006D-0000-1000-8000-0026BB765291", "value": 40},
                     {"iid": 10, "type": "0000007C-0000-1000-8000-0026BB765291", "value": 40},
                     {"iid": 11, "type": "00000072-0000-1000-8000-0026BB765291", "value": 2},
@@ -334,7 +343,8 @@ mod tests {
         assert_eq!(l.model, "Legrand Gateway");
         assert_eq!(l.firmware.as_deref(), Some("2.1.0"));
         let names: Vec<(&str, &str)> = l.devices.iter().map(|(d, _)| (d.reference.as_str(), d.name.as_str())).collect();
-        assert_eq!(names, vec![("2.8", "Volet salon"), ("3.8", "Prise cuisine")], "the Ecometer's own service is left out");
+        assert_eq!(names, vec![("2.8", "Volet salon"), ("3.8", "Prise cuisine")], "the Ecometer's own service is left out; the accessory's name, not the service's");
+        assert_eq!(l.devices.iter().map(|(d, _)| d.kind.as_str()).collect::<Vec<_>>(), vec!["shutter", "switch.relay"]);
         assert_eq!(l.devices[0].1.kind, Kind::Cover { current: 9, target: 10, state: Some(11), hold: Some(12) });
 
         let values = HashMap::from([((2, 9), json!(35)), ((2, 10), json!(80)), ((2, 11), json!(1)), ((3, 9), json!(1))]);

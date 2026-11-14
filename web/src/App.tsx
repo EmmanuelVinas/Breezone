@@ -38,6 +38,9 @@ const SolarPage = lazy(() =>
 const LightsPage = lazy(() =>
   import("@/pages/lights").then((m) => ({ default: m.LightsPage }))
 )
+const ShuttersPage = lazy(() =>
+  import("@/pages/shutters").then((m) => ({ default: m.ShuttersPage }))
+)
 const SettingsPage = lazy(() =>
   import("@/pages/settings").then((m) => ({ default: m.SettingsPage }))
 )
@@ -68,6 +71,7 @@ function Protected() {
           <Route path="/recharge" element={<ChargingPage />} />
           <Route path="/solaire" element={<SolarPage />} />
           <Route path="/lumieres" element={<LightsPage />} />
+          <Route path="/volets" element={<ShuttersPage />} />
           <Route path="/programmations" element={<SchedulesPage />} />
           <Route path="/routines" element={<RoutinesPage />} />
           <Route path="/activity" element={<ActivityPage />} />
