@@ -230,7 +230,8 @@ export function UpdateTab() {
             <Switch
               id="beta-channel"
               checked={v.beta}
-              disabled={channel.isPending || busy}
+              disabled={busy}
+              loading={channel.isPending}
               onCheckedChange={(beta) => channel.mutate(beta)}
             />
           </div>

@@ -1063,7 +1063,10 @@ function Measures({
                         typeof on === "boolean" && (
                           <Switch
                             checked={on}
-                            disabled={!admin || !d.available || relay.isPending}
+                            disabled={!admin || !d.available}
+                            loading={
+                              relay.isPending && relay.variables?.id === d.id
+                            }
                             onCheckedChange={(v) =>
                               relay.mutate({ id: d.id, on: v })
                             }

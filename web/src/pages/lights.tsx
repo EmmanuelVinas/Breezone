@@ -157,7 +157,8 @@ function LightCard({
           </span>
           <Switch
             checked={!!s.on}
-            disabled={!canDrive || !light.available || set.isPending}
+            disabled={!canDrive || !light.available}
+            loading={set.isPending}
             onClick={(e) => e.stopPropagation()}
             onCheckedChange={(on) =>
               set.mutate({ id: light.id, params: { on } })
@@ -220,7 +221,8 @@ function Detail({ light, canDrive }: { light: DeviceView; canDrive: boolean }) {
         </div>
         <Switch
           checked={!!s.on}
-          disabled={disabled}
+          disabled={!canDrive || !light.available}
+          loading={set.isPending}
           onCheckedChange={(on) => set.mutate({ id: light.id, params: { on } })}
           aria-label={light.name}
         />

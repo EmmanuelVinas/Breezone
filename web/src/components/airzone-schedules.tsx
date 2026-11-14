@@ -421,7 +421,7 @@ function ScheduleCard({
           </div>
           <Switch
             checked={s.enabled}
-            disabled={toggle.isPending}
+            loading={toggle.isPending}
             onCheckedChange={(v) => toggle.mutate(v)}
             aria-label={t("Activer")}
           />

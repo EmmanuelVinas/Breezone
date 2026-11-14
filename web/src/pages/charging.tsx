@@ -502,6 +502,7 @@ function ChargerCard({
       ? Math.min(1, s.session_energy / s.energy_goal)
       : null
   const disabled = !admin || !device.available || act.isPending
+  const locking = act.isPending && act.variables?.action === "lock"
   // With an energy goal and a car charging: when it is reached at the current power.
   const left = s.energy_goal ? s.energy_goal - (s.session_energy ?? 0) : null
   const finish =
@@ -583,7 +584,8 @@ function ChargerCard({
                 {t("Verrouillée")}
                 <Switch
                   checked={!!s.locked}
-                  disabled={disabled}
+                  disabled={disabled && !locking}
+                  loading={locking}
                   onCheckedChange={(v) =>
                     act.mutate({ action: "lock", params: { locked: v } })
                   }
