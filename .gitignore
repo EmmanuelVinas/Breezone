@@ -42,3 +42,6 @@ scripts/private/
 
 # Local roadmap and mockups
 docs/roadmap/
+
+# Release guide and signing key (private): kept local, the workflow uses the BREEZONE_RELEASE_SIGNING_KEY secret
+docs/release/

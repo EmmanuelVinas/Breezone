@@ -6,6 +6,12 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Zone page (web and app): the air quality section only shows when the thermostat has measured the
+  air quality now or in the last 24 hours (it was 30 days), so a sensor that stopped measuring does
+  not leave an empty section for a month.
+
 ## [0.10.1] - 2026-11-14
 
 ### Added

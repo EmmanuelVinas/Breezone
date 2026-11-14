@@ -97,18 +97,17 @@ export function AirQualityCard({ zone }: { zone: Zone }) {
     queryFn: () => api.daily(zone, days),
     refetchInterval: 300_000,
   })
-  // Shown only when the sensor measures something: now, or in the last 30 days.
-  const month = useQuery({
-    queryKey: ["daily", ...key, "30"],
-    queryFn: () => api.daily(zone, 30),
+  // Shown only when the sensor measures something: now, or in the last 24 hours.
+  const recent = useQuery({
+    queryKey: ["history", ...key, "24", "air"],
+    queryFn: () => api.history(zone, 24),
     refetchInterval: 300_000,
   })
-  const measuredThisMonth = (month.data ?? []).some((d) => {
-    const s = d.air_quality_secs
-    return !!s && s.good + s.regular + s.bad > 0
-  })
+  const measuredToday = (recent.data ?? []).some(
+    (r) => (r.air_quality ?? 0) > 0
+  )
   const air = zone.air_quality
-  if (!air || (!air.level && !measuredThisMonth)) return null
+  if (!air || (!air.level && !measuredToday)) return null
 
   const shares = (daily.data ?? []).flatMap((d) => {
     const s = d.air_quality_secs
