@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-11-14
+
 ### Added
 
 - Servers of different versions now tell each other what they can do (ADR 0012), when their link
@@ -306,7 +308,8 @@ All notable changes are documented here. The format follows
 - Project renamed from FreeZone to Breezone (former `FREEZONE_*` variables and `freezone.db` are
   still recognised).
 
-[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.10.1...HEAD
+[0.10.1]: https://github.com/EmmanuelVinas/breezone/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/EmmanuelVinas/breezone/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.8.0...v0.9.0
