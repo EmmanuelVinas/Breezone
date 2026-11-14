@@ -57,7 +57,7 @@ are found on the network by their MAC address.
 | Real-time **activity**                                                    | **Installations**: on this network or through another site                                |
 
 
-The web UI is in French for now; English is on the [roadmap](docs/ROADMAP.md).
+The web UI is available in French, English and Spanish.
 
 ### Mobile app
 
@@ -168,7 +168,6 @@ yet? « Try the demo » on the first screen opens a simulated home.
 | [`web/`](web)                        | Web UI: React 19, Vite, Tailwind 4, shadcn/ui                                                                                 |
 | [`mobile/`](mobile)                  | Compose Multiplatform app (Android and iOS)                                                                                   |
 | [`docs/API.md`](docs/API.md)         | API reference (in French)                                                                                                     |
-| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Roadmap (in French)                                                                                                           |
 
 
 Airzone APIs used:
