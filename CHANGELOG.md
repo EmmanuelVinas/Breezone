@@ -6,8 +6,15 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.1] - 2026-11-14
+
 ### Added
 
+- Hoymiles micro-inverters through their Wi-Fi DTU (DTU-W100, DTU-Lite-S, DTU-WLite, DTU-Pro), read
+  locally every 30 seconds, found by the network scanner. Each inverter gives its AC power, today's and
+  total production, temperature and grid frequency, and can be the solar production of the energy page;
+  each panel gives its power, voltage, current and production, shown on the energy page. Read only.
+  New traits: `solar.inverter`, `solar.panel`.
 - V2C Trydan charger (local API), found by the network scanner and added in one click. New trait
   `ev.charger`: state, whether a vehicle is plugged in, session energy and duration, current; actions `start` (with a maximum current
   and an energy to add, after which Breezone stops the charge), `stop`, `set_limit`, `lock` and
