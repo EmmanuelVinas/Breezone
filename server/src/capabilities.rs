@@ -71,6 +71,7 @@ impl Capabilities {
                 ("climate.zone".into(), vec![1]),
                 ("energy.meter".into(), vec![1]),
                 ("energy.power".into(), vec![1]),
+                ("ev.charger".into(), vec![1]),
                 ("switch.relay".into(), vec![1]),
             ]),
             features: [
@@ -92,6 +93,9 @@ impl Capabilities {
                 // Sources read by drivers (Shelly…) and the generic action on a device's trait.
                 ("home.sources", 1),
                 ("devices.actions", 1),
+                // Device history and the energy of the home: /api/devices/{id}/history, /api/energy/*.
+                ("devices.history", 1),
+                ("energy", 1),
             ]
             .into_iter()
             .map(|(k, v)| (k.to_string(), v))
@@ -104,6 +108,7 @@ impl Capabilities {
                     version: version.to_string(),
                     provides: vec!["energy.power@1".into(), "energy.meter@1".into(), "switch.relay@1".into()],
                 },
+                ModuleInfo { id: "trydan".into(), version: version.to_string(), provides: vec!["ev.charger@1".into(), "energy.power@1".into()] },
             ],
             caps_rev: String::new(),
         };

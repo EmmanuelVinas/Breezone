@@ -778,7 +778,7 @@ export type SourceInput = {
 
 /** A supported product found on the network. */
 export type FoundProduct = {
-  brand: "airzone" | "shelly"
+  brand: "airzone" | "shelly" | "v2c"
   driver: string
   model: string
   host: string

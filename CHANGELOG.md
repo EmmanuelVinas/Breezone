@@ -8,6 +8,13 @@ All notable changes are documented here. The format follows
 
 ### Added
 
+- V2C Trydan charger (local API), found by the network scanner and added in one click. New trait
+  `ev.charger`: state, whether a vehicle is plugged in, session energy and duration, current; actions `start` (with a maximum current
+  and an energy to add, after which Breezone stops the charge), `stop`, `set_limit`, `lock` and
+  `set_auto_limit` (the charger sets its current itself, V2C dynamic mode). The charger also measures
+  its power, so it can be a consumption on the energy page.
+- Charging page (web): the state of each charger, start with a maximum current and an energy to add,
+  stop, lock, who sets the current (the charger or Breezone), and its power over the last 24 hours.
 - Drivers (ADR 0013): a common interface for every source of devices, with Shelly as the first one
   (Plus, Pro, Gen3, Gen4, local RPC API): a Pro 3EM gives a three-phase meter, plugs and relays give
   switchable relays that measure their power. Sources are configured by administrators

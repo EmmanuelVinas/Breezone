@@ -46,6 +46,10 @@ fn typescript() -> String {
         }
         out += "}\n\n";
         for a in &t.actions {
+            if a.params.is_empty() {
+                out += &format!("/** {} (`{}`): action `{}`, without parameters. */\nexport type {name}{} = Record<string, never>\n\n", t.label.en, t.id(), a.name, pascal(&a.name));
+                continue;
+            }
             out += &format!("/** {} (`{}`): action `{}`. */\nexport type {name}{} = {{\n", t.label.en, t.id(), a.name, pascal(&a.name));
             for p in &a.params {
                 out += &format!("  {}{}: {}\n", p.name, if p.optional { "?" } else { "" }, ts_type(p));
@@ -104,6 +108,10 @@ fn kotlin() -> String {
         }
         out += ")\n";
         for a in &t.actions {
+            if a.params.is_empty() {
+                out += &format!("\n/** {} (`{}`): action `{}`, without parameters. */\n@Serializable\nclass {name}{}\n", t.label.en, t.id(), a.name, pascal(&a.name));
+                continue;
+            }
             out += &format!("\n/** {} (`{}`): action `{}`. */\n@Serializable\ndata class {name}{}(\n", t.label.en, t.id(), a.name, pascal(&a.name));
             for p in &a.params {
                 out += &format!("    val {}: {}? = null,\n", camel(&p.name), kotlin_type(t, p));

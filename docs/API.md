@@ -205,7 +205,7 @@ Une **source** est un matériel lu par un **pilote** (ADR 0013) : par exemple un
 | POST 👑 | `/api/discovery/products` | `{subnet?}` → `{subnet, duration_ms, products:[{brand, driver, model, host, port, mac, device_id, firmware, note, supported, added}]}` : tous les produits pris en charge du réseau (WebServers Airzone, Shelly…), identifiés jusqu'au modèle, et s'ils sont déjà ajoutés |
 
 Le scanner interroge chaque adresse pour toutes les marques à la fois (128 adresses en parallèle,
-environ 3 s pour un /24) : port 3000 pour Airzone, `GET /shelly` sur le port 80 pour Shelly.
+environ 3 s pour un /24) : port 3000 pour Airzone, `GET /shelly` sur le port 80 pour Shelly, `GET /RealTimeData` sur le port 80 pour la Trydan.
 
 Pilote `shelly` (Plus, Pro, Gen3, Gen4, API RPC locale) : `config: {host, device_id?}`. Avec
 `device_id` (fourni par le scanner), un autre appareil qui répondrait à cette adresse est refusé.
@@ -213,6 +213,23 @@ Les modèles sont reconnus par leur application (`Shelly Pro 3EM`, en triphasé 
 3 voies, `Shelly Plus Plug S`…) ; la 1re génération est détectée mais pas encore prise en charge. Composants lus :
 `em:N` (Pro 3EM, `energy.power` + `energy.meter`), `em1:N` (Pro EM), `switch:N` (`switch.relay`,
 avec puissance et énergie s'ils sont mesurés), `pm1:N`. Lecture toutes les 5 s.
+
+Pilote `trydan` (borne V2C Trydan, API HTTP locale sans mot de passe : une adresse fixe est conseillée) :
+`config: {host, device_id?}` (`device_id` est l'`ID` de la borne, fourni par le scanner). La borne est un
+appareil `ev.charger@1` + `energy.power@1` : elle peut donc être une consommation de la page Énergie.
+Actions `ev.charger` :
+
+| Action | Paramètres | Effet sur la Trydan |
+|---|---|---|
+| `start` | `{limit?, energy?}` | `limit` (6 à 32 A) : Breezone fixe l'intensité maximale et coupe le mode dynamique de la borne (`Dynamic=0`, `Intensity`) ; `energy` (kWh à ajouter) : Breezone arrête la charge une fois cette énergie ajoutée (`energy_goal` dans l'état ; gardé en mémoire, oublié au redémarrage, terminé quand la voiture est débranchée) ; puis `Paused=0` |
+| `stop` | `{}` | `Paused=1` (efface l'objectif d'énergie) |
+| `set_limit` | `{limit}` | `Intensity` |
+| `lock` | `{locked}` | `Locked` |
+| `set_auto_limit` | `{on}` | `Dynamic` : la borne règle elle-même l'intensité selon sa pince |
+
+État : `status` (`available`, `plugged`, `charging`, `fault`), `vehicle` (véhicule branché ; absent pendant un défaut), `paused`, `locked`, `session_energy`,
+`session_secs`, `limit`, `limit_min`, `limit_max`, `auto_limit`, `energy_goal`, et `power`, `voltage`,
+`current` (`energy.power`).
 
 Les types web et mobile sont générés depuis `server/contracts/traits/` :
 `BREEZONE_WRITE_GENERATED=1 cargo test --test generated` (dans `server/`).

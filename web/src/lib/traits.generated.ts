@@ -45,6 +45,56 @@ export type EnergyMeterState = {
   energy_out: number | null
 }
 
+/** EV charger (`ev.charger@1`): state. */
+export type EvChargerState = {
+  /** Status */
+  status: "available" | "plugged" | "charging" | "fault"
+  /** Vehicle plugged in */
+  vehicle: boolean | null
+  /** Paused */
+  paused: boolean
+  /** Locked */
+  locked: boolean
+  /** Session energy (kWh) */
+  session_energy: number
+  /** Session duration (s) */
+  session_secs: number
+  /** Charging current (A) */
+  limit: number | null
+  /** Minimum current (A) */
+  limit_min: number | null
+  /** Maximum current (A) */
+  limit_max: number | null
+  /** Current set by the charger */
+  auto_limit: boolean | null
+  /** Stops at (kWh) */
+  energy_goal: number | null
+}
+
+/** EV charger (`ev.charger@1`): action `set_limit`. */
+export type EvChargerSetLimit = {
+  limit: number
+}
+
+/** EV charger (`ev.charger@1`): action `start`. */
+export type EvChargerStart = {
+  limit?: number
+  energy?: number
+}
+
+/** EV charger (`ev.charger@1`): action `stop`, without parameters. */
+export type EvChargerStop = Record<string, never>
+
+/** EV charger (`ev.charger@1`): action `lock`. */
+export type EvChargerLock = {
+  locked: boolean
+}
+
+/** EV charger (`ev.charger@1`): action `set_auto_limit`. */
+export type EvChargerSetAutoLimit = {
+  on: boolean
+}
+
 /** Power (`energy.power@1`): state. */
 export type EnergyPowerState = {
   /** Power (W) */
@@ -73,4 +123,4 @@ export type SwitchRelaySet = {
 }
 
 /** Traits described by this version (`trait@version`). */
-export const TRAITS = ["climate.zone@1", "energy.meter@1", "energy.power@1", "switch.relay@1"] as const
+export const TRAITS = ["climate.zone@1", "energy.meter@1", "ev.charger@1", "energy.power@1", "switch.relay@1"] as const

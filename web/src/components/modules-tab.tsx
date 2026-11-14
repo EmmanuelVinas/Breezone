@@ -18,6 +18,7 @@ import type {
   SourceView,
 } from "@/lib/api"
 import { api } from "@/lib/api"
+import { CHARGER_STATUS } from "@/lib/charger"
 import { relativeTime } from "@/lib/format"
 import { t } from "@/lib/i18n"
 import { Confirm } from "@/components/confirm"
@@ -65,6 +66,12 @@ const STATE_LABEL: Record<SourceView["status"]["state"], string> = {
   disabled: t("Désactivé"),
   unknown: t("En attente"),
 }
+
+/** Drivers that can be added by their address. */
+const BY_ADDRESS = [
+  { driver: "shelly", label: "Shelly" },
+  { driver: "trydan", label: "V2C Trydan" },
+]
 
 function watts(v: unknown) {
   if (typeof v !== "number") return null
@@ -132,11 +139,17 @@ function DeviceRow({
       : "none"
   const s = device.state ?? {}
   const values = [
+    typeof s.status === "string"
+      ? (CHARGER_STATUS[s.status] ?? s.status)
+      : null,
     watts(s.power),
     typeof s.on === "boolean" ? (s.on ? t("allumé") : t("éteint")) : null,
     kwh(s.energy_in) && t("{value} consommés", { value: kwh(s.energy_in)! }),
     typeof s.energy_out === "number" && s.energy_out > 0
       ? t("{value} injectés", { value: kwh(s.energy_out)! })
+      : null,
+    typeof s.session_energy === "number" && s.session_energy > 0
+      ? t("{value} cette session", { value: kwh(s.session_energy)! })
       : null,
   ].filter(Boolean)
 
@@ -328,6 +341,7 @@ function AddModuleDialog({
   const qc = useQueryClient()
   const [subnet, setSubnet] = useState("")
   const [host, setHost] = useState("")
+  const [driver, setDriver] = useState(BY_ADDRESS[0].driver)
   const scan = useMutation({
     mutationFn: () => api.scanProducts(subnet.trim() || undefined),
     onError: (e) => toast.error(errorText(e)),
@@ -339,12 +353,13 @@ function AddModuleDialog({
   }, [open])
   const add = useMutation({
     mutationFn: (p: {
+      driver: string
       name: string
       host: string
       device_id?: string | null
     }) =>
       api.createSource({
-        driver: "shelly",
+        driver: p.driver,
         name: p.name,
         config: p.device_id
           ? { host: p.host, device_id: p.device_id }
@@ -381,7 +396,12 @@ function AddModuleDialog({
         size="sm"
         disabled={add.isPending}
         onClick={() =>
-          add.mutate({ name: p.model, host: p.host, device_id: p.device_id })
+          add.mutate({
+            driver: p.driver,
+            name: p.model,
+            host: p.host,
+            device_id: p.device_id,
+          })
         }
       >
         <Plus /> {t("Ajouter")}
@@ -396,7 +416,7 @@ function AddModuleDialog({
           <DialogTitle>{t("Ajouter un module")}</DialogTitle>
           <DialogDescription>
             {t(
-              "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone et Shelly (Plus, Pro, Gen3, Gen4)."
+              "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4) et bornes V2C Trydan."
             )}
           </DialogDescription>
         </DialogHeader>
@@ -446,12 +466,22 @@ function AddModuleDialog({
           ))}
         </div>
         <div className="grid gap-2 border-t pt-4">
-          <Label htmlFor="shelly-host">
-            {t("Ou par son adresse (Shelly)")}
-          </Label>
+          <Label htmlFor="module-host">{t("Ou par son adresse")}</Label>
           <div className="flex gap-2">
+            <Select value={driver} onValueChange={setDriver}>
+              <SelectTrigger className="w-40" aria-label={t("Produit")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {BY_ADDRESS.map((d) => (
+                  <SelectItem key={d.driver} value={d.driver}>
+                    {d.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Input
-              id="shelly-host"
+              id="module-host"
               value={host}
               placeholder="192.168.1.40"
               onChange={(e) => setHost(e.target.value)}
@@ -459,7 +489,15 @@ function AddModuleDialog({
             <Button
               variant="outline"
               disabled={!host.trim() || add.isPending}
-              onClick={() => add.mutate({ name: "Shelly", host: host.trim() })}
+              onClick={() =>
+                add.mutate({
+                  driver,
+                  name:
+                    BY_ADDRESS.find((d) => d.driver === driver)?.label ??
+                    driver,
+                  host: host.trim(),
+                })
+              }
             >
               <Plus /> {t("Ajouter")}
             </Button>

@@ -723,13 +723,10 @@ const en: Record<string, string> = {
   "Onglet Installations": "Installations tab",
   "Non pris en charge": "Not supported",
   "Ajouter un module": "Add a module",
-  "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone et Shelly (Plus, Pro, Gen3, Gen4).":
-    "Breezone looks on the network for the products it can drive: Airzone WebServers and Shelly (Plus, Pro, Gen3, Gen4).",
   Réseau: "Network",
   "Recherche sur le réseau… (quelques secondes)":
     "Searching the network… (a few seconds)",
   "Aucun produit trouvé sur {subnet}.": "No product found on {subnet}.",
-  "Ou par son adresse (Shelly)": "Or by its address (Shelly)",
   Modules: "Modules",
   "Les produits que Breezone lit et pilote en plus d'Airzone. Donnez un rôle à chaque mesure d'énergie : la page Énergie s'en sert.":
     "The products Breezone reads and drives besides Airzone. Give each energy measure a role: the energy page uses it.",
@@ -835,6 +832,52 @@ const en: Record<string, string> = {
   "{n} mesure": "{n} measure",
   "{n} mesures": "{n} measures",
   "Réseau électrique": "Grid",
+  Recharge: "Charging",
+  "{value} cette session": "{value} this session",
+  "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4) et bornes V2C Trydan.":
+    "Breezone looks on the network for the products it can drive: Airzone WebServers, Shelly (Plus, Pro, Gen3, Gen4) and V2C Trydan chargers.",
+  "Ou par son adresse": "Or by its address",
+  Produit: "Product",
+  Disponible: "Available",
+  "Câble branché": "Cable plugged in",
+  "En charge": "Charging",
+  Défaut: "Fault",
+  "En pause": "Paused",
+  "Lancer la charge": "Start charging",
+  "La charge démarre dès qu'une voiture est branchée.":
+    "Charging starts as soon as a car is plugged in.",
+  Intensité: "Current",
+  "Maximum choisi": "Chosen maximum",
+  "Réglée par la borne": "Set by the charger",
+  "Intensité maximale": "Maximum current",
+  "La borne adapte l'intensité selon sa propre pince (mode dynamique).":
+    "The charger adapts the current from its own clamp (dynamic mode).",
+  "S'arrêter après": "Stop after",
+  "Énergie à ajouter": "Energy to add",
+  "kWh ajoutés": "kWh added",
+  "Puissance de charge": "Charging power",
+  "Dernières 24 heures": "Last 24 hours",
+  "Intensité de charge": "Charging current",
+  "Qui décide de l'intensité pendant la charge":
+    "Who decides the current while charging",
+  "La borne": "The charger",
+  "La borne adapte l'intensité selon sa propre pince (mode dynamique). Choisissez Breezone pour fixer un maximum.":
+    "The charger adapts the current from its own clamp (dynamic mode). Choose Breezone to set a maximum.",
+  "Session : {duration}": "Session: {duration}",
+  "Aucune session en cours": "No session in progress",
+  Verrouillée: "Locked",
+  Arrêter: "Stop",
+  "Énergie ajoutée": "Energy added",
+  "arrêt à {kwh}": "stops at {kwh}",
+  "réglée par la borne": "set by the charger",
+  "maximum fixé par Breezone": "maximum set by Breezone",
+  Plage: "Range",
+  "Mis à jour toutes les 5 s": "Updated every 5 s",
+  "Aucune borne": "No charger",
+  "Ajoutez votre borne (V2C Trydan) dans Réglages › Modules : Breezone la trouve sur le réseau.":
+    "Add your charger (V2C Trydan) in Settings › Modules: Breezone finds it on the network.",
+  "Véhicule branché": "Vehicle plugged in",
+  "Aucun véhicule branché": "No vehicle plugged in",
 }
 
 export default en

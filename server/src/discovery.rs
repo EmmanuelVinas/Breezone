@@ -1,6 +1,6 @@
 //! LAN discovery: scans a subnet for the products Breezone supports. Each address is asked, in
-//! parallel, whether it is an Airzone WebServer (local API, port 3000) or a Shelly (`/shelly`, port
-//! 80), and products are identified down to the model.
+//! parallel, whether it is an Airzone WebServer (local API, port 3000), a Shelly (`/shelly`, port
+//! 80) or a V2C Trydan (`/RealTimeData`, port 80), and products are identified down to the model.
 
 use crate::airzone::AirzoneClient;
 use serde::Serialize;
@@ -128,7 +128,7 @@ pub async fn probe(host: &str, port: u16) -> Option<Found> {
 /// A product found on the network, of a supported brand.
 #[derive(Debug, Clone, Serialize)]
 pub struct Product {
-    /// "airzone" | "shelly"
+    /// "airzone" | "shelly" | "v2c"
     pub brand: &'static str,
     /// What adds it: "airzone" (an installation) or the driver of a source.
     pub driver: &'static str,
@@ -156,11 +156,11 @@ pub async fn scan_products(subnet: &str, airzone_port: u16) -> Result<Vec<Produc
         tasks.push(tokio::spawn(async move {
             let _permit = limit.acquire().await.ok()?;
             let host = host.to_string();
-            let (airzone, shelly) = tokio::join!(probe(&host, airzone_port), async {
+            let (airzone, (shelly, trydan)) = tokio::join!(probe(&host, airzone_port), async {
                 if is_open(&host, 80).await {
-                    crate::drivers::shelly::probe(&host).await
+                    tokio::join!(crate::drivers::shelly::probe(&host), crate::drivers::trydan::probe(&host))
                 } else {
-                    None
+                    (None, None)
                 }
             });
             let mut found = vec![];
@@ -196,6 +196,20 @@ pub async fn scan_products(subnet: &str, airzone_port: u16) -> Result<Vec<Produc
                     firmware: s.firmware,
                     note: s.note,
                     supported: s.supported,
+                });
+            }
+            if let Some(t) = trydan {
+                found.push(Product {
+                    brand: "v2c",
+                    driver: "trydan",
+                    model: "V2C Trydan".into(),
+                    host: host.clone(),
+                    port: 80,
+                    mac: None,
+                    device_id: (!t.id.is_empty()).then_some(t.id),
+                    firmware: t.firmware,
+                    note: t.note,
+                    supported: true,
                 });
             }
             Some(found)

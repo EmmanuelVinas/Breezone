@@ -1,0 +1,54 @@
+{
+  "trait": "ev.charger",
+  "version": 1,
+  "label": { "fr": "Borne de recharge", "en": "EV charger", "es": "Cargador de vehículo eléctrico" },
+  "state": [
+    { "name": "status", "type": "enum", "values": ["available", "plugged", "charging", "fault"], "label": { "fr": "État", "en": "Status", "es": "Estado" } },
+    { "name": "vehicle", "type": "bool", "optional": true, "label": { "fr": "Véhicule branché", "en": "Vehicle plugged in", "es": "Vehículo conectado" } },
+    { "name": "paused", "type": "bool", "label": { "fr": "En pause", "en": "Paused", "es": "En pausa" } },
+    { "name": "locked", "type": "bool", "label": { "fr": "Verrouillée", "en": "Locked", "es": "Bloqueado" } },
+    { "name": "session_energy", "type": "number", "unit": "kWh", "label": { "fr": "Énergie de la session", "en": "Session energy", "es": "Energía de la sesión" } },
+    { "name": "session_secs", "type": "integer", "unit": "s", "label": { "fr": "Durée de la session", "en": "Session duration", "es": "Duración de la sesión" } },
+    { "name": "limit", "type": "integer", "unit": "A", "optional": true, "label": { "fr": "Intensité de charge", "en": "Charging current", "es": "Intensidad de carga" } },
+    { "name": "limit_min", "type": "integer", "unit": "A", "optional": true, "label": { "fr": "Intensité minimale", "en": "Minimum current", "es": "Intensidad mínima" } },
+    { "name": "limit_max", "type": "integer", "unit": "A", "optional": true, "label": { "fr": "Intensité maximale", "en": "Maximum current", "es": "Intensidad máxima" } },
+    { "name": "auto_limit", "type": "bool", "optional": true, "label": { "fr": "Intensité réglée par la borne", "en": "Current set by the charger", "es": "Intensidad regulada por el cargador" } },
+    { "name": "energy_goal", "type": "number", "unit": "kWh", "optional": true, "label": { "fr": "Arrêt à", "en": "Stops at", "es": "Se detiene a los" } }
+  ],
+  "actions": [
+    {
+      "name": "set_limit",
+      "label": { "fr": "Régler l'intensité", "en": "Set the current", "es": "Ajustar la intensidad" },
+      "params": [
+        { "name": "limit", "type": "integer", "unit": "A", "min": 6, "max": 32, "label": { "fr": "Intensité", "en": "Current", "es": "Intensidad" } }
+      ]
+    },
+    {
+      "name": "start",
+      "label": { "fr": "Lancer la charge", "en": "Start charging", "es": "Iniciar la carga" },
+      "params": [
+        { "name": "limit", "type": "integer", "unit": "A", "min": 6, "max": 32, "optional": true, "label": { "fr": "Intensité maximale", "en": "Maximum current", "es": "Intensidad máxima" } },
+        { "name": "energy", "type": "number", "unit": "kWh", "min": 0.1, "max": 200, "optional": true, "label": { "fr": "Énergie à ajouter", "en": "Energy to add", "es": "Energía a añadir" } }
+      ]
+    },
+    {
+      "name": "stop",
+      "label": { "fr": "Arrêter la charge", "en": "Stop charging", "es": "Detener la carga" },
+      "params": []
+    },
+    {
+      "name": "lock",
+      "label": { "fr": "Verrouiller ou déverrouiller", "en": "Lock or unlock", "es": "Bloquear o desbloquear" },
+      "params": [
+        { "name": "locked", "type": "bool", "label": { "fr": "Verrouillée", "en": "Locked", "es": "Bloqueado" } }
+      ]
+    },
+    {
+      "name": "set_auto_limit",
+      "label": { "fr": "Laisser la borne régler l'intensité", "en": "Let the charger set the current", "es": "Dejar que el cargador regule la intensidad" },
+      "params": [
+        { "name": "on", "type": "bool", "label": { "fr": "Réglée par la borne", "en": "Set by the charger", "es": "Regulada por el cargador" } }
+      ]
+    }
+  ]
+}

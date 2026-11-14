@@ -122,7 +122,7 @@ pub struct Shelly {
 }
 
 /// Host or `host:port` on the local network: letters, digits, dots, dashes, colons.
-fn valid_host(host: &str) -> bool {
+pub(super) fn valid_host(host: &str) -> bool {
     !host.is_empty() && host.len() <= 253 && host.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | ':' | '[' | ']'))
 }
 

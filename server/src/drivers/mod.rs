@@ -7,6 +7,7 @@
 //! through the same generic route). The future WASM modules (ADR 0012) will be drivers too.
 
 pub mod shelly;
+pub mod trydan;
 
 use crate::db::{self, Db};
 use serde::Serialize;
@@ -92,13 +93,14 @@ pub struct DriverInfo {
 }
 
 pub fn available() -> Vec<DriverInfo> {
-    vec![shelly::info()]
+    vec![shelly::info(), trydan::info()]
 }
 
 /// The driver of a source, from its configuration.
 pub fn create(driver: &str, config: &Value) -> Result<Arc<dyn Driver>, String> {
     match driver {
         "shelly" => Ok(Arc::new(shelly::Shelly::new(config)?)),
+        "trydan" => Ok(Arc::new(trydan::Trydan::new(config)?)),
         other => Err(format!("unknown driver: {other}")),
     }
 }
@@ -154,11 +156,30 @@ pub struct SourceDevice {
 pub struct Runtime {
     db: Db,
     sources: RwLock<HashMap<i64, Running>>,
+    /// Charges to stop once they have added some energy, by source and device.
+    goals: RwLock<HashMap<(i64, String), Goal>>,
+}
+
+/// A charge started with an energy to add (`ev.charger` `start`): Breezone stops it once added.
+/// Kept in memory: a restart forgets it, and the charge then goes on.
+#[derive(Debug, Clone, Copy)]
+struct Goal {
+    /// Energy of the session when the goal was set.
+    base: f64,
+    energy: f64,
+    /// A car was plugged in since: unplugging it ends the goal.
+    plugged: bool,
+}
+
+impl Goal {
+    fn target(&self) -> f64 {
+        ((self.base + self.energy) * 1000.0).round() / 1000.0
+    }
 }
 
 impl Runtime {
     pub fn new(db: Db) -> Self {
-        Self { db, sources: RwLock::new(HashMap::new()) }
+        Self { db, sources: RwLock::new(HashMap::new()), goals: RwLock::new(HashMap::new()) }
     }
 
     /// Takes the configured sources into account (at start, and after each change).
@@ -251,6 +272,7 @@ impl Runtime {
                 }
             }
         }
+        self.check_goals(id).await;
     }
 
     pub async fn poll_all(&self) {
@@ -315,13 +337,18 @@ impl Runtime {
 
     pub async fn devices(&self) -> Vec<SourceDevice> {
         let sources = self.sources.read().await;
+        let goals = self.goals.read().await;
         let mut out = vec![];
         for r in sources.values() {
             for info in &r.devices {
+                let mut state = r.states.get(&info.reference).cloned();
+                if let (Some(s), Some(g)) = (state.as_mut(), goals.get(&(r.source.id, info.reference.clone()))) {
+                    s.insert("energy_goal".into(), Value::from(g.target()));
+                }
                 out.push(SourceDevice {
                     source_id: r.source.id,
                     driver: r.source.driver.clone(),
-                    state: r.states.get(&info.reference).cloned(),
+                    state,
                     online: r.status.state == "online",
                     info: info.clone(),
                 });
@@ -334,7 +361,57 @@ impl Runtime {
     pub async fn act(&self, source_id: i64, reference: &str, trait_name: &str, action: &str, params: &State) -> Result<(), DriverError> {
         let driver = self.sources.read().await.get(&source_id).and_then(|r| r.driver.clone()).ok_or_else(|| DriverError::Unreachable("source not configured".into()))?;
         driver.act(reference, trait_name, action, params).await?;
+        if trait_name == "ev.charger" && matches!(action, "start" | "stop") {
+            let key = (source_id, reference.to_string());
+            let energy = params.get("energy").and_then(Value::as_f64).filter(|_| action == "start");
+            let base = self.number(source_id, reference, "session_energy").await.unwrap_or(0.0);
+            let mut goals = self.goals.write().await;
+            match energy {
+                Some(energy) => goals.insert(key, Goal { base, energy, plugged: false }),
+                None => goals.remove(&key),
+            };
+        }
         self.poll(source_id).await;
         Ok(())
+    }
+
+    async fn number(&self, source_id: i64, reference: &str, field: &str) -> Option<f64> {
+        self.sources.read().await.get(&source_id)?.states.get(reference)?.get(field)?.as_f64()
+    }
+
+    /// Stops the charges of a source that have added their energy.
+    async fn check_goals(&self, id: i64) {
+        let (driver, reached) = {
+            let sources = self.sources.read().await;
+            let Some(r) = sources.get(&id) else { return };
+            let mut goals = self.goals.write().await;
+            let mut reached = vec![];
+            goals.retain(|(source, reference), g| {
+                let Some(s) = r.states.get(reference).filter(|_| *source == id) else { return true };
+                let energy = s.get("session_energy").and_then(Value::as_f64).unwrap_or(0.0);
+                if energy + 1e-9 < g.base {
+                    // A new session started.
+                    g.base = 0.0;
+                }
+                match s.get("status").and_then(Value::as_str) {
+                    Some("plugged" | "charging") => g.plugged = true,
+                    Some("available") if g.plugged => return false,
+                    _ => {}
+                }
+                if energy - g.base + 1e-9 >= g.energy {
+                    reached.push(reference.clone());
+                    return false;
+                }
+                true
+            });
+            (r.driver.clone(), reached)
+        };
+        let Some(driver) = driver else { return };
+        for reference in reached {
+            match driver.act(&reference, "ev.charger", "stop", &State::new()).await {
+                Ok(()) => tracing::info!("charge of {reference} (source {id}) stopped: its energy is added"),
+                Err(e) => tracing::error!("cannot stop the charge of {reference} (source {id}): {e}"),
+            }
+        }
     }
 }

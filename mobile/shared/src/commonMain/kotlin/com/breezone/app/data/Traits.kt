@@ -58,6 +58,59 @@ data class EnergyMeterState(
     val energyOut: Double? = null,
 )
 
+@Serializable
+enum class EvChargerStatus {
+    @SerialName("available") Available,
+    @SerialName("plugged") Plugged,
+    @SerialName("charging") Charging,
+    @SerialName("fault") Fault,
+}
+
+/** EV charger (`ev.charger@1`): state. */
+@Serializable
+data class EvChargerState(
+    val status: EvChargerStatus? = null,
+    val vehicle: Boolean? = null,
+    val paused: Boolean = false,
+    val locked: Boolean = false,
+    val sessionEnergy: Double = 0.0,
+    val sessionSecs: Long = 0,
+    val limit: Long? = null,
+    val limitMin: Long? = null,
+    val limitMax: Long? = null,
+    val autoLimit: Boolean? = null,
+    val energyGoal: Double? = null,
+)
+
+/** EV charger (`ev.charger@1`): action `set_limit`. */
+@Serializable
+data class EvChargerSetLimit(
+    val limit: Long? = null,
+)
+
+/** EV charger (`ev.charger@1`): action `start`. */
+@Serializable
+data class EvChargerStart(
+    val limit: Long? = null,
+    val energy: Double? = null,
+)
+
+/** EV charger (`ev.charger@1`): action `stop`, without parameters. */
+@Serializable
+class EvChargerStop
+
+/** EV charger (`ev.charger@1`): action `lock`. */
+@Serializable
+data class EvChargerLock(
+    val locked: Boolean? = null,
+)
+
+/** EV charger (`ev.charger@1`): action `set_auto_limit`. */
+@Serializable
+data class EvChargerSetAutoLimit(
+    val on: Boolean? = null,
+)
+
 /** Power (`energy.power@1`): state. */
 @Serializable
 data class EnergyPowerState(
@@ -82,4 +135,4 @@ data class SwitchRelaySet(
 )
 
 /** Traits described by this version (`trait@version`). */
-val TRAITS = listOf("climate.zone@1", "energy.meter@1", "energy.power@1", "switch.relay@1")
+val TRAITS = listOf("climate.zone@1", "energy.meter@1", "ev.charger@1", "energy.power@1", "switch.relay@1")

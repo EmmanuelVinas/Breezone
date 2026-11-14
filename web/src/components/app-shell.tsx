@@ -6,6 +6,7 @@ import {
   LayoutGrid,
   LogOut,
   Moon,
+  PlugZap,
   Settings,
   Smartphone,
   Sun,
@@ -33,6 +34,7 @@ import { useProfileLanguage } from "@/hooks/use-profile-language"
 const NAV = [
   { to: "/", label: t("Installations"), icon: LayoutGrid, end: true },
   { to: "/energie", label: t("Énergie"), icon: Zap, end: false },
+  { to: "/recharge", label: t("Recharge"), icon: PlugZap, end: false },
   {
     to: "/programmations",
     label: t("Programmations"),
@@ -72,6 +74,16 @@ function useEnergy() {
     staleTime: 60_000,
   }).data
   return !!live && Object.values(live.roles).some(Boolean)
+}
+
+/** The charging page is shown once a charger is added (Settings › Modules). */
+function useCharger() {
+  const devices = useQuery({
+    queryKey: ["devices"],
+    queryFn: api.devices,
+    staleTime: 60_000,
+  }).data
+  return !!devices?.some((d) => d.traits.includes("ev.charger@1"))
 }
 
 /** A newer Breezone, for administrators (the server checks once a day). */
@@ -118,7 +130,10 @@ export function AppShell({
   const update = useAvailableUpdate(user?.role === "admin")
   useProfileLanguage()
   const energy = useEnergy()
-  const nav = NAV.filter((n) => n.to !== "/energie" || energy)
+  const charger = useCharger()
+  const nav = NAV.filter(
+    (n) => (n.to !== "/energie" || energy) && (n.to !== "/recharge" || charger)
+  )
   const dark =
     theme === "dark" ||
     (theme === "system" &&
@@ -258,7 +273,7 @@ export function AppShell({
             }
           >
             <Icon className="size-5" />
-            {label}
+            <span className="max-w-full truncate px-0.5">{label}</span>
           </NavLink>
         ))}
       </nav>

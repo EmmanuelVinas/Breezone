@@ -263,3 +263,89 @@ async fn the_measures_have_a_history_and_make_the_energy_of_the_home() {
     let (s, _) = server.call("GET", "/api/energy/day?date=demain", t, None).await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
 }
+
+/// A V2C Trydan answering its local API; while charging, each reading adds 0.5 kWh to the session.
+async fn fake_trydan(data: Arc<Mutex<Value>>) -> u16 {
+    use axum::extract::Path;
+    let router = Router::new()
+        .route(
+            "/RealTimeData",
+            get(|State(d): State<Arc<Mutex<Value>>>| async move {
+                let mut d = d.lock().unwrap();
+                if d["ChargeState"] == 2 && d["Paused"] == 0 {
+                    d["ChargeEnergy"] = json!(d["ChargeEnergy"].as_f64().unwrap() + 0.5);
+                }
+                Json(d.clone())
+            }),
+        )
+        .route(
+            "/write/{kv}",
+            get(|State(d): State<Arc<Mutex<Value>>>, Path(kv): Path<String>| async move {
+                let (k, v) = kv.split_once('=').unwrap();
+                d.lock().unwrap()[k] = json!(v.parse::<i64>().unwrap());
+                "OK"
+            }),
+        )
+        .with_state(data);
+    serve(router).await
+}
+
+#[tokio::test]
+async fn a_trydan_charges_with_a_maximum_and_stops_once_its_energy_is_added() {
+    let data = Arc::new(Mutex::new(json!({"ID":"XY99R6","FirmwareVersion":"2.5.1","ChargeState":0,"ChargeMode":0,"ChargePower":0.0,"VoltageInstallation":222,
+        "ChargeEnergy":0.0,"ChargeTime":0,"Paused":0,"Locked":0,"Intensity":0,"IntensityMeasure_L1":0.0,"Dynamic":1,"MinIntensity":6,"MaxIntensity":32})));
+    let trydan = fake_trydan(data.clone()).await;
+    let (server, token) = Server::start().await;
+    let t = Some(token.as_str());
+
+    let (s, source) = server.call("POST", "/api/sources", t, Some(json!({"driver":"trydan","name":"Borne","config":{"host": format!("127.0.0.1:{trydan}"), "device_id": "XY99R6"}}))).await;
+    assert_eq!(s, StatusCode::CREATED, "{source}");
+    assert_eq!(source["status"]["state"], "online", "{source}");
+    assert_eq!(source["status"]["model"], "V2C Trydan (monophasé · 6–32 A)");
+    let refresh = format!("/api/sources/{}/refresh", source["id"]);
+
+    let (_, devices) = server.call("GET", "/api/devices", t, None).await;
+    let charger = devices.as_array().unwrap().iter().find(|d| d["source"] == "trydan").unwrap().clone();
+    assert_eq!(charger["traits"], json!(["ev.charger@1", "energy.power@1"]));
+    assert_eq!(charger["state"]["status"], "available");
+    assert_eq!(charger["state"]["auto_limit"], true);
+    let actions = format!("/api/devices/{}/actions", charger["id"]);
+
+    // Out of range, unknown parameter: nothing is written.
+    let (s, _) = server.call("POST", &actions, t, Some(json!({"trait":"ev.charger","action":"start","params":{"limit":40}}))).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+    let (s, _) = server.call("POST", &actions, t, Some(json!({"trait":"ev.charger","action":"start","params":{"until":"07:00"}}))).await;
+    assert_eq!(s, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(data.lock().unwrap()["Dynamic"], 1);
+
+    // Start at 10 A at most, for 1 kWh: Breezone takes the current over from the charger.
+    let (s, d) = server.call("POST", &actions, t, Some(json!({"trait":"ev.charger","action":"start","params":{"limit":10,"energy":1.0}}))).await;
+    assert_eq!(s, StatusCode::OK, "{d}");
+    {
+        let d = data.lock().unwrap();
+        assert_eq!((d["Dynamic"].clone(), d["Intensity"].clone(), d["Paused"].clone()), (json!(0), json!(10), json!(0)));
+    }
+    assert_eq!(d["state"]["limit"], 10);
+    assert_eq!(d["state"]["energy_goal"], 1.0);
+
+    // The car charges: 0.5 kWh per reading; at 1 kWh Breezone pauses the charger.
+    data.lock().unwrap()["ChargeState"] = json!(2);
+    for _ in 0..3 {
+        server.call("POST", &refresh, t, None).await;
+    }
+    assert_eq!(data.lock().unwrap()["Paused"], 1, "stopped once 1 kWh is added");
+    let (_, devices) = server.call("GET", "/api/devices", t, None).await;
+    let charger = devices.as_array().unwrap().iter().find(|d| d["source"] == "trydan").unwrap().clone();
+    assert_eq!(charger["state"]["paused"], true);
+    assert_eq!(charger["state"]["energy_goal"], Value::Null, "the goal is over");
+
+    // Started again without a goal, then stopped by hand.
+    server.call("POST", &actions, t, Some(json!({"trait":"ev.charger","action":"start","params":{}}))).await;
+    assert_eq!(data.lock().unwrap()["Paused"], 0);
+    let (s, _) = server.call("POST", &actions, t, Some(json!({"trait":"ev.charger","action":"stop","params":{}}))).await;
+    assert_eq!(s, StatusCode::OK);
+    assert_eq!(data.lock().unwrap()["Paused"], 1);
+    let (s, _) = server.call("POST", &actions, t, Some(json!({"trait":"ev.charger","action":"lock","params":{"locked":true}}))).await;
+    assert_eq!(s, StatusCode::OK);
+    assert_eq!(data.lock().unwrap()["Locked"], 1);
+}
