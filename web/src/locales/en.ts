@@ -849,7 +849,6 @@ const en: Record<string, string> = {
   "arrêt à {kwh}": "stops at {kwh}",
   "réglée par la borne": "set by the charger",
   "maximum fixé par Breezone": "maximum set by Breezone",
-  Plage: "Range",
   "Aucune borne": "No charger",
   "Ajoutez votre borne (V2C Trydan) dans Réglages › Modules : Breezone la trouve sur le réseau.":
     "Add your charger (V2C Trydan) in Settings › Modules: Breezone finds it on the network.",
@@ -936,6 +935,35 @@ const en: Record<string, string> = {
   "Énergie consommée": "Energy used",
   Année: "Year",
   "Exporter CSV": "Export CSV",
+  Automatismes: "Automations",
+  Serveur: "Server",
+  "comptée par « {name} »": "counted by “{name}”",
+  "comptée d'office": "counted by default",
+  "Production de": "Production of",
+  "Une autre production": "Another production",
+  "Production de {name}": "Production of {name}",
+  "Production solaire, comptée par « {name} »":
+    "Solar production, counted by “{name}”",
+  "Production et consommation toutes les 15 minutes":
+    "Production and consumption every 15 minutes",
+  Injectée: "Returned",
+  "30 derniers jours": "Last 30 days",
+  "{kwh} produits · autoconsommés ou injectés":
+    "{kwh} produced · self-consumed or returned",
+  "{kwh} au total": "{kwh} in total",
+  "Aucun onduleur solaire": "No solar inverter",
+  "Ajoutez la clé Wi-Fi de vos micro-onduleurs (Hoymiles) dans Réglages › Modules : Breezone la trouve sur le réseau.":
+    "Add the Wi-Fi stick of your micro-inverters (Hoymiles) in Settings › Modules: Breezone finds it on the network.",
+  "rendue au réseau aujourd'hui": "given back to the grid today",
+  "{n} micro-onduleur": "{n} micro-inverter",
+  "{n} micro-onduleurs": "{n} micro-inverters",
+  "toujours comptée": "always counted",
+  "non comptée : « {name} » mesure déjà la production":
+    "not counted: “{name}” already measures the production",
+  Automatique: "Automatic",
+  "Toujours compter": "Always count",
+  "Non comptée : « {name} » mesure déjà la production":
+    "Not counted: “{name}” already measures the production",
 }
 
 export default en

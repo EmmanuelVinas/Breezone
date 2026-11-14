@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from "react"
-import { Link, NavLink, useNavigate } from "react-router"
+import { Link, NavLink, useLocation, useNavigate } from "react-router"
 import {
   Activity,
   CalendarClock,
@@ -7,7 +7,9 @@ import {
   LogOut,
   Moon,
   PlugZap,
+  Puzzle,
   Settings,
+  SolarPanel,
   Smartphone,
   Sun,
   Timer,
@@ -31,19 +33,75 @@ import {
 import { t } from "@/lib/i18n"
 import { useProfileLanguage } from "@/hooks/use-profile-language"
 
-const NAV = [
-  { to: "/", label: t("Installations"), icon: LayoutGrid, end: true },
-  { to: "/energie", label: t("Énergie"), icon: Zap, end: false },
-  { to: "/recharge", label: t("Recharge"), icon: PlugZap, end: false },
+type NavItem = {
+  to: string
+  label: string
+  icon: typeof Zap
+  end: boolean
+  /** Shown only when a module provides it, or to administrators. */
+  when?: "energy" | "solar" | "charger" | "admin"
+}
+
+/** The menu, in sections as in the mockups; a section without an item is not shown. */
+const NAV: { title: string | null; items: NavItem[] }[] = [
   {
-    to: "/programmations",
-    label: t("Programmations"),
-    icon: CalendarClock,
-    end: false,
+    title: null,
+    items: [
+      { to: "/", label: t("Installations"), icon: LayoutGrid, end: true },
+    ],
   },
-  { to: "/routines", label: t("Routines"), icon: Timer, end: false },
-  { to: "/activity", label: t("Activité"), icon: Activity, end: false },
-  { to: "/settings", label: t("Réglages"), icon: Settings, end: false },
+  {
+    title: t("Maison"),
+    items: [
+      {
+        to: "/energie",
+        label: t("Énergie"),
+        icon: Zap,
+        end: false,
+        when: "energy",
+      },
+      {
+        to: "/solaire",
+        label: t("Solaire"),
+        icon: SolarPanel,
+        end: false,
+        when: "solar",
+      },
+      {
+        to: "/recharge",
+        label: t("Recharge"),
+        icon: PlugZap,
+        end: false,
+        when: "charger",
+      },
+    ],
+  },
+  {
+    title: t("Automatismes"),
+    items: [
+      {
+        to: "/programmations",
+        label: t("Programmations"),
+        icon: CalendarClock,
+        end: false,
+      },
+      { to: "/routines", label: t("Routines"), icon: Timer, end: false },
+      { to: "/activity", label: t("Activité"), icon: Activity, end: false },
+    ],
+  },
+  {
+    title: t("Serveur"),
+    items: [
+      {
+        to: "/settings?tab=modules",
+        label: t("Modules"),
+        icon: Puzzle,
+        end: false,
+        when: "admin",
+      },
+      { to: "/settings", label: t("Réglages"), icon: Settings, end: false },
+    ],
+  },
 ]
 
 function LiveIndicator({ state }: { state: LiveState }) {
@@ -76,14 +134,16 @@ function useEnergy() {
   return !!live && Object.values(live.roles).some(Boolean)
 }
 
-/** The charging page is shown once a charger is added (Settings › Modules). */
-function useCharger() {
+function useModules() {
   const devices = useQuery({
     queryKey: ["devices"],
     queryFn: api.devices,
     staleTime: 60_000,
   }).data
-  return !!devices?.some((d) => d.traits.includes("ev.charger@1"))
+  return {
+    charger: !!devices?.some((d) => d.traits.includes("ev.charger@1")),
+    solar: !!devices?.some((d) => d.traits.includes("solar.inverter@1")),
+  }
 }
 
 /** A newer Breezone, for administrators (the server checks once a day). */
@@ -130,10 +190,30 @@ export function AppShell({
   const update = useAvailableUpdate(user?.role === "admin")
   useProfileLanguage()
   const energy = useEnergy()
-  const charger = useCharger()
-  const nav = NAV.filter(
-    (n) => (n.to !== "/energie" || energy) && (n.to !== "/recharge" || charger)
-  )
+  const modules = useModules()
+  const location = useLocation()
+  const shown = (n: NavItem) =>
+    n.when === undefined ||
+    (n.when === "energy" && energy) ||
+    (n.when === "solar" && modules.solar) ||
+    (n.when === "charger" && modules.charger) ||
+    (n.when === "admin" && user?.role === "admin")
+  const sections = NAV.map((s) => ({
+    ...s,
+    items: s.items.filter(shown),
+  })).filter((s) => s.items.length > 0)
+  // Modules is a tab of the settings: each of the two entries is active on its own.
+  const onModules =
+    location.pathname === "/settings" &&
+    new URLSearchParams(location.search).get("tab") === "modules"
+  const active = (n: NavItem, isActive: boolean) =>
+    n.to.startsWith("/settings")
+      ? isActive && (n.to.includes("tab=modules") ? onModules : !onModules)
+      : isActive
+  // The bottom bar of a phone: everything but Modules (reached from the settings).
+  const nav = sections
+    .flatMap((s) => s.items)
+    .filter((n) => !n.to.includes("tab=modules"))
   const dark =
     theme === "dark" ||
     (theme === "system" &&
@@ -152,21 +232,30 @@ export function AppShell({
           <Brand />
         </div>
         <nav className="mt-6 flex flex-col gap-1">
-          {nav.map(({ to, label, icon: Icon, end }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              className={({ isActive }) =>
-                cn(
-                  "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground",
-                  isActive && "bg-sidebar-accent text-foreground"
-                )
-              }
-            >
-              <Icon className="size-4.5" />
-              {label}
-            </NavLink>
+          {sections.map((section, i) => (
+            <div key={section.title ?? i} className="flex flex-col gap-1">
+              {section.title && (
+                <div className="mt-4 px-3 pb-1 text-[11px] font-medium tracking-wide text-muted-foreground/80 uppercase">
+                  {section.title}
+                </div>
+              )}
+              {section.items.map((n) => (
+                <NavLink
+                  key={n.to}
+                  to={n.to}
+                  end={n.end}
+                  className={({ isActive }) =>
+                    cn(
+                      "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground",
+                      active(n, isActive) && "bg-sidebar-accent text-foreground"
+                    )
+                  }
+                >
+                  <n.icon className="size-4.5" />
+                  {n.label}
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
         <div className="mt-auto flex flex-col gap-1.5 px-3">
@@ -256,10 +345,7 @@ export function AppShell({
         </main>
       </div>
 
-      <nav
-        style={{ gridTemplateColumns: `repeat(${nav.length}, minmax(0, 1fr))` }}
-        className="fixed inset-x-3 bottom-3 z-40 grid rounded-3xl border bg-card/80 p-1.5 shadow-2xl backdrop-blur-xl md:hidden"
-      >
+      <nav className="fixed inset-x-3 bottom-3 z-40 flex overflow-x-auto rounded-3xl border bg-card/80 p-1.5 shadow-2xl backdrop-blur-xl md:hidden">
         {nav.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
@@ -267,7 +353,7 @@ export function AppShell({
             end={end}
             className={({ isActive }) =>
               cn(
-                "flex flex-col items-center gap-1 rounded-2xl py-2 text-[11px] text-muted-foreground",
+                "flex min-w-16 flex-1 flex-col items-center gap-1 rounded-2xl py-2 text-[11px] text-muted-foreground",
                 isActive && "bg-primary/12 text-primary"
               )
             }

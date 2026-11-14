@@ -6,6 +6,23 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Solar page (web): the production now and today, self-consumption and what is returned, each
+  inverter with its temperature, voltage and frequency, its panels laid out with their power, voltage,
+  current and production, today's curve beside the consumption, and the last 30 days.
+- The menu in sections, as in the mockups: Home (energy, solar, charging), Automations, Server
+  (modules, settings).
+
+### Fixed
+
+- A solar inverter is the solar production of the home without being told; a meter on its line
+  (a Shelly channel) can say which inverter it measures, and both count once. A measure linked to an
+  inverter counts as a production, whatever role it was given; a production that does not say what it
+  measures leaves the inverters out unless they are told to count (another installation).
+- A source that misses a reading (a Hoymiles DTU serves one client at a time) stays online with its
+  last values for a minute, or three readings, instead of showing as unreachable.
+
 ## [0.11.0-beta.2] - 2026-11-14
 
 ### Changed

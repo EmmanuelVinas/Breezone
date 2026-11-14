@@ -221,14 +221,23 @@ pub async fn update_device(State(state): State<AppState>, user: AuthUser, Path(i
             return Err(ApiError::bad_request("only an energy measure has a role"));
         }
     }
+    // A consumption measures a device or a room; a production may measure a solar inverter (a meter
+    // on its line), so that both count once.
     let consumption = role == Some("consumption");
-    let measured_device = input.measures_device_id.unwrap_or(device.measures_device_id).filter(|_| consumption);
+    let solar = role == Some("solar");
+    let measured_device = input.measures_device_id.unwrap_or(device.measures_device_id).filter(|_| consumption || solar);
     let measured_room = input.measures_room_id.unwrap_or(device.measures_room_id).filter(|_| consumption);
     if measured_device == Some(id) {
         return Err(ApiError::bad_request("a measure cannot measure itself"));
     }
     if let Some(d) = measured_device {
         db::device_by_id(&state.db, d).await?.ok_or_else(|| ApiError::bad_request("unknown device"))?;
+        if solar {
+            let inverter = devices_of(&state).await?.into_iter().find(|x| x.id == d).is_some_and(|x| x.traits.iter().any(|t| t == "solar.inverter@1"));
+            if !inverter {
+                return Err(ApiError::bad_request("a production measures a solar inverter"));
+            }
+        }
     }
     if let Some(r) = measured_room {
         db::room_by_id(&state.db, r).await?.ok_or_else(|| ApiError::bad_request("unknown room"))?;

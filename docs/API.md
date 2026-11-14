@@ -161,7 +161,7 @@ avec un identifiant stable. Les routes des zones restent celles qui les pilotent
 |---------|--------|-------------|
 | GET 🔒 | `/api/traits` | Catalogue des traits : `[{trait, version, label{fr,en,es}, state:[champ], actions:[{name, label, params:[champ]}]}]`, champ = `{name, type (bool·integer·number·string·enum), unit?, values?, min?, max?, optional, label}`. Sert aussi de descripteur pour un trait inconnu du client |
 | GET 🔒 | `/api/devices` | Appareils visibles par l'utilisateur : `[{id, kind, traits, source, source_id, installation_id, reference, name, room_id, role, measures:{device_id, room_id}, position, available, state}]` (`state` : valeurs décrites par le catalogue ; `available` faux si la source ne fournit plus l'appareil) |
-| PUT 🔒 | `/api/devices/{id}` | `{name?, room_id?, position?, role?, measures_device_id?, measures_room_id?}` : seuls les champs donnés changent (`null` efface). Nom personnalisé (vide = celui de la source), pièce, et pour une mesure d'énergie son **rôle** : `grid` (réseau, toute la maison), `solar`, `battery` ou `consumption` (consommation d'un appareil ou d'une pièce ; sans cible : autres usages). Même droit que pour renommer les zones de l'installation ; administrateurs pour les appareils des sources |
+| PUT 🔒 | `/api/devices/{id}` | `{name?, room_id?, position?, role?, measures_device_id?, measures_room_id?}` : seuls les champs donnés changent (`null` efface). `measures_device_id` désigne l'appareil mesuré par une consommation, ou l'onduleur mesuré par une production ; Nom personnalisé (vide = celui de la source), pièce, et pour une mesure d'énergie son **rôle** : `grid` (réseau, toute la maison), `solar`, `battery` ou `consumption` (consommation d'un appareil ou d'une pièce ; sans cible : autres usages). Même droit que pour renommer les zones de l'installation ; administrateurs pour les appareils des sources |
 | GET 🔒 | `/api/rooms` | `[{id, name, position, created_at}]` |
 | POST 👑 | `/api/rooms` | `{name, position?}` → 201 |
 | PUT 👑 · DELETE 👑 | `/api/rooms/{id}` | Renommer, réordonner, supprimer (ses appareils restent, sans pièce) |
@@ -186,6 +186,7 @@ Conventions :
 - `battery` est positif en charge.
 - La maison consomme : réseau + production + décharge − charge. Sans compteur général, c'est la somme des mesures de consommation.
 - `other` est la consommation de la maison qu'aucune mesure de consommation ne couvre.
+- Un onduleur solaire (`solar.inverter@1`) est une production sans qu'on le dise. Une mesure de production peut désigner l'onduleur qu'elle mesure (`measures_device_id`, une pince sur sa ligne) : les deux ne comptent qu'une fois, par la mesure. Une mesure liée à un onduleur compte comme une production, quel que soit son rôle. Une mesure de production qui ne dit pas ce qu'elle mesure peut mesurer les onduleurs : ils sont alors laissés de côté, sauf s'ils ont reçu eux-mêmes le rôle `solar` (une autre installation).
 - L'énergie vient des compteurs des appareils quand ils en ont, sinon de la puissance moyenne.
 - Un trou de plus de deux intervalles (appareil non lu) ne compte pas.
 

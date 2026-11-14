@@ -33,6 +33,7 @@ import type { LucideIcon } from "lucide-react"
 import type { DayEnergy, DeviceView, EnergyLive, MeasureRole } from "@/lib/api"
 import { api, currentUser } from "@/lib/api"
 import { percent, time } from "@/lib/format"
+import { inverterCounting, isInverter } from "@/lib/solar"
 import { locale, t, tn } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { PageHeader } from "@/components/app-shell"
@@ -940,10 +941,24 @@ function roleText(
   devices: DeviceView[],
   rooms: Map<number, string>
 ) {
+  const measured = devices.find((x) => x.id === d.measures.device_id)
+  // As the server counts them: an inverter is a production, a meter of an inverter too.
+  if (isInverter(d)) {
+    const c = inverterCounting(d, devices)
+    if (!c.counted)
+      return t("Non comptée : « {name} » mesure déjà la production", {
+        name: c.overlap.name,
+      })
+    return c.by
+      ? t("Production solaire, comptée par « {name} »", { name: c.by.name })
+      : ROLE_LABEL.solar
+  }
+  if (d.role && isInverter(measured))
+    return t("Production de {name}", { name: measured!.name })
   if (!d.role) return t("Non affectée")
   if (d.role !== "consumption") return ROLE_LABEL[d.role]
   const target =
-    devices.find((x) => x.id === d.measures.device_id)?.name ??
+    measured?.name ??
     (d.measures.room_id !== null ? rooms.get(d.measures.room_id) : undefined)
   return target
     ? t("Consommation de {name}", { name: target })

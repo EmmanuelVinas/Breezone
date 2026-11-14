@@ -19,15 +19,45 @@ fn max_span(state: &AppState) -> i64 {
     state.cfg.history_interval_secs * 2
 }
 
-/// The energy measures of the home, with what each consumption measures.
+fn is_inverter(d: &DeviceView) -> bool {
+    d.traits.iter().any(|t| t == "solar.inverter@1")
+}
+
+/// The role a measure has on the energy page. A solar inverter is a production without being told;
+/// a measure of a solar inverter (a meter on its line) is a production whatever role it was given.
+fn effective_role(d: &DeviceView, by_id: &HashMap<i64, &DeviceView>) -> Option<Role> {
+    let of_inverter = d.measures.device_id.and_then(|id| by_id.get(&id)).is_some_and(|t| is_inverter(t));
+    match d.role.as_deref().and_then(Role::parse) {
+        Some(Role::Consumption) if of_inverter => Some(Role::Solar),
+        Some(role) => Some(role),
+        None if is_inverter(d) => Some(Role::Solar),
+        None => None,
+    }
+}
+
+/// The energy measures of the home, with what each consumption measures. An inverter measured by
+/// another production measure counts once, through that measure (its meter is read more often).
+/// A production measure that does not say what it measures may measure the inverters too: they are
+/// then left out, unless they were explicitly given the role of a production (another installation).
 async fn measures(state: &AppState, devices: &[DeviceView]) -> ApiResult<Vec<Measure>> {
     let rooms: HashMap<i64, String> = db::list_rooms(&state.db).await?.into_iter().map(|r| (r.id, r.name)).collect();
     let names: HashMap<i64, &str> = devices.iter().map(|d| (d.id, d.name.as_str())).collect();
+    let by_id: HashMap<i64, &DeviceView> = devices.iter().map(|d| (d.id, d)).collect();
+    let covered: Vec<i64> = devices
+        .iter()
+        .filter(|d| effective_role(d, &by_id) == Some(Role::Solar))
+        .filter_map(|d| d.measures.device_id.filter(|t| *t != d.id && by_id.get(t).is_some_and(|t| is_inverter(t))))
+        .collect();
+    let meter_of_all = devices
+        .iter()
+        .any(|d| !is_inverter(d) && d.measures.device_id.is_none() && d.traits.iter().any(|t| t == "energy.power@1") && effective_role(d, &by_id) == Some(Role::Solar));
     Ok(devices
         .iter()
         .filter(|d| d.traits.iter().any(|t| t == "energy.power@1"))
+        .filter(|d| !covered.contains(&d.id))
+        .filter(|d| !(meter_of_all && is_inverter(d) && d.role.is_none()))
         .filter_map(|d| {
-            let role = Role::parse(d.role.as_deref()?)?;
+            let role = effective_role(d, &by_id)?;
             let consumer = (role == Role::Consumption).then(|| {
                 let target = d.measures.device_id.and_then(|id| names.get(&id).map(|n| n.to_string()));
                 let room = d.measures.room_id.and_then(|id| rooms.get(&id).cloned());

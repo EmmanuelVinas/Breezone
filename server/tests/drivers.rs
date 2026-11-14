@@ -173,9 +173,11 @@ async fn a_shelly_source_provides_devices_driven_through_their_traits() {
     assert_eq!(s, StatusCode::BAD_REQUEST, "not itself");
     let (s, _) = server.call("PUT", &format!("/api/devices/{meter_id}"), t, Some(json!({"role":"magic"}))).await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
-    // Only consumption points to what it measures.
-    let (_, d) = server.call("PUT", &format!("/api/devices/{meter_id}"), t, Some(json!({"role":"solar","measures_device_id": relay_id}))).await;
-    assert_eq!(d["role"], "solar");
+    // A production only points to the solar inverter it measures; a battery to nothing.
+    let (s, _) = server.call("PUT", &format!("/api/devices/{meter_id}"), t, Some(json!({"role":"solar","measures_device_id": relay_id}))).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST, "the relay is not a solar inverter");
+    let (_, d) = server.call("PUT", &format!("/api/devices/{meter_id}"), t, Some(json!({"role":"battery","measures_device_id": relay_id}))).await;
+    assert_eq!(d["role"], "battery");
     assert_eq!(d["measures"]["device_id"], Value::Null);
 
     // A user sees the devices but neither drives them nor manages the sources (for now).
@@ -473,10 +475,35 @@ async fn a_hoymiles_dtu_gives_its_inverter_and_panels() {
     let (s, _) = server.call("POST", &format!("/api/devices/{}/actions", inverter["id"]), t, Some(json!({"trait":"switch.relay","action":"set","params":{"on":false}}))).await;
     assert_eq!(s, StatusCode::UNPROCESSABLE_ENTITY);
 
-    // The inverter is the solar production of the home.
+    // An inverter is the solar production of the home without being told.
+    let (_, live) = server.call("GET", "/api/energy/live", t, None).await;
+    assert_eq!(live["roles"]["solar"], true, "{live}");
+    assert_eq!(live["solar"], 486.9, "{live}");
+
+    // A meter on the inverter's line measures it: both count once, through the meter.
+    let shelly = fake_shelly(Arc::new(Mutex::new(false))).await;
+    server.call("POST", "/api/sources", t, Some(json!({"driver":"shelly","name":"Tableau","config":{"host": format!("127.0.0.1:{shelly}")}}))).await;
+    let (_, all) = server.call("GET", "/api/devices", t, None).await;
+    let meter = all.as_array().unwrap().iter().find(|d| d["reference"] == "em:0").unwrap()["id"].as_i64().unwrap();
+    // A production that does not say what it measures may measure the inverter: counted once.
+    server.call("PUT", &format!("/api/devices/{meter}"), t, Some(json!({"role":"solar"}))).await;
+    let (_, live) = server.call("GET", "/api/energy/live", t, None).await;
+    assert_eq!(live["solar"], 2410.5, "{live}");
+    // Unless the inverter is told to count as well (another installation).
     server.call("PUT", &format!("/api/devices/{}", inverter["id"]), t, Some(json!({"role":"solar"}))).await;
     let (_, live) = server.call("GET", "/api/energy/live", t, None).await;
-    assert_eq!(live["solar"], 486.9, "{live}");
+    assert_eq!(live["solar"], 2897.4, "{live}");
+    server.call("PUT", &format!("/api/devices/{}", inverter["id"]), t, Some(json!({"role":null}))).await;
+    let (s, d) = server.call("PUT", &format!("/api/devices/{meter}"), t, Some(json!({"role":"solar","measures_device_id": inverter["id"]}))).await;
+    assert_eq!(s, StatusCode::OK, "{d}");
+    assert_eq!(d["measures"]["device_id"], inverter["id"]);
+    let (_, live) = server.call("GET", "/api/energy/live", t, None).await;
+    assert_eq!(live["solar"], 2410.5, "the meter, not meter + inverter: {live}");
+    // Given as the consumption of the inverter, the meter is still its production.
+    server.call("PUT", &format!("/api/devices/{meter}"), t, Some(json!({"role":"consumption","measures_device_id": inverter["id"]}))).await;
+    let (_, live) = server.call("GET", "/api/energy/live", t, None).await;
+    assert_eq!(live["solar"], 2410.5, "{live}");
+    assert_eq!(live["consumers"], json!([]), "{live}");
 
     // The DTU is not read again before its 30 s (the runtime asks every 5 s).
     let before = requests.load(Ordering::SeqCst);

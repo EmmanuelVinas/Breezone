@@ -23,6 +23,7 @@ import type {
 } from "@/lib/api"
 import { api } from "@/lib/api"
 import { CHARGER_STATUS } from "@/lib/charger"
+import { inverterCounting, isInverter } from "@/lib/solar"
 import { relativeTime } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { t } from "@/lib/i18n"
@@ -138,6 +139,8 @@ function DeviceRow({
   const measuresEnergy = device.traits.some((x) =>
     x.startsWith("energy.power@")
   )
+  const counting = isInverter(device) ? inverterCounting(device, devices) : null
+  const inverters = devices.filter((d) => d.id !== device.id && isInverter(d))
   const target = device.measures.device_id
     ? `d:${device.measures.device_id}`
     : device.measures.room_id
@@ -180,7 +183,43 @@ function DeviceRow({
           {device.available ? values.join(" · ") : t("Indisponible")}
         </div>
       </div>
-      {measuresEnergy && (
+      {measuresEnergy && counting && (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="text-right text-sm">
+            <div className="font-medium text-warning">
+              {t("Production solaire")}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {counting.counted
+                ? counting.by
+                  ? t("comptée par « {name} »", { name: counting.by.name })
+                  : counting.forced
+                    ? t("toujours comptée")
+                    : t("comptée d'office")
+                : t("non comptée : « {name} » mesure déjà la production", {
+                    name: counting.overlap.name,
+                  })}
+            </div>
+          </div>
+          {(!counting.counted || counting.forced) && (
+            <Select
+              value={device.role === "solar" ? "always" : "auto"}
+              onValueChange={(v) =>
+                save.mutate({ role: v === "always" ? "solar" : null })
+              }
+            >
+              <SelectTrigger className="w-48" aria-label={t("Rôle")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">{t("Automatique")}</SelectItem>
+                <SelectItem value="always">{t("Toujours compter")}</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+      )}
+      {measuresEnergy && !isInverter(device) && (
         <div className="flex flex-wrap items-center gap-2">
           <Select
             value={device.role ?? "none"}
@@ -201,6 +240,36 @@ function DeviceRow({
               )}
             </SelectContent>
           </Select>
+          {device.role === "solar" && inverters.length > 0 && (
+            <Select
+              value={
+                device.measures.device_id
+                  ? `d:${device.measures.device_id}`
+                  : "none"
+              }
+              onValueChange={(v) =>
+                save.mutate({
+                  measures_device_id: v.startsWith("d:")
+                    ? Number(v.slice(2))
+                    : null,
+                })
+              }
+            >
+              <SelectTrigger className="w-56" aria-label={t("Production de")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">
+                  {t("Une autre production")}
+                </SelectItem>
+                {inverters.map((d) => (
+                  <SelectItem key={d.id} value={`d:${d.id}`}>
+                    {t("Production de {name}", { name: d.name })}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           {device.role === "consumption" && (
             <Select
               value={target}
@@ -221,7 +290,10 @@ function DeviceRow({
               <SelectContent>
                 <SelectItem value="none">{t("Autres usages")}</SelectItem>
                 {devices
-                  .filter((d) => d.id !== device.id && d.role === null)
+                  .filter(
+                    (d) =>
+                      d.id !== device.id && d.role === null && !isInverter(d)
+                  )
                   .map((d) => (
                     <SelectItem key={d.id} value={`d:${d.id}`}>
                       {d.name}

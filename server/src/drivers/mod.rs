@@ -161,6 +161,9 @@ pub struct SourceDevice {
     pub online: bool,
 }
 
+/// Seconds a source stays online after its last successful reading, at least.
+const MISSED_READINGS_GRACE: i64 = 60;
+
 pub struct Runtime {
     db: Db,
     sources: RwLock<HashMap<i64, Running>>,
@@ -269,7 +272,13 @@ impl Runtime {
                     r.status.last_error = None;
                 }
                 Err(e) => {
-                    r.status.state = if matches!(e, DriverError::Unreachable(_)) { "offline" } else { "error" };
+                    // A missed reading is not an outage (a Hoymiles DTU serves one client at a time):
+                    // the source stays online, with its last values, until its readings fail for a while.
+                    let grace = (driver.read_every().as_secs() as i64 * 3).max(MISSED_READINGS_GRACE);
+                    let recent = r.status.last_seen.is_some_and(|t| db::now() - t < grace);
+                    if !(recent && r.status.state == "online" && matches!(e, DriverError::Unreachable(_))) {
+                        r.status.state = if matches!(e, DriverError::Unreachable(_)) { "offline" } else { "error" };
+                    }
                     r.status.last_error = Some(e.to_string());
                 }
             }

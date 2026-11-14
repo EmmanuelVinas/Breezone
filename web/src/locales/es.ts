@@ -858,7 +858,6 @@ const es: Record<string, string> = {
   "arrêt à {kwh}": "se detiene a los {kwh}",
   "réglée par la borne": "regulada por el cargador",
   "maximum fixé par Breezone": "máximo fijado por Breezone",
-  Plage: "Rango",
   "Aucune borne": "Ningún cargador",
   "Ajoutez votre borne (V2C Trydan) dans Réglages › Modules : Breezone la trouve sur le réseau.":
     "Añada su cargador (V2C Trydan) en Ajustes › Módulos: Breezone lo encuentra en la red.",
@@ -944,6 +943,35 @@ const es: Record<string, string> = {
   "Énergie consommée": "Energía consumida",
   Année: "Año",
   "Exporter CSV": "Exportar CSV",
+  Automatismes: "Automatismos",
+  Serveur: "Servidor",
+  "comptée par « {name} »": "contada por «{name}»",
+  "comptée d'office": "contada por defecto",
+  "Production de": "Producción de",
+  "Une autre production": "Otra producción",
+  "Production de {name}": "Producción de {name}",
+  "Production solaire, comptée par « {name} »":
+    "Producción solar, contada por «{name}»",
+  "Production et consommation toutes les 15 minutes":
+    "Producción y consumo cada 15 minutos",
+  Injectée: "Inyectada",
+  "30 derniers jours": "Últimos 30 días",
+  "{kwh} produits · autoconsommés ou injectés":
+    "{kwh} producidos · autoconsumidos o inyectados",
+  "{kwh} au total": "{kwh} en total",
+  "Aucun onduleur solaire": "Ningún inversor solar",
+  "Ajoutez la clé Wi-Fi de vos micro-onduleurs (Hoymiles) dans Réglages › Modules : Breezone la trouve sur le réseau.":
+    "Añada la llave Wi-Fi de sus microinversores (Hoymiles) en Ajustes › Módulos: Breezone la encuentra en la red.",
+  "rendue au réseau aujourd'hui": "devuelta a la red hoy",
+  "{n} micro-onduleur": "{n} microinversor",
+  "{n} micro-onduleurs": "{n} microinversores",
+  "toujours comptée": "siempre contada",
+  "non comptée : « {name} » mesure déjà la production":
+    "no contada: «{name}» ya mide la producción",
+  Automatique: "Automático",
+  "Toujours compter": "Contar siempre",
+  "Non comptée : « {name} » mesure déjà la production":
+    "No contada: «{name}» ya mide la producción",
 }
 
 export default es
