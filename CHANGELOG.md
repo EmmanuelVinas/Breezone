@@ -6,6 +6,21 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- HomeKit controller: Breezone pairs with a HomeKit accessory or bridge (a Legrand Home + Control
+  gateway, a VELUX gateway…) with its 8-digit code, then reads and drives it on the local network
+  through encrypted sessions, without Apple Home or any account. The scanner finds the accessories
+  (mDNS, asked to the group and to each address), « Ajouter un module » pairs them. Shutters, windows
+  and doors are `cover.position` devices (new trait: opening, target, movement; open to, stop),
+  outlets, switches and lights `switch.relay`. Pairing changes nothing else on the accessory;
+  removing the module removes Breezone's own pairing, and only it.
+- A module whose address changed is found again: each source keeps the identity of its hardware
+  (Shelly id, Trydan id, Hoymiles serial number), learnt at its first reading when it was added by its
+  address. Unreachable for 3 minutes, it is looked for on the network by this identity (at most every
+  15 minutes), and its address follows; the move is in the activity. « Rechercher » in Settings ›
+  Modules does it at once (`/api/sources/{id}/locate`).
+
 ## [0.11.0-beta.3] - 2026-11-14
 
 ### Added

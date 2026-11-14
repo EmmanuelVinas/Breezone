@@ -46,6 +46,9 @@ ed25519-dalek = "3"
 # Self-update: release archives (.tar.gz).
 tar = "0.4"
 flate2 = "1"
+hkdf = "0.13"
+num-bigint = "0.4"
+x25519-dalek = { version = "3.0.0", features = ["static_secrets"] }
 
 [profile.release]
 opt-level = "z"

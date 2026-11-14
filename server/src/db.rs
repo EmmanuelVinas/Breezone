@@ -1315,6 +1315,8 @@ pub struct Source {
     pub config: String,
     pub enabled: bool,
     pub created_at: i64,
+    /// Encrypted with the server key (a HomeKit pairing); never sent by the API.
+    pub secret: Option<String>,
 }
 
 pub async fn list_sources(db: &Db) -> sqlx::Result<Vec<Source>> {
@@ -1338,6 +1340,11 @@ pub async fn insert_source(db: &Db, driver: &str, name: &str, config: &str) -> s
 
 pub async fn update_source(db: &Db, id: i64, name: &str, config: &str, enabled: bool) -> sqlx::Result<bool> {
     Ok(sqlx::query("UPDATE sources SET name = ?, config = ?, enabled = ? WHERE id = ?").bind(name).bind(config).bind(enabled).bind(id).execute(db).await?.rows_affected() > 0)
+}
+
+pub async fn set_source_secret(db: &Db, id: i64, secret: Option<&str>) -> sqlx::Result<()> {
+    sqlx::query("UPDATE sources SET secret = ? WHERE id = ?").bind(secret).bind(id).execute(db).await?;
+    Ok(())
 }
 
 pub async fn delete_source(db: &Db, id: i64) -> sqlx::Result<bool> {

@@ -184,6 +184,7 @@ impl Driver for Trydan {
             Ok(Described {
                 model,
                 firmware: found.firmware,
+                identity: (!found.id.is_empty()).then(|| found.id.clone()),
                 devices: vec![DeviceInfo {
                     reference: REFERENCE.into(),
                     kind: "ev.charger".into(),

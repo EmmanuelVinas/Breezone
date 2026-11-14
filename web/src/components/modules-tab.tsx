@@ -2,7 +2,9 @@ import { useEffect, useState, type ReactNode } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   AirVent,
+  Blinds,
   Home,
+  Link2,
   Loader2,
   PlugZap,
   Plus,
@@ -148,6 +150,18 @@ function DeviceRow({
       : "none"
   const s = device.state ?? {}
   const values = [
+    typeof s.position === "number"
+      ? s.position === 0
+        ? t("fermé")
+        : s.position === 100
+          ? t("ouvert")
+          : t("ouvert à {n} %", { n: s.position })
+      : null,
+    s.moving === "opening"
+      ? t("s'ouvre")
+      : s.moving === "closing"
+        ? t("se ferme")
+        : null,
     typeof s.status === "string"
       ? (CHARGER_STATUS[s.status] ?? s.status)
       : null,
@@ -355,6 +369,23 @@ const DRIVER: Record<
       "L'API locale de la Trydan n'a pas de mot de passe : tout appareil du réseau local peut la piloter. Réservez-lui une adresse IP fixe (bail DHCP) ; si elle change, « Rechercher » retrouve la borne."
     ),
   },
+  homekit: {
+    icon: Blinds,
+    tone: "bg-primary/15 text-primary",
+    connection: t(
+      "HomeKit en local : appairé avec le code de l'accessoire, sans Apple Maison ni compte"
+    ),
+    every: t("toutes les 10 s"),
+    reads: t(
+      "position et mouvement des volets et fenêtres, état des prises, interrupteurs et lumières"
+    ),
+    writes: t(
+      "ouverture et arrêt des volets, marche et arrêt des prises et lumières"
+    ),
+    note: t(
+      "Retirer ce module supprime l'appairage de Breezone sur l'accessoire, et rien d'autre : ce que l'application du fabricant a configuré ne change pas."
+    ),
+  },
   hoymiles: {
     icon: Sun,
     tone: "bg-warning/15 text-warning",
@@ -515,6 +546,28 @@ function SourceDetail({
     },
     onError: (e) => toast.error(errorText(e)),
   })
+  const known = typeof source.config.device_id === "string"
+  const locate = useMutation({
+    mutationFn: () => api.locateSource(source.id),
+    onSuccess: (s) => {
+      qc.invalidateQueries({ queryKey: ["sources"] })
+      qc.invalidateQueries({ queryKey: ["devices"] })
+      if (s.moved)
+        toast.success(
+          t("« {name} » retrouvé à {host}", {
+            name: s.name,
+            host: String(s.config.host),
+          })
+        )
+      else if (s.status.state === "online")
+        toast.success(
+          t("« {name} » répond à la même adresse", { name: s.name })
+        )
+      else
+        toast.error(t("« {name} » introuvable sur le réseau", { name: s.name }))
+    },
+    onError: (e) => toast.error(errorText(e)),
+  })
   const remove = useMutation({
     mutationFn: () => api.deleteSource(source.id),
     onSuccess: () => {
@@ -573,8 +626,17 @@ function SourceDetail({
               <span className="tabular min-w-40 flex-1 rounded-2xl bg-muted/60 px-3 py-2 font-mono text-sm text-primary">
                 {host || "–"}
               </span>
-              <Button variant="outline" onClick={onSearch}>
-                <Search /> {t("Rechercher")}
+              <Button
+                variant="outline"
+                disabled={locate.isPending}
+                onClick={() => (known ? locate.mutate() : onSearch())}
+              >
+                {locate.isPending ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <Search />
+                )}
+                {t("Rechercher")}
               </Button>
               <Button
                 variant="outline"
@@ -730,17 +792,52 @@ function AddModuleDialog({
     onError: (e) => toast.error(errorText(e)),
   })
   const products = scan.data?.products ?? []
+  // A HomeKit accessory being paired, and the code typed.
+  const [pairing, setPairing] = useState<FoundProduct | null>(null)
+  const [code, setCode] = useState("")
+  const pair = useMutation({
+    mutationFn: (p: FoundProduct) =>
+      api.pairHomekit({
+        host: p.host,
+        name: p.model,
+        code,
+        flags: p.flags,
+      }),
+    onSuccess: (s) => {
+      toast.success(t("« {name} » appairé", { name: s.name }))
+      qc.invalidateQueries({ queryKey: ["sources"] })
+      qc.invalidateQueries({ queryKey: ["devices"] })
+      setPairing(null)
+      onClose()
+    },
+    onError: (e) => toast.error(errorText(e)),
+  })
 
   const action = (p: FoundProduct) => {
     if (p.added) return <Badge variant="secondary">{t("Déjà ajouté")}</Badge>
     if (p.brand === "airzone")
       return (
         <span className="text-xs text-muted-foreground">
-          {t("Onglet Installations")}
+          {t("Module Airzone")}
         </span>
       )
+    if (p.brand === "homekit" && !p.supported)
+      return <Badge variant="outline">{t("Appairé ailleurs")}</Badge>
     if (!p.supported)
       return <Badge variant="outline">{t("Non pris en charge")}</Badge>
+    if (p.brand === "homekit")
+      return (
+        <Button
+          size="sm"
+          variant={pairing?.host === p.host ? "secondary" : "default"}
+          onClick={() => {
+            setPairing(p)
+            setCode("")
+          }}
+        >
+          <Link2 /> {t("Appairer")}
+        </Button>
+      )
     return (
       <Button
         size="sm"
@@ -766,7 +863,7 @@ function AddModuleDialog({
           <DialogTitle>{t("Ajouter un module")}</DialogTitle>
           <DialogDescription>
             {t(
-              "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan et clés Wi-Fi Hoymiles."
+              "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan, clés Wi-Fi Hoymiles et accessoires HomeKit (Legrand, VELUX…)."
             )}
           </DialogDescription>
         </DialogHeader>
@@ -814,6 +911,58 @@ function AddModuleDialog({
               {action(p)}
             </div>
           ))}
+          {pairing && (
+            <form
+              className="grid gap-3 rounded-2xl border border-primary/40 bg-primary/5 p-3"
+              onSubmit={(e) => {
+                e.preventDefault()
+                pair.mutate(pairing)
+              }}
+            >
+              <div className="text-sm font-medium">
+                {t("Appairer « {name} » avec Breezone", {
+                  name: pairing.model,
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  "Saisissez le code HomeKit à 8 chiffres, imprimé sur l'appareil ou sa notice. Rien ne change dans l'application du fabricant : vos équipements restent configurés comme aujourd'hui."
+                )}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Input
+                  value={code}
+                  autoFocus
+                  inputMode="numeric"
+                  autoComplete="off"
+                  placeholder="123-45-678"
+                  aria-label={t("Code HomeKit")}
+                  className="w-40 font-mono"
+                  onChange={(e) => setCode(e.target.value)}
+                />
+                <Button
+                  type="submit"
+                  disabled={
+                    pair.isPending || code.replace(/\D/g, "").length !== 8
+                  }
+                >
+                  {pair.isPending ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <Link2 />
+                  )}
+                  {t("Appairer")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setPairing(null)}
+                >
+                  {t("Annuler")}
+                </Button>
+              </div>
+            </form>
+          )}
         </div>
         <div className="grid gap-2 border-t pt-4">
           <Label htmlFor="module-host">{t("Ou par son adresse")}</Label>

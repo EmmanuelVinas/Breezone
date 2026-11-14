@@ -42,3 +42,31 @@ async fn real_shelly() {
         println!("  {} [{}] {:?}", d.info.name, d.info.traits.join(", "), d.state);
     }
 }
+
+/// The HomeKit accessories announced on this network (`cargo test --test scan_network -- --ignored homekit`).
+#[tokio::test]
+#[ignore = "real network"]
+async fn homekit_accessories_are_announced() {
+    let found = breezone_server::homekit::discovery::browse(std::time::Duration::from_secs(2), &[]).await;
+    for a in &found {
+        println!("{a:?}");
+    }
+    assert!(!found.is_empty(), "no HomeKit accessory announced");
+}
+
+/// The bare mDNS question with std sockets, to see what this machine lets through.
+#[test]
+#[ignore = "real network"]
+fn bare_mdns_question() {
+    let q: Vec<u8> = [&[0u8, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0][..], b"\x04_hap\x04_tcp\x05local\x00", &[0, 12, 0, 1]].concat();
+    let ip = breezone_server::discovery::local_ipv4().unwrap();
+    let s = std::net::UdpSocket::bind((ip, 0)).unwrap();
+    println!("bound {:?}", s.local_addr());
+    println!("sent {:?}", s.send_to(&q, "224.0.0.251:5353"));
+    println!("sent unicast {:?}", s.send_to(&q, "192.168.86.25:5353"));
+    s.set_read_timeout(Some(std::time::Duration::from_millis(500))).unwrap();
+    let mut buf = [0u8; 9000];
+    for _ in 0..4 {
+        println!("recv {:?}", s.recv_from(&mut buf).map(|(n, a)| (n, a)));
+    }
+}

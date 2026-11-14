@@ -466,7 +466,7 @@ impl Driver for Hoymiles {
                 }
             }
             let model = format!("{} ({})", found.model, found.note());
-            Ok(Described { model, firmware: found.firmware, devices })
+            Ok(Described { model, firmware: found.firmware, devices, identity: Some(found.serial) })
         })
     }
 

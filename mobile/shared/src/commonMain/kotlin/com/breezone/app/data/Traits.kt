@@ -51,6 +51,31 @@ data class ClimateZoneSet(
     val sleep: Long? = null,
 )
 
+@Serializable
+enum class CoverPositionMoving {
+    @SerialName("opening") Opening,
+    @SerialName("closing") Closing,
+    @SerialName("stopped") Stopped,
+}
+
+/** Shutter, blind or window (`cover.position@1`): state. */
+@Serializable
+data class CoverPositionState(
+    val position: Long = 0,
+    val target: Long? = null,
+    val moving: CoverPositionMoving? = null,
+)
+
+/** Shutter, blind or window (`cover.position@1`): action `set`. */
+@Serializable
+data class CoverPositionSet(
+    val position: Long? = null,
+)
+
+/** Shutter, blind or window (`cover.position@1`): action `stop`, without parameters. */
+@Serializable
+class CoverPositionStop
+
 /** Energy meter (`energy.meter@1`): state. */
 @Serializable
 data class EnergyMeterState(
@@ -157,4 +182,4 @@ data class SwitchRelaySet(
 )
 
 /** Traits described by this version (`trait@version`). */
-val TRAITS = listOf("climate.zone@1", "energy.meter@1", "ev.charger@1", "solar.inverter@1", "solar.panel@1", "energy.power@1", "switch.relay@1")
+val TRAITS = listOf("climate.zone@1", "cover.position@1", "energy.meter@1", "ev.charger@1", "solar.inverter@1", "solar.panel@1", "energy.power@1", "switch.relay@1")

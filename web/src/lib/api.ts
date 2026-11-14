@@ -778,7 +778,7 @@ export type SourceInput = {
 
 /** A supported product found on the network. */
 export type FoundProduct = {
-  brand: "airzone" | "shelly" | "v2c" | "hoymiles"
+  brand: "airzone" | "shelly" | "v2c" | "hoymiles" | "homekit"
   driver: string
   model: string
   host: string
@@ -788,6 +788,8 @@ export type FoundProduct = {
   firmware: string | null
   note: string | null
   supported: boolean
+  /** HomeKit feature flags (pairing). */
+  flags: number
   added: boolean
 }
 
@@ -846,7 +848,12 @@ export type DeviceHistory = {
 export const api = {
   devices: () => request<DeviceView[]>("GET", "/api/devices"),
   /** The history of a device over a period (timestamps), `bucket` seconds per point. */
-  deviceHistoryBetween: (id: number, from: number, until: number, bucket: number) =>
+  deviceHistoryBetween: (
+    id: number,
+    from: number,
+    until: number,
+    bucket: number
+  ) =>
     request<DeviceHistory>(
       "GET",
       `/api/devices/${id}/history?from=${from}&until=${until}&bucket=${bucket}`
@@ -882,6 +889,19 @@ export const api = {
   updateSource: (id: number, input: SourceInput) =>
     request<SourceView>("PUT", `/api/sources/${id}`, input),
   deleteSource: (id: number) => request<void>("DELETE", `/api/sources/${id}`),
+  /** Pairs Breezone with a HomeKit accessory (its 8-digit code), then adds it as a module. */
+  pairHomekit: (input: {
+    host: string
+    name: string
+    code: string
+    flags: number
+  }) => request<SourceView>("POST", "/api/homekit/pair", input),
+  /** Looks for the source's hardware on the network, and follows it if its address changed. */
+  locateSource: (id: number) =>
+    request<SourceView & { moved: boolean }>(
+      "POST",
+      `/api/sources/${id}/locate`
+    ),
   refreshSource: (id: number) =>
     request<SourceView>("POST", `/api/sources/${id}/refresh`),
   scanProducts: (subnet?: string) =>

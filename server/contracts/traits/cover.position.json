@@ -1,0 +1,24 @@
+{
+  "trait": "cover.position",
+  "version": 1,
+  "label": { "fr": "Volet, store ou fenêtre", "en": "Shutter, blind or window", "es": "Persiana, toldo o ventana" },
+  "state": [
+    { "name": "position", "type": "integer", "unit": "%", "min": 0, "max": 100, "label": { "fr": "Ouverture", "en": "Opening", "es": "Apertura" } },
+    { "name": "target", "type": "integer", "unit": "%", "min": 0, "max": 100, "optional": true, "label": { "fr": "Ouverture demandée", "en": "Opening asked", "es": "Apertura pedida" } },
+    { "name": "moving", "type": "enum", "values": ["opening", "closing", "stopped"], "optional": true, "label": { "fr": "Mouvement", "en": "Moving", "es": "Movimiento" } }
+  ],
+  "actions": [
+    {
+      "name": "set",
+      "label": { "fr": "Ouvrir à", "en": "Open to", "es": "Abrir a" },
+      "params": [
+        { "name": "position", "type": "integer", "unit": "%", "min": 0, "max": 100, "label": { "fr": "Ouverture", "en": "Opening", "es": "Apertura" } }
+      ]
+    },
+    {
+      "name": "stop",
+      "label": { "fr": "Arrêter", "en": "Stop", "es": "Detener" },
+      "params": []
+    }
+  ]
+}

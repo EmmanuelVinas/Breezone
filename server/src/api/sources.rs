@@ -68,7 +68,7 @@ fn enabled() -> bool {
 
 /// Checks the driver and its configuration; returns the trimmed name and the configuration text.
 fn checked(input: &SourceInput) -> ApiResult<(String, String)> {
-    crate::drivers::create(&input.driver, &input.config).map_err(ApiError::bad_request)?;
+    crate::drivers::create(&input.driver, &input.config, None).map_err(ApiError::bad_request)?;
     let name: String = input.name.trim().chars().take(60).collect();
     if name.is_empty() {
         return Err(ApiError::bad_request(crate::text!("le nom est vide", "the name is empty", "el nombre está vacío")));
@@ -100,8 +100,19 @@ pub async fn update(State(state): State<AppState>, _admin: AdminUser, Path(id): 
     Ok(Json(polled(&state, id).await?))
 }
 
-/// Removes the source and its devices.
+/// Removes the source and its devices. For a HomeKit accessory, Breezone first removes its own
+/// pairing from it (and nothing else), so that it can be paired again.
 pub async fn delete(State(state): State<AppState>, _admin: AdminUser, Path(id): Path<i64>) -> ApiResult<StatusCode> {
+    if let Some(source) = db::source_by_id(&state.db, id).await? {
+        let pairing = source.secret.as_deref().and_then(|s| crate::cloud::decrypt(&state.cloud_key, s)).and_then(|s| serde_json::from_str::<crate::homekit::Pairing>(&s).ok());
+        let host: Value = serde_json::from_str(&source.config).unwrap_or(Value::Null);
+        if let (Some(pairing), Some(host)) = (pairing, host["host"].as_str()) {
+            let removed = tokio::time::timeout(std::time::Duration::from_secs(15), crate::homekit::remove_own_pairing(host, &pairing)).await;
+            if !matches!(removed, Ok(Ok(()))) {
+                tracing::warn!("cannot remove Breezone's pairing from {host}: {removed:?}; the accessory may still list it");
+            }
+        }
+    }
     if !db::delete_source(&state.db, id).await? {
         return Err(ApiError::not_found("source not found"));
     }
@@ -109,10 +120,72 @@ pub async fn delete(State(state): State<AppState>, _admin: AdminUser, Path(id): 
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[derive(Deserialize)]
+pub struct PairInput {
+    /// "ip:port", as the scanner found it.
+    pub host: String,
+    pub name: String,
+    /// The accessory's HomeKit setup code (8 digits).
+    pub code: String,
+    /// Feature flags it announces (1: Apple authentication).
+    #[serde(default)]
+    pub flags: u32,
+}
+
+/// Pairs Breezone with a HomeKit accessory with its setup code, then adds it as a source. Nothing
+/// else changes on the accessory: what its own app set up stays as it is.
+pub async fn pair_homekit(State(state): State<AppState>, _admin: AdminUser, Json(input): Json<PairInput>) -> ApiResult<(StatusCode, Json<SourceView>)> {
+    let code = crate::homekit::setup_code(&input.code).ok_or_else(|| {
+        ApiError::bad_request(crate::text!(
+            "Le code HomeKit a 8 chiffres (par exemple 123-45-678).",
+            "The HomeKit code has 8 digits (for example 123-45-678).",
+            "El código HomeKit tiene 8 cifras (por ejemplo 123-45-678)."
+        ))
+    })?;
+    let host = input.host.trim();
+    if host.is_empty() || !host.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | ':')) {
+        return Err(ApiError::bad_request("invalid accessory address"));
+    }
+    let name: String = input.name.trim().chars().take(60).collect();
+    let pairing = crate::homekit::pair_setup(host, &code, input.flags & 1 == 1).await.map_err(|e| ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, e.explain()))?;
+    let config = serde_json::json!({"host": host, "device_id": pairing.accessory_id}).to_string();
+    let secret = crate::cloud::encrypt(&state.cloud_key, &serde_json::to_string(&pairing).unwrap_or_default());
+    let stored = async {
+        let id = db::insert_source(&state.db, "homekit", if name.is_empty() { "HomeKit" } else { &name }, &config).await?;
+        db::set_source_secret(&state.db, id, Some(&secret)).await?;
+        Ok::<i64, sqlx::Error>(id)
+    }
+    .await;
+    match stored {
+        Ok(id) => Ok((StatusCode::CREATED, Json(polled(&state, id).await?))),
+        Err(e) => {
+            // Paired but not kept: the accessory forgets Breezone, to be paired again.
+            let _ = crate::homekit::remove_own_pairing(host, &pairing).await;
+            Err(e.into())
+        }
+    }
+}
+
 /// Reads the source now (« Tester » / « Actualiser »).
 pub async fn refresh(State(state): State<AppState>, _admin: AdminUser, Path(id): Path<i64>) -> ApiResult<Json<SourceView>> {
     db::source_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("source not found"))?;
     Ok(Json(polled(&state, id).await?))
+}
+
+#[derive(Serialize)]
+pub struct LocateView {
+    #[serde(flatten)]
+    pub source: SourceView,
+    /// Found at another address, now used.
+    pub moved: bool,
+}
+
+/// Looks for the source's hardware on the network by its identity (« Rechercher »), and follows it
+/// if its address changed.
+pub async fn locate(State(state): State<AppState>, _admin: AdminUser, Path(id): Path<i64>) -> ApiResult<Json<LocateView>> {
+    db::source_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("source not found"))?;
+    let moved = state.drivers.locate(id, state.cfg.scan_subnet.as_deref(), state.cfg.scan_port).await.map_err(ApiError::bad_request)?;
+    Ok(Json(LocateView { source: polled(&state, id).await?, moved }))
 }
 
 #[derive(Deserialize, Default)]

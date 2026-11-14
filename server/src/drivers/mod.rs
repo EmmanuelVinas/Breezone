@@ -6,6 +6,7 @@
 //! whose zones are still read by the hub for now (they are already devices, and their actions go
 //! through the same generic route). The future WASM modules (ADR 0012) will be drivers too.
 
+pub mod homekit;
 pub mod hoymiles;
 pub mod shelly;
 pub mod trydan;
@@ -54,6 +55,9 @@ pub struct Described {
     pub model: String,
     pub firmware: Option<String>,
     pub devices: Vec<DeviceInfo>,
+    /// What tells this hardware apart (Shelly id, charger id, serial number): kept in the source's
+    /// configuration (`device_id`), so that it is found again if its address changes.
+    pub identity: Option<String>,
 }
 
 /// Values of the traits of one device.
@@ -99,15 +103,16 @@ pub struct DriverInfo {
 }
 
 pub fn available() -> Vec<DriverInfo> {
-    vec![shelly::info(), trydan::info(), hoymiles::info()]
+    vec![shelly::info(), trydan::info(), hoymiles::info(), homekit::info()]
 }
 
-/// The driver of a source, from its configuration.
-pub fn create(driver: &str, config: &Value) -> Result<Arc<dyn Driver>, String> {
+/// The driver of a source, from its configuration and its secret (decrypted).
+pub fn create(driver: &str, config: &Value, secret: Option<&str>) -> Result<Arc<dyn Driver>, String> {
     match driver {
         "shelly" => Ok(Arc::new(shelly::Shelly::new(config)?)),
         "trydan" => Ok(Arc::new(trydan::Trydan::new(config)?)),
         "hoymiles" => Ok(Arc::new(hoymiles::Hoymiles::new(config)?)),
+        "homekit" => Ok(Arc::new(homekit::HomeKit::new(config, secret)?)),
         other => Err(format!("unknown driver: {other}")),
     }
 }
@@ -146,6 +151,12 @@ struct Pending {
     last: f64,
 }
 
+/// The identity of the hardware a source was configured with (`device_id`).
+fn config_identity(source: &db::Source) -> Option<String> {
+    let config: Value = serde_json::from_str(&source.config).ok()?;
+    config["device_id"].as_str().map(str::trim).filter(|s| !s.is_empty()).map(str::to_string)
+}
+
 /// A number of the state worth a history (a switch counts as 0 or 1: its mean is the time on).
 fn number(v: &Value) -> Option<f64> {
     v.as_f64().or_else(|| v.as_bool().map(|b| if b { 1.0 } else { 0.0 }))
@@ -166,10 +177,20 @@ const MISSED_READINGS_GRACE: i64 = 60;
 
 pub struct Runtime {
     db: Db,
+    key: [u8; 32],
     sources: RwLock<HashMap<i64, Running>>,
     /// Charges to stop once they have added some energy, by source and device.
     goals: RwLock<HashMap<(i64, String), Goal>>,
+    /// When each lost source was last looked for on the network.
+    searched: RwLock<HashMap<i64, Instant>>,
 }
+
+/// A source unreachable this long (seconds) is looked for on the network by its identity.
+const RELOCATE_AFTER: i64 = 180;
+/// At most one search per source in this time.
+const RELOCATE_EVERY: Duration = Duration::from_secs(15 * 60);
+/// How often the lost sources are checked.
+const RELOCATE_CHECK: Duration = Duration::from_secs(60);
 
 /// A charge started with an energy to add (`ev.charger` `start`): Breezone stops it once added.
 /// Kept in memory: a restart forgets it, and the charge then goes on.
@@ -189,8 +210,9 @@ impl Goal {
 }
 
 impl Runtime {
-    pub fn new(db: Db) -> Self {
-        Self { db, sources: RwLock::new(HashMap::new()), goals: RwLock::new(HashMap::new()) }
+    /// `key`: decrypts the secrets of the sources (the server key).
+    pub fn new(db: Db, key: [u8; 32]) -> Self {
+        Self { db, key, sources: RwLock::new(HashMap::new()), goals: RwLock::new(HashMap::new()), searched: RwLock::new(HashMap::new()) }
     }
 
     /// Takes the configured sources into account (at start, and after each change).
@@ -199,7 +221,7 @@ impl Runtime {
         let mut sources = self.sources.write().await;
         let mut next = HashMap::new();
         for source in rows {
-            let previous = sources.remove(&source.id).filter(|r| r.source.driver == source.driver && r.source.config == source.config);
+            let previous = sources.remove(&source.id).filter(|r| r.source.driver == source.driver && r.source.config == source.config && r.source.secret == source.secret);
             let running = match previous {
                 Some(mut r) => {
                     r.source = source;
@@ -207,7 +229,8 @@ impl Runtime {
                 }
                 None => {
                     let config: Value = serde_json::from_str(&source.config).unwrap_or(Value::Null);
-                    let (driver, error) = match create(&source.driver, &config) {
+                    let secret = source.secret.as_deref().and_then(|s| crate::cloud::decrypt(&self.key, s));
+                    let (driver, error) = match create(&source.driver, &config, secret.as_deref()) {
                         Ok(d) => (Some(d), None),
                         Err(e) => (None, Some(e)),
                     };
@@ -243,12 +266,14 @@ impl Runtime {
             _ => driver.read().await,
         };
         let mut new_devices = vec![];
+        let mut identity: Option<(db::Source, String)> = None;
         {
             let mut sources = self.sources.write().await;
             let Some(r) = sources.get_mut(&id) else { return };
             if let Some(Ok(d)) = described {
                 r.status.model = Some(d.model);
                 r.status.firmware = d.firmware;
+                identity = d.identity.filter(|_| config_identity(&r.source).is_none()).map(|i| (r.source.clone(), i));
                 if r.devices != d.devices {
                     new_devices = d.devices.clone();
                     r.devices = d.devices;
@@ -292,6 +317,22 @@ impl Runtime {
                 }
             }
         }
+        // A source added by its address learns the identity of its hardware.
+        if let Some((source, identity)) = identity {
+            let mut config: Value = serde_json::from_str(&source.config).unwrap_or_else(|_| Value::Object(Map::new()));
+            if let Some(o) = config.as_object_mut() {
+                o.insert("device_id".into(), Value::from(identity));
+            }
+            let text = config.to_string();
+            match db::update_source(&self.db, id, &source.name, &text, source.enabled).await {
+                Ok(_) => {
+                    if let Some(r) = self.sources.write().await.get_mut(&id) {
+                        r.source.config = text;
+                    }
+                }
+                Err(e) => tracing::error!("cannot keep the identity of source {id}: {e}"),
+            }
+        }
         self.check_goals(id).await;
     }
 
@@ -314,16 +355,106 @@ impl Runtime {
     }
 
     /// Reads the sources every `read_every`, and writes their history every `record_every`.
-    pub async fn run(self: Arc<Self>, read_every: Duration, record_every: Duration) {
+    /// Looks for the lost sources on `scan`: the subnet configured (else the one saved or found).
+    pub async fn run(self: Arc<Self>, read_every: Duration, record_every: Duration, scan: Option<String>, airzone_port: u16) {
         let mut recorded = Instant::now();
+        let mut checked = Instant::now();
         loop {
             self.poll_all().await;
             if recorded.elapsed() >= record_every {
                 recorded = Instant::now();
                 self.record().await;
             }
+            if checked.elapsed() >= RELOCATE_CHECK {
+                checked = Instant::now();
+                let me = self.clone();
+                let scan = scan.clone();
+                // A network scan takes a few seconds: the readings go on meanwhile.
+                tokio::spawn(async move { me.relocate_lost(scan.as_deref(), airzone_port).await });
+            }
             tokio::time::sleep(read_every).await;
         }
+    }
+
+    /// The sources unreachable for a while that know the identity of their hardware, and were not
+    /// looked for lately.
+    async fn lost(&self) -> Vec<i64> {
+        let now = db::now();
+        let searched = self.searched.read().await;
+        self.sources
+            .read()
+            .await
+            .values()
+            .filter(|r| r.source.enabled && r.driver.is_some() && matches!(r.status.state, "offline" | "error"))
+            .filter(|r| config_identity(&r.source).is_some())
+            .filter(|r| now - r.status.last_seen.unwrap_or(r.source.created_at) >= RELOCATE_AFTER)
+            .filter(|r| searched.get(&r.source.id).is_none_or(|t| t.elapsed() >= RELOCATE_EVERY))
+            .map(|r| r.source.id)
+            .collect()
+    }
+
+    async fn relocate_lost(&self, configured: Option<&str>, airzone_port: u16) {
+        let lost = self.lost().await;
+        if lost.is_empty() {
+            return;
+        }
+        {
+            let mut searched = self.searched.write().await;
+            for id in &lost {
+                searched.insert(*id, Instant::now());
+            }
+        }
+        let Some(subnet) = crate::discovery::global_subnet(&self.db, configured).await else { return };
+        match crate::discovery::scan_products(&subnet, airzone_port).await {
+            Ok(products) => {
+                self.relocate(&products, &lost).await;
+            }
+            Err(e) => tracing::warn!("cannot look for the lost sources on {subnet}: {e}"),
+        }
+    }
+
+    /// Looks for one source on the network now (« Rechercher »): `true` if it moved.
+    pub async fn locate(&self, id: i64, configured: Option<&str>, airzone_port: u16) -> Result<bool, String> {
+        let subnet = crate::discovery::global_subnet(&self.db, configured).await.ok_or_else(|| "no network to scan: set it in Settings".to_string())?;
+        let products = crate::discovery::scan_products(&subnet, airzone_port).await?;
+        self.searched.write().await.insert(id, Instant::now());
+        Ok(!self.relocate(&products, &[id]).await.is_empty())
+    }
+
+    /// Gives the sources in `ids` the new address of their hardware, when the network has it
+    /// elsewhere; returns the sources moved.
+    pub async fn relocate(&self, products: &[crate::discovery::Product], ids: &[i64]) -> Vec<i64> {
+        let sources: Vec<db::Source> = self.sources.read().await.values().filter(|r| ids.contains(&r.source.id)).map(|r| r.source.clone()).collect();
+        let mut moved = vec![];
+        for source in sources {
+            let Some(identity) = config_identity(&source) else { continue };
+            let mut config: Value = serde_json::from_str(&source.config).unwrap_or(Value::Null);
+            let old = config["host"].as_str().unwrap_or_default().to_string();
+            let Some(found) = products.iter().find(|p| p.driver == source.driver && p.device_id.as_deref() == Some(identity.as_str()) && p.host != old) else {
+                continue;
+            };
+            config["host"] = Value::from(found.host.clone());
+            if let Err(e) = db::update_source(&self.db, source.id, &source.name, &config.to_string(), source.enabled).await {
+                tracing::error!("cannot move source {}: {e}", source.id);
+                continue;
+            }
+            let message =
+                crate::text!("« {0} » a changé d'adresse : {1} → {2}", "“{0}” changed address: {1} → {2}", "«{0}» cambió de dirección: {1} → {2}", source.name, old, found.host);
+            if let Err(e) = db::insert_event(&self.db, "connection", "info", None, None, &message, None).await {
+                tracing::error!("cannot record event: {e}");
+            }
+            tracing::info!("source {} ({}) moved from {old} to {}", source.id, source.name, found.host);
+            moved.push(source.id);
+        }
+        if !moved.is_empty() {
+            if let Err(e) = self.reload().await {
+                tracing::error!("cannot reload the sources: {e}");
+            }
+            for id in &moved {
+                self.poll(*id).await;
+            }
+        }
+        moved
     }
 
     /// Writes a history point of every device read since the last one: the mean of each number,

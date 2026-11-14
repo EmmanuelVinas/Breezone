@@ -202,8 +202,17 @@ Une **source** est un matériel lu par un **pilote** (ADR 0013) : par exemple un
 | POST 👑 | `/api/sources` | `{driver, name, config, enabled?}` : configuration vérifiée, source lue aussitôt → 201 |
 | PUT 👑 · DELETE 👑 | `/api/sources/{id}` | Modifier (le pilote ne change pas) ; supprimer, avec ses appareils |
 | POST 👑 | `/api/sources/{id}/refresh` | Relire maintenant |
+| POST 👑 | `/api/sources/{id}/locate` | Chercher son matériel sur le réseau par son identité (`device_id`) et le suivre s'il a changé d'adresse (« Rechercher ») → la source et `moved` |
+| POST 👑 | `/api/homekit/pair` | `{host, name, code, flags?}` : appaire Breezone à un accessoire HomeKit trouvé par le scanner (`host` « ip:port », `flags` ses indicateurs) avec son code à 8 chiffres, puis l'ajoute comme module → 201 la source ; code incorrect, trop d'essais, déjà appairé ailleurs → 422 avec l'explication |
 
 | POST 👑 | `/api/discovery/products` | `{subnet?}` → `{subnet, duration_ms, products:[{brand, driver, model, host, port, mac, device_id, firmware, note, supported, added}]}` : tous les produits pris en charge du réseau (WebServers Airzone, Shelly…), identifiés jusqu'au modèle, et s'ils sont déjà ajoutés |
+
+Chaque source retient l'identité de son matériel (`device_id` : id du Shelly, `ID` de la Trydan,
+numéro de série de la clé Hoymiles), apprise au premier relevé si elle a été ajoutée par son adresse.
+Une source injoignable depuis plus de 3 minutes est cherchée sur le réseau par cette identité (au plus
+une fois toutes les 15 minutes) : retrouvée ailleurs, son adresse est mise à jour et le changement est
+noté dans le journal d'activité. Le mDNS n'est pas utilisé : sur les réseaux testés, ni le Shelly, ni
+la Trydan, ni la clé Hoymiles n'y répondent.
 
 Le scanner interroge chaque adresse pour toutes les marques à la fois (128 adresses en parallèle,
 environ 3 s pour un /24) : port 3000 pour Airzone, `GET /shelly` sur le port 80 pour Shelly, `GET /RealTimeData` sur le port 80 pour la Trydan, `AppInfoData` sur le port 10081 pour une clé Hoymiles.
@@ -214,6 +223,18 @@ Les modèles sont reconnus par leur application (`Shelly Pro 3EM`, en triphasé 
 3 voies, `Shelly Plus Plug S`…) ; la 1re génération est détectée mais pas encore prise en charge. Composants lus :
 `em:N` (Pro 3EM, `energy.power` + `energy.meter`), `em1:N` (Pro EM), `switch:N` (`switch.relay`,
 avec puissance et énergie s'ils sont mesurés), `pm1:N`. Lecture toutes les 5 s.
+
+Pilote `homekit` (accessoires et ponts HomeKit en IP : passerelle Legrand Home + Control, VELUX App
+Control…) : Breezone est un contrôleur HomeKit. Il s'appaire avec le code de l'accessoire (SRP-6a,
+Ed25519), puis lit et pilote l'accessoire en local, par des sessions chiffrées (X25519,
+ChaCha20-Poly1305), sans Apple Maison ni compte. Le scanner trouve les accessoires par mDNS
+(`_hap._tcp`), en posant la question au groupe et à chaque adresse du réseau. `config: {host, device_id}`
+(l'identifiant HomeKit de l'accessoire) ; l'appairage (la clé de Breezone) est le secret de la source,
+chiffré, jamais renvoyé par l'API. Une source HomeKit ne s'ajoute que par `/api/homekit/pair`. Volets,
+fenêtres et portes deviennent des appareils `cover.position@1` (`position` 0 fermé à 100 ouvert,
+`target`, `moving` ; actions `set {position}` et `stop`), prises, interrupteurs et lumières des
+`switch.relay@1`. Lecture toutes les 10 s. Appairer Breezone ne change rien d'autre sur l'accessoire ;
+supprimer la source retire l'appairage de Breezone, et seulement lui.
 
 Pilote `hoymiles` (micro-onduleurs Hoymiles HM, HMS, HMT, par leur clé Wi-Fi DTU : DTU-W100,
 DTU-Lite-S, DTU-WLite, DTU-Pro) : `config: {host, device_id?}` (`device_id` est le numéro de série de la

@@ -277,7 +277,7 @@ impl Driver for Shelly {
                 Some(n) => format!("{} ({n})", found.model),
                 None => found.model.clone(),
             };
-            Ok(Described { model, firmware: found.firmware.clone(), devices: devices_of(&found.model, status) })
+            Ok(Described { model, firmware: found.firmware.clone(), devices: devices_of(&found.model, status), identity: Some(found.id.clone()) })
         })
     }
 

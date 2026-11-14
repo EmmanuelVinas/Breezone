@@ -60,6 +60,7 @@ async fn fake_shelly_counting(relay: Arc<Mutex<bool>>, step: u64) -> u16 {
 struct Server {
     base: String,
     http: reqwest::Client,
+    state: breezone_server::AppState,
 }
 
 impl Server {
@@ -78,10 +79,10 @@ impl Server {
         let state = breezone_server::init_state(cfg).await.unwrap();
         if read {
             use std::time::Duration;
-            tokio::spawn(state.drivers.clone().run(Duration::from_millis(read_every), Duration::from_secs(record_every)));
+            tokio::spawn(state.drivers.clone().run(Duration::from_millis(read_every), Duration::from_secs(record_every), None, 9));
         }
-        let port = serve(breezone_server::app(state)).await;
-        let server = Server { base: format!("http://127.0.0.1:{port}"), http: reqwest::Client::new() };
+        let port = serve(breezone_server::app(state.clone())).await;
+        let server = Server { base: format!("http://127.0.0.1:{port}"), http: reqwest::Client::new(), state };
         let (_, v) = server.call("POST", "/api/setup", None, Some(json!({"username":"admin","password":"motdepasse1"}))).await;
         (server, v["access_token"].as_str().unwrap().to_string())
     }
@@ -128,6 +129,9 @@ async fn a_shelly_source_provides_devices_driven_through_their_traits() {
     assert_eq!(source["status"]["state"], "online", "{source}");
     assert_eq!(source["status"]["model"], "Shelly Pro 3EM (triphasé)");
     assert_eq!(source["devices"], 2);
+    // Added by its address, it learns the identity of its hardware (to find it again if it moves).
+    let (_, sources) = server.call("GET", "/api/sources", t, None).await;
+    assert_eq!(sources[0]["config"]["device_id"], "shellypro3em-a1b2", "{sources}");
 
     // Its devices: a three-phase meter and a relay, with their state.
     let (_, devices) = server.call("GET", "/api/devices", t, None).await;
@@ -518,4 +522,40 @@ async fn a_hoymiles_dtu_gives_its_inverter_and_panels() {
     let (_, sources) = server.call("GET", "/api/sources", t, None).await;
     assert_eq!(sources[0]["status"]["state"], "online");
     assert_eq!(requests.load(Ordering::SeqCst), before);
+}
+
+#[tokio::test]
+async fn a_lost_source_is_found_again_at_its_new_address() {
+    use breezone_server::discovery::Product;
+    let shelly = fake_shelly(Arc::new(Mutex::new(false))).await;
+    let (server, token) = Server::start().await;
+    let t = Some(token.as_str());
+    // Its address changed: nothing answers at the old one any more.
+    let (_, source) =
+        server.call("POST", "/api/sources", t, Some(json!({"driver":"shelly","name":"Tableau","config":{"host":"127.0.0.1:9","device_id":"shellypro3em-a1b2"}}))).await;
+    assert_eq!(source["status"]["state"], "offline", "{source}");
+    let id = source["id"].as_i64().unwrap();
+    let product = |device_id: &str| Product {
+        brand: "shelly",
+        driver: "shelly",
+        model: "Shelly Pro 3EM".into(),
+        host: format!("127.0.0.1:{shelly}"),
+        port: 80,
+        mac: None,
+        device_id: Some(device_id.into()),
+        firmware: None,
+        note: None,
+        supported: true,
+        flags: 0,
+    };
+
+    // Another Shelly on the network is not it.
+    assert!(server.state.drivers.relocate(&[product("shellyplus1pm-ffff")], &[id]).await.is_empty());
+    // The same one, elsewhere: the source moves there and reads it at once.
+    assert_eq!(server.state.drivers.relocate(&[product("shellypro3em-a1b2")], &[id]).await, vec![id]);
+    let (_, sources) = server.call("GET", "/api/sources", t, None).await;
+    assert_eq!(sources[0]["config"]["host"], format!("127.0.0.1:{shelly}"), "{sources}");
+    assert_eq!(sources[0]["status"]["state"], "online", "{sources}");
+    let (_, events) = server.call("GET", "/api/events", t, None).await;
+    assert!(events.to_string().contains("127.0.0.1:9"), "the move is in the activity: {events}");
 }

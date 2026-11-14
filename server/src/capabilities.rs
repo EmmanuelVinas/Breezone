@@ -69,6 +69,7 @@ impl Capabilities {
             protocol: Protocol { current: PROTOCOL, min: PROTOCOL_MIN },
             traits: BTreeMap::from([
                 ("climate.zone".into(), vec![1]),
+                ("cover.position".into(), vec![1]),
                 ("energy.meter".into(), vec![1]),
                 ("energy.power".into(), vec![1]),
                 ("ev.charger".into(), vec![1]),
@@ -107,6 +108,7 @@ impl Capabilities {
                 ModuleInfo { id: "airzone".into(), version: version.to_string(), provides: vec!["climate.zone@1".into()] },
                 ModuleInfo { id: "shelly".into(), version: version.to_string(), provides: vec!["energy.power@1".into(), "energy.meter@1".into(), "switch.relay@1".into()] },
                 ModuleInfo { id: "trydan".into(), version: version.to_string(), provides: vec!["ev.charger@1".into(), "energy.power@1".into()] },
+                ModuleInfo { id: "homekit".into(), version: version.to_string(), provides: vec!["cover.position@1".into(), "switch.relay@1".into()] },
                 ModuleInfo { id: "hoymiles".into(), version: version.to_string(), provides: vec!["energy.power@1".into(), "solar.inverter@1".into(), "solar.panel@1".into()] },
             ],
             caps_rev: String::new(),
@@ -268,11 +270,11 @@ mod tests {
     fn a_newer_peer_shows_what_cannot_be_read_here() {
         let local = Capabilities::local();
         let mut peer = local.clone();
-        peer.traits.insert("cover.position".into(), vec![1]);
+        peer.traits.insert("pool.filtration".into(), vec![1]);
         peer.features.insert("federation.watch".into(), 2);
         let c = local.compatibility(&peer);
         assert_eq!(c.state, "limited");
-        assert!(c.newer.contains(&"cover.position@1".to_string()) && c.newer.contains(&"federation.watch@2".to_string()));
+        assert!(c.newer.contains(&"pool.filtration@1".to_string()) && c.newer.contains(&"federation.watch@2".to_string()));
         assert!(c.missing.is_empty(), "version 2 of a feature includes version 1: {c:?}");
     }
 

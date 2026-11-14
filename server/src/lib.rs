@@ -16,6 +16,7 @@ pub mod drivers;
 pub mod energy;
 pub mod error;
 pub mod federation;
+pub mod homekit;
 pub mod hub;
 pub mod i18n;
 pub mod mock;
@@ -65,7 +66,7 @@ pub async fn init_state(cfg: Config) -> anyhow::Result<AppState> {
     let hub = Hub::new(db.clone(), cfg.clone(), cloud_key.clone());
     let updater = Arc::new(update::Updater::new(cfg.data_dir.clone(), cfg.self_update));
     updater.set_beta(db::get_setting(&db, update::CHANNEL_SETTING).await?.as_deref() == Some("beta"));
-    let drivers = Arc::new(drivers::Runtime::new(db.clone()));
+    let drivers = Arc::new(drivers::Runtime::new(db.clone(), *cloud_key));
     drivers.reload().await?;
     let state = AppState { db, cfg, hub, auth, cloud_key, updater, drivers };
     bootstrap(&state).await?;
@@ -146,9 +147,12 @@ pub fn spawn_background(state: &AppState) {
     tokio::spawn(state.hub.clone().run_poller());
     tokio::spawn(state.hub.clone().run_node_links());
     tokio::spawn(state.hub.clone().run_maintenance());
-    tokio::spawn(
-        state.drivers.clone().run(std::time::Duration::from_millis(state.cfg.device_read_ms), std::time::Duration::from_secs(state.cfg.history_interval_secs.max(1) as u64)),
-    );
+    tokio::spawn(state.drivers.clone().run(
+        std::time::Duration::from_millis(state.cfg.device_read_ms),
+        std::time::Duration::from_secs(state.cfg.history_interval_secs.max(1) as u64),
+        state.cfg.scan_subnet.clone(),
+        state.cfg.scan_port,
+    ));
     tokio::spawn(cloud::run_auto_sync(state.clone()));
     tokio::spawn(airzone_schedules::run_sync(state.clone()));
     tokio::spawn(timers::run_loop(state.hub.clone(), state.db.clone()));

@@ -37,6 +37,24 @@ export type ClimateZoneSet = {
   sleep?: number
 }
 
+/** Shutter, blind or window (`cover.position@1`): state. */
+export type CoverPositionState = {
+  /** Opening (%) */
+  position: number
+  /** Opening asked (%) */
+  target: number | null
+  /** Moving */
+  moving: "opening" | "closing" | "stopped" | null
+}
+
+/** Shutter, blind or window (`cover.position@1`): action `set`. */
+export type CoverPositionSet = {
+  position: number
+}
+
+/** Shutter, blind or window (`cover.position@1`): action `stop`, without parameters. */
+export type CoverPositionStop = Record<string, never>
+
 /** Energy meter (`energy.meter@1`): state. */
 export type EnergyMeterState = {
   /** Energy consumed (kWh) */
@@ -155,4 +173,4 @@ export type SwitchRelaySet = {
 }
 
 /** Traits described by this version (`trait@version`). */
-export const TRAITS = ["climate.zone@1", "energy.meter@1", "ev.charger@1", "solar.inverter@1", "solar.panel@1", "energy.power@1", "switch.relay@1"] as const
+export const TRAITS = ["climate.zone@1", "cover.position@1", "energy.meter@1", "ev.charger@1", "solar.inverter@1", "solar.panel@1", "energy.power@1", "switch.relay@1"] as const

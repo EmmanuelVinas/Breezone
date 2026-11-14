@@ -118,7 +118,7 @@ pub async fn probe(host: &str, port: u16) -> Option<Found> {
 /// A product found on the network, of a supported brand.
 #[derive(Debug, Clone, Serialize)]
 pub struct Product {
-    /// "airzone" | "shelly" | "v2c" | "hoymiles"
+    /// "airzone" | "shelly" | "v2c" | "hoymiles" | "homekit"
     pub brand: &'static str,
     /// What adds it: "airzone" (an installation) or the driver of a source.
     pub driver: &'static str,
@@ -134,11 +134,18 @@ pub struct Product {
     pub note: Option<String>,
     /// Breezone can drive it.
     pub supported: bool,
+    /// HomeKit feature flags (1: Apple authentication), for pairing.
+    pub flags: u32,
 }
 
 /// Every supported product on `subnet`, each address asked for every brand at once.
 pub async fn scan_products(subnet: &str, airzone_port: u16) -> Result<Vec<Product>, String> {
     let hosts = hosts_in(subnet)?;
+    // HomeKit accessories answer mDNS: asked meanwhile.
+    let homekit = tokio::spawn({
+        let hosts = hosts.clone();
+        async move { crate::homekit::discovery::browse(Duration::from_secs(2), &hosts).await }
+    });
     let limit = Arc::new(Semaphore::new(SCAN_PARALLEL));
     let mut tasks = Vec::with_capacity(hosts.len());
     for host in hosts {
@@ -182,6 +189,7 @@ pub async fn scan_products(subnet: &str, airzone_port: u16) -> Result<Vec<Produc
                     firmware: a.firmware,
                     note,
                     supported: true,
+                    flags: 0,
                 });
             }
             if let Some(s) = shelly {
@@ -196,6 +204,7 @@ pub async fn scan_products(subnet: &str, airzone_port: u16) -> Result<Vec<Produc
                     firmware: s.firmware,
                     note: s.note,
                     supported: s.supported,
+                    flags: 0,
                 });
             }
             if let Some(t) = trydan {
@@ -210,6 +219,7 @@ pub async fn scan_products(subnet: &str, airzone_port: u16) -> Result<Vec<Produc
                     firmware: t.firmware,
                     note: t.note,
                     supported: true,
+                    flags: 0,
                 });
             }
             if let Some(h) = hoymiles {
@@ -218,6 +228,7 @@ pub async fn scan_products(subnet: &str, airzone_port: u16) -> Result<Vec<Produc
                     driver: "hoymiles",
                     note: Some(h.note()),
                     supported: !h.encrypted,
+                    flags: 0,
                     model: h.model,
                     host: host.clone(),
                     port: crate::drivers::hoymiles::PORT,
@@ -235,7 +246,34 @@ pub async fn scan_products(subnet: &str, airzone_port: u16) -> Result<Vec<Produc
             found.extend(f);
         }
     }
-    found.sort_by_key(|p| (p.host.parse::<Ipv4Addr>().map(u32::from).unwrap_or(0), p.brand));
+    for a in homekit.await.unwrap_or_default() {
+        let kind = match a.category {
+            Some(2) => "pont",
+            Some(14) => "volet",
+            Some(15) => "fenêtre",
+            Some(7) => "prise",
+            Some(5) => "lumière",
+            _ => "accessoire",
+        };
+        found.push(Product {
+            brand: "homekit",
+            driver: "homekit",
+            model: a.model.clone().filter(|m| !m.is_empty()).unwrap_or_else(|| a.name.clone()),
+            port: a.host.rsplit(':').next().and_then(|p| p.parse().ok()).unwrap_or(0),
+            host: a.host,
+            mac: None,
+            device_id: Some(a.id),
+            firmware: None,
+            note: Some(if a.paired {
+                format!("HomeKit · {kind} « {} » · déjà appairé à un autre contrôleur", a.name)
+            } else {
+                format!("HomeKit · {kind} « {} » · à appairer avec son code", a.name)
+            }),
+            supported: !a.paired,
+            flags: a.flags,
+        });
+    }
+    found.sort_by_key(|p| (p.host.split(':').next().and_then(|h| h.parse::<Ipv4Addr>().ok()).map(u32::from).unwrap_or(0), p.brand));
     Ok(found)
 }
 

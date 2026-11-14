@@ -715,7 +715,6 @@ const en: Record<string, string> = {
   "« {name} » ajouté": "“{name}” added",
   "« {name} » ajouté, mais ne répond pas pour l'instant":
     "“{name}” added, but it does not answer for now",
-  "Onglet Installations": "Installations tab",
   "Non pris en charge": "Not supported",
   "Ajouter un module": "Add a module",
   Réseau: "Network",
@@ -855,8 +854,6 @@ const en: Record<string, string> = {
   "Véhicule branché": "Vehicle plugged in",
   "Aucun véhicule branché": "No vehicle plugged in",
   "{value} aujourd'hui": "{value} today",
-  "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan et clés Wi-Fi Hoymiles.":
-    "Breezone looks on the network for the products it can drive: Airzone WebServers, Shelly (Plus, Pro, Gen3, Gen4), V2C Trydan chargers and Hoymiles Wi-Fi sticks.",
   "{kwh} aujourd'hui": "{kwh} today",
   "{n} panneau": "{n} panel",
   "{n} panneaux": "{n} panels",
@@ -968,6 +965,33 @@ const en: Record<string, string> = {
   "Puissance de chaque panneau toutes les 15 minutes":
     "Power of each panel every 15 minutes",
   maintenant: "now",
+  "« {name} » retrouvé à {host}": "“{name}” found again at {host}",
+  "« {name} » répond à la même adresse": "“{name}” answers at the same address",
+  "« {name} » introuvable sur le réseau": "“{name}” not found on the network",
+  fermé: "closed",
+  ouvert: "open",
+  "ouvert à {n} %": "open at {n}%",
+  "s'ouvre": "opening",
+  "se ferme": "closing",
+  "HomeKit en local : appairé avec le code de l'accessoire, sans Apple Maison ni compte":
+    "Local HomeKit: paired with the accessory's code, without Apple Home or an account",
+  "toutes les 10 s": "every 10 s",
+  "position et mouvement des volets et fenêtres, état des prises, interrupteurs et lumières":
+    "position and movement of shutters and windows, state of outlets, switches and lights",
+  "ouverture et arrêt des volets, marche et arrêt des prises et lumières":
+    "opening and stopping shutters, outlets and lights on and off",
+  "Retirer ce module supprime l'appairage de Breezone sur l'accessoire, et rien d'autre : ce que l'application du fabricant a configuré ne change pas.":
+    "Removing this module removes Breezone's pairing from the accessory, and nothing else: what the manufacturer's app set up does not change.",
+  "« {name} » appairé": "“{name}” paired",
+  "Module Airzone": "Airzone module",
+  "Appairé ailleurs": "Paired elsewhere",
+  Appairer: "Pair",
+  "Appairer « {name} » avec Breezone": "Pair “{name}” with Breezone",
+  "Saisissez le code HomeKit à 8 chiffres, imprimé sur l'appareil ou sa notice. Rien ne change dans l'application du fabricant : vos équipements restent configurés comme aujourd'hui.":
+    "Type the 8-digit HomeKit code, printed on the device or its manual. Nothing changes in the manufacturer's app: your equipment stays set up as it is.",
+  "Code HomeKit": "HomeKit code",
+  "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan, clés Wi-Fi Hoymiles et accessoires HomeKit (Legrand, VELUX…).":
+    "Breezone looks on the network for the products it can drive: Airzone WebServers, Shelly (Plus, Pro, Gen3, Gen4), V2C Trydan chargers, Hoymiles Wi-Fi sticks and HomeKit accessories (Legrand, VELUX…).",
 }
 
 export default en
