@@ -258,6 +258,10 @@ pub struct FedSnapshot {
     /// to 0.5.x, which do not support waiting: they are read periodically instead.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub revision: Option<String>,
+    /// `caps_rev` of the exposing node (ADR 0012): when it changes (update, rollback, module), the
+    /// reading node asks for its capabilities again. Absent from nodes up to 0.10.0.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caps_rev: Option<String>,
 }
 
 impl FedSnapshot {
@@ -391,6 +395,8 @@ impl From<NodeError> for ApiError {
             )),
             NodeError::Rejected { status: 403, message } => ApiError::forbidden(message),
             NodeError::Rejected { status: 404, message } => ApiError::not_found(message),
+            // A command the other node does not know (ADR 0012): said as such, with its words.
+            NodeError::Rejected { status: 422, message } => ApiError::new(axum::http::StatusCode::UNPROCESSABLE_ENTITY, message).with_detail("code", "unsupported"),
             other => ApiError::bad_gateway(other.text()),
         }
     }
@@ -475,6 +481,17 @@ impl NodeClient {
         let status = resp.status();
         if !status.is_success() {
             let body: serde_json::Value = resp.json().await.unwrap_or_default();
+            // The route does not exist there (the router's own 404): an older node.
+            if status == reqwest::StatusCode::NOT_FOUND && body["error"] == "not found" {
+                return Err(NodeError::Rejected {
+                    status: 404,
+                    message: crate::text!(
+                        "fonction absente sur ce serveur : mettez-le à jour",
+                        "feature missing on this server: update it",
+                        "función ausente en este servidor: actualícelo"
+                    ),
+                });
+            }
             let message = body["error"].as_str().map(String::from).unwrap_or_else(|| format!("HTTP {status}"));
             return Err(NodeError::Rejected { status: status.as_u16(), message: Text::plain(message) });
         }
@@ -499,6 +516,23 @@ impl NodeClient {
         };
         let body = serde_json::to_vec(&req).expect("serializable request");
         self.send(reqwest::Method::POST, "/api/federation/pair", Some(body), None).await
+    }
+
+    /// Exchanges capabilities with the node (ADR 0012): sends this node's, receives its own.
+    /// `None`: the node predates the exchange (up to 0.10.0): it gets the legacy profile.
+    pub async fn hello(&self, mine: &crate::capabilities::Capabilities) -> Result<Option<crate::capabilities::Capabilities>, NodeError> {
+        let body = serde_json::to_vec(mine).expect("serializable capabilities");
+        let resp = self.request(reqwest::Method::POST, "/api/federation/hello", Some(body), None, None).await?;
+        let status = resp.status();
+        // Unknown route (404, or 405 on some proxies): an older node.
+        if status == reqwest::StatusCode::NOT_FOUND || status == reqwest::StatusCode::METHOD_NOT_ALLOWED {
+            return Ok(None);
+        }
+        if !status.is_success() {
+            return Self::decode::<crate::capabilities::Capabilities>(resp).await.map(Some);
+        }
+        // Very old nodes answer their web page to unknown addresses: legacy as well.
+        Ok(resp.json::<crate::capabilities::Capabilities>().await.ok().map(crate::capabilities::Capabilities::sanitized))
     }
 
     pub async fn snapshot(&self) -> Result<FedSnapshot, NodeError> {

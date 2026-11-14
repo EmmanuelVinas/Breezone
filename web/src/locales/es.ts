@@ -686,6 +686,25 @@ const es: Record<string, string> = {
   "Breezone {version} est installé": "Breezone {version} está instalado",
   "Breezone est à jour": "Breezone está actualizado",
   bêta: "beta",
+  climatisation: "climatización",
+  volets: "persianas",
+  "orientation des lames": "orientación de las lamas",
+  lumières: "luces",
+  énergie: "energía",
+  recharge: "recarga",
+  piscine: "piscina",
+  "suivi en direct": "seguimiento en directo",
+  pilotage: "control",
+  "programmations Airzone": "programaciones de Airzone",
+  "échange des versions": "intercambio de versiones",
+  "Fonctions limitées": "Funciones limitadas",
+  "À mettre à jour": "Por actualizar",
+  "Les deux serveurs ne se comprennent plus : mettez à jour le plus ancien.":
+    "Los dos servidores ya no se entienden: actualice el más antiguo.",
+  "Pas encore sur « {name} » : {list}. Mettez-le à jour.":
+    "Todavía no en «{name}»: {list}. Actualícelo.",
+  "« {name} » sait aussi : {list}. Mettez à jour ce serveur pour en profiter.":
+    "«{name}» también sabe: {list}. Actualice este servidor para aprovecharlo.",
   "Recevoir les versions bêta": "Recibir las versiones beta",
   "Les nouveautés avant tout le monde, avec un risque de défauts. Si une bêta ne démarre pas, Breezone revient seul à la version d'avant.":
     "Las novedades antes que nadie, con riesgo de fallos. Si una beta no arranca, Breezone vuelve solo a la versión anterior.",

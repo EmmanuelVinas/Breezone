@@ -134,6 +134,24 @@ export type NodeIdentity = {
   public_url: string | null
 }
 
+/** Version and capabilities of another server (ADR 0012), once they said hello. */
+export type PeerView = {
+  /** Breezone version on that server (unknown before 0.10.1). */
+  version: string | null
+  channel: string
+  /** The server predates the exchange of capabilities (0.10.0 or older). */
+  legacy: boolean
+  checked_at: number | null
+  compatibility: {
+    state: "compatible" | "limited" | "outdated"
+    /** What this server can do that the other cannot (`trait@v`, `feature@v`). */
+    missing: string[]
+    /** What the other server can do that this one cannot read yet. */
+    newer: string[]
+  }
+  modules: { id: string; version: string; provides: string[] }[]
+}
+
 export type Share = {
   id: number
   label: string
@@ -158,6 +176,8 @@ export type Share = {
   remote_shares_back: boolean
   /** Share given back to a server that invited this one. */
   reverse: boolean
+  /** The server reading the share, once it said hello. */
+  peer: PeerView | null
 }
 
 export type ShareInput = {
@@ -194,6 +214,8 @@ export type BreezoneNode = {
   installations: { id: number; name: string }[]
   /** A certificate failing the usual HTTPS checks was trusted for this server. */
   certificate_pinned: boolean
+  /** Its version and what it can do, once exchanged. */
+  peer: PeerView | null
   /** Installations this server shares with us, and whether they are shown here. */
   offered: {
     remote_id: number

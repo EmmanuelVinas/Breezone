@@ -331,6 +331,30 @@ async fn pairing_and_signed_requests_are_enforced() {
     let r = neighbour.request(&http, &office.base, Method::GET, "/api/status", b"").send().await.unwrap();
     assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
 
+    // Capabilities (ADR 0012): the node tells what it knows and learns this server's; the
+    // snapshot carries the fingerprint to notice a change.
+    let mine = json!({"breezone": "0.12.0-beta.1", "channel": "beta", "protocol": {"current": 1, "min": 1},
+        "traits": {"climate.zone": [1], "cover.position": [1]}, "features": {"federation.watch": 1, "federation.hello": 1}, "caps_rev": "x"});
+    let r = neighbour.request(&http, &office.base, Method::POST, "/api/federation/hello", &serde_json::to_vec(&mine).unwrap()).send().await.unwrap();
+    assert_eq!(r.status(), StatusCode::OK);
+    let theirs: Value = r.json().await.unwrap();
+    assert_eq!(theirs["breezone"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(theirs["traits"]["climate.zone"], json!([1]));
+    let snap: Value = neighbour.request(&http, &office.base, Method::GET, list, b"").send().await.unwrap().json().await.unwrap();
+    assert_eq!(snap["caps_rev"], theirs["caps_rev"]);
+    let (_, shares) = office.call(Method::GET, "/api/shares", None).await;
+    let peer = &shares.as_array().unwrap().iter().find(|s| s["id"] == share_id).unwrap()["peer"];
+    assert_eq!(peer["version"], "0.12.0-beta.1");
+    assert_eq!(peer["compatibility"]["state"], "limited", "{peer}");
+    assert!(peer["compatibility"]["newer"].as_array().unwrap().contains(&json!("cover.position@1")), "{peer}");
+
+    // A command field this server does not know is refused, never ignored.
+    let r = neighbour.request(&http, &office.base, Method::PATCH, &path_a, br#"{"on":true,"eco":true}"#).send().await.unwrap();
+    assert_eq!(r.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let v: Value = r.json().await.unwrap();
+    assert_eq!(v["code"], "unsupported");
+    assert_eq!(v["unsupported"], json!(["eco"]));
+
     // The invitation cannot be used twice.
     let r = FakeNode::new("other", 3).pair(&http, &office.base, token).await;
     assert_eq!(r.status(), StatusCode::BAD_REQUEST);

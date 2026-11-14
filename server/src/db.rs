@@ -889,6 +889,9 @@ pub struct Share {
     pub remote_url: Option<String>,
     /// The other node accepted to share back.
     pub remote_shares_back: bool,
+    /// Capabilities of the node reading this share (JSON, ADR 0012) and when they were received.
+    pub peer_caps: Option<String>,
+    pub peer_caps_at: Option<i64>,
 }
 
 impl Share {
@@ -1097,6 +1100,19 @@ pub struct Node {
     pub last_error: Option<String>,
     /// Certificate trusted by an administrator (SHA-256): the only one accepted for this node.
     pub tls_fingerprint: Option<String>,
+    /// Capabilities of the node (JSON, ADR 0012) and when they were received.
+    pub peer_caps: Option<String>,
+    pub peer_caps_at: Option<i64>,
+}
+
+pub async fn set_node_caps(db: &Db, id: i64, caps: &str) -> sqlx::Result<()> {
+    sqlx::query("UPDATE nodes SET peer_caps = ?, peer_caps_at = ? WHERE id = ?").bind(caps).bind(now()).bind(id).execute(db).await?;
+    Ok(())
+}
+
+pub async fn set_share_caps(db: &Db, id: i64, caps: &str) -> sqlx::Result<()> {
+    sqlx::query("UPDATE shares SET peer_caps = ?, peer_caps_at = ? WHERE id = ?").bind(caps).bind(now()).bind(id).execute(db).await?;
+    Ok(())
 }
 
 pub async fn list_nodes(db: &Db) -> sqlx::Result<Vec<Node>> {

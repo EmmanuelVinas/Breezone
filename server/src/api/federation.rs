@@ -6,6 +6,7 @@
 //!   the installations of the share. `POST /api/federation/pair` uses a single-use invitation code.
 
 use crate::auth::{hash_token, AdminUser, AuthUser};
+use crate::capabilities::{Capabilities, PeerView};
 use crate::db::{self, Share};
 use crate::error::{ApiError, ApiResult};
 use crate::federation::{self, FedInstallation, FedSnapshot, Identity, Invitation, NodeClient, PairRequest, PairResponse, ACTOR_HEADER};
@@ -75,6 +76,8 @@ pub struct ShareView {
     pub remote_shares_back: bool,
     /// Share given back to a node that invited this one (reciprocal invitation).
     pub reverse: bool,
+    /// Version and capabilities of the node reading the share (ADR 0012), once it said hello.
+    pub peer: Option<PeerView>,
 }
 
 #[derive(Serialize)]
@@ -114,6 +117,7 @@ async fn share_view(state: &AppState, s: Share) -> ApiResult<ShareView> {
         status: s.status,
         pairing_expires_at: s.pairing_expires_at,
         requested_at: s.requested_at,
+        peer: PeerView::of(s.peer_caps.as_deref(), s.peer_caps_at),
     })
 }
 
@@ -293,6 +297,8 @@ pub struct NodeView {
     pub certificate_pinned: bool,
     /// Installations the node shares with this one, and whether they are shown here.
     pub offered: Vec<OfferedView>,
+    /// Version and capabilities of the node (ADR 0012), once exchanged.
+    pub peer: Option<PeerView>,
 }
 
 #[derive(Serialize)]
@@ -341,6 +347,7 @@ async fn node_views(state: &AppState) -> ApiResult<Vec<NodeView>> {
                 .map(|i| ShareInstallation { id: i.id, name: i.name.clone() })
                 .collect(),
             certificate_pinned: n.tls_fingerprint.is_some(),
+            peer: PeerView::of(n.peer_caps.as_deref(), n.peer_caps_at),
             id: n.id,
             name: n.name,
             url: n.url,
@@ -741,6 +748,7 @@ async fn fed_snapshot(state: &AppState, auth: &ShareAuth) -> ApiResult<FedSnapsh
         permission: auth.share.permission.clone(),
         installations: state.hub.federated(&auth.installation_ids).await,
         revision: None,
+        caps_rev: Some(Capabilities::local().caps_rev),
     };
     snap.revision = Some(snap.compute_revision());
     Ok(snap)
@@ -796,6 +804,32 @@ pub async fn pair(State(state): State<AppState>, signed: Signed) -> ApiResult<Js
     Ok(Json(PairResponse { status: "pending".into(), node_id: me.node_id, name: me.name, public_key: Some(federation::public_key_text(&key)) }))
 }
 
+/// Exchange of capabilities (ADR 0012): the reading node sends its own, this one answers with its.
+/// Called when the link opens, and again whenever either side's `caps_rev` changes.
+pub async fn hello(State(state): State<AppState>, auth: ShareAuth) -> ApiResult<Json<Capabilities>> {
+    let peer: Capabilities = serde_json::from_slice(&auth.body).map_err(|_| ApiError::bad_request("invalid capabilities"))?;
+    let peer = peer.sanitized();
+    let before: Option<Capabilities> = auth.share.peer_caps.as_deref().and_then(|c| serde_json::from_str(c).ok());
+    let json = serde_json::to_string(&peer).map_err(anyhow::Error::from)?;
+    db::set_share_caps(&state.db, auth.share.id, &json).await?;
+    db::touch_share(&state.db, auth.share.id, None, None, auth.address.as_deref()).await?;
+    let who = auth.share.remote_name.clone().unwrap_or_else(|| auth.share.label.clone());
+    if before.is_some_and(|b| b.breezone != peer.breezone) && !peer.breezone.is_empty() {
+        state
+            .hub
+            .log(
+                "system",
+                "info",
+                None,
+                None,
+                crate::text!("Le serveur « {0} » est passé à Breezone {1}", "Server “{0}” moved to Breezone {1}", "El servidor «{0}» pasó a Breezone {1}", who, peer.breezone),
+                None,
+            )
+            .await;
+    }
+    Ok(Json(Capabilities::local()))
+}
+
 #[derive(Deserialize)]
 pub struct WatchQuery {
     /// Seconds to wait for a change (long polling), at most [`federation::WATCH_SECS`].
@@ -846,7 +880,7 @@ pub async fn installations(State(state): State<AppState>, Query(q): Query<WatchQ
 }
 
 pub async fn control(State(state): State<AppState>, Path((id, system_id, zone_id)): Path<(i64, i64, i64)>, auth: ShareAuth) -> ApiResult<Json<FedInstallation>> {
-    let cmd: ZoneCommand = serde_json::from_slice(&auth.body).map_err(|e| ApiError::bad_request(crate::text!("commande invalide : {0}", "invalid command: {0}", "orden no válida: {0}", e)))?;
+    let cmd = ZoneCommand::parse_strict(&auth.body)?;
     if !auth.installation_ids.contains(&id) {
         return Err(ApiError::not_found("installation non partagée"));
     }

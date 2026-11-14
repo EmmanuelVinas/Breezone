@@ -7,6 +7,7 @@
 //! * Broadcasts every change to WebSocket clients (mobile app, web UI).
 
 use crate::airzone::{master_zone, AirzoneClient, AirzoneError, OperationMode, ZoneData};
+use crate::capabilities::Capabilities;
 use crate::cloud::normalize_mac;
 use ed25519_dalek::SigningKey;
 use crate::config::Config;
@@ -184,6 +185,41 @@ pub struct ZoneCommand {
 }
 
 impl ZoneCommand {
+    /// The fields this version knows (ADR 0012): any other one is refused, never ignored.
+    pub const FIELDS: &'static [&'static str] = &["on", "setpoint", "cool_setpoint", "heat_setpoint", "mode", "speed", "sleep"];
+
+    /// Reads a command sent by a client or another node. A field this server does not know gives
+    /// a 422 `unsupported` (with the fields), not a command applied in part: the sender learns
+    /// that this server must be updated instead of believing it was done.
+    pub fn parse_strict(body: &[u8]) -> ApiResult<ZoneCommand> {
+        let value: Value = serde_json::from_slice(body)
+            .map_err(|e| ApiError::bad_request(crate::text!("commande invalide : {0}", "invalid command: {0}", "orden no válida: {0}", e)))?;
+        Self::from_value_strict(value)
+    }
+
+    pub fn from_value_strict(value: Value) -> ApiResult<ZoneCommand> {
+        let Some(fields) = value.as_object() else {
+            return Err(ApiError::bad_request("invalid command"));
+        };
+        let unknown: Vec<String> = fields.keys().filter(|k| !Self::FIELDS.contains(&k.as_str())).cloned().collect();
+        if !unknown.is_empty() {
+            return Err(ApiError::new(
+                axum::http::StatusCode::UNPROCESSABLE_ENTITY,
+                crate::text!(
+                    "Ce serveur (Breezone {0}) ne sait pas appliquer : {1}. Mettez-le à jour.",
+                    "This server (Breezone {0}) cannot apply: {1}. Update it.",
+                    "Este servidor (Breezone {0}) no sabe aplicar: {1}. Actualícelo.",
+                    env!("CARGO_PKG_VERSION"),
+                    unknown.join(", ")
+                ),
+            )
+            .with_detail("code", "unsupported")
+            .with_detail("unsupported", &unknown)
+            .with_detail("breezone", env!("CARGO_PKG_VERSION")));
+        }
+        serde_json::from_value(value).map_err(|e| ApiError::bad_request(crate::text!("commande invalide : {0}", "invalid command: {0}", "orden no válida: {0}", e)))
+    }
+
     pub fn is_empty(&self) -> bool {
         *self == ZoneCommand::default()
     }
@@ -524,6 +560,8 @@ struct NodeState {
     offered: Vec<OfferedInstallation>,
     /// The live link (long polling, see [`Hub::run_node_links`]) works: no periodic read needed.
     watching: bool,
+    /// What the node knows (ADR 0012), from the last hello; `None` before the first one.
+    peer_caps: Option<Capabilities>,
 }
 
 /// An installation another node shares with this one.
@@ -546,7 +584,8 @@ impl NodeState {
             latency_ms: None,
             permission: node.permission.clone(),
         };
-        Self { node, client, status, failures: 0, persisted_at: 0, offered: vec![], watching: false }
+        let peer_caps = node.peer_caps.as_deref().and_then(|c| serde_json::from_str(c).ok());
+        Self { node, client, status, failures: 0, persisted_at: 0, offered: vec![], watching: false, peer_caps }
     }
 
     fn reference(&self) -> NodeRef {
@@ -1187,6 +1226,9 @@ impl Hub {
         let mut since: Option<String> = None;
         let mut failures: u32 = 0;
         let mut latency: u64 = 0;
+        // `caps_rev` of this server last told to the node (ADR 0012): told again when it changes
+        // (a module installed…) or when the node's own changes. Always told when the link opens.
+        let mut told: Option<String> = None;
         loop {
             let (client, name) = match self.nodes.read().await.get(&node_id) {
                 Some(n) => (n.client.clone(), n.node.name.clone()),
@@ -1197,6 +1239,17 @@ impl Hub {
                 tokio::time::sleep(Duration::from_secs(60)).await;
                 continue;
             };
+            let mine = Capabilities::local();
+            if told.as_deref() != Some(mine.caps_rev.as_str()) {
+                match client.hello(&mine).await {
+                    Ok(peer) => {
+                        self.set_peer_caps(node_id, &name, peer.unwrap_or_else(Capabilities::legacy)).await;
+                        told = Some(mine.caps_rev.clone());
+                    }
+                    // Tried again at the next turn; reading the node does not wait for it.
+                    Err(e) => tracing::debug!("capabilities of node {name} not exchanged: {e}"),
+                }
+            }
             let commands = self.node_commands(node_id).await;
             let started = Instant::now();
             match client.watch(since.as_deref(), self.cfg.node_watch_secs).await {
@@ -1221,6 +1274,13 @@ impl Hub {
                         latency = started.elapsed().as_millis() as u64;
                     }
                     self.set_watching(node_id, true).await;
+                    // The node's capabilities changed (update, rollback, module): exchange again.
+                    if let Some(rev) = snap.caps_rev.as_deref() {
+                        let known = self.nodes.read().await.get(&node_id).and_then(|n| n.peer_caps.as_ref().map(|c| c.caps_rev.clone()));
+                        if known.as_deref() != Some(rev) {
+                            told = None;
+                        }
+                    }
                     // A command sent while waiting may make this content stale: read again at once.
                     let stale = self.node_commands(node_id).await != commands;
                     self.node_ok(node_id, &name, snap, latency, &commands).await;
@@ -1236,6 +1296,69 @@ impl Hub {
                 }
             }
         }
+    }
+
+    /// Records what a node knows (ADR 0012), and notes in the activity feed when its version
+    /// changed (update or rollback on that side).
+    async fn set_peer_caps(&self, node_id: i64, name: &str, caps: Capabilities) {
+        let before = {
+            let mut nodes = self.nodes.write().await;
+            let Some(n) = nodes.get_mut(&node_id) else { return };
+            if n.peer_caps.as_ref() == Some(&caps) {
+                return;
+            }
+            n.peer_caps.replace(caps.clone())
+        };
+        match serde_json::to_string(&caps) {
+            Ok(json) => {
+                if let Err(e) = db::set_node_caps(&self.db, node_id, &json).await {
+                    tracing::error!("cannot store the capabilities of node {name}: {e}");
+                }
+            }
+            Err(e) => tracing::error!("capabilities of node {name}: {e}"),
+        }
+        let compatibility = Capabilities::local().compatibility(&caps);
+        if compatibility.state == "outdated" {
+            self.log(
+                "connection",
+                "warn",
+                None,
+                None,
+                crate::text!(
+                    "« {0} » et ce serveur ne se comprennent plus : mettez à jour le plus ancien des deux",
+                    "“{0}” and this server no longer understand each other: update the older one",
+                    "«{0}» y este servidor ya no se entienden: actualice el más antiguo",
+                    name
+                ),
+                None,
+            )
+            .await;
+        } else if before.is_some_and(|b| b.breezone != caps.breezone) && !caps.breezone.is_empty() {
+            self.log("connection", "info", None, None, crate::text!("« {0} » est passé à Breezone {1}", "“{0}” moved to Breezone {1}", "«{0}» pasó a Breezone {1}", name, caps.breezone), None)
+                .await;
+        }
+    }
+
+    /// Before sending something to a node: does it say it can do it (ADR 0012)? A node that
+    /// predates the exchange is assumed to do what 0.10.0 did.
+    async fn node_can(&self, node_id: i64, node_name: &str, feature: &str, version: u32) -> ApiResult<()> {
+        let caps = self.nodes.read().await.get(&node_id).and_then(|n| n.peer_caps.clone()).unwrap_or_else(Capabilities::legacy);
+        if caps.has_feature(feature, version) {
+            return Ok(());
+        }
+        let current = if caps.breezone.is_empty() { "≤ 0.10.0".to_string() } else { caps.breezone.clone() };
+        Err(ApiError::new(
+            axum::http::StatusCode::UNPROCESSABLE_ENTITY,
+            crate::text!(
+                "« {0} » (Breezone {1}) ne sait pas encore le faire : mettez-le à jour",
+                "“{0}” (Breezone {1}) cannot do this yet: update it",
+                "«{0}» (Breezone {1}) aún no sabe hacerlo: actualícelo",
+                node_name,
+                current
+            ),
+        )
+        .with_detail("code", "unsupported")
+        .with_detail("needs", format!("{feature}@{version}")))
     }
 
     /// The node answered "nothing new": still online, nothing else to update.
@@ -1447,6 +1570,7 @@ impl Hub {
                 node_name
             ))
         })?;
+        self.node_can(node_id, &node_name, "federation.schedules", 1).await?;
         client.schedule(remote_id, op, actor).await?;
         Ok(())
     }
@@ -1467,6 +1591,7 @@ impl Hub {
                 node_name
             ))
         })?;
+        self.node_can(node_id, &node_name, "federation.control", 1).await?;
         let zone_label = self.zone(id, system_id, zone_id).await.map(|z| z.name).unwrap_or_else(|| format!("Zone {zone_id}"));
         let data = Some(json!({ "system_id": system_id, "zone_id": zone_id, "command": cmd, "node": node_name }));
         match client.control(remote_id, system_id, zone_id, cmd, actor).await {

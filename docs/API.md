@@ -23,6 +23,18 @@ Règles de compatibilité :
   demande de mettre le serveur à jour ; au-dessus de la sienne, elle propose de se mettre à jour.
 - Un serveur qui n'annonce pas `api_version` (jusqu'à 0.4.x) parle l'API 1.
 
+### Capacités (ADR 0012)
+
+`GET 🔒 /api/capabilities` → ce que le serveur sait faire, fonction par fonction :
+`{breezone, channel, protocol:{current, min}, traits:{"climate.zone":[1]}, features:{"federation.watch":1, …}, modules:[{id, version, provides}], caps_rev}`.
+`caps_rev` (empreinte du document) figure aussi dans `/api/version` : un client relit les capacités
+quand elle change, et n'active que les écrans des fonctions annoncées. Les serveurs fédérés
+s'échangent ce même document (`POST /api/federation/hello`).
+
+Une commande portant un champ que le serveur ne connaît pas n'est jamais appliquée en partie :
+`422 {error, code:"unsupported", unsupported:[champs], breezone}`. L'émetteur sait ainsi qu'il faut
+mettre ce serveur à jour.
+
 ## Langue des messages
 
 Les textes écrits par le serveur pour les personnes (`error` des réponses, messages du journal,
@@ -95,7 +107,7 @@ de l'utilisateur ; les clients relisent alors `/api/me`.
 | POST 🛠 | `/api/installations/test` | `{host, port}` → `{ok, zones, webserver}` ou `{ok:false, error}` |
 | POST 👑 | `/api/discovery/scan` | `{subnet?}` → `{subnet, found:[{host, port, mac, firmware, zones}]}` (seules les réponses portant la signature Airzone comptent) |
 | GET 🔒 / PUT 👑 | `/api/discovery/settings` | Réseau local du serveur : `{subnet}` → `{subnet, effective, in_container}` |
-| PATCH 🔒 | `/api/installations/{id}/zones/{system_id}/{zone_id}` | `ZoneCommand` → `Zone` mise à jour |
+| PATCH 🔒 | `/api/installations/{id}/zones/{system_id}/{zone_id}` | `ZoneCommand` → `Zone` mise à jour ; un champ inconnu → `422 unsupported` |
 | PUT 🔒 | `/api/installations/{id}/zones/{system_id}/{zone_id}/meta` | `{display_name?, group?, position?}` |
 | GET 🔒 | `/api/installations/{id}/zones/{system_id}/{zone_id}/history?hours=24` | `[{ts, room_temp, humidity, setpoint, is_on, mode, demand_secs, air_quality}]` (`hours` ≤ 2160) |
 | GET 🔒 | `/api/installations/{id}/zones/{system_id}/{zone_id}/daily?days=14` | Confort jour par jour : `[DayStats]`, du plus ancien au plus récent (`days` ≤ 90) |
@@ -216,8 +228,9 @@ Routes entre serveurs — limitées aux installations du partage :
 | Méthode | Chemin | Description |
 |---------|--------|-------------|
 | POST | `/api/federation/pair` | `{code, node_id, name, public_key, shares_back_from?}` signé avec la clé présentée → `{status:"pending", node_id, name, public_key}` ; le code est consommé. `shares_back_from` (adresse du demandeur) n'est retenu que si l'invitation est réciproque : à l'acceptation, ce nœud ajoute le demandeur comme nœud |
-| GET | `/api/federation/installations?wait=&since=` | `FedSnapshot` : `{node_id, name, permission, installations:[{id, name, location, mac, connection, zones (format Airzone), meta}], revision}`. Avec `since` (la `revision` déjà reçue) et `wait` (secondes, 45 au plus), la réponse attend qu'une installation partagée change ; sans changement à la fin de l'attente : `304`, sans contenu |
-| PATCH | `/api/federation/installations/{id}/zones/{system_id}/{zone_id}` | `ZoneCommand` (droit `control`), en-tête `X-Breezone-Actor` pour le journal → installation à jour |
+| POST | `/api/federation/hello` | Capacités du nœud qui lit (même format que `/api/capabilities`) → capacités de ce nœud. Appelé à l'ouverture du lien et dès que le `caps_rev` de l'un ou de l'autre change. `404` : nœud de 0.10.0 ou avant, traité avec le profil « legacy » |
+| GET | `/api/federation/installations?wait=&since=` | `FedSnapshot` : `{node_id, name, permission, installations:[{id, name, location, mac, connection, zones (format Airzone), meta}], revision, caps_rev}`. Avec `since` (la `revision` déjà reçue) et `wait` (secondes, 45 au plus), la réponse attend qu'une installation partagée change ; sans changement à la fin de l'attente : `304`, sans contenu |
+| PATCH | `/api/federation/installations/{id}/zones/{system_id}/{zone_id}` | `ZoneCommand` (droit `control`), en-tête `X-Breezone-Actor` pour le journal → installation à jour ; un champ inconnu → `422 unsupported` |
 | POST | `/api/federation/installations/{id}/schedules` | `{op:"create", input}` \| `{op:"update", schedule_id, input}` \| `{op:"enable", schedule_id, enabled}` \| `{op:"delete", schedule_id}` : modifie les programmations Airzone de l'installation partagée avec le compte Airzone de ce serveur (partage en pilotage). Un serveur qui joint une installation via un autre nœud lui transmet ainsi ces modifications : son propre compte Airzone peut ne pas avoir le droit de les écrire (abonnement) |
 
 Le serveur consommateur suit chaque nœud en direct : il redemande l'état « depuis la dernière

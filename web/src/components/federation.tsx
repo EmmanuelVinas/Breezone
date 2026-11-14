@@ -19,6 +19,7 @@ import type {
   BreezoneNode,
   CertificateInfo,
   NodeState,
+  PeerView,
   Share,
   ShareInput,
 } from "@/lib/api"
@@ -70,6 +71,86 @@ const NODE_STATE: Record<NodeState, { label: string; tone: string }> = {
 }
 
 /** Connection state of another Breezone server. */
+/** Names of what servers exchange (ADR 0012); unknown ones are shown as they come. */
+const CAPABILITY_LABEL: Record<string, string> = {
+  "climate.zone": t("climatisation"),
+  "cover.position": t("volets"),
+  "cover.tilt": t("orientation des lames"),
+  "light.onoff": t("lumières"),
+  "energy.power": t("énergie"),
+  "charger.session": t("recharge"),
+  "pool.filtration": t("piscine"),
+  "federation.watch": t("suivi en direct"),
+  "federation.control": t("pilotage"),
+  "federation.schedules": t("programmations Airzone"),
+  "federation.hello": t("échange des versions"),
+}
+
+const capabilityLabel = (item: string) => {
+  const [name, version] = item.split("@")
+  const label = CAPABILITY_LABEL[name] ?? name
+  return version && version !== "1" ? `${label} (v${version})` : label
+}
+
+/** Version of another server and how well it understands this one. */
+function PeerBadges({ peer }: { peer: PeerView | null }) {
+  if (!peer) return null
+  const version = peer.version ?? (peer.legacy ? "≤ 0.10.0" : null)
+  return (
+    <>
+      {version && (
+        <Badge variant="outline" className="tabular">
+          Breezone {version}
+        </Badge>
+      )}
+      {peer.channel === "beta" && (
+        <Badge variant="outline" className="border-warning/50 text-warning">
+          {t("bêta")}
+        </Badge>
+      )}
+      {peer.compatibility.state === "limited" && (
+        <Badge variant="secondary">{t("Fonctions limitées")}</Badge>
+      )}
+      {peer.compatibility.state === "outdated" && (
+        <Badge variant="destructive">{t("À mettre à jour")}</Badge>
+      )}
+    </>
+  )
+}
+
+/** What one side can do that the other cannot, and who should be updated. */
+function PeerLimits({ peer, name }: { peer: PeerView | null; name: string }) {
+  if (!peer || peer.compatibility.state === "compatible") return null
+  const { missing, newer, state } = peer.compatibility
+  return (
+    <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+      {state === "outdated" && (
+        <p className="text-destructive">
+          {t(
+            "Les deux serveurs ne se comprennent plus : mettez à jour le plus ancien."
+          )}
+        </p>
+      )}
+      {missing.length > 0 && (
+        <p>
+          {t("Pas encore sur « {name} » : {list}. Mettez-le à jour.", {
+            name,
+            list: missing.map(capabilityLabel).join(", "),
+          })}
+        </p>
+      )}
+      {newer.length > 0 && (
+        <p>
+          {t(
+            "« {name} » sait aussi : {list}. Mettez à jour ce serveur pour en profiter.",
+            { name, list: newer.map(capabilityLabel).join(", ") }
+          )}
+        </p>
+      )}
+    </div>
+  )
+}
+
 export function NodeStateBadge({
   state,
   latency,
@@ -586,11 +667,13 @@ function SharesCard() {
                     {t("Demande d'accès")}
                   </Badge>
                 )}
+                <PeerBadges peer={s.peer} />
               </div>
               <div className="text-xs text-muted-foreground">
                 {s.installations.map((i) => i.name).join(", ") ||
                   t("Aucune installation")}
               </div>
+              <PeerLimits peer={s.peer} name={s.remote_name ?? s.label} />
               {s.status === "pending" && (
                 <p className="mt-1 text-sm">
                   {t(
@@ -1063,6 +1146,7 @@ function NodeRow({ node }: { node: BreezoneNode }) {
                 <ShieldCheck /> {t("Certificat accepté")}
               </Badge>
             )}
+            <PeerBadges peer={node.peer} />
           </div>
           <div className="text-xs text-muted-foreground">
             {node.installations.map((i) => i.name).join(", ") ||
@@ -1086,6 +1170,7 @@ function NodeRow({ node }: { node: BreezoneNode }) {
               s.state !== "pending" &&
               ` · ${s.last_error}`}
           </div>
+          <PeerLimits peer={node.peer} name={node.name} />
         </div>
         <Button
           size="icon"

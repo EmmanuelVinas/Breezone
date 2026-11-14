@@ -74,6 +74,7 @@ pub fn router() -> Router<AppState> {
             get(federation::node_certificate).put(federation::trust_node_certificate).delete(federation::untrust_node_certificate),
         )
         .route("/api/federation/pair", post(federation::pair))
+        .route("/api/federation/hello", post(federation::hello))
         .route("/api/federation/installations", get(federation::installations))
         .route("/api/federation/installations/{id}/zones/{system_id}/{zone_id}", patch(federation::control))
         .route("/api/federation/installations/{id}/schedules", post(federation::schedule))
@@ -91,6 +92,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/airzone/schedules/{cloud_id}/{id}", put(schedules::update).delete(schedules::delete))
         .route("/api/airzone/schedules/{cloud_id}/{id}/enabled", put(schedules::set_enabled))
         // Updates of Breezone itself (issue #40)
+        .route("/api/capabilities", get(capabilities))
         .route("/api/system/update", get(system::update_status).post(system::install))
         .route("/api/system/update/check", post(system::check))
         .route("/api/system/update/channel", put(system::set_channel))
@@ -135,7 +137,18 @@ async fn client_api_guard(request: Request, next: Next) -> Response {
 }
 
 fn versions() -> serde_json::Value {
-    json!({ "version": env!("CARGO_PKG_VERSION"), "api_version": API_VERSION, "min_client_api": MIN_CLIENT_API })
+    json!({
+        "version": env!("CARGO_PKG_VERSION"),
+        "api_version": API_VERSION,
+        "min_client_api": MIN_CLIENT_API,
+        "caps_rev": crate::capabilities::Capabilities::local().caps_rev,
+    })
+}
+
+/// What this server knows (ADR 0012): clients activate their screens from it. Its `caps_rev` is
+/// in `/api/version`, to notice a change without reading this again.
+async fn capabilities(_user: crate::auth::AuthUser) -> Json<crate::capabilities::Capabilities> {
+    Json(crate::capabilities::Capabilities::local())
 }
 
 async fn health() -> impl IntoResponse {

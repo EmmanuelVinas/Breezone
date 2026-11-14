@@ -292,3 +292,23 @@ async fn both_nodes_down_the_following_one_back_first() {
     assert!(sites.online(15).await, "home connects as soon as the office is back");
     assert!(sites.live(26.0).await);
 }
+
+#[tokio::test]
+async fn linked_nodes_exchange_their_versions_and_capabilities() {
+    let sites = Sites::new("capabilities").await;
+    let version = env!("CARGO_PKG_VERSION");
+    // Home learns what the office knows when the link opens…
+    let home_knows = eventually(15, async || {
+        let (_, nodes) = sites.home.call(Method::GET, "/api/nodes", None).await;
+        nodes[0]["peer"]["version"] == version
+    })
+    .await;
+    assert!(home_knows, "home records the office's version");
+    let (_, nodes) = sites.home.call(Method::GET, "/api/nodes", None).await;
+    assert_eq!(nodes[0]["peer"]["compatibility"]["state"], "compatible", "{}", nodes[0]["peer"]);
+    assert_eq!(nodes[0]["peer"]["legacy"], false);
+    // …and the office learns home's in return.
+    let (_, shares) = sites.office.call(Method::GET, "/api/shares", None).await;
+    assert_eq!(shares[0]["peer"]["version"], version, "{}", shares[0]);
+    assert_eq!(shares[0]["peer"]["compatibility"]["state"], "compatible");
+}

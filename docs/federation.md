@@ -106,6 +106,20 @@ habituelle** revient au contrôle HTTPS normal.
 La bonne solution reste un certificat valide : voir l'étape « Certificat » du
 [guide Synology](install-synology.md#proxy-inversé-du-nas-https).
 
+## Versions différentes
+
+Les deux serveurs n'ont pas besoin d'avoir la même version : à chaque ouverture du lien, et après
+une mise à jour ou un retour arrière de l'un d'eux, ils s'échangent ce qu'ils savent faire. Chacun
+n'utilise que ce que l'autre comprend.
+
+- **Réglages › Nœuds** et **Réglages › Partages** affichent la version de l'autre serveur (badge
+  « bêta » s'il suit les bêtas) et l'état : *compatible*, *fonctions limitées* (avec la liste, et
+  lequel mettre à jour) ou *à mettre à jour* (ils ne se comprennent plus).
+- Une action que l'autre serveur ne sait pas faire est refusée avec un message qui le dit, jamais
+  ignorée en silence.
+- Un serveur en 0.10.0 ou avant ne sait pas annoncer sa version : il apparaît comme « ≤ 0.10.0 ».
+  Tout ce qu'il savait faire continue de fonctionner.
+
 ## Sécurité
 
 - Le jeton ne contient aucune clé : une fois utilisé ou expiré, il ne sert plus à rien.

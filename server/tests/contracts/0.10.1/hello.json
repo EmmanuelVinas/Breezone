@@ -1,0 +1,38 @@
+{
+  "breezone": "0.10.1",
+  "caps_rev": "65755234a5d05be9",
+  "channel": "stable",
+  "features": {
+    "air_quality": 1,
+    "demand": 1,
+    "federation.control": 1,
+    "federation.hello": 1,
+    "federation.schedules": 1,
+    "federation.watch": 1,
+    "history": 1,
+    "scenes": 1,
+    "schedules.airzone": 1,
+    "self_update": 1,
+    "stats.daily": 1,
+    "timers": 1,
+    "update.beta": 1
+  },
+  "modules": [
+    {
+      "id": "airzone",
+      "provides": [
+        "climate.zone@1"
+      ],
+      "version": "0.10.1"
+    }
+  ],
+  "protocol": {
+    "current": 1,
+    "min": 1
+  },
+  "traits": {
+    "climate.zone": [
+      1
+    ]
+  }
+}

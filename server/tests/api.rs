@@ -379,6 +379,15 @@ async fn self_update_is_for_administrators_and_needs_a_newer_release() {
     let (s, v) = env.call("POST", "/api/system/update", t, None).await;
     assert_eq!(s, StatusCode::CONFLICT, "{v}");
 
+    // What the server knows (ADR 0012): for signed-in clients, fingerprint in /api/version.
+    let (s, caps) = env.call("GET", "/api/capabilities", t, None).await;
+    assert_eq!(s, StatusCode::OK);
+    assert_eq!(caps["traits"]["climate.zone"], json!([1]));
+    let (_, version) = env.call("GET", "/api/version", None, None).await;
+    assert_eq!(version["caps_rev"], caps["caps_rev"]);
+    let (s, _) = env.call("GET", "/api/capabilities", None, None).await;
+    assert_eq!(s, StatusCode::UNAUTHORIZED);
+
     // The beta channel is opt-in, and kept.
     let (_, v) = env.call("GET", "/api/system/update", t, None).await;
     assert_eq!(v["beta"], false);

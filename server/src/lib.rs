@@ -7,6 +7,7 @@ pub mod airzone;
 pub mod airzone_schedules;
 pub mod api;
 pub mod auth;
+pub mod capabilities;
 pub mod cloud;
 pub mod config;
 pub mod db;

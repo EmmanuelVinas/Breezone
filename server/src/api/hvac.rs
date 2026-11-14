@@ -218,8 +218,9 @@ pub async fn control_zone(
     State(state): State<AppState>,
     user: AuthUser,
     Path((id, system_id, zone_id)): Path<(i64, i64, i64)>,
-    Json(cmd): Json<ZoneCommand>,
+    Json(cmd): Json<serde_json::Value>,
 ) -> ApiResult<Json<ZoneView>> {
+    let cmd = ZoneCommand::from_value_strict(cmd)?;
     Access::of(&state.db, &user).await?.control(id)?;
     Ok(Json(state.hub.control(id, system_id, zone_id, &cmd, &user.username).await?))
 }

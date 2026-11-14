@@ -6,6 +6,21 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Servers of different versions now tell each other what they can do (ADR 0012), when their link
+  opens and again after an update, a rollback or any change. Settings › Nodes and Shares show the
+  other server's version (with a « bêta » badge) and whether they understand each other fully,
+  partly (with what is missing and which one to update) or no longer. `GET /api/capabilities` gives
+  the same for clients; its fingerprint is in `/api/version`.
+
+### Changed
+
+- A zone command with a field the server does not know is refused (`422`, `code: "unsupported"`)
+  instead of being applied in part, so that the sender, an app or another server, knows this server
+  must be updated. Commands to another server are checked against what it announced before they are
+  sent.
+
 ## [0.10.0] - 2026-11-13
 
 ### Added

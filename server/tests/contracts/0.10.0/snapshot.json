@@ -1,0 +1,88 @@
+{
+  "installations": [
+    {
+      "connection": {
+        "last_error": null,
+        "last_seen": 1794000000,
+        "state": "online"
+      },
+      "id": 3,
+      "location": "Toulouse",
+      "mac": "AA:BB:CC:DD:EE:FF",
+      "meta": [
+        {
+          "display_name": "Salon",
+          "group": "Rez-de-chaussée",
+          "position": 0,
+          "system_id": 1,
+          "zone_id": 1
+        }
+      ],
+      "name": "Atelier",
+      "record_demand": true,
+      "zones": [
+        {
+          "air_demand": 0,
+          "aq_mode": 2,
+          "aq_quality": 1,
+          "aq_thrhigh": 50,
+          "aq_thrlow": 25,
+          "errors": [],
+          "floor_demand": 0,
+          "humidity": 39,
+          "master_zoneID": 1,
+          "maxTemp": 30.0,
+          "minTemp": 15.0,
+          "mode": 3,
+          "modes": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "name": "Salon",
+          "on": 1,
+          "roomTemp": 19.5,
+          "setpoint": 19.0,
+          "sleep": 0,
+          "speed": 0,
+          "speeds": 3,
+          "systemID": 1,
+          "temp_step": 0.5,
+          "units": 0,
+          "zoneID": 1
+        },
+        {
+          "air_demand": 0,
+          "aq_mode": 2,
+          "aq_quality": 2,
+          "aq_thrhigh": 50,
+          "aq_thrlow": 25,
+          "errors": [],
+          "floor_demand": 0,
+          "humidity": 47,
+          "master_zoneID": 1,
+          "maxTemp": 30.0,
+          "minTemp": 15.0,
+          "mode": 3,
+          "name": "Bureau",
+          "on": 1,
+          "roomTemp": 19.5,
+          "setpoint": 16.0,
+          "sleep": 0,
+          "speed": 0,
+          "speeds": 3,
+          "systemID": 1,
+          "temp_step": 0.5,
+          "units": 0,
+          "zoneID": 2
+        }
+      ]
+    }
+  ],
+  "name": "Bureau",
+  "node_id": "6f1c2a9e-office",
+  "permission": "control",
+  "revision": "0123456789abcdef01234567"
+}
