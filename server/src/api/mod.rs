@@ -2,6 +2,7 @@
 
 mod account;
 mod cloud;
+mod energy;
 mod federation;
 mod home;
 mod hvac;
@@ -99,6 +100,10 @@ pub fn router() -> Router<AppState> {
         .route("/api/devices", get(home::list_devices))
         .route("/api/devices/{id}", put(home::update_device))
         .route("/api/devices/{id}/actions", post(home::act))
+        .route("/api/devices/{id}/history", get(energy::device_history))
+        .route("/api/energy/live", get(energy::live))
+        .route("/api/energy/day", get(energy::day))
+        .route("/api/energy/days", get(energy::days))
         .route("/api/drivers", get(sources::drivers))
         .route("/api/sources", get(sources::list).post(sources::create))
         .route("/api/sources/{id}", put(sources::update).delete(sources::delete))

@@ -23,6 +23,15 @@ All notable changes are documented here. The format follows
   scans the network and adds a Shelly in one click (or by its address), and each energy measure
   named and given a role: grid (whole home), solar production, battery, or the consumption of a
   device or a room. The energy page will rely on these roles.
+- Device history: every number of the state of a device (power, energy, relay…) is recorded every
+  5 minutes, as the mean of the readings since the previous point, and served per device
+  (`/api/devices/{id}/history`). Kept as long as the zone history.
+- Energy page (web): the home right now (solar, battery, grid, home and its main consumers, with
+  flows that move the way the energy goes), the curve of a day every 15 minutes, the energy per day
+  over 7 or 30 days, where the energy goes, and the measured devices with their relay. Production,
+  self-consumption and self-sufficiency appear with a solar channel and a main meter. Served by
+  `/api/energy/live`, `/api/energy/day` and `/api/energy/days`; the page shows in the menu once a
+  measure has a role.
 
 ### Fixed
 

@@ -26,6 +26,9 @@ const SchedulesPage = lazy(() =>
 const ActivityPage = lazy(() =>
   import("@/pages/activity").then((m) => ({ default: m.ActivityPage }))
 )
+const EnergyPage = lazy(() =>
+  import("@/pages/energy").then((m) => ({ default: m.EnergyPage }))
+)
 const SettingsPage = lazy(() =>
   import("@/pages/settings").then((m) => ({ default: m.SettingsPage }))
 )
@@ -52,6 +55,7 @@ function Protected() {
           <Route path="/" element={<DashboardPage />} />
           <Route path="/installations/:id" element={<DashboardPage />} />
           <Route path="/zones/:inst/:sys/:zone" element={<ZonePage />} />
+          <Route path="/energie" element={<EnergyPage />} />
           <Route path="/programmations" element={<SchedulesPage />} />
           <Route path="/routines" element={<RoutinesPage />} />
           <Route path="/activity" element={<ActivityPage />} />

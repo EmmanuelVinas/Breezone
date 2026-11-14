@@ -80,7 +80,7 @@ fn climate_state(z: &ZoneView) -> Value {
 }
 
 /// Records the zones as devices (new ones only), then lists every device with its state.
-async fn devices_of(state: &AppState) -> ApiResult<Vec<DeviceView>> {
+pub(crate) async fn devices_of(state: &AppState) -> ApiResult<Vec<DeviceView>> {
     let mut zones: HashMap<String, ZoneView> = HashMap::new();
     for inst in state.hub.snapshot().await {
         for z in inst.zones {

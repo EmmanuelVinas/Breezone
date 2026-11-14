@@ -9,6 +9,8 @@ pub struct Config {
     pub data_dir: PathBuf,
     pub web_dir: PathBuf,
     pub poll_interval_secs: u64,
+    /// How often the sources of devices (Shelly…) are read.
+    pub device_read_ms: u64,
     /// Longest wait between two tries of the live link to a node that does not answer (5 min).
     pub node_retry_max_secs: u64,
     /// How long the live link asks a node to wait for a change before answering "nothing new".
@@ -68,6 +70,7 @@ impl Config {
             data_dir: var("BREEZONE_DATA_DIR").map(PathBuf::from).unwrap_or_else(|| "data".into()),
             web_dir: var("BREEZONE_WEB_DIR").map(PathBuf::from).unwrap_or_else(|| "web".into()),
             poll_interval_secs: num("BREEZONE_POLL_INTERVAL_SECS", 15).max(2),
+            device_read_ms: num("BREEZONE_DEVICE_READ_MS", 5000).max(500),
             node_retry_max_secs: 300,
             node_watch_secs: crate::federation::WATCH_SECS,
             history_interval_secs: num("BREEZONE_HISTORY_INTERVAL_SECS", 300).max(30),
@@ -106,6 +109,7 @@ impl Config {
             data_dir,
             web_dir: "web".into(),
             poll_interval_secs: 3600,
+            device_read_ms: 5000,
             node_retry_max_secs: 1,
             node_watch_secs: 2,
             history_interval_secs: 300,

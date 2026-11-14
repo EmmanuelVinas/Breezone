@@ -10,6 +10,7 @@ import {
   Smartphone,
   Sun,
   Timer,
+  Zap,
 } from "lucide-react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import type { LiveState } from "@/hooks/use-live"
@@ -31,6 +32,7 @@ import { useProfileLanguage } from "@/hooks/use-profile-language"
 
 const NAV = [
   { to: "/", label: t("Installations"), icon: LayoutGrid, end: true },
+  { to: "/energie", label: t("Énergie"), icon: Zap, end: false },
   {
     to: "/programmations",
     label: t("Programmations"),
@@ -60,6 +62,16 @@ function LiveIndicator({ state }: { state: LiveState }) {
       {label}
     </span>
   )
+}
+
+/** The energy page is shown once a measure has a role (Settings › Modules). */
+function useEnergy() {
+  const live = useQuery({
+    queryKey: ["energy-live"],
+    queryFn: api.energyLive,
+    staleTime: 60_000,
+  }).data
+  return !!live && Object.values(live.roles).some(Boolean)
 }
 
 /** A newer Breezone, for administrators (the server checks once a day). */
@@ -105,6 +117,8 @@ export function AppShell({
   const version = useServerVersion()
   const update = useAvailableUpdate(user?.role === "admin")
   useProfileLanguage()
+  const energy = useEnergy()
+  const nav = NAV.filter((n) => n.to !== "/energie" || energy)
   const dark =
     theme === "dark" ||
     (theme === "system" &&
@@ -123,7 +137,7 @@ export function AppShell({
           <Brand />
         </div>
         <nav className="mt-6 flex flex-col gap-1">
-          {NAV.map(({ to, label, icon: Icon, end }) => (
+          {nav.map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}
@@ -227,8 +241,11 @@ export function AppShell({
         </main>
       </div>
 
-      <nav className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-4 rounded-3xl border bg-card/80 p-1.5 shadow-2xl backdrop-blur-xl md:hidden">
-        {NAV.map(({ to, label, icon: Icon, end }) => (
+      <nav
+        style={{ gridTemplateColumns: `repeat(${nav.length}, minmax(0, 1fr))` }}
+        className="fixed inset-x-3 bottom-3 z-40 grid rounded-3xl border bg-card/80 p-1.5 shadow-2xl backdrop-blur-xl md:hidden"
+      >
+        {nav.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
             to={to}

@@ -13,6 +13,7 @@ pub mod config;
 pub mod db;
 pub mod discovery;
 pub mod drivers;
+pub mod energy;
 pub mod error;
 pub mod federation;
 pub mod hub;
@@ -150,7 +151,10 @@ pub fn spawn_background(state: &AppState) {
     tokio::spawn(state.hub.clone().run_poller());
     tokio::spawn(state.hub.clone().run_node_links());
     tokio::spawn(state.hub.clone().run_maintenance());
-    tokio::spawn(state.drivers.clone().run());
+    tokio::spawn(state.drivers.clone().run(
+        std::time::Duration::from_millis(state.cfg.device_read_ms),
+        std::time::Duration::from_secs(state.cfg.history_interval_secs.max(1) as u64),
+    ));
     tokio::spawn(cloud::run_auto_sync(state.clone()));
     tokio::spawn(airzone_schedules::run_sync(state.clone()));
     tokio::spawn(timers::run_loop(state.hub.clone(), state.db.clone()));

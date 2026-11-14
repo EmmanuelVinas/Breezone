@@ -167,6 +167,27 @@ avec un identifiant stable. Les routes des zones restent celles qui les pilotent
 | PUT 👑 · DELETE 👑 | `/api/rooms/{id}` | Renommer, réordonner, supprimer (ses appareils restent, sans pièce) |
 
 | POST 🔒 | `/api/devices/{id}/actions` | `{trait, action, params}` : action d'un trait de l'appareil, quelle que soit sa source (`climate.zone` / `set` pour une zone Airzone, avec les droits de l'installation ; `switch.relay` / `set` pour un relais Shelly, réservé aux administrateurs pour l'instant). Paramètre inconnu → `422 unsupported` ; manquant ou mal typé → `400` → appareil à jour |
+| GET 🔒 | `/api/devices/{id}/history?hours=24&points=96` | `{bucket, series:{field:[[ts, value]]}}` : chaque nombre de l'état d'un appareil d'une source (puissance, énergie, relais en 0/1…), moyenne par intervalle (dernière valeur pour un compteur `energy_in` / `energy_out`). Un point est enregistré toutes les 5 min (`BREEZONE_HISTORY_INTERVAL_SECS`) : moyenne des lectures depuis le point précédent |
+
+### Énergie
+
+Calculée à partir des mesures d'énergie qui ont un rôle (`PUT /api/devices/{id}`), et de leur
+historique. Toute valeur est `null` quand la maison n'a pas de mesure de ce rôle.
+
+| Méthode | Chemin | Description |
+|---------|--------|-------------|
+| GET 🔒 | `/api/energy/live` | `{roles:{grid, solar, battery, consumption}, grid, solar, battery, home, consumers:[{name, device_id, room_id, power}], other}` : puissances (W) à la dernière lecture |
+| GET 🔒 | `/api/energy/day?date=YYYY-MM-DD` | `{date, bucket, points:[{ts, grid, solar, battery, home}], totals}` : puissance moyenne par quart d'heure d'un jour local (aujourd'hui par défaut), et son énergie (`totals`, comme un élément de `/days`) |
+| GET 🔒 | `/api/energy/days?days=30` | `[{day, imported, exported, production, charged, discharged, consumption, self_consumed, consumers:[{name, device_id, room_id, energy}], other, devices:[{device_id, energy_in, energy_out}]}]` : énergie (kWh) par jour local, du plus ancien à aujourd'hui (1 à 366 jours) |
+
+Conventions :
+- `grid` est positif quand la maison tire du réseau. `energy_in` correspond à l'énergie importée, `energy_out` à l'énergie injectée.
+- Pour `solar` et `consumption`, seule la valeur absolue compte, car le signe dépend du sens de la pince.
+- `battery` est positif en charge.
+- La maison consomme : réseau + production + décharge − charge. Sans compteur général, c'est la somme des mesures de consommation.
+- `other` est la consommation de la maison qu'aucune mesure de consommation ne couvre.
+- L'énergie vient des compteurs des appareils quand ils en ont, sinon de la puissance moyenne.
+- Un trou de plus de deux intervalles (appareil non lu) ne compte pas.
 
 ### Sources d'appareils 👑
 

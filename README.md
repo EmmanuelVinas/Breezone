@@ -131,6 +131,7 @@ in the `breezone_data` volume; back it up with
 | `BREEZONE_AIRZONE_HOSTS`                                             | —                               | Installations created at first start (`Home=192.168.1.25,Office=192.168.1.40:3000`) |
 | `BREEZONE_ADMIN_USER` / `BREEZONE_ADMIN_PASSWORD`                    | —                               | Administrator created at first start (otherwise from the web page)                  |
 | `BREEZONE_POLL_INTERVAL_SECS`                                        | `15`                            | WebServer polling period                                                            |
+| `BREEZONE_DEVICE_READ_MS`                                            | `5000`                          | Reading period of the device sources (Shelly…)                                      |
 | `BREEZONE_HISTORY_RETENTION_DAYS` / `BREEZONE_EVENTS_RETENTION_DAYS` | `90` / `30`                     | Retention                                                                           |
 | `BREEZONE_ACCESS_TOKEN_TTL_SECS` / `BREEZONE_REFRESH_TOKEN_TTL_DAYS` | `900` / `60`                    | Token lifetimes (device sessions are sliding)                                       |
 | `BREEZONE_JWT_SECRET`                                                | generated in `/data/jwt.secret` | Signing secret                                                                      |

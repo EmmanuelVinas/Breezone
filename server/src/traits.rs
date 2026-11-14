@@ -88,6 +88,11 @@ pub fn get(name: &str, version: u32) -> Option<&'static Trait> {
     catalog().iter().find(|t| t.name == name && t.version == version)
 }
 
+/// A field that counts up (an energy in kWh): its history keeps the last value, not the mean.
+pub fn is_counter(field: &str) -> bool {
+    catalog().iter().flat_map(|t| &t.state).any(|f| f.name == field && f.unit.as_deref() == Some("kWh"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

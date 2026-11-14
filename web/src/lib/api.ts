@@ -791,8 +791,81 @@ export type FoundProduct = {
   added: boolean
 }
 
+/** What a consumption measure measures, as shown in the breakdown. */
+export type Consumer = {
+  name: string
+  device_id: number | null
+  room_id: number | null
+}
+
+/** Power of the home (W) per role; `null` for a role without a measure. */
+export type EnergyFlows = {
+  /** Drawn from the grid (negative: returned to it). */
+  grid: number | null
+  solar: number | null
+  /** Charging (negative: discharging). */
+  battery: number | null
+  home: number | null
+}
+
+export type EnergyLive = EnergyFlows & {
+  roles: Record<MeasureRole, boolean>
+  /** Largest first. */
+  consumers: (Consumer & { power: number })[]
+  /** What the home uses beyond its consumption measures (with a grid meter). */
+  other: number | null
+}
+
+/** Energy of the home over a local day (kWh); `null` for what it has no measure of. */
+export type DayEnergy = {
+  day: string
+  imported: number | null
+  exported: number | null
+  production: number | null
+  charged: number | null
+  discharged: number | null
+  consumption: number | null
+  self_consumed: number | null
+  consumers: (Consumer & { energy: number })[]
+  other: number | null
+  devices: { device_id: number; energy_in: number; energy_out: number }[]
+}
+
+export type EnergyDay = {
+  date: string
+  bucket: number
+  points: (EnergyFlows & { ts: number })[]
+  totals: DayEnergy
+}
+
+export type DeviceHistory = {
+  bucket: number
+  series: Record<string, [number, number][]>
+}
+
 export const api = {
   devices: () => request<DeviceView[]>("GET", "/api/devices"),
+  deviceHistory: (id: number, hours = 24, points = 96) =>
+    request<DeviceHistory>(
+      "GET",
+      `/api/devices/${id}/history?hours=${hours}&points=${points}`
+    ),
+  act: (
+    id: number,
+    trait: string,
+    action: string,
+    params: Record<string, unknown>
+  ) =>
+    request<DeviceView>("POST", `/api/devices/${id}/actions`, {
+      trait,
+      action,
+      params,
+    }),
+  energyLive: () => request<EnergyLive>("GET", "/api/energy/live"),
+  energyDay: (date?: string) =>
+    request<EnergyDay>("GET", `/api/energy/day${date ? `?date=${date}` : ""}`),
+  energyDays: (days: number) =>
+    request<DayEnergy[]>("GET", `/api/energy/days?days=${days}`),
   updateDevice: (id: number, input: DeviceInput) =>
     request<DeviceView>("PUT", `/api/devices/${id}`, input),
   rooms: () => request<Room[]>("GET", "/api/rooms"),

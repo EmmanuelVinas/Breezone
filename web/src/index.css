@@ -157,3 +157,16 @@
 }
 
 .tabular { font-variant-numeric: tabular-nums; }
+
+/* Energy flowing along a link (energy page): the dots move where the energy goes. */
+.fz-flow {
+  background-image: radial-gradient(circle, currentColor 1.6px, transparent 2.2px);
+  background-size: 12px 6px;
+  background-repeat: repeat-x;
+  background-position: 0 center;
+  animation: fz-flow 0.9s linear infinite;
+}
+.fz-flow[data-reverse] { animation-direction: reverse; }
+.fz-flow[data-idle] { animation: none; opacity: 0.3; }
+@keyframes fz-flow { to { background-position: 12px center; } }
+@media (prefers-reduced-motion: reduce) { .fz-flow { animation: none; } }

@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 
 pub type DriverFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, DriverError>> + Send + 'a>>;
@@ -124,6 +124,21 @@ struct Running {
     devices: Vec<DeviceInfo>,
     states: HashMap<String, State>,
     status: SourceStatus,
+    /// Numbers read since the last history point, by device then field.
+    pending: HashMap<String, HashMap<String, Pending>>,
+}
+
+/// Readings of one number since the last history point.
+#[derive(Debug, Clone, Copy)]
+struct Pending {
+    sum: f64,
+    count: u32,
+    last: f64,
+}
+
+/// A number of the state worth a history (a switch counts as 0 or 1: its mean is the time on).
+fn number(v: &Value) -> Option<f64> {
+    v.as_f64().or_else(|| v.as_bool().map(|b| if b { 1.0 } else { 0.0 }))
 }
 
 /// A device of a source, with its last known state.
@@ -140,9 +155,6 @@ pub struct Runtime {
     db: Db,
     sources: RwLock<HashMap<i64, Running>>,
 }
-
-/// How often a source is read.
-const READ_EVERY: Duration = Duration::from_secs(5);
 
 impl Runtime {
     pub fn new(db: Db) -> Self {
@@ -168,7 +180,7 @@ impl Runtime {
                         Err(e) => (None, Some(e)),
                     };
                     let status = SourceStatus { state: if error.is_some() { "error" } else { "unknown" }, last_error: error, ..Default::default() };
-                    Running { source, driver, devices: vec![], states: HashMap::new(), status }
+                    Running { source, driver, devices: vec![], states: HashMap::new(), status, pending: HashMap::new() }
                 }
             };
             next.insert(running.source.id, running);
@@ -209,6 +221,16 @@ impl Runtime {
             }
             match result {
                 Ok(states) => {
+                    for (reference, state) in &states {
+                        let pending = r.pending.entry(reference.clone()).or_default();
+                        for (field, v) in state {
+                            let Some(v) = number(v) else { continue };
+                            let p = pending.entry(field.clone()).or_insert(Pending { sum: 0.0, count: 0, last: v });
+                            p.sum += v;
+                            p.count += 1;
+                            p.last = v;
+                        }
+                    }
                     r.states = states;
                     r.status.state = "online";
                     r.status.last_seen = Some(db::now());
@@ -238,10 +260,52 @@ impl Runtime {
         }
     }
 
-    pub async fn run(self: Arc<Self>) {
+    /// Reads the sources every `read_every`, and writes their history every `record_every`.
+    pub async fn run(self: Arc<Self>, read_every: Duration, record_every: Duration) {
+        let mut recorded = Instant::now();
         loop {
             self.poll_all().await;
-            tokio::time::sleep(READ_EVERY).await;
+            if recorded.elapsed() >= record_every {
+                recorded = Instant::now();
+                self.record().await;
+            }
+            tokio::time::sleep(read_every).await;
+        }
+    }
+
+    /// Writes a history point of every device read since the last one: the mean of each number,
+    /// the last value of a counter.
+    pub async fn record(&self) {
+        let taken: Vec<(String, HashMap<String, Pending>)> = {
+            let mut sources = self.sources.write().await;
+            sources
+                .values_mut()
+                .flat_map(|r| {
+                    let id = r.source.id;
+                    r.pending.drain().map(move |(reference, p)| (format!("{id}/{reference}"), p)).collect::<Vec<_>>()
+                })
+                .collect()
+        };
+        if taken.is_empty() {
+            return;
+        }
+        let ids = match db::source_device_ids(&self.db).await {
+            Ok(ids) => ids,
+            Err(e) => return tracing::error!("cannot record the device history: {e}"),
+        };
+        let ts = db::now();
+        let samples: Vec<db::DeviceSample> = taken
+            .into_iter()
+            .filter_map(|(key, fields)| ids.get(&key).map(|id| (*id, fields)))
+            .flat_map(|(device_id, fields)| {
+                fields.into_iter().map(move |(field, p)| {
+                    let value = if crate::traits::is_counter(&field) { p.last } else { p.sum / p.count as f64 };
+                    db::DeviceSample { device_id, ts, field, value }
+                })
+            })
+            .collect();
+        if let Err(e) = db::insert_device_samples(&self.db, &samples).await {
+            tracing::error!("cannot record the device history: {e}");
         }
     }
 

@@ -8,6 +8,7 @@ use breezone_server::config::Config;
 use reqwest::StatusCode;
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 async fn serve(router: Router) -> u16 {
@@ -17,29 +18,42 @@ async fn serve(router: Router) -> u16 {
     port
 }
 
+#[derive(Clone)]
+struct Fake {
+    relay: Arc<Mutex<bool>>,
+    /// Wh the meter counts at each reading.
+    step: u64,
+    counted: Arc<AtomicU64>,
+}
+
 /// A Shelly Pro 3EM with one relay, answering its local RPC API.
 async fn fake_shelly(relay: Arc<Mutex<bool>>) -> u16 {
+    fake_shelly_counting(relay, 0).await
+}
+
+async fn fake_shelly_counting(relay: Arc<Mutex<bool>>, step: u64) -> u16 {
     let router = Router::new()
         .route("/rpc/Shelly.GetDeviceInfo", get(|| async { Json(json!({"id": "shellypro3em-a1b2", "app": "Pro3EM", "ver": "1.4.4", "gen": 2})) }))
         .route(
             "/rpc/Shelly.GetStatus",
-            get(|State(relay): State<Arc<Mutex<bool>>>| async move {
+            get(|State(f): State<Fake>| async move {
+                let wh = f.counted.fetch_add(f.step, Ordering::SeqCst) as f64;
                 Json(json!({
                     "em:0": {"id": 0, "a_act_power": 1120.4, "b_act_power": 640.0, "c_act_power": 650.1, "total_act_power": 2410.5, "a_voltage": 232.1},
-                    "emdata:0": {"id": 0, "total_act": 1234567.0, "total_act_ret": 45678.0},
-                    "switch:0": {"id": 0, "output": *relay.lock().unwrap(), "apower": 0.0, "aenergy": {"total": 900.0}},
+                    "emdata:0": {"id": 0, "total_act": 1234567.0 + wh, "total_act_ret": 45678.0},
+                    "switch:0": {"id": 0, "output": *f.relay.lock().unwrap(), "apower": 0.0, "aenergy": {"total": 900.0}},
                     "sys": {"uptime": 10}
                 }))
             }),
         )
         .route(
             "/rpc/Switch.Set",
-            get(|State(relay): State<Arc<Mutex<bool>>>, Query(q): Query<HashMap<String, String>>| async move {
-                *relay.lock().unwrap() = q.get("on").map(String::as_str) == Some("true");
+            get(|State(f): State<Fake>, Query(q): Query<HashMap<String, String>>| async move {
+                *f.relay.lock().unwrap() = q.get("on").map(String::as_str) == Some("true");
                 Json(json!({"was_on": false}))
             }),
         )
-        .with_state(relay);
+        .with_state(Fake { relay, step, counted: Arc::new(AtomicU64::new(0)) });
     serve(router).await
 }
 
@@ -50,11 +64,22 @@ struct Server {
 
 impl Server {
     async fn start() -> (Server, String) {
+        Self::start_with(|_| {}, false).await
+    }
+
+    /// `read`: the sources are read and their history written in the background.
+    async fn start_with(tune: impl FnOnce(&mut Config), read: bool) -> (Server, String) {
         let dir = std::env::temp_dir().join(format!("breezone-drivers-{}-{}", std::process::id(), rand_suffix()));
         let _ = std::fs::remove_dir_all(&dir);
         let mut cfg = Config::for_tests(dir);
         cfg.scan_port = 9;
+        tune(&mut cfg);
+        let (read_every, record_every) = (cfg.device_read_ms, cfg.history_interval_secs as u64);
         let state = breezone_server::init_state(cfg).await.unwrap();
+        if read {
+            use std::time::Duration;
+            tokio::spawn(state.drivers.clone().run(Duration::from_millis(read_every), Duration::from_secs(record_every)));
+        }
         let port = serve(breezone_server::app(state)).await;
         let server = Server { base: format!("http://127.0.0.1:{port}"), http: reqwest::Client::new() };
         let (_, v) = server.call("POST", "/api/setup", None, Some(json!({"username":"admin","password":"motdepasse1"}))).await;
@@ -75,9 +100,10 @@ impl Server {
     }
 }
 
-fn rand_suffix() -> u64 {
+fn rand_suffix() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() as u64
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    format!("{}-{}", SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos(), NEXT.fetch_add(1, Ordering::SeqCst))
 }
 
 #[tokio::test]
@@ -171,4 +197,69 @@ async fn a_shelly_source_provides_devices_driven_through_their_traits() {
     assert_eq!(s, StatusCode::NO_CONTENT);
     let (_, devices) = server.call("GET", "/api/devices", t, None).await;
     assert!(devices.as_array().unwrap().iter().all(|d| d["source_id"] != id), "{devices}");
+}
+
+#[tokio::test]
+async fn the_measures_have_a_history_and_make_the_energy_of_the_home() {
+    let shelly = fake_shelly_counting(Arc::new(Mutex::new(false)), 1).await;
+    // Read often, a history point every second.
+    let tune = |cfg: &mut Config| {
+        cfg.device_read_ms = 200;
+        cfg.history_interval_secs = 1;
+    };
+    let (server, token) = Server::start_with(tune, true).await;
+    let t = Some(token.as_str());
+    let (s, _) = server.call("POST", "/api/sources", t, Some(json!({"driver":"shelly","name":"Tableau","config":{"host": format!("127.0.0.1:{shelly}")}}))).await;
+    assert_eq!(s, StatusCode::CREATED);
+
+    // Nothing is shown until the measures have a role.
+    let (_, live) = server.call("GET", "/api/energy/live", t, None).await;
+    assert_eq!(live["roles"]["grid"], false, "{live}");
+    assert_eq!(live["home"], Value::Null);
+
+    let (_, devices) = server.call("GET", "/api/devices", t, None).await;
+    let id = |reference: &str| devices.as_array().unwrap().iter().find(|d| d["reference"] == reference).unwrap()["id"].as_i64().unwrap();
+    let (meter, relay) = (id("em:0"), id("switch:0"));
+    server.call("PUT", &format!("/api/devices/{meter}"), t, Some(json!({"role":"grid"}))).await;
+    server.call("PUT", &format!("/api/devices/{relay}"), t, Some(json!({"role":"consumption","name":"Pompe"}))).await;
+
+    let (_, live) = server.call("GET", "/api/energy/live", t, None).await;
+    assert_eq!((live["roles"]["grid"].clone(), live["roles"]["solar"].clone()), (json!(true), json!(false)), "{live}");
+    assert_eq!(live["grid"], 2410.5);
+    assert_eq!(live["home"], 2410.5);
+    assert_eq!(live["solar"], Value::Null);
+    assert_eq!(live["consumers"][0]["name"], "Pompe");
+    assert_eq!(live["other"], 2410.5);
+
+    tokio::time::sleep(std::time::Duration::from_millis(3500)).await;
+
+    // The history of the meter: its power (mean), its counter (last value).
+    let (s, h) = server.call("GET", &format!("/api/devices/{meter}/history?hours=1&points=60"), t, None).await;
+    assert_eq!(s, StatusCode::OK, "{h}");
+    assert_eq!(h["bucket"], 60);
+    assert_eq!(h["series"]["power"][0][1], 2410.5, "{h}");
+    assert!(h["series"]["energy_in"][0][1].as_f64().unwrap() > 1234.567, "{h}");
+    let (s, _) = server.call("GET", "/api/devices/999999/history", t, None).await;
+    assert_eq!(s, StatusCode::NOT_FOUND);
+
+    // Its counter went up: energy drawn from the grid today, used by the home.
+    let (_, days) = server.call("GET", "/api/energy/days?days=3", t, None).await;
+    let days = days.as_array().unwrap();
+    assert_eq!(days.len(), 3);
+    let today = days.last().unwrap();
+    assert!(today["imported"].as_f64().unwrap() > 0.0, "{today}");
+    assert_eq!(today["consumption"], today["imported"]);
+    assert_eq!(today["production"], Value::Null, "no solar measure");
+    assert_eq!(today["consumers"][0]["name"], "Pompe");
+    assert_eq!(days[0]["imported"], 0.0, "no reading two days ago");
+
+    let (s, day) = server.call("GET", "/api/energy/day", t, None).await;
+    assert_eq!(s, StatusCode::OK, "{day}");
+    assert_eq!(day["bucket"], 900);
+    let points = day["points"].as_array().unwrap();
+    assert!((92..=100).contains(&points.len()));
+    assert!(points.iter().any(|p| p["grid"] == 2410.5), "{day}");
+    assert_eq!(day["totals"], *today);
+    let (s, _) = server.call("GET", "/api/energy/day?date=demain", t, None).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
 }
