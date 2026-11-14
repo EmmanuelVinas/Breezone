@@ -2,8 +2,8 @@ import { useState } from "react"
 import { Link } from "react-router"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { Lightbulb, Power } from "lucide-react"
-import type { DeviceView, Room } from "@/lib/api"
+import { Lightbulb, Loader2, Power, Sparkles } from "lucide-react"
+import type { DeviceView, Room, SceneView } from "@/lib/api"
 import { api, currentUser } from "@/lib/api"
 import { t, tn } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
@@ -321,6 +321,60 @@ function Detail({ light, canDrive }: { light: DeviceView; canDrive: boolean }) {
   )
 }
 
+/** The scenes of the Hue app, one button each. */
+function Scenes({
+  scenes,
+  canDrive,
+}: {
+  scenes: SceneView[]
+  canDrive: boolean
+}) {
+  const qc = useQueryClient()
+  const activate = useMutation({
+    mutationFn: (s: SceneView) => api.activateScene(s.source_id, s.id),
+    onSuccess: (_, s) => {
+      qc.invalidateQueries({ queryKey: ["devices"] })
+      toast.success(t("Scène « {name} » activée", { name: s.name }))
+    },
+    onError: (e) => toast.error(errorText(e)),
+  })
+  if (scenes.length === 0) return null
+  return (
+    <div className="flex flex-wrap gap-2">
+      {scenes.map((s) => {
+        const busy =
+          activate.isPending &&
+          activate.variables?.id === s.id &&
+          activate.variables?.source_id === s.source_id
+        return (
+          <Button
+            key={`${s.source_id}/${s.id}`}
+            variant="outline"
+            size="sm"
+            className="rounded-full"
+            disabled={!canDrive || activate.isPending}
+            onClick={() => activate.mutate(s)}
+          >
+            {busy ? <Loader2 className="animate-spin" /> : <Sparkles />}
+            {s.name}
+          </Button>
+        )
+      })}
+    </div>
+  )
+}
+
+/** The Breezone room a scene belongs to: the one all its lights are in, if they share one. */
+function sceneRoom(scene: SceneView, lights: DeviceView[]) {
+  const rooms = new Set(
+    scene.device_ids.map(
+      (id) => lights.find((d) => d.id === id)?.room_id ?? null
+    )
+  )
+  const [only] = [...rooms]
+  return rooms.size === 1 ? only : null
+}
+
 export function LightsPage() {
   const admin = currentUser()?.role === "admin"
   const qc = useQueryClient()
@@ -330,8 +384,24 @@ export function LightsPage() {
     refetchInterval: 5_000,
   })
   const rooms = useQuery({ queryKey: ["rooms"], queryFn: api.rooms })
+  const scenes = useQuery({
+    queryKey: ["scenes"],
+    queryFn: api.scenes,
+    staleTime: 60_000,
+  })
   const [selected, setSelected] = useState<number | null>(null)
   const all = (devices.data ?? []).filter((d) => d.traits.includes("light@1"))
+  const roomOf = new Map(
+    (scenes.data ?? []).map((s) => [s, sceneRoom(s, all)] as const)
+  )
+  const scenesIn = (room: number | null) =>
+    (scenes.data ?? []).filter((s) => roomOf.get(s) === room)
+  // Scenes over several rooms (or with no light known here): above the rooms.
+  const wide = (scenes.data ?? []).filter(
+    (s) =>
+      roomOf.get(s) === null &&
+      !all.some((d) => d.room_id === null && s.device_ids.includes(d.id))
+  )
   const lit = all.filter((d) => stateOf(d).on && d.available)
   // Drives several lights at once ("Tout allumer").
   const many = useMutation({
@@ -406,6 +476,7 @@ export function LightsPage() {
       ) : (
         <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
           <div className="grid gap-6">
+            {wide.length > 0 && <Scenes scenes={wide} canDrive={admin} />}
             {groups.map((g) => {
               const on = g.lights.filter((d) => stateOf(d).on && d.available)
               return (
@@ -449,6 +520,12 @@ export function LightsPage() {
                       </Button>
                     </div>
                   </div>
+                  <Scenes
+                    scenes={scenesIn(g.room?.id ?? null).filter(
+                      (s) => g.room !== null || !wide.includes(s)
+                    )}
+                    canDrive={admin}
+                  />
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                     {g.lights.map((d) => (
                       <LightCard

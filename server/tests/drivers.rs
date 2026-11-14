@@ -564,6 +564,8 @@ async fn a_lost_source_is_found_again_at_its_new_address() {
 struct HueBridge {
     pressed: Arc<Mutex<bool>>,
     lights: Arc<Mutex<Value>>,
+    /// Scenes recalled: (group, scene).
+    recalled: Arc<Mutex<Vec<(String, String)>>>,
 }
 
 /// A Hue bridge (local API v1) with a color light and a dimmable one.
@@ -600,6 +602,39 @@ async fn fake_hue(bridge: HueBridge) -> u16 {
             }),
         )
         .route("/api/{key}/lights", get(|State(b): State<HueBridge>| async move { Json(b.lights.lock().unwrap().clone()) }))
+        .route(
+            "/api/{key}/groups",
+            get(|| async {
+                Json(json!({
+                    "1": {"name": "Salon", "type": "Room", "lights": ["1"]},
+                    "2": {"name": "Chambre", "type": "Room", "lights": ["2"]},
+                    "3": {"name": "Tout", "type": "Zone", "lights": ["1", "2"]}
+                }))
+            }),
+        )
+        .route(
+            "/api/{key}/scenes",
+            get(|| async {
+                Json(json!({
+                    "abc-1": {"name": "Lecture", "type": "GroupScene", "group": "1", "lights": ["1"], "recycle": false},
+                    "abc-2": {"name": "Nuit", "type": "LightScene", "lights": ["1", "2"], "recycle": false},
+                    "tmp-9": {"name": "temp", "type": "LightScene", "lights": ["1"], "recycle": true}
+                }))
+            }),
+        )
+        .route(
+            "/api/{key}/scenes/{id}",
+            get(|Path((_, id)): Path<(String, String)>| async move {
+                Json(if id == "abc-1" { json!({"name": "Lecture", "type": "GroupScene", "group": "1"}) } else { json!({"name": "Nuit", "type": "LightScene"}) })
+            }),
+        )
+        .route(
+            "/api/{key}/groups/{group}/action",
+            put(|State(b): State<HueBridge>, Path((_, group)): Path<(String, String)>, Json(cmd): Json<Value>| async move {
+                b.recalled.lock().unwrap().push((group, cmd["scene"].as_str().unwrap_or_default().to_string()));
+                Json(json!([{"success": cmd}]))
+            }),
+        )
         .route(
             "/api/{key}/lights/{id}/state",
             put(|State(b): State<HueBridge>, Path((_, id)): Path<(String, String)>, Json(cmd): Json<Value>| async move {
@@ -661,4 +696,27 @@ async fn a_hue_bridge_is_added_with_its_button_and_drives_its_lights() {
     let (path, body) = act(&ceiling["id"], json!({"on": false, "flash": true}));
     let (s, _) = server.call("POST", &path, t, Some(body)).await;
     assert_eq!(s, StatusCode::UNPROCESSABLE_ENTITY, "unknown parameter");
+
+    // The rooms of the Hue app: created by name, the lights not in a room yet go in theirs.
+    let (_, salon) = server.call("POST", "/api/rooms", t, Some(json!({"name": "salon"}))).await;
+    let (s, taken) = server.call("POST", &format!("/api/sources/{}/rooms", source["id"]), t, None).await;
+    assert_eq!(s, StatusCode::OK, "{taken}");
+    assert_eq!(taken, json!({"created": ["Chambre"], "placed": 2}), "« salon » already exists; a zone is not a room");
+    let (_, devices) = server.call("GET", "/api/devices", t, None).await;
+    let light = |name: &str| devices.as_array().unwrap().iter().find(|d| d["name"] == name).unwrap().clone();
+    assert_eq!(light("Plafonnier")["room_id"], salon["id"]);
+    let (_, again) = server.call("POST", &format!("/api/sources/{}/rooms", source["id"]), t, None).await;
+    assert_eq!(again, json!({"created": [], "placed": 0}), "nothing moves twice");
+
+    // Its scenes, without the temporary ones, recalled on their room or on all the lights.
+    let (_, scenes) = server.call("GET", "/api/scenes", t, None).await;
+    let names: Vec<_> = scenes.as_array().unwrap().iter().map(|s| (s["name"].as_str().unwrap(), s["room"].clone(), s["device_ids"].as_array().unwrap().len())).collect();
+    assert_eq!(names, vec![("Nuit", Value::Null, 2), ("Lecture", json!("Salon"), 1)], "{scenes}");
+    let (s, _) = server.call("POST", &format!("/api/scenes/{}/abc-1", source["id"]), t, None).await;
+    assert_eq!(s, StatusCode::NO_CONTENT);
+    let (s, _) = server.call("POST", &format!("/api/scenes/{}/abc-2", source["id"]), t, None).await;
+    assert_eq!(s, StatusCode::NO_CONTENT);
+    assert_eq!(*bridge.recalled.lock().unwrap(), vec![("1".into(), "abc-1".into()), ("0".into(), "abc-2".into())]);
+    let (s, _) = server.call("POST", &format!("/api/scenes/{}/..%2Fx", source["id"]), t, None).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
 }

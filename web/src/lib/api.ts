@@ -606,6 +606,16 @@ export class ApiError extends Error {
   }
 }
 
+/** A scene of a module's own app (Hue). */
+export interface SceneView {
+  source_id: number
+  id: string
+  name: string
+  /** The room of the module's app it belongs to. */
+  room: string | null
+  device_ids: number[]
+}
+
 /** What an import of the configuration changed, and what is left to do by hand. */
 export interface ConfigImported {
   installations: number
@@ -918,6 +928,16 @@ export const api = {
   /** Replaces the configuration with an exported one. */
   importConfig: (file: unknown) =>
     request<ConfigImported>("POST", "/api/system/config", file),
+  /** Takes the rooms of the module's own app (Hue): missing ones created, unplaced devices placed. */
+  takeRooms: (sourceId: number) =>
+    request<{ created: string[]; placed: number }>(
+      "POST",
+      `/api/sources/${sourceId}/rooms`
+    ),
+  /** The scenes of the modules that have some (Hue). */
+  scenes: () => request<SceneView[]>("GET", "/api/scenes"),
+  activateScene: (sourceId: number, id: string) =>
+    request<void>("POST", `/api/scenes/${sourceId}/${encodeURIComponent(id)}`),
   /** Starts pairing: an accessory with a screen shows its code now. */
   startHomekitPairing: (input: { host: string; flags: number }) =>
     request<void>("POST", "/api/homekit/pair/start", input),

@@ -314,3 +314,95 @@ pub async fn scan(State(state): State<AppState>, _admin: AdminUser, body: Option
         .collect();
     Ok(Json(serde_json::json!({ "subnet": subnet, "duration_ms": started.elapsed().as_millis() as u64, "products": found })))
 }
+
+fn driver_error(e: crate::drivers::DriverError) -> ApiError {
+    match e {
+        crate::drivers::DriverError::Unreachable(m) => ApiError::bad_gateway(m),
+        crate::drivers::DriverError::Unsupported(m) => ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, m).with_detail("code", "unsupported"),
+        crate::drivers::DriverError::Invalid(m) => ApiError::bad_request(m),
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct SceneView {
+    pub source_id: i64,
+    pub id: String,
+    pub name: String,
+    /// The room of the module's app it belongs to.
+    pub room: Option<String>,
+    /// The devices it sets.
+    pub device_ids: Vec<i64>,
+}
+
+/// The scenes of the modules that have some (Hue), with the devices they set. A module that does
+/// not answer is left out.
+pub async fn scenes(State(state): State<AppState>, _user: crate::auth::AuthUser) -> ApiResult<Json<Vec<SceneView>>> {
+    let ids = db::source_device_ids(&state.db).await?;
+    let mut out = vec![];
+    for source in db::list_sources(&state.db).await?.into_iter().filter(|s| s.enabled) {
+        let Some(driver) = state.drivers.driver(source.id).await else { continue };
+        let Ok(scenes) = driver.scenes().await else { continue };
+        out.extend(scenes.into_iter().map(|s| SceneView {
+            source_id: source.id,
+            device_ids: s.references.iter().filter_map(|r| ids.get(&format!("{}/{r}", source.id)).copied()).collect(),
+            id: s.id,
+            name: s.name,
+            room: s.room,
+        }));
+    }
+    Ok(Json(out))
+}
+
+/// Activates a scene of a module (administrators, as for the other devices of modules).
+pub async fn activate_scene(State(state): State<AppState>, _admin: AdminUser, Path((source_id, scene)): Path<(i64, String)>) -> ApiResult<StatusCode> {
+    state.drivers.activate_scene(source_id, &scene).await.map_err(driver_error)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Debug, Serialize)]
+pub struct RoomsTaken {
+    /// Rooms created in Breezone.
+    pub created: Vec<String>,
+    /// Devices put in a room (those already in one stay where they are).
+    pub placed: usize,
+}
+
+/// Takes the rooms of the module's own app (Hue): the missing ones are created, by name, and the
+/// devices not in a room yet go in theirs.
+pub async fn take_rooms(State(state): State<AppState>, _admin: AdminUser, Path(id): Path<i64>) -> ApiResult<Json<RoomsTaken>> {
+    let driver = state.drivers.driver(id).await.ok_or_else(|| ApiError::not_found("source not found"))?;
+    let rooms = driver.rooms().await.map_err(driver_error)?;
+    let ids = db::source_device_ids(&state.db).await?;
+    let mut existing = db::list_rooms(&state.db).await?;
+    let mut taken = RoomsTaken { created: vec![], placed: 0 };
+    for room in rooms {
+        let mut devices = vec![];
+        for r in &room.references {
+            if let Some(device) = match ids.get(&format!("{id}/{r}")) {
+                Some(d) => db::device_by_id(&state.db, *d).await?,
+                None => None,
+            } {
+                devices.push(device);
+            }
+        }
+        if devices.is_empty() {
+            continue;
+        }
+        let name = room.name.trim();
+        let room_id = match existing.iter().find(|e| e.name.trim().to_lowercase() == name.to_lowercase()) {
+            Some(e) => e.id,
+            None => {
+                let created = db::insert_room(&state.db, name, existing.len() as i64).await?;
+                taken.created.push(created.name.clone());
+                let id = created.id;
+                existing.push(created);
+                id
+            }
+        };
+        for d in devices.into_iter().filter(|d| d.room_id.is_none()) {
+            db::update_device(&state.db, d.id, d.name.as_deref(), Some(room_id), d.position).await?;
+            taken.placed += 1;
+        }
+    }
+    Ok(Json(taken))
+}

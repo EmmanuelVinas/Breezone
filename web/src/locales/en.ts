@@ -892,7 +892,6 @@ const en: Record<string, string> = {
   "marche et arrêt des relais": "relays on and off",
   "Nommez chaque appareil et dites ce que mesure chaque voie : la page Énergie s'en sert.":
     "Name each device and say what each channel measures: the energy page uses it.",
-  "Nommez chaque appareil.": "Name each device.",
   "Protocole local de la clé Wi-Fi (port 10081) : aucun compte S-Miles Cloud nécessaire":
     "Local protocol of the Wi-Fi stick (port 10081): no S-Miles Cloud account needed",
   "puissance, tension, fréquence, température et production de chaque micro-onduleur ; puissance et production de chaque panneau":
@@ -1069,6 +1068,13 @@ const en: Record<string, string> = {
   "Tout ouvrir": "Open all",
   "Volet roulant": "Roller shutter",
   Volets: "Shutters",
+  "Toutes les lumières ont déjà une pièce": "Every light already has a room",
+  "{placed} lumière(s) rangée(s), {created} pièce(s) créée(s)":
+    "{placed} light(s) placed, {created} room(s) created",
+  "Nommez chaque appareil et choisissez sa pièce.":
+    "Name each device and choose its room.",
+  "Reprendre les pièces Hue": "Take the Hue rooms",
+  "Scène « {name} » activée": "Scene “{name}” on",
 }
 
 export default en

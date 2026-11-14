@@ -900,7 +900,6 @@ const es: Record<string, string> = {
   "marche et arrêt des relais": "encendido y apagado de los relés",
   "Nommez chaque appareil et dites ce que mesure chaque voie : la page Énergie s'en sert.":
     "Nombre cada aparato y diga qué mide cada canal: la página Energía lo usa.",
-  "Nommez chaque appareil.": "Nombre cada aparato.",
   "Protocole local de la clé Wi-Fi (port 10081) : aucun compte S-Miles Cloud nécessaire":
     "Protocolo local de la llave Wi-Fi (puerto 10081): sin cuenta S-Miles Cloud",
   "puissance, tension, fréquence, température et production de chaque micro-onduleur ; puissance et production de chaque panneau":
@@ -1078,6 +1077,14 @@ const es: Record<string, string> = {
   "Tout ouvrir": "Abrir todo",
   "Volet roulant": "Persiana enrollable",
   Volets: "Persianas",
+  "Toutes les lumières ont déjà une pièce":
+    "Todas las luces ya tienen estancia",
+  "{placed} lumière(s) rangée(s), {created} pièce(s) créée(s)":
+    "{placed} luz(ces) colocada(s), {created} estancia(s) creada(s)",
+  "Nommez chaque appareil et choisissez sa pièce.":
+    "Nombre cada aparato y elija su estancia.",
+  "Reprendre les pièces Hue": "Tomar las estancias de Hue",
+  "Scène « {name} » activée": "Escena «{name}» activada",
 }
 
 export default es

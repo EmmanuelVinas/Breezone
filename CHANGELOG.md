@@ -6,8 +6,15 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.9] - 2026-11-14
+
 ### Added
 
+- Rooms of the devices of modules: each device gets its room in Settings › Modules (and a shutter in
+  its detail on the Shutters page). « Reprendre les pièces Hue » takes the rooms of the Hue app:
+  the missing ones are created by name, the lights not in a room yet go in theirs.
+- Hue scenes on the Lights page: those of a room under it, those over several rooms above; one click
+  turns one on (`GET /api/scenes`, `POST /api/scenes/{source}/{scene}`).
 - Shutters page (web), as in the mockups: shutters by room with « Tout ouvrir » and « Tout fermer »,
   a card per shutter showing how far it is open with ▲ ■ ▼, and the detail of the one chosen
   (position, open, stop, close, its room). In the menu when a module provides shutters.

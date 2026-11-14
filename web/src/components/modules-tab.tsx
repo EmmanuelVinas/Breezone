@@ -7,6 +7,7 @@ import {
   Lightbulb,
   Home,
   Link2,
+  House,
   Loader2,
   PlugZap,
   Plus,
@@ -337,6 +338,26 @@ function DeviceRow({
           )}
         </div>
       )}
+      {!measuresEnergy && (
+        <Select
+          value={device.room_id ? String(device.room_id) : "none"}
+          onValueChange={(v) =>
+            save.mutate({ room_id: v === "none" ? null : Number(v) })
+          }
+        >
+          <SelectTrigger className="w-48" aria-label={t("Pièce")}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">{t("Sans pièce")}</SelectItem>
+            {rooms.map((r) => (
+              <SelectItem key={r.id} value={String(r.id)}>
+                {r.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
     </div>
   )
 }
@@ -606,6 +627,22 @@ function SourceDetail({
     },
     onError: (e) => toast.error(errorText(e)),
   })
+  const takeRooms = useMutation({
+    mutationFn: () => api.takeRooms(source.id),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ["devices"] })
+      qc.invalidateQueries({ queryKey: ["rooms"] })
+      toast.success(
+        r.placed === 0 && r.created.length === 0
+          ? t("Toutes les lumières ont déjà une pièce")
+          : t("{placed} lumière(s) rangée(s), {created} pièce(s) créée(s)", {
+              placed: r.placed,
+              created: r.created.length,
+            })
+      )
+    },
+    onError: (e) => toast.error(errorText(e)),
+  })
   const d = DRIVER[source.driver]
   const Icon = d?.icon ?? Zap
   const host = typeof source.config.host === "string" ? source.config.host : ""
@@ -697,15 +734,32 @@ function SourceDetail({
       </Card>
       {charger && <CurrentOwner charger={charger} />}
       <Card className="rounded-3xl">
-        <CardHeader>
-          <CardTitle>{t("Appareils")}</CardTitle>
-          <CardDescription>
-            {devices.some((x) => x.traits.includes("energy.power@1"))
-              ? t(
-                  "Nommez chaque appareil et dites ce que mesure chaque voie : la page Énergie s'en sert."
-                )
-              : t("Nommez chaque appareil.")}
-          </CardDescription>
+        <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
+          <div className="grid gap-1.5">
+            <CardTitle>{t("Appareils")}</CardTitle>
+            <CardDescription>
+              {devices.some((x) => x.traits.includes("energy.power@1"))
+                ? t(
+                    "Nommez chaque appareil et dites ce que mesure chaque voie : la page Énergie s'en sert."
+                  )
+                : t("Nommez chaque appareil et choisissez sa pièce.")}
+            </CardDescription>
+          </div>
+          {source.driver === "hue" && devices.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={takeRooms.isPending}
+              onClick={() => takeRooms.mutate()}
+            >
+              {takeRooms.isPending ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <House />
+              )}
+              {t("Reprendre les pièces Hue")}
+            </Button>
+          )}
         </CardHeader>
         <CardContent className="grid gap-2">
           {devices.length === 0 ? (

@@ -4,7 +4,7 @@
 //! Breezone gets its access key the way the Hue app does: the bridge's button is pressed, then
 //! `POST /api` gives a key (the source's secret, stored encrypted).
 
-use super::{ConfigField, Described, DeviceInfo, Driver, DriverError, DriverFuture, DriverInfo, State};
+use super::{ConfigField, Described, DeviceInfo, Driver, DriverError, DriverFuture, DriverInfo, HardwareRoom, Scene, State};
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use std::time::Duration;
@@ -252,6 +252,56 @@ impl Hue {
     }
 }
 
+impl Hue {
+    async fn put(&self, path: &str, body: &Value) -> Result<(), DriverError> {
+        let resp = self.http.put(format!("{}{path}", self.base)).json(body).send().await.map_err(|e| DriverError::Unreachable(e.to_string()))?;
+        let v: Value = resp.json().await.map_err(|e| DriverError::Invalid(e.to_string()))?;
+        match v.as_array().and_then(|a| a.iter().find_map(|r| r.get("error"))) {
+            Some(e) => Err(DriverError::Invalid(e["description"].as_str().unwrap_or("error").to_string())),
+            None => Ok(()),
+        }
+    }
+}
+
+fn references(lights: &Value) -> Vec<String> {
+    lights.as_array().map(|l| l.iter().filter_map(Value::as_str).map(|id| format!("light:{id}")).collect()).unwrap_or_default()
+}
+
+/// The rooms of the Hue app (`/groups` of type "Room"), by name.
+pub fn rooms_of(groups: &Value) -> Vec<HardwareRoom> {
+    let mut rooms: Vec<(u64, HardwareRoom)> = groups
+        .as_object()
+        .map(|o| {
+            o.iter()
+                .filter(|(_, g)| g["type"] == "Room")
+                .map(|(id, g)| (id.parse().unwrap_or(0), HardwareRoom { name: g["name"].as_str().unwrap_or("Pièce").to_string(), references: references(&g["lights"]) }))
+                .collect()
+        })
+        .unwrap_or_default();
+    rooms.sort_by_key(|(n, _)| *n);
+    rooms.into_iter().map(|(_, r)| r).collect()
+}
+
+/// The scenes of the Hue app (`/scenes`), without the temporary ones apps leave behind.
+pub fn scenes_of(scenes: &Value, groups: &Value) -> Vec<Scene> {
+    let mut out: Vec<Scene> = scenes
+        .as_object()
+        .map(|o| {
+            o.iter()
+                .filter(|(_, s)| s["recycle"] != true)
+                .map(|(id, s)| Scene {
+                    id: id.clone(),
+                    name: s["name"].as_str().unwrap_or("Scène").to_string(),
+                    room: s["group"].as_str().and_then(|g| groups[g]["name"].as_str()).map(str::to_string),
+                    references: references(&s["lights"]),
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    out.sort_by(|a, b| (&a.room, &a.name).cmp(&(&b.room, &b.name)));
+    out
+}
+
 impl Driver for Hue {
     fn describe(&self) -> DriverFuture<'_, Described> {
         Box::pin(async move {
@@ -302,13 +352,30 @@ impl Driver for Hue {
             let (Some(id), "light", "set") = (reference.strip_prefix("light:"), trait_name, action) else {
                 return Err(DriverError::Unsupported(format!("{reference}: {trait_name}.{action}")));
             };
-            let body = command(params)?;
-            let resp = self.http.put(format!("{}/lights/{id}/state", self.base)).json(&body).send().await.map_err(|e| DriverError::Unreachable(e.to_string()))?;
-            let v: Value = resp.json().await.map_err(|e| DriverError::Invalid(e.to_string()))?;
-            match v.as_array().and_then(|a| a.iter().find_map(|r| r.get("error"))) {
-                Some(e) => Err(DriverError::Invalid(e["description"].as_str().unwrap_or("error").to_string())),
-                None => Ok(()),
+            self.put(&format!("/lights/{id}/state"), &command(params)?).await
+        })
+    }
+
+    fn rooms(&self) -> DriverFuture<'_, Vec<HardwareRoom>> {
+        Box::pin(async move { Ok(rooms_of(&self.get("/groups").await?)) })
+    }
+
+    fn scenes(&self) -> DriverFuture<'_, Vec<Scene>> {
+        Box::pin(async move {
+            let groups = self.get("/groups").await?;
+            Ok(scenes_of(&self.get("/scenes").await?, &groups))
+        })
+    }
+
+    fn activate_scene<'a>(&'a self, id: &'a str) -> DriverFuture<'a, ()> {
+        Box::pin(async move {
+            if id.is_empty() || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+                return Err(DriverError::Invalid("invalid scene".into()));
             }
+            let scene = self.get(&format!("/scenes/{id}")).await?;
+            // A scene of a room is recalled on that room; any other on all the lights (group 0).
+            let group = scene["group"].as_str().filter(|g| g.chars().all(|c| c.is_ascii_digit())).unwrap_or("0");
+            self.put(&format!("/groups/{group}/action"), &json!({ "scene": id })).await
         })
     }
 }

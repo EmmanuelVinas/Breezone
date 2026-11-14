@@ -78,6 +78,33 @@ pub trait Driver: Send + Sync {
     fn read_every(&self) -> Duration {
         Duration::ZERO
     }
+    /// The rooms set in the hardware's own app (Hue), when it has some.
+    fn rooms(&self) -> DriverFuture<'_, Vec<HardwareRoom>> {
+        Box::pin(async { Ok(vec![]) })
+    }
+    /// The scenes set in the hardware's own app (Hue), when it has some.
+    fn scenes(&self) -> DriverFuture<'_, Vec<Scene>> {
+        Box::pin(async { Ok(vec![]) })
+    }
+    fn activate_scene<'a>(&'a self, id: &'a str) -> DriverFuture<'a, ()> {
+        Box::pin(async move { Err(DriverError::Unsupported(format!("scene {id}"))) })
+    }
+}
+
+/// A room of the hardware's own app: its name and the references of the devices in it.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct HardwareRoom {
+    pub name: String,
+    pub references: Vec<String>,
+}
+
+/// A scene of the hardware's own app: the room it belongs to, if any, and the devices it sets.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Scene {
+    pub id: String,
+    pub name: String,
+    pub room: Option<String>,
+    pub references: Vec<String>,
 }
 
 /// A field of a driver's configuration form.
@@ -516,6 +543,19 @@ impl Runtime {
     }
 
     /// Applies an action, then reads the source again so that the new state shows at once.
+    /// The driver of a configured source.
+    pub async fn driver(&self, source_id: i64) -> Option<Arc<dyn Driver>> {
+        self.sources.read().await.get(&source_id).and_then(|r| r.driver.clone())
+    }
+
+    /// Activates a scene, then reads the source again (its devices changed).
+    pub async fn activate_scene(&self, source_id: i64, scene: &str) -> Result<(), DriverError> {
+        let driver = self.driver(source_id).await.ok_or_else(|| DriverError::Unreachable("source not configured".into()))?;
+        driver.activate_scene(scene).await?;
+        self.poll(source_id).await;
+        Ok(())
+    }
+
     pub async fn act(&self, source_id: i64, reference: &str, trait_name: &str, action: &str, params: &State) -> Result<(), DriverError> {
         let driver = self.sources.read().await.get(&source_id).and_then(|r| r.driver.clone()).ok_or_else(|| DriverError::Unreachable("source not configured".into()))?;
         driver.act(reference, trait_name, action, params).await?;
