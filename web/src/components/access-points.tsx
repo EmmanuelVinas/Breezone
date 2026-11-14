@@ -201,7 +201,7 @@ export function AccessDialog({
           <div className="grid gap-3">
             <p className="text-sm text-muted-foreground">
               {t(
-                "L'installation est sur un autre site, pilotée par le serveur Breezone installé là-bas. Sur ce serveur : Réglages › Partages › Nouveau partage, puis ajoutez son jeton ici. Les installations partagées sont reconnues automatiquement (même WebServer)."
+                "L'installation est sur un autre site, pilotée par le serveur Breezone installé là-bas. Sur ce serveur : Réglages › Serveurs › Nouveau partage, puis ajoutez son jeton ici. Les installations partagées sont reconnues automatiquement (même WebServer)."
               )}
             </p>
             {(nodes.data ?? []).map((n) => (

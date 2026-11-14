@@ -409,12 +409,12 @@ function ShareDialog({
             </DialogTitle>
             <DialogDescription>
               {t(
-                "Sur l'autre serveur Breezone : Réglages › Nœuds › Ajouter, puis collez ce jeton (ou scannez le QR code avec l'application). Il est utilisable une seule fois, pendant 15 minutes, et ne contient aucune clé d'accès. Vous devrez ensuite accepter la demande ici, dans « À qui ce serveur est partagé »."
+                "Sur l'autre serveur Breezone : Réglages › Serveurs › Ajouter, puis collez ce jeton (ou scannez le QR code avec l'application). Il est utilisable une seule fois, pendant 15 minutes, et ne contient aucune clé d'accès. Vous devrez ensuite accepter la demande ici, dans « À qui ce serveur est partagé »."
               )}
               {reciprocal &&
                 " " +
                   t(
-                    "L'autre serveur pourra aussi vous partager ses installations : elles apparaîtront dans Nœuds une fois la demande acceptée."
+                    "L'autre serveur pourra aussi vous partager ses installations : elles apparaîtront dans « Quels serveurs partagent avec celui-ci » une fois la demande acceptée."
                   )}
             </DialogDescription>
           </DialogHeader>
@@ -692,7 +692,7 @@ function SharesCard() {
                     " " +
                       (s.remote_shares_back
                         ? t(
-                            "Il vous partage aussi ses installations : elles apparaîtront dans Nœuds dès que vous accepterez."
+                            "Il vous partage aussi ses installations : elles apparaîtront dans « Quels serveurs partagent avec celui-ci » dès que vous accepterez."
                           )
                         : t("Il n'a pas accepté le partage réciproque."))}
                 </p>
@@ -701,11 +701,11 @@ function SharesCard() {
                 <p className="mt-1 text-xs text-muted-foreground">
                   {s.remote_shares_back
                     ? t(
-                        "« {name} » vous partage aussi ses installations : choisissez celles à afficher dans Réglages › Nœuds.",
+                        "« {name} » vous partage aussi ses installations : choisissez celles à afficher dans Réglages › Serveurs.",
                         { name: s.remote_name ?? "?" }
                       )
                     : t(
-                        "« {name} » ne partage pas ses installations en retour. Pour les voir ici : sur ce serveur-là, Réglages › Partages › Nouveau partage, puis ajoutez le jeton dans Réglages › Nœuds.",
+                        "« {name} » ne partage pas ses installations en retour. Pour les voir ici : sur ce serveur-là, Réglages › Serveurs › Nouveau partage, puis ajoutez le jeton dans Réglages › Serveurs.",
                         { name: s.remote_name ?? "?" }
                       )}
                 </p>
@@ -800,11 +800,13 @@ function SharesCard() {
   )
 }
 
-export function SharesTab() {
+/** The servers of the other sites: this one, those it shares with, those that share with it. */
+export function ServersTab() {
   return (
     <div className="grid gap-6">
       <IdentityCard />
       <SharesCard />
+      <NodesCard />
     </div>
   )
 }
@@ -914,7 +916,7 @@ export function AddNodeDialog({ onClose }: { onClose: () => void }) {
           <DialogTitle>{t("Ajouter un serveur Breezone")}</DialogTitle>
           <DialogDescription>
             {t(
-              "Sur le serveur de l'autre site : Réglages › Partages › Nouveau partage. Collez ici le jeton obtenu (valable 15 minutes, une seule fois), puis acceptez la demande sur ce serveur-là. Ses installations apparaîtront alors ici. Les deux serveurs se reconnaissent ensuite par une signature : aucune clé ne circule."
+              "Sur le serveur de l'autre site : Réglages › Serveurs › Nouveau partage. Collez ici le jeton obtenu (valable 15 minutes, une seule fois), puis acceptez la demande sur ce serveur-là. Ses installations apparaîtront alors ici. Les deux serveurs se reconnaissent ensuite par une signature : aucune clé ne circule."
             )}
           </DialogDescription>
         </DialogHeader>
@@ -974,7 +976,7 @@ export function AddNodeDialog({ onClose }: { onClose: () => void }) {
                   </span>
                   <span className="block text-muted-foreground">
                     {t(
-                      "Ce serveur propose un partage réciproque. Il verra les installations cochées dès qu'il aura accepté votre demande ; vous pourrez révoquer ce partage dans Réglages › Partages."
+                      "Ce serveur propose un partage réciproque. Il verra les installations cochées dès qu'il aura accepté votre demande ; vous pourrez révoquer ce partage dans Réglages › Serveurs."
                     )}
                   </span>
                 </span>
@@ -1025,7 +1027,7 @@ export function AddNodeDialog({ onClose }: { onClose: () => void }) {
                   {!identity.data?.public_url && (
                     <p className="text-sm text-destructive">
                       {t(
-                        "Renseignez d'abord l'adresse publique de ce serveur (Réglages › Partages › Ce serveur) : l'autre serveur en a besoin pour le joindre."
+                        "Renseignez d'abord l'adresse publique de ce serveur (Réglages › Serveurs › Ce serveur) : l'autre serveur en a besoin pour le joindre."
                       )}
                     </p>
                   )}
@@ -1152,7 +1154,7 @@ function NodeRow({ node }: { node: BreezoneNode }) {
             {node.installations.map((i) => i.name).join(", ") ||
               (s.state === "pending"
                 ? t(
-                    "Ses installations apparaîtront quand « {name} » aura accepté la demande (Réglages › Partages sur ce serveur)",
+                    "Ses installations apparaîtront quand « {name} » aura accepté la demande (Réglages › Serveurs sur ce serveur)",
                     { name: node.name }
                   )
                 : t("Aucune installation partagée"))}
@@ -1312,7 +1314,7 @@ function NodeRow({ node }: { node: BreezoneNode }) {
   )
 }
 
-export function NodesTab() {
+function NodesCard() {
   const nodes = useQuery({
     queryKey: ["nodes"],
     queryFn: api.nodes,
@@ -1322,7 +1324,7 @@ export function NodesTab() {
   return (
     <Card className="rounded-3xl">
       <CardHeader>
-        <CardTitle>{t("Autres serveurs Breezone")}</CardTitle>
+        <CardTitle>{t("Quels serveurs partagent avec celui-ci")}</CardTitle>
         <CardDescription>
           {t(
             "Les serveurs d'autres sites qui partagent leurs installations avec celui-ci : vous les pilotez d'ici, sans VPN. Les serveurs se parlent entre eux ; la clé n'arrive jamais sur les téléphones."

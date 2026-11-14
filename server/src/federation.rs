@@ -136,7 +136,7 @@ pub fn encode_token(inv: &Invitation) -> String {
 }
 
 pub fn parse_token(token: &str) -> Result<Invitation, ApiError> {
-    let invalid = || ApiError::bad_request("jeton d'invitation invalide : copiez-le en entier depuis Réglages › Partages du serveur qui partage");
+    let invalid = || ApiError::bad_request("jeton d'invitation invalide : copiez-le en entier depuis Réglages › Serveurs du serveur qui partage");
     let compact: String = token.chars().filter(|c| !c.is_whitespace()).collect();
     if compact.starts_with(LEGACY_TOKEN_PREFIX) {
         return Err(ApiError::bad_request("ancien format de jeton : créez un nouveau partage sur l'autre serveur (mis à jour)"));

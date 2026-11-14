@@ -35,7 +35,7 @@ import { UpdateTab } from "@/components/update-tab"
 import { ModulesTab } from "@/components/modules-tab"
 import { ConnectionDot } from "@/components/connection-badge"
 import { Confirm } from "@/components/confirm"
-import { NodesTab, SharesTab } from "@/components/federation"
+import { ServersTab } from "@/components/federation"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -1216,23 +1216,23 @@ export function SettingsPage() {
           ? "installations"
           : null
   const tabs = [
-    ...(admin
-      ? [
-          { id: "nodes", label: t("Nœuds") },
-          { id: "shares", label: t("Partages") },
-        ]
-      : []),
+    ...(admin ? [{ id: "servers", label: t("Serveurs") }] : []),
     ...(admin ? [{ id: "users", label: t("Utilisateurs") }] : []),
     ...(admin ? [{ id: "modules", label: t("Modules") }] : []),
     ...(admin ? [{ id: "breezone", label: "Breezone" }] : []),
     { id: "devices", label: t("Appareils") },
     { id: "account", label: t("Mon compte") },
   ]
+  // Nodes and shares are one tab now: the old links lead to it.
+  const asked =
+    params.get("tab") === "nodes" || params.get("tab") === "shares"
+      ? "servers"
+      : params.get("tab")
   const tab =
     airzone && admin
       ? "modules"
-      : tabs.some((x) => x.id === params.get("tab"))
-        ? params.get("tab")!
+      : tabs.some((x) => x.id === asked)
+        ? asked!
         : tabs[0].id
 
   return (
@@ -1258,13 +1258,8 @@ export function SettingsPage() {
           ))}
         </TabsList>
         {admin && (
-          <TabsContent value="nodes">
-            <NodesTab />
-          </TabsContent>
-        )}
-        {admin && (
-          <TabsContent value="shares">
-            <SharesTab />
+          <TabsContent value="servers">
+            <ServersTab />
           </TabsContent>
         )}
         {admin && (

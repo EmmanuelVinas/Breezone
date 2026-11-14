@@ -1042,15 +1042,15 @@ impl Hub {
                 ),
                 "expired" => crate::text!("Nœud « {0} » : le partage a expiré", "Node “{0}”: the share expired", "Nodo «{0}»: el uso compartido caducó", node_name),
                 "pending" => crate::text!(
-                    "Nœud « {0} » : en attente d'acceptation sur ce serveur (Réglages › Partages)",
-                    "Node “{0}”: waiting for approval on that server (Settings › Shares)",
-                    "Nodo «{0}»: pendiente de aceptación en ese servidor (Ajustes › Compartidos)",
+                    "Nœud « {0} » : en attente d'acceptation sur ce serveur (Réglages › Serveurs)",
+                    "Node “{0}”: waiting for approval on that server (Settings › Servers)",
+                    "Nodo «{0}»: pendiente de aceptación en ese servidor (Ajustes › Servidores)",
                     node_name
                 ),
                 "certificate" => crate::text!(
-                    "Nœud « {0} » : {1} (Réglages › Nœuds pour l'examiner)",
-                    "Node “{0}”: {1} (Settings › Nodes to review it)",
-                    "Nodo «{0}»: {1} (Ajustes › Nodos para revisarlo)",
+                    "Nœud « {0} » : {1} (Réglages › Serveurs pour l'examiner)",
+                    "Node “{0}”: {1} (Settings › Servers to review it)",
+                    "Nodo «{0}»: {1} (Ajustes › Servidores para revisarlo)",
                     node_name,
                     message.arg()
                 ),
