@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.4] - 2026-11-14
+
 ### Added
 
 - Philips Hue: the bridge is found by the scanner and added with its button (its local API, no Hue
