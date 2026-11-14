@@ -49,15 +49,7 @@ pub struct CertificateInfo {
 }
 
 pub fn describe_certificate(der: &[u8]) -> CertificateInfo {
-    let mut info = CertificateInfo {
-        fingerprint: fingerprint(der),
-        subject: None,
-        names: vec![],
-        issuer: None,
-        not_before: None,
-        not_after: None,
-        self_signed: false,
-    };
+    let mut info = CertificateInfo { fingerprint: fingerprint(der), subject: None, names: vec![], issuer: None, not_before: None, not_after: None, self_signed: false };
     if let Ok((_, cert)) = x509_parser::parse_x509_certificate(der) {
         let cn = |name: &x509_parser::x509::X509Name| name.iter_common_name().next().and_then(|a| a.as_str().ok()).map(str::to_string);
         info.subject = cn(cert.subject()).or_else(|| Some(cert.subject().to_string()).filter(|s| !s.is_empty()));
@@ -93,7 +85,14 @@ struct Pinned {
 }
 
 impl ServerCertVerifier for Pinned {
-    fn verify_server_cert(&self, end_entity: &CertificateDer<'_>, _: &[CertificateDer<'_>], _: &ServerName<'_>, _: &[u8], _: UnixTime) -> Result<ServerCertVerified, rustls::Error> {
+    fn verify_server_cert(
+        &self,
+        end_entity: &CertificateDer<'_>,
+        _: &[CertificateDer<'_>],
+        _: &ServerName<'_>,
+        _: &[u8],
+        _: UnixTime,
+    ) -> Result<ServerCertVerified, rustls::Error> {
         if fingerprint(end_entity) == self.fingerprint {
             Ok(ServerCertVerified::assertion())
         } else {
@@ -119,7 +118,14 @@ struct Recorder {
 }
 
 impl ServerCertVerifier for Recorder {
-    fn verify_server_cert(&self, end_entity: &CertificateDer<'_>, _: &[CertificateDer<'_>], _: &ServerName<'_>, _: &[u8], _: UnixTime) -> Result<ServerCertVerified, rustls::Error> {
+    fn verify_server_cert(
+        &self,
+        end_entity: &CertificateDer<'_>,
+        _: &[CertificateDer<'_>],
+        _: &ServerName<'_>,
+        _: &[u8],
+        _: UnixTime,
+    ) -> Result<ServerCertVerified, rustls::Error> {
         *self.seen.lock().unwrap_or_else(|e| e.into_inner()) = Some(end_entity.to_vec());
         // Stop here: nothing is sent to a server whose certificate is not trusted.
         Err(rustls::Error::General("certificate recorded".into()))
@@ -136,10 +142,7 @@ impl ServerCertVerifier for Recorder {
 }
 
 fn builder() -> reqwest::ClientBuilder {
-    reqwest::Client::builder()
-        .connect_timeout(Duration::from_secs(4))
-        .timeout(Duration::from_secs(10))
-        .user_agent(concat!("Breezone/", env!("CARGO_PKG_VERSION")))
+    reqwest::Client::builder().connect_timeout(Duration::from_secs(4)).timeout(Duration::from_secs(10)).user_agent(concat!("Breezone/", env!("CARGO_PKG_VERSION")))
 }
 
 fn custom_tls(verifier: Arc<dyn ServerCertVerifier>) -> Option<rustls::ClientConfig> {

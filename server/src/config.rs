@@ -60,10 +60,7 @@ fn num<T: std::str::FromStr>(name: &str, default: T) -> T {
 
 impl Config {
     pub fn from_env() -> Self {
-        let timezone = var("BREEZONE_TZ")
-            .or_else(|| var("TZ"))
-            .and_then(|tz| tz.parse().ok())
-            .unwrap_or(chrono_tz::Europe::Paris);
+        let timezone = var("BREEZONE_TZ").or_else(|| var("TZ")).and_then(|tz| tz.parse().ok()).unwrap_or(chrono_tz::Europe::Paris);
         Self {
             bind: var("BREEZONE_BIND").unwrap_or_else(|| "0.0.0.0".into()),
             port: num("BREEZONE_PORT", 8427),
@@ -86,9 +83,7 @@ impl Config {
             scan_port: num("BREEZONE_SCAN_PORT", 3000),
             admin_user: var("BREEZONE_ADMIN_USER"),
             admin_password: var("BREEZONE_ADMIN_PASSWORD"),
-            airzone_hosts: var("BREEZONE_AIRZONE_HOSTS")
-                .map(|v| parse_bootstrap(&v))
-                .unwrap_or_default(),
+            airzone_hosts: var("BREEZONE_AIRZONE_HOSTS").map(|v| parse_bootstrap(&v)).unwrap_or_default(),
             self_update: !var("BREEZONE_SELF_UPDATE").is_some_and(|v| matches!(v.trim().to_lowercase().as_str(), "false" | "0" | "no" | "off")),
         }
     }

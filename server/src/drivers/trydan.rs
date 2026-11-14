@@ -10,7 +10,7 @@
 //! (`auto_limit`). Starting with a maximum current turns `Dynamic` off. Charging is started and
 //! stopped with `Paused`.
 
-use super::{ConfigField, DeviceInfo, Described, Driver, DriverError, DriverFuture, DriverInfo, State};
+use super::{ConfigField, Described, DeviceInfo, Driver, DriverError, DriverFuture, DriverInfo, State};
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use std::time::Duration;
@@ -262,7 +262,16 @@ mod tests {
     fn a_charging_car() {
         let mut d = idle();
         let o = d.as_object_mut().unwrap();
-        for (k, v) in [("ChargeState", json!(2)), ("ChargePower", json!(2070.5)), ("ChargeEnergy", json!(8.62)), ("ChargeTime", json!(11880)), ("Intensity", json!(9)), ("IntensityMeasure_L1", json!(9.1)), ("Paused", json!(0)), ("Dynamic", json!(0))] {
+        for (k, v) in [
+            ("ChargeState", json!(2)),
+            ("ChargePower", json!(2070.5)),
+            ("ChargeEnergy", json!(8.62)),
+            ("ChargeTime", json!(11880)),
+            ("Intensity", json!(9)),
+            ("IntensityMeasure_L1", json!(9.1)),
+            ("Paused", json!(0)),
+            ("Dynamic", json!(0)),
+        ] {
             o.insert(k.into(), v);
         }
         let s = state_of(o);

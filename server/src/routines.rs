@@ -7,8 +7,8 @@
 
 use crate::db::{self, Db, RoutineRow};
 use crate::error::{ApiError, ApiResult};
-use crate::i18n::Text;
 use crate::hub::{Hub, ZoneCommand};
+use crate::i18n::Text;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -122,16 +122,7 @@ pub async fn run_routine(hub: &Hub, db: &Db, row: &RoutineRow, actor: &str) -> A
     db::set_routine_last_run(db, row.id, db::now()).await?;
     let failed = results.iter().filter(|r| !r.ok).count();
     let (level, message) = if failed == 0 {
-        (
-            "info",
-            crate::text!(
-                "Routine « {0} » exécutée ({1} action(s))",
-                "Routine “{0}” run ({1} action(s))",
-                "Rutina «{0}» ejecutada ({1} acción(es))",
-                row.name,
-                results.len()
-            ),
-        )
+        ("info", crate::text!("Routine « {0} » exécutée ({1} action(s))", "Routine “{0}” run ({1} action(s))", "Rutina «{0}» ejecutada ({1} acción(es))", row.name, results.len()))
     } else {
         (
             "warn",

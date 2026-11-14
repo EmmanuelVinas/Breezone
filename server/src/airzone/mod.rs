@@ -39,11 +39,7 @@ pub struct AirzoneClient {
 impl AirzoneClient {
     pub fn new(host: &str, port: u16) -> Self {
         let timeout = Duration::from_secs(8);
-        let http = reqwest::Client::builder()
-            .timeout(timeout)
-            .connect_timeout(Duration::from_secs(4))
-            .build()
-            .expect("reqwest client");
+        let http = reqwest::Client::builder().timeout(timeout).connect_timeout(Duration::from_secs(4)).build().expect("reqwest client");
         Self { host: host.to_string(), port, http, timeout }
     }
 
@@ -93,9 +89,7 @@ impl AirzoneClient {
                 Ok(bytes) => parse_json_body(&bytes)?,
                 Err(_) => self.raw_call(method, path, body).await?,
             },
-            Err(e) if e.is_connect() || e.is_timeout() => {
-                return Err(AirzoneError::Unreachable(format!("{}:{}", self.host, self.port), e.to_string()))
-            }
+            Err(e) if e.is_connect() || e.is_timeout() => return Err(AirzoneError::Unreachable(format!("{}:{}", self.host, self.port), e.to_string())),
             Err(_) => self.raw_call(method, path, body).await?,
         };
         check_api_errors(value)
@@ -127,10 +121,7 @@ impl AirzoneClient {
 /// Extracts the JSON body from a raw HTTP response (handles chunked encoding).
 pub fn parse_raw_http(buf: &[u8]) -> Result<Value, AirzoneError> {
     let text = String::from_utf8_lossy(buf);
-    let (head, body) = text
-        .split_once("\r\n\r\n")
-        .or_else(|| text.split_once("\n\n"))
-        .ok_or_else(|| AirzoneError::InvalidResponse("no HTTP header terminator".into()))?;
+    let (head, body) = text.split_once("\r\n\r\n").or_else(|| text.split_once("\n\n")).ok_or_else(|| AirzoneError::InvalidResponse("no HTTP header terminator".into()))?;
     let chunked = head.to_ascii_lowercase().contains("transfer-encoding: chunked");
     let body = if chunked { dechunk(body) } else { body.to_string() };
     parse_json_body(body.as_bytes())

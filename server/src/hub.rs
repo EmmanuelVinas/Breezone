@@ -9,12 +9,12 @@
 use crate::airzone::{master_zone, AirzoneClient, AirzoneError, OperationMode, ZoneData};
 use crate::capabilities::Capabilities;
 use crate::cloud::normalize_mac;
-use ed25519_dalek::SigningKey;
 use crate::config::Config;
 use crate::db::{self, Db, Event, Installation, ZoneMeta};
 use crate::error::{ApiError, ApiResult};
-use crate::i18n::Text;
 use crate::federation::{FedConnection, FedInstallation, FedSnapshot, FedZoneMeta, NodeClient, NodeError};
+use crate::i18n::Text;
+use ed25519_dalek::SigningKey;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
@@ -157,12 +157,20 @@ pub struct NodeStatus {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum HubMessage {
-    Installation { installation: InstallationView },
-    InstallationRemoved { id: i64 },
-    Event { event: Event },
+    Installation {
+        installation: InstallationView,
+    },
+    InstallationRemoved {
+        id: i64,
+    },
+    Event {
+        event: Event,
+    },
     RoutinesChanged,
     /// The installations a user can see changed (handled by the server, not forwarded).
-    AccessChanged { user_id: i64 },
+    AccessChanged {
+        user_id: i64,
+    },
 }
 
 /// A command on one zone. Every field is optional; only the provided ones are applied.
@@ -192,8 +200,8 @@ impl ZoneCommand {
     /// a 422 `unsupported` (with the fields), not a command applied in part: the sender learns
     /// that this server must be updated instead of believing it was done.
     pub fn parse_strict(body: &[u8]) -> ApiResult<ZoneCommand> {
-        let value: Value = serde_json::from_slice(body)
-            .map_err(|e| ApiError::bad_request(crate::text!("commande invalide : {0}", "invalid command: {0}", "orden no válida: {0}", e)))?;
+        let value: Value =
+            serde_json::from_slice(body).map_err(|e| ApiError::bad_request(crate::text!("commande invalide : {0}", "invalid command: {0}", "orden no válida: {0}", e)))?;
         Self::from_value_strict(value)
     }
 
@@ -429,11 +437,7 @@ impl InstState {
 
     fn view(&self) -> InstallationView {
         // Modes available on a system are carried by its master zone.
-        let masters: HashMap<i64, i64> = self
-            .zones
-            .iter()
-            .filter_map(|z| master_zone(&self.zones, z.system_id).map(|m| (z.system_id, m)))
-            .collect();
+        let masters: HashMap<i64, i64> = self.zones.iter().filter_map(|z| master_zone(&self.zones, z.system_id).map(|m| (z.system_id, m))).collect();
         let system_modes: HashMap<i64, Vec<OperationMode>> = self
             .zones
             .iter()
@@ -452,8 +456,7 @@ impl InstState {
             })
             .collect();
         zones.sort_by(|a, b| {
-            (a.group.is_none(), a.group.clone(), a.position, a.system_id, a.zone_id)
-                .cmp(&(b.group.is_none(), b.group.clone(), b.position, b.system_id, b.zone_id))
+            (a.group.is_none(), a.group.clone(), a.position, a.system_id, a.zone_id).cmp(&(b.group.is_none(), b.group.clone(), b.position, b.system_id, b.zone_id))
         });
         InstallationView {
             id: self.inst.id,
@@ -475,11 +478,7 @@ impl InstState {
 
 fn zone_view(installation_id: i64, z: &ZoneData, is_master: bool, meta: Option<&ZoneMeta>, system_modes: Option<&Vec<OperationMode>>) -> ZoneView {
     let airzone_name = z.name.clone().filter(|n| !n.trim().is_empty());
-    let name = meta
-        .and_then(|m| m.display_name.clone())
-        .filter(|n| !n.trim().is_empty())
-        .or_else(|| airzone_name.clone())
-        .unwrap_or_else(|| format!("Zone {}", z.zone_id));
+    let name = meta.and_then(|m| m.display_name.clone()).filter(|n| !n.trim().is_empty()).or_else(|| airzone_name.clone()).unwrap_or_else(|| format!("Zone {}", z.zone_id));
     let speeds = match (&z.speed_values, z.speeds) {
         (Some(values), _) if !values.is_empty() => values.clone(),
         (_, Some(n)) if n > 0 => (0..=n).collect(),
@@ -715,9 +714,7 @@ impl Hub {
     }
 
     pub async fn zone(&self, id: i64, system_id: i64, zone_id: i64) -> Option<ZoneView> {
-        self.installation(id)
-            .await
-            .and_then(|i| i.zones.into_iter().find(|z| z.system_id == system_id && z.zone_id == zone_id))
+        self.installation(id).await.and_then(|i| i.zones.into_iter().find(|z| z.system_id == system_id && z.zone_id == zone_id))
     }
 
     /// MAC address of the WebServer (read once, then stored).
@@ -876,7 +873,9 @@ impl Hub {
 
     async fn record(&self, id: i64, zones: Vec<(ZoneData, Option<i64>)>) {
         for (z, demand_secs) in zones {
-            if let Err(e) = db::insert_reading(&self.db, id, z.system_id, z.zone_id, z.room_temp, z.humidity.filter(|h| *h > 0), z.setpoint, z.is_on(), z.mode, demand_secs, z.aq_quality).await {
+            if let Err(e) =
+                db::insert_reading(&self.db, id, z.system_id, z.zone_id, z.room_temp, z.humidity.filter(|h| *h > 0), z.setpoint, z.is_on(), z.mode, demand_secs, z.aq_quality).await
+            {
                 tracing::error!("cannot record history: {e}");
             }
         }
@@ -899,12 +898,7 @@ impl Hub {
     /// What this server exposes to a share: its local installations among `ids`.
     pub async fn federated(&self, ids: &[i64]) -> Vec<FedInstallation> {
         let state = self.state.read().await;
-        let mut out: Vec<FedInstallation> = ids
-            .iter()
-            .filter_map(|id| state.get(id))
-            .filter(|s| s.node_id().is_none() && s.inst.enabled)
-            .map(InstState::federated)
-            .collect();
+        let mut out: Vec<FedInstallation> = ids.iter().filter_map(|id| state.get(id)).filter(|s| s.node_id().is_none() && s.inst.enabled).map(InstState::federated).collect();
         out.sort_by_key(|i| i.id);
         out
     }
@@ -923,11 +917,7 @@ impl Hub {
             Some(c) => c.snapshot().await,
             None => Err(NodeError::Rejected {
                 status: 401,
-                message: crate::text!(
-                    "clé illisible : ajoutez de nouveau ce nœud",
-                    "unreadable key: add this node again",
-                    "clave ilegible: añada de nuevo este nodo"
-                ),
+                message: crate::text!("clé illisible : ajoutez de nouveau ce nœud", "unreadable key: add this node again", "clave ilegible: añada de nuevo este nodo"),
             }),
         };
         let latency = started.elapsed().as_millis() as u64;
@@ -946,11 +936,7 @@ impl Hub {
             let was = n.status.state;
             let permission_changed = n.status.permission != snap.permission;
             n.failures = 0;
-            n.offered = snap
-                .installations
-                .iter()
-                .map(|f| OfferedInstallation { remote_id: f.id, name: f.name.clone(), location: f.location.clone() })
-                .collect();
+            n.offered = snap.installations.iter().map(|f| OfferedInstallation { remote_id: f.id, name: f.name.clone(), location: f.location.clone() }).collect();
             n.status = NodeStatus { state: "online", last_seen: Some(now), last_error: None, latency_ms: Some(latency), permission: snap.permission.clone() };
             n.node.permission = snap.permission.clone();
             let persist = was != "online" || permission_changed || now - n.persisted_at >= 60;
@@ -1334,8 +1320,15 @@ impl Hub {
             )
             .await;
         } else if before.is_some_and(|b| b.breezone != caps.breezone) && !caps.breezone.is_empty() {
-            self.log("connection", "info", None, None, crate::text!("« {0} » est passé à Breezone {1}", "“{0}” moved to Breezone {1}", "«{0}» pasó a Breezone {1}", name, caps.breezone), None)
-                .await;
+            self.log(
+                "connection",
+                "info",
+                None,
+                None,
+                crate::text!("« {0} » est passé à Breezone {1}", "“{0}” moved to Breezone {1}", "«{0}» pasó a Breezone {1}", name, caps.breezone),
+                None,
+            )
+            .await;
         }
     }
 
@@ -1603,15 +1596,7 @@ impl Hub {
                         s.view()
                     })
                 };
-                let text = crate::text!(
-                    "{0} ({1}, via {2}) : {3}",
-                    "{0} ({1}, via {2}): {3}",
-                    "{0} ({1}, vía {2}): {3}",
-                    zone_label,
-                    inst_name,
-                    node_name,
-                    cmd.describe().arg()
-                );
+                let text = crate::text!("{0} ({1}, via {2}) : {3}", "{0} ({1}, via {2}): {3}", "{0} ({1}, vía {2}): {3}", zone_label, inst_name, node_name, cmd.describe().arg());
                 self.log("command", "info", Some(id), Some(actor), text, data).await;
                 let view = view.ok_or_else(|| ApiError::not_found("installation not found"))?;
                 self.send(HubMessage::Installation { installation: view.clone() });
@@ -1687,14 +1672,7 @@ fn build_params(cmd: &ZoneCommand, zone: &ZoneData) -> ApiResult<(Map<String, Va
     let max = zone.max_temp.unwrap_or(35.0);
     let check_temp = |label: &str, v: f64| -> ApiResult<f64> {
         if !v.is_finite() || v < min || v > max {
-            return Err(ApiError::bad_request(crate::text!(
-                "{0} : entre {1}° et {2}°",
-                "{0} must be between {1}° and {2}°",
-                "{0}: entre {1}° y {2}°",
-                label,
-                min,
-                max
-            )));
+            return Err(ApiError::bad_request(crate::text!("{0} : entre {1}° et {2}°", "{0} must be between {1}° and {2}°", "{0}: entre {1}° y {2}°", label, min, max)));
         }
         Ok((v * 10.0).round() / 10.0)
     };

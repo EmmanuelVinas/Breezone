@@ -39,7 +39,10 @@ pub async fn setup(State(state): State<AppState>, Json(req): Json<Credentials>) 
     auth::validate_password(&req.password)?;
     let hash = auth::hash_password(req.password.clone()).await?;
     let user = db::insert_first_admin(&state.db, username, &hash).await?.ok_or_else(|| ApiError::conflict("Breezone is already set up"))?;
-    state.hub.log("auth", "info", None, Some(&user.username), crate::text!("Compte administrateur créé", "Administrator account created", "Cuenta de administrador creada"), None).await;
+    state
+        .hub
+        .log("auth", "info", None, Some(&user.username), crate::text!("Compte administrateur créé", "Administrator account created", "Cuenta de administrador creada"), None)
+        .await;
     let device = req.device_name.as_deref().unwrap_or("Navigateur");
     Ok(Json(state.auth.open_session(&state.db, &user, device).await?))
 }
@@ -110,9 +113,11 @@ pub struct LanguageChange {
 pub async fn change_language(State(state): State<AppState>, user: AuthUser, Json(req): Json<LanguageChange>) -> ApiResult<StatusCode> {
     let language = match req.language.as_deref() {
         None | Some("") => None,
-        Some(code) => Some(crate::i18n::Lang::parse(code).filter(|l| l.code() == code).ok_or_else(|| {
-            ApiError::bad_request(crate::text!("langue attendue : fr, en ou es", "language expected: fr, en or es", "idioma esperado: fr, en o es"))
-        })?),
+        Some(code) => Some(
+            crate::i18n::Lang::parse(code)
+                .filter(|l| l.code() == code)
+                .ok_or_else(|| ApiError::bad_request(crate::text!("langue attendue : fr, en ou es", "language expected: fr, en or es", "idioma esperado: fr, en o es")))?,
+        ),
     };
     db::update_user_language(&state.db, user.id, language.map(|l| l.code())).await?;
     Ok(StatusCode::NO_CONTENT)
@@ -172,7 +177,17 @@ pub async fn delete_session(State(state): State<AppState>, user: AuthUser, Path(
         return Err(ApiError::not_found("session not found"));
     }
     db::delete_session(&state.db, id).await?;
-    state.hub.log("auth", "info", None, Some(&user.username), crate::text!("Appareil « {0} » déconnecté", "Device “{0}” signed out", "Dispositivo «{0}» desconectado", session.device_name), None).await;
+    state
+        .hub
+        .log(
+            "auth",
+            "info",
+            None,
+            Some(&user.username),
+            crate::text!("Appareil « {0} » déconnecté", "Device “{0}” signed out", "Dispositivo «{0}» desconectado", session.device_name),
+            None,
+        )
+        .await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -201,11 +216,7 @@ pub struct AccessEntry {
 }
 
 async fn access_entries(state: &AppState, user_id: i64) -> ApiResult<Vec<AccessEntry>> {
-    Ok(db::user_access(&state.db, user_id)
-        .await?
-        .into_iter()
-        .map(|g| AccessEntry { installation_id: g.installation_id, permission: g.permission, rights: g.rights })
-        .collect())
+    Ok(db::user_access(&state.db, user_id).await?.into_iter().map(|g| AccessEntry { installation_id: g.installation_id, permission: g.permission, rights: g.rights }).collect())
 }
 
 async fn user_details(state: &AppState, u: &db::User) -> ApiResult<UserDetails> {
@@ -270,7 +281,17 @@ pub async fn create_user(State(state): State<AppState>, AdminUser(admin): AdminU
     let user = db::insert_user(&state.db, username, &hash, &req.role).await?;
     save_access(&state, user.id, &req.access).await?;
     let user = db::user_by_id(&state.db, user.id).await?.ok_or_else(|| ApiError::not_found("user not found"))?;
-    state.hub.log("auth", "info", None, Some(&admin.username), crate::text!("Utilisateur « {0} » créé ({1})", "User “{0}” created ({1})", "Usuario «{0}» creado ({1})", user.username, user.role), None).await;
+    state
+        .hub
+        .log(
+            "auth",
+            "info",
+            None,
+            Some(&admin.username),
+            crate::text!("Utilisateur « {0} » créé ({1})", "User “{0}” created ({1})", "Usuario «{0}» creado ({1})", user.username, user.role),
+            None,
+        )
+        .await;
     Ok((StatusCode::CREATED, Json(user_details(&state, &user).await?)))
 }
 
@@ -304,7 +325,10 @@ pub async fn update_user(State(state): State<AppState>, AdminUser(admin): AdminU
         // A password reset signs the user out everywhere.
         db::delete_user_sessions(&state.db, id, None).await?;
     }
-    state.hub.log("auth", "info", None, Some(&admin.username), crate::text!("Utilisateur « {0} » modifié", "User “{0}” changed", "Usuario «{0}» modificado", user.username), None).await;
+    state
+        .hub
+        .log("auth", "info", None, Some(&admin.username), crate::text!("Utilisateur « {0} » modifié", "User “{0}” changed", "Usuario «{0}» modificado", user.username), None)
+        .await;
     let updated = db::user_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("user not found"))?;
     Ok(Json(user_details(&state, &updated).await?))
 }
@@ -317,6 +341,9 @@ pub async fn delete_user(State(state): State<AppState>, AdminUser(admin): AdminU
     if !db::delete_user_keeping_an_admin(&state.db, id).await? {
         return Err(ApiError::bad_request("cannot delete the last administrator"));
     }
-    state.hub.log("auth", "info", None, Some(&admin.username), crate::text!("Utilisateur « {0} » supprimé", "User “{0}” deleted", "Usuario «{0}» eliminado", user.username), None).await;
+    state
+        .hub
+        .log("auth", "info", None, Some(&admin.username), crate::text!("Utilisateur « {0} » supprimé", "User “{0}” deleted", "Usuario «{0}» eliminado", user.username), None)
+        .await;
     Ok(StatusCode::NO_CONTENT)
 }

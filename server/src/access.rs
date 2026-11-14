@@ -61,9 +61,7 @@ impl Access {
             return InstallationUserRights { zones: true, routines: true, schedules: true, admin: true };
         }
         match self.granted.get(&installation_id) {
-            Some(g) if g.permission == "control" => {
-                InstallationUserRights { zones: g.rights.zones, routines: g.rights.routines, schedules: g.rights.schedules, admin: false }
-            }
+            Some(g) if g.permission == "control" => InstallationUserRights { zones: g.rights.zones, routines: g.rights.routines, schedules: g.rights.schedules, admin: false },
             _ => InstallationUserRights::default(),
         }
     }
@@ -75,11 +73,7 @@ impl Access {
             return UserRights::default();
         }
         let all: Vec<InstallationUserRights> = self.granted.keys().map(|id| self.rights(*id)).collect();
-        UserRights {
-            zones: all.iter().any(|r| r.zones),
-            routines: all.iter().any(|r| r.routines),
-            schedules: all.iter().any(|r| r.schedules),
-        }
+        UserRights { zones: all.iter().any(|r| r.zones), routines: all.iter().any(|r| r.routines), schedules: all.iter().any(|r| r.schedules) }
     }
 
     /// Visible installations (`None` = all).
@@ -122,9 +116,7 @@ impl Access {
     /// Creating, changing or deleting a routine with these actions.
     pub fn edit_routine(&self, actions: &[Action]) -> ApiResult<()> {
         self.control_actions(actions)?;
-        actions
-            .iter()
-            .try_for_each(|a| Self::allowed(self.rights(a.installation_id).routines, "vous n'avez pas le droit de modifier les routines"))
+        actions.iter().try_for_each(|a| Self::allowed(self.rights(a.installation_id).routines, "vous n'avez pas le droit de modifier les routines"))
     }
 
     /// Creating, changing or deleting an Airzone schedule of an installation (control is checked

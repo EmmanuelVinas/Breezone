@@ -25,13 +25,13 @@ use crate::airzone::ZoneData;
 use crate::auth::{hash_token, random_bytes};
 use crate::db::{self, Db};
 use crate::error::ApiError;
-use crate::i18n::Text;
 use crate::hub::ZoneCommand;
+use crate::i18n::Text;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use ed25519_dalek::{Signature, Signer, SigningKey, VerifyingKey};
-use sha2::{Digest, Sha256};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::net::IpAddr;
 
 const TOKEN_PREFIX: &str = "bz2.";
@@ -76,11 +76,7 @@ pub async fn identity(db: &Db) -> sqlx::Result<Identity> {
             id
         }
     };
-    Ok(Identity {
-        node_id,
-        name: db::get_setting(db, SETTING_NODE_NAME).await?.unwrap_or_else(|| "Breezone".into()),
-        public_url: db::get_setting(db, SETTING_PUBLIC_URL).await?,
-    })
+    Ok(Identity { node_id, name: db::get_setting(db, SETTING_NODE_NAME).await?.unwrap_or_else(|| "Breezone".into()), public_url: db::get_setting(db, SETTING_PUBLIC_URL).await? })
 }
 
 pub async fn save_identity(db: &Db, name: &str, public_url: Option<&str>) -> Result<Identity, ApiError> {
@@ -178,12 +174,7 @@ pub fn signed_headers(key: &SigningKey, node_id: &str, method: &str, path: &str,
     let timestamp = db::now();
     let nonce = URL_SAFE_NO_PAD.encode(random_bytes::<16>());
     let signature = key.sign(&signing_message(method, path, timestamp, &nonce, body));
-    vec![
-        (HEADER_NODE, node_id.to_string()),
-        (HEADER_TIMESTAMP, timestamp.to_string()),
-        (HEADER_NONCE, nonce),
-        (HEADER_SIGNATURE, URL_SAFE_NO_PAD.encode(signature.to_bytes())),
-    ]
+    vec![(HEADER_NODE, node_id.to_string()), (HEADER_TIMESTAMP, timestamp.to_string()), (HEADER_NONCE, nonce), (HEADER_SIGNATURE, URL_SAFE_NO_PAD.encode(signature.to_bytes()))]
 }
 
 /// Checks a signature made with the public key `public_key` (base64url).
@@ -201,9 +192,7 @@ pub fn verify_signature(public_key: &str, message: &[u8], signature: &str) -> bo
 /// Validates a node URL: `https://…`, or `http://…` towards a private address only.
 pub fn normalize_url(url: &str) -> Result<String, ApiError> {
     let url = url.trim().trim_end_matches('/').to_string();
-    let (scheme, rest) = url
-        .split_once("://")
-        .ok_or_else(|| ApiError::bad_request("adresse invalide : elle doit commencer par https:// (ou http:// sur le réseau local)"))?;
+    let (scheme, rest) = url.split_once("://").ok_or_else(|| ApiError::bad_request("adresse invalide : elle doit commencer par https:// (ou http:// sur le réseau local)"))?;
     let authority = rest.split('/').next().unwrap_or_default();
     let host = host_of(authority);
     if host.is_empty() || rest.contains([' ', '?', '#']) {
@@ -234,11 +223,7 @@ pub fn is_private_host(host: &str) -> bool {
             let first = ip.segments()[0];
             ip.is_loopback() || (first & 0xfe00) == 0xfc00 || (first & 0xffc0) == 0xfe80
         }
-        Err(_) => {
-            host == "localhost"
-                || !host.contains('.')
-                || [".local", ".lan", ".home", ".home.arpa", ".internal", ".localhost"].iter().any(|s| host.ends_with(s))
-        }
+        Err(_) => host == "localhost" || !host.contains('.') || [".local", ".lan", ".home", ".home.arpa", ".internal", ".localhost"].iter().any(|s| host.ends_with(s)),
     }
 }
 
@@ -387,12 +372,9 @@ impl From<NodeError> for ApiError {
     fn from(e: NodeError) -> Self {
         match e {
             NodeError::Rejected { status: 400, message } => ApiError::bad_request(message),
-            NodeError::Rejected { status: 401, message } => ApiError::bad_gateway(crate::text!(
-                "le nœud a refusé l'accès ({0})",
-                "the node refused access ({0})",
-                "el nodo rechazó el acceso ({0})",
-                message.arg()
-            )),
+            NodeError::Rejected { status: 401, message } => {
+                ApiError::bad_gateway(crate::text!("le nœud a refusé l'accès ({0})", "the node refused access ({0})", "el nodo rechazó el acceso ({0})", message.arg()))
+            }
             NodeError::Rejected { status: 403, message } => ApiError::forbidden(message),
             NodeError::Rejected { status: 404, message } => ApiError::not_found(message),
             // A command the other node does not know (ADR 0012): said as such, with its words.

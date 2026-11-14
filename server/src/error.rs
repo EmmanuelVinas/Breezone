@@ -1,10 +1,10 @@
 //! API error type: every handler returns `Result<_, ApiError>`, rendered as
 //! `{"error": "<message>"}` with the right HTTP status.
 
+use crate::i18n::Text;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
-use crate::i18n::Text;
 use serde_json::json;
 
 #[derive(Debug)]

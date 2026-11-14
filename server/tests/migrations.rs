@@ -31,11 +31,8 @@ const APPLIED: &[(&str, &str)] = &[
 #[test]
 fn applied_migrations_are_unchanged() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations");
-    let mut files: Vec<String> = std::fs::read_dir(&dir)
-        .unwrap()
-        .filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().into_owned()))
-        .filter(|n| n.ends_with(".sql"))
-        .collect();
+    let mut files: Vec<String> =
+        std::fs::read_dir(&dir).unwrap().filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().into_owned())).filter(|n| n.ends_with(".sql")).collect();
     files.sort();
     for (name, hash) in APPLIED {
         let content = std::fs::read(dir.join(name)).unwrap_or_else(|_| panic!("{name} was removed"));

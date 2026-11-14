@@ -12,19 +12,19 @@
 
 use crate::access::Access;
 use crate::auth;
-use crate::i18n::{Lang, Text};
-use crate::hub::HubMessage;
 use crate::db;
+use crate::hub::HubMessage;
+use crate::i18n::{Lang, Text};
 use crate::AppState;
 use axum::extract::ws::rejection::WebSocketUpgradeRejection;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use std::sync::atomic::{AtomicI64, Ordering};
-use axum::extract::State;
 use axum::response::Response;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{json, Value};
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Duration;
 use tokio::sync::broadcast::error::RecvError;
 
@@ -42,10 +42,7 @@ pub async fn handler(ws: Result<WebSocketUpgrade, WebSocketUpgradeRejection>, St
             let now = crate::db::now();
             let last = LAST_HINT.load(Ordering::Relaxed);
             if now - last >= 3600 && LAST_HINT.compare_exchange(last, now, Ordering::Relaxed, Ordering::Relaxed).is_ok() {
-                state
-                    .hub
-                    .log("system", "warn", None, None, proxy_hint(), None)
-                    .await;
+                state.hub.log("system", "warn", None, None, proxy_hint(), None).await;
             }
             tracing::warn!("websocket refused ({rejection}): {}", proxy_hint().en);
             (StatusCode::BAD_REQUEST, axum::Json(json!({ "error": proxy_hint() }))).into_response()
@@ -86,12 +83,7 @@ async fn session(socket: WebSocket, state: AppState, lang: Lang) {
     crate::i18n::scope(lang, live(sink, stream, state, token)).await
 }
 
-async fn live(
-    mut sink: futures_util::stream::SplitSink<WebSocket, Message>,
-    mut stream: futures_util::stream::SplitStream<WebSocket>,
-    state: AppState,
-    token: Option<String>,
-) {
+async fn live(mut sink: futures_util::stream::SplitSink<WebSocket, Message>, mut stream: futures_util::stream::SplitStream<WebSocket>, state: AppState, token: Option<String>) {
     let user = match token {
         Some(t) => auth::authenticate(&state, &t).await.ok(),
         None => None,

@@ -101,9 +101,7 @@ async fn untrusted_certificates_can_be_reviewed_and_pinned_both_ways() {
     office.call(Method::PUT, "/api/node", Some(json!({"name":"Bureau","public_url": office_url}))).await;
     home.call(Method::PUT, "/api/node", Some(json!({"name":"Maison","public_url": home_url}))).await;
 
-    let (_, created) = office
-        .call(Method::POST, "/api/shares", Some(json!({"label":"Maison","installation_ids":[office_inst],"permission":"control","reciprocal":true})))
-        .await;
+    let (_, created) = office.call(Method::POST, "/api/shares", Some(json!({"label":"Maison","installation_ids":[office_inst],"permission":"control","reciprocal":true}))).await;
     let token = created["token"].as_str().unwrap().to_string();
     let back = json!({"installation_ids": [home_inst], "permission": "read"});
 

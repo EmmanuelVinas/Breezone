@@ -5,8 +5,8 @@
 
 use crate::db::{self, Db};
 use crate::error::{ApiError, ApiResult};
-use crate::i18n::Text;
 use crate::hub::{Hub, InstallationView, ZoneCommand};
+use crate::i18n::Text;
 use crate::routines::{run_actions, Action};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -82,10 +82,7 @@ pub fn actions(target: &Target, command: &ZoneCommand, installations: &[Installa
     if command.mode.is_some() && *command == (ZoneCommand { mode: command.mode, ..Default::default() }) {
         zones.dedup_by_key(|(i, s, _)| (*i, *s));
     }
-    zones
-        .into_iter()
-        .map(|(installation_id, system_id, zone_id)| Action { installation_id, system_id, zone_id, command: command.clone(), delay_minutes: None })
-        .collect()
+    zones.into_iter().map(|(installation_id, system_id, zone_id)| Action { installation_id, system_id, zone_id, command: command.clone(), delay_minutes: None }).collect()
 }
 
 #[derive(Debug, Clone, Serialize)]

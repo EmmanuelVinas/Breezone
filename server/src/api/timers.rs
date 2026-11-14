@@ -32,8 +32,7 @@ pub async fn cancel(State(state): State<AppState>, user: AuthUser, Path(id): Pat
 pub async fn airzone_routines(State(state): State<AppState>, user: AuthUser) -> ApiResult<Json<Value>> {
     let access = Access::of(&state.db, &user).await?;
     // Airzone installation → Breezone installation (to apply the user's access).
-    let linked: std::collections::HashMap<String, i64> =
-        db::list_installations(&state.db).await?.into_iter().filter_map(|i| i.cloud_id.map(|c| (c, i.id))).collect();
+    let linked: std::collections::HashMap<String, i64> = db::list_installations(&state.db).await?.into_iter().filter_map(|i| i.cloud_id.map(|c| (c, i.id))).collect();
     let names: std::collections::HashMap<String, String> = db::list_cloud_installations(&state.db).await?.into_iter().map(|r| (r.cloud_id, r.name)).collect();
     let mut out = vec![];
     for (cloud_id, data) in db::list_airzone_routines(&state.db).await? {

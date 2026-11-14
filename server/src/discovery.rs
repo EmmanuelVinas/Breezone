@@ -99,11 +99,7 @@ pub async fn probe(host: &str, port: u16) -> Option<Found> {
         return None;
     }
     let client = AirzoneClient::new(host, port);
-    let info = tokio::time::timeout(Duration::from_secs(2), client.webserver_info())
-        .await
-        .ok()
-        .and_then(|r| r.ok())
-        .filter(is_airzone_webserver);
+    let info = tokio::time::timeout(Duration::from_secs(2), client.webserver_info()).await.ok().and_then(|r| r.ok()).filter(is_airzone_webserver);
     // Older WebServers have no description: only their zones tell.
     let zones = tokio::time::timeout(Duration::from_millis(if info.is_some() { 1500 } else { 2500 }), client.read_all())
         .await
@@ -115,14 +111,7 @@ pub async fn probe(host: &str, port: u16) -> Option<Found> {
         return None;
     }
     let field = |k: &str| info.as_ref().and_then(|i| i.get(k)).and_then(|v| v.as_str()).map(String::from);
-    Some(Found {
-        host: host.to_string(),
-        port,
-        mac: field("mac"),
-        ws_type: field("ws_type"),
-        firmware: field("ws_firmware"),
-        zones,
-    })
+    Some(Found { host: host.to_string(), port, mac: field("mac"), ws_type: field("ws_type"), firmware: field("ws_firmware"), zones })
 }
 
 /// A product found on the network, of a supported brand.
@@ -227,8 +216,7 @@ pub async fn scan_products(subnet: &str, airzone_port: u16) -> Result<Vec<Produc
 
 /// `POST /api/v1/webserver` of an Airzone WebServer returns its MAC address and type.
 pub fn is_airzone_webserver(info: &serde_json::Value) -> bool {
-    info.get("mac").and_then(|v| v.as_str()).is_some_and(|m| m.chars().filter(|c| c.is_ascii_hexdigit()).count() == 12)
-        || info.get("ws_type").and_then(|v| v.as_str()).is_some()
+    info.get("mac").and_then(|v| v.as_str()).is_some_and(|m| m.chars().filter(|c| c.is_ascii_hexdigit()).count() == 12) || info.get("ws_type").and_then(|v| v.as_str()).is_some()
 }
 
 /// Running inside a container: the local address is the container's, not the LAN's.

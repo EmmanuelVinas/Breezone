@@ -101,16 +101,14 @@ pub fn info() -> DriverInfo {
         id: "shelly",
         label: "Shelly (Plus, Pro, Gen3, Gen4)",
         provides: vec!["energy.power@1", "energy.meter@1", "switch.relay@1"],
-        models: MODELS.iter().map(|(_, name, note)| match note {
-            Some(n) => format!("{name} ({n})"),
-            None => name.to_string(),
-        }).collect(),
-        config: vec![ConfigField {
-            name: "host",
-            kind: "string",
-            optional: false,
-            label: crate::text!("Adresse IP ou nom", "IP address or name", "Dirección IP o nombre"),
-        }],
+        models: MODELS
+            .iter()
+            .map(|(_, name, note)| match note {
+                Some(n) => format!("{name} ({n})"),
+                None => name.to_string(),
+            })
+            .collect(),
+        config: vec![ConfigField { name: "host", kind: "string", optional: false, label: crate::text!("Adresse IP ou nom", "IP address or name", "Dirección IP o nombre") }],
     }
 }
 

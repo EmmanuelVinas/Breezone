@@ -345,13 +345,7 @@ impl Runtime {
                 if let (Some(s), Some(g)) = (state.as_mut(), goals.get(&(r.source.id, info.reference.clone()))) {
                     s.insert("energy_goal".into(), Value::from(g.target()));
                 }
-                out.push(SourceDevice {
-                    source_id: r.source.id,
-                    driver: r.source.driver.clone(),
-                    state,
-                    online: r.status.state == "online",
-                    info: info.clone(),
-                });
+                out.push(SourceDevice { source_id: r.source.id, driver: r.source.driver.clone(), state, online: r.status.state == "online", info: info.clone() });
             }
         }
         out

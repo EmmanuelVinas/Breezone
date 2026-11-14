@@ -1,7 +1,7 @@
 //! Schedules of the Airzone app (mirror of Airzone Cloud, edited there).
 
-use crate::airzone_schedules::{self, ScheduleInput, ScheduleOp, SchedulesState};
 use crate::access::Access;
+use crate::airzone_schedules::{self, ScheduleInput, ScheduleOp, SchedulesState};
 use crate::auth::AuthUser;
 use crate::db;
 use crate::error::{ApiError, ApiResult};

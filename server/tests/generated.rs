@@ -47,7 +47,8 @@ fn typescript() -> String {
         out += "}\n\n";
         for a in &t.actions {
             if a.params.is_empty() {
-                out += &format!("/** {} (`{}`): action `{}`, without parameters. */\nexport type {name}{} = Record<string, never>\n\n", t.label.en, t.id(), a.name, pascal(&a.name));
+                out +=
+                    &format!("/** {} (`{}`): action `{}`, without parameters. */\nexport type {name}{} = Record<string, never>\n\n", t.label.en, t.id(), a.name, pascal(&a.name));
                 continue;
             }
             out += &format!("/** {} (`{}`): action `{}`. */\nexport type {name}{} = {{\n", t.label.en, t.id(), a.name, pascal(&a.name));

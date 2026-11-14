@@ -51,7 +51,10 @@ pub async fn delete(State(state): State<AppState>, user: AuthUser, Path(id): Pat
     let row = db::routine_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("routine not found"))?;
     Access::of(&state.db, &user).await?.edit_routine(&routines::to_view(&row).actions)?;
     db::delete_routine(&state.db, id).await?;
-    state.hub.log("routine", "info", None, Some(&user.username), crate::text!("Routine « {0} » supprimée", "Routine “{0}” deleted", "Rutina «{0}» eliminada", row.name), None).await;
+    state
+        .hub
+        .log("routine", "info", None, Some(&user.username), crate::text!("Routine « {0} » supprimée", "Routine “{0}” deleted", "Rutina «{0}» eliminada", row.name), None)
+        .await;
     state.hub.routines_changed();
     Ok(StatusCode::NO_CONTENT)
 }
@@ -62,4 +65,3 @@ pub async fn run(State(state): State<AppState>, user: AuthUser, Path(id): Path<i
     let results = routines::run_routine(&state.hub, &state.db, &row, &user.username).await?;
     Ok(Json(json!({ "results": results })))
 }
-

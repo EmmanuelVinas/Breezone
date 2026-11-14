@@ -18,12 +18,7 @@ pub async fn connect(path: &Path) -> anyhow::Result<Db> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let options = SqliteConnectOptions::new()
-        .filename(path)
-        .create_if_missing(true)
-        .journal_mode(SqliteJournalMode::Wal)
-        .foreign_keys(true)
-        .busy_timeout(Duration::from_secs(5));
+    let options = SqliteConnectOptions::new().filename(path).create_if_missing(true).journal_mode(SqliteJournalMode::Wal).foreign_keys(true).busy_timeout(Duration::from_secs(5));
     let pool = SqlitePoolOptions::new().max_connections(4).connect_with(options).await?;
     sqlx::migrate!("./migrations").run(&pool).await?;
     Ok(pool)
@@ -150,12 +145,7 @@ pub async fn update_user_role_keeping_an_admin(db: &Db, id: i64, role: &str) -> 
 
 /// Deletes a user unless it is the last administrator. Returns false if refused.
 pub async fn delete_user_keeping_an_admin(db: &Db, id: i64) -> sqlx::Result<bool> {
-    let r = sqlx::query(
-        "DELETE FROM users WHERE id = ?1 AND (role != 'admin' OR (SELECT COUNT(*) FROM users WHERE role = 'admin') > 1)",
-    )
-    .bind(id)
-    .execute(db)
-    .await?;
+    let r = sqlx::query("DELETE FROM users WHERE id = ?1 AND (role != 'admin' OR (SELECT COUNT(*) FROM users WHERE role = 'admin') > 1)").bind(id).execute(db).await?;
     Ok(r.rows_affected() == 1)
 }
 
@@ -219,24 +209,16 @@ pub async fn session_by_id(db: &Db, id: i64) -> sqlx::Result<Option<Session>> {
 pub async fn rotate_session(db: &Db, id: i64, new_hash: &str, keep_prev: bool, expires_at: i64) -> sqlx::Result<()> {
     let t = now();
     if keep_prev {
-        sqlx::query("UPDATE sessions SET token_hash = ?, last_used_at = ?, expires_at = ? WHERE id = ?")
+        sqlx::query("UPDATE sessions SET token_hash = ?, last_used_at = ?, expires_at = ? WHERE id = ?").bind(new_hash).bind(t).bind(expires_at).bind(id).execute(db).await?;
+    } else {
+        sqlx::query("UPDATE sessions SET prev_token_hash = token_hash, rotated_at = ?, token_hash = ?, last_used_at = ?, expires_at = ? WHERE id = ?")
+            .bind(t)
             .bind(new_hash)
             .bind(t)
             .bind(expires_at)
             .bind(id)
             .execute(db)
             .await?;
-    } else {
-        sqlx::query(
-            "UPDATE sessions SET prev_token_hash = token_hash, rotated_at = ?, token_hash = ?, last_used_at = ?, expires_at = ? WHERE id = ?",
-        )
-        .bind(t)
-        .bind(new_hash)
-        .bind(t)
-        .bind(expires_at)
-        .bind(id)
-        .execute(db)
-        .await?;
     }
     Ok(())
 }
@@ -251,11 +233,7 @@ pub async fn delete_session(db: &Db, id: i64) -> sqlx::Result<()> {
 }
 
 pub async fn delete_user_sessions(db: &Db, user_id: i64, except: Option<i64>) -> sqlx::Result<()> {
-    sqlx::query("DELETE FROM sessions WHERE user_id = ? AND id != ?")
-        .bind(user_id)
-        .bind(except.unwrap_or(-1))
-        .execute(db)
-        .await?;
+    sqlx::query("DELETE FROM sessions WHERE user_id = ? AND id != ?").bind(user_id).bind(except.unwrap_or(-1)).execute(db).await?;
     Ok(())
 }
 
@@ -317,13 +295,13 @@ pub async fn update_installation(db: &Db, id: i64, name: &str, host: &str, port:
         "UPDATE installations SET name = ?1, host = ?2, port = ?3, enabled = ?4,
          mac = CASE WHEN host = ?2 AND port = ?3 THEN mac ELSE NULL END WHERE id = ?5",
     )
-        .bind(name)
-        .bind(host)
-        .bind(port)
-        .bind(enabled)
-        .bind(id)
-        .execute(db)
-        .await?;
+    .bind(name)
+    .bind(host)
+    .bind(port)
+    .bind(enabled)
+    .bind(id)
+    .execute(db)
+    .await?;
     Ok(())
 }
 
@@ -533,18 +511,16 @@ pub async fn routine_by_id(db: &Db, id: i64) -> sqlx::Result<Option<RoutineRow>>
 
 pub async fn insert_routine(db: &Db, name: &str, enabled: bool, days: i64, time: Option<&str>, actions: &str) -> sqlx::Result<RoutineRow> {
     let t = now();
-    sqlx::query_as(
-        "INSERT INTO routines (name, enabled, days, time, actions, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *",
-    )
-    .bind(name)
-    .bind(enabled)
-    .bind(days)
-    .bind(time)
-    .bind(actions)
-    .bind(t)
-    .bind(t)
-    .fetch_one(db)
-    .await
+    sqlx::query_as("INSERT INTO routines (name, enabled, days, time, actions, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *")
+        .bind(name)
+        .bind(enabled)
+        .bind(days)
+        .bind(time)
+        .bind(actions)
+        .bind(t)
+        .bind(t)
+        .fetch_one(db)
+        .await
 }
 
 pub async fn update_routine(db: &Db, id: i64, name: &str, enabled: bool, days: i64, time: Option<&str>, actions: &str) -> sqlx::Result<()> {
@@ -604,11 +580,7 @@ struct EventRow {
 
 impl From<EventRow> for Event {
     fn from(r: EventRow) -> Event {
-        let message = Text {
-            en: r.message_en.unwrap_or_else(|| r.message.clone()),
-            es: r.message_es.unwrap_or_else(|| r.message.clone()),
-            fr: r.message,
-        };
+        let message = Text { en: r.message_en.unwrap_or_else(|| r.message.clone()), es: r.message_es.unwrap_or_else(|| r.message.clone()), fr: r.message };
         Event { id: r.id, ts: r.ts, kind: r.kind, level: r.level, installation_id: r.installation_id, actor: r.actor, message, data: r.data }
     }
 }
@@ -651,11 +623,7 @@ pub async fn user_access(db: &Db, user_id: i64) -> sqlx::Result<Vec<Grant>> {
     .await?;
     Ok(rows
         .into_iter()
-        .map(|(installation_id, permission, zones, routines, schedules)| Grant {
-            installation_id,
-            permission,
-            rights: UserRights { zones, routines, schedules },
-        })
+        .map(|(installation_id, permission, zones, routines, schedules)| Grant { installation_id, permission, rights: UserRights { zones, routines, schedules } })
         .collect())
 }
 
@@ -703,16 +671,14 @@ pub async fn list_visible_events(db: &Db, limit: i64, before_id: Option<i64>, in
 }
 
 pub async fn list_events(db: &Db, limit: i64, before_id: Option<i64>, installation_id: Option<i64>) -> sqlx::Result<Vec<Event>> {
-    sqlx::query_as::<_, EventRow>(
-        "SELECT * FROM events WHERE id < ? AND (? IS NULL OR installation_id = ?) ORDER BY id DESC LIMIT ?",
-    )
-    .bind(before_id.unwrap_or(i64::MAX))
-    .bind(installation_id)
-    .bind(installation_id)
-    .bind(limit)
-    .fetch_all(db)
-    .await
-    .map(|rows| rows.into_iter().map(Event::from).collect())
+    sqlx::query_as::<_, EventRow>("SELECT * FROM events WHERE id < ? AND (? IS NULL OR installation_id = ?) ORDER BY id DESC LIMIT ?")
+        .bind(before_id.unwrap_or(i64::MAX))
+        .bind(installation_id)
+        .bind(installation_id)
+        .bind(limit)
+        .fetch_all(db)
+        .await
+        .map(|rows| rows.into_iter().map(Event::from).collect())
 }
 
 /// Deletes old history, events and expired sessions.
@@ -734,11 +700,7 @@ pub async fn get_setting(db: &Db, key: &str) -> sqlx::Result<Option<String>> {
 }
 
 pub async fn set_setting(db: &Db, key: &str, value: &str) -> sqlx::Result<()> {
-    sqlx::query("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value")
-        .bind(key)
-        .bind(value)
-        .execute(db)
-        .await?;
+    sqlx::query("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value").bind(key).bind(value).execute(db).await?;
     Ok(())
 }
 
@@ -773,11 +735,7 @@ pub async fn list_cloud_installations(db: &Db) -> sqlx::Result<Vec<CloudInstalla
 /// Records which Breezone installation drives a cloud installation.
 pub async fn set_cloud_installation_link(db: &Db, cloud_id: &str, installation_id: Option<i64>) -> sqlx::Result<()> {
     if let Some(id) = installation_id {
-        sqlx::query("UPDATE cloud_installations SET installation_id = NULL WHERE installation_id = ? AND cloud_id != ?")
-            .bind(id)
-            .bind(cloud_id)
-            .execute(db)
-            .await?;
+        sqlx::query("UPDATE cloud_installations SET installation_id = NULL WHERE installation_id = ? AND cloud_id != ?").bind(id).bind(cloud_id).execute(db).await?;
     }
     sqlx::query("UPDATE cloud_installations SET installation_id = ? WHERE cloud_id = ?").bind(installation_id).bind(cloud_id).execute(db).await?;
     Ok(())
@@ -801,19 +759,17 @@ pub async fn replace_cloud_installations(db: &Db, rows: &[CloudInstallationRow])
     let mut tx = db.begin().await?;
     sqlx::query("DELETE FROM cloud_installations").execute(&mut *tx).await?;
     for r in rows {
-        sqlx::query(
-            "INSERT INTO cloud_installations (cloud_id, name, location, ws_ids, zones, installation_id, synced_at, detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        )
-        .bind(&r.cloud_id)
-        .bind(&r.name)
-        .bind(&r.location)
-        .bind(&r.ws_ids)
-        .bind(r.zones)
-        .bind(r.installation_id)
-        .bind(r.synced_at)
-        .bind(&r.detail)
-        .execute(&mut *tx)
-        .await?;
+        sqlx::query("INSERT INTO cloud_installations (cloud_id, name, location, ws_ids, zones, installation_id, synced_at, detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+            .bind(&r.cloud_id)
+            .bind(&r.name)
+            .bind(&r.location)
+            .bind(&r.ws_ids)
+            .bind(r.zones)
+            .bind(r.installation_id)
+            .bind(r.synced_at)
+            .bind(&r.detail)
+            .execute(&mut *tx)
+            .await?;
     }
     tx.commit().await
 }
@@ -930,11 +886,7 @@ pub async fn insert_share(
     .fetch_one(&mut *tx)
     .await?;
     for id in installation_ids {
-        sqlx::query("INSERT INTO share_installations (share_id, installation_id) VALUES (?, ?)")
-            .bind(share.id)
-            .bind(id)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query("INSERT INTO share_installations (share_id, installation_id) VALUES (?, ?)").bind(share.id).bind(id).execute(&mut *tx).await?;
     }
     tx.commit().await?;
     Ok(share)
@@ -957,15 +909,7 @@ pub async fn invited_share(db: &Db, code_hash: &str) -> sqlx::Result<Option<Shar
 /// Returns false if the code was used meanwhile.
 /// `shares_back_from`: address of the requesting node when it shares back (reciprocal invitation).
 #[allow(clippy::too_many_arguments)]
-pub async fn claim_share(
-    db: &Db,
-    id: i64,
-    node_id: &str,
-    name: &str,
-    public_key: &str,
-    address: Option<&str>,
-    shares_back_from: Option<&str>,
-) -> sqlx::Result<bool> {
+pub async fn claim_share(db: &Db, id: i64, node_id: &str, name: &str, public_key: &str, address: Option<&str>, shares_back_from: Option<&str>) -> sqlx::Result<bool> {
     let r = sqlx::query(
         "UPDATE shares SET status = 'pending', key_hash = 'used:' || id, remote_node_id = ?, remote_name = ?,
          remote_public_key = ?, last_address = ?, requested_at = ?, remote_url = ?, remote_shares_back = ?
@@ -986,10 +930,7 @@ pub async fn claim_share(
 
 /// The share a paired node uses (the most recent one if it paired several times).
 pub async fn share_of_node(db: &Db, node_id: &str) -> sqlx::Result<Option<Share>> {
-    sqlx::query_as("SELECT * FROM shares WHERE remote_node_id = ? AND status IN ('pending', 'active') ORDER BY id DESC LIMIT 1")
-        .bind(node_id)
-        .fetch_optional(db)
-        .await
+    sqlx::query_as("SELECT * FROM shares WHERE remote_node_id = ? AND status IN ('pending', 'active') ORDER BY id DESC LIMIT 1").bind(node_id).fetch_optional(db).await
 }
 
 /// Share given back to the node that invited this one (reciprocal invitation): bound to that
@@ -1021,11 +962,7 @@ pub async fn insert_reverse_share(
     .fetch_one(&mut *tx)
     .await?;
     for id in installation_ids {
-        sqlx::query("INSERT INTO share_installations (share_id, installation_id) VALUES (?, ?)")
-            .bind(share.id)
-            .bind(id)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query("INSERT INTO share_installations (share_id, installation_id) VALUES (?, ?)").bind(share.id).bind(id).execute(&mut *tx).await?;
     }
     tx.commit().await?;
     Ok(share)
@@ -1037,34 +974,21 @@ pub async fn approve_share(db: &Db, id: i64) -> sqlx::Result<bool> {
 }
 
 pub async fn share_installation_ids(db: &Db, share_id: i64) -> sqlx::Result<Vec<i64>> {
-    sqlx::query_scalar("SELECT installation_id FROM share_installations WHERE share_id = ? ORDER BY installation_id")
-        .bind(share_id)
-        .fetch_all(db)
-        .await
+    sqlx::query_scalar("SELECT installation_id FROM share_installations WHERE share_id = ? ORDER BY installation_id").bind(share_id).fetch_all(db).await
 }
 
 pub async fn set_share_installations(db: &Db, share_id: i64, installation_ids: &[i64]) -> sqlx::Result<()> {
     let mut tx = db.begin().await?;
     sqlx::query("DELETE FROM share_installations WHERE share_id = ?").bind(share_id).execute(&mut *tx).await?;
     for id in installation_ids {
-        sqlx::query("INSERT INTO share_installations (share_id, installation_id) VALUES (?, ?)")
-            .bind(share_id)
-            .bind(id)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query("INSERT INTO share_installations (share_id, installation_id) VALUES (?, ?)").bind(share_id).bind(id).execute(&mut *tx).await?;
     }
     tx.commit().await?;
     Ok(())
 }
 
 pub async fn update_share(db: &Db, id: i64, label: &str, permission: &str, expires_at: Option<i64>) -> sqlx::Result<()> {
-    sqlx::query("UPDATE shares SET label = ?, permission = ?, expires_at = ? WHERE id = ?")
-        .bind(label)
-        .bind(permission)
-        .bind(expires_at)
-        .bind(id)
-        .execute(db)
-        .await?;
+    sqlx::query("UPDATE shares SET label = ?, permission = ?, expires_at = ? WHERE id = ?").bind(label).bind(permission).bind(expires_at).bind(id).execute(db).await?;
     Ok(())
 }
 
@@ -1175,15 +1099,13 @@ pub async fn set_node_seen(db: &Db, id: i64, name: Option<&str>, permission: Opt
     if error.is_some() {
         sqlx::query("UPDATE nodes SET last_error = ? WHERE id = ?").bind(error).bind(id).execute(db).await?;
     } else {
-        sqlx::query(
-            "UPDATE nodes SET last_seen = ?, last_error = NULL, name = COALESCE(?, name), permission = COALESCE(?, permission) WHERE id = ?",
-        )
-        .bind(now())
-        .bind(name)
-        .bind(permission)
-        .bind(id)
-        .execute(db)
-        .await?;
+        sqlx::query("UPDATE nodes SET last_seen = ?, last_error = NULL, name = COALESCE(?, name), permission = COALESCE(?, permission) WHERE id = ?")
+            .bind(now())
+            .bind(name)
+            .bind(permission)
+            .bind(id)
+            .execute(db)
+            .await?;
     }
     Ok(())
 }
@@ -1297,12 +1219,14 @@ pub async fn delete_timer(db: &Db, id: i64) -> sqlx::Result<()> {
 }
 
 pub async fn set_airzone_routines(db: &Db, cloud_id: &str, data: &str) -> sqlx::Result<()> {
-    sqlx::query("INSERT INTO airzone_routines (cloud_id, data, synced_at) VALUES (?, ?, ?) ON CONFLICT (cloud_id) DO UPDATE SET data = excluded.data, synced_at = excluded.synced_at")
-        .bind(cloud_id)
-        .bind(data)
-        .bind(now())
-        .execute(db)
-        .await?;
+    sqlx::query(
+        "INSERT INTO airzone_routines (cloud_id, data, synced_at) VALUES (?, ?, ?) ON CONFLICT (cloud_id) DO UPDATE SET data = excluded.data, synced_at = excluded.synced_at",
+    )
+    .bind(cloud_id)
+    .bind(data)
+    .bind(now())
+    .execute(db)
+    .await?;
     Ok(())
 }
 
@@ -1402,7 +1326,14 @@ pub async fn source_by_id(db: &Db, id: i64) -> sqlx::Result<Option<Source>> {
 }
 
 pub async fn insert_source(db: &Db, driver: &str, name: &str, config: &str) -> sqlx::Result<i64> {
-    Ok(sqlx::query("INSERT INTO sources (driver, name, config, created_at) VALUES (?, ?, ?, ?)").bind(driver).bind(name).bind(config).bind(now()).execute(db).await?.last_insert_rowid())
+    Ok(sqlx::query("INSERT INTO sources (driver, name, config, created_at) VALUES (?, ?, ?, ?)")
+        .bind(driver)
+        .bind(name)
+        .bind(config)
+        .bind(now())
+        .execute(db)
+        .await?
+        .last_insert_rowid())
 }
 
 pub async fn update_source(db: &Db, id: i64, name: &str, config: &str, enabled: bool) -> sqlx::Result<bool> {

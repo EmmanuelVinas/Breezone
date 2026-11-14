@@ -24,9 +24,9 @@
 use crate::auth::random_bytes;
 use crate::db::{self, CloudInstallationRow, InstallationAccess, ZoneMeta};
 use crate::discovery;
-use crate::i18n::Text;
 use crate::error::{ApiError, ApiResult};
 use crate::hub::InstallationView;
+use crate::i18n::Text;
 use crate::AppState;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
@@ -116,16 +116,8 @@ fn cloud_err(e: reqwest::Error) -> ApiError {
 impl CloudSession {
     pub async fn login(base_url: &str, ctrl_url: &str, email: &str, password: &str) -> ApiResult<CloudSession> {
         let base = base_url.trim_end_matches('/').to_string();
-        let http = reqwest::Client::builder()
-            .timeout(Duration::from_secs(20))
-            .build()
-            .map_err(|e| ApiError::internal(e.to_string()))?;
-        let login = http
-            .post(format!("{base}/api/v1/auth/login"))
-            .json(&json!({ "email": email.trim(), "password": password }))
-            .send()
-            .await
-            .map_err(cloud_err)?;
+        let http = reqwest::Client::builder().timeout(Duration::from_secs(20)).build().map_err(|e| ApiError::internal(e.to_string()))?;
+        let login = http.post(format!("{base}/api/v1/auth/login")).json(&json!({ "email": email.trim(), "password": password })).send().await.map_err(cloud_err)?;
         let status = login.status();
         if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::BAD_REQUEST || status == reqwest::StatusCode::NOT_FOUND {
             return Err(ApiError::bad_request("Airzone Cloud a refusé ces identifiants"));
@@ -194,14 +186,8 @@ pub async fn fetch_account(session: &CloudSession, schedules: bool) -> ApiResult
         let detail = get(format!("installations/{cloud_id}")).await?;
         let city = &inst["location_text"]["city"];
         let location = city["fr"].as_str().or_else(|| city["en"].as_str()).or_else(|| city.as_str()).map(String::from);
-        let ws_ids: Vec<String> = inst["ws_ids"]
-            .as_array()
-            .or_else(|| detail["ws_ids"].as_array())
-            .cloned()
-            .unwrap_or_default()
-            .iter()
-            .filter_map(|v| v.as_str().map(String::from))
-            .collect();
+        let ws_ids: Vec<String> =
+            inst["ws_ids"].as_array().or_else(|| detail["ws_ids"].as_array()).cloned().unwrap_or_default().iter().filter_map(|v| v.as_str().map(String::from)).collect();
         let mut groups = vec![];
         let mut zones: Vec<CloudZone> = vec![];
         let mut systems: Vec<CloudSystem> = vec![];
@@ -495,11 +481,7 @@ pub async fn sync(state: &AppState, creds: &Credentials, opts: SyncOptions, acto
 
 /// The cloud organisation saved at the last synchronisation.
 async fn snapshot(state: &AppState) -> ApiResult<Vec<CloudInstallation>> {
-    Ok(db::list_cloud_installations(&state.db)
-        .await?
-        .into_iter()
-        .filter_map(|r| r.detail.and_then(|d| serde_json::from_str(&d).ok()))
-        .collect())
+    Ok(db::list_cloud_installations(&state.db).await?.into_iter().filter_map(|r| r.detail.and_then(|d| serde_json::from_str(&d).ok())).collect())
 }
 
 #[derive(Debug, Deserialize)]
@@ -522,11 +504,7 @@ pub struct AttachResult {
 /// Sets (or clears) the fixed local address of a cloud installation's WebServer and tries to
 /// reach it right away, using the organisation saved at the last synchronisation.
 pub async fn set_access(state: &AppState, cloud_id: &str, input: &AccessInput, actor: &str) -> ApiResult<AttachResult> {
-    let host = input
-        .host
-        .as_deref()
-        .map(|h| h.trim().trim_start_matches("http://").trim_end_matches('/').to_string())
-        .filter(|h| !h.is_empty());
+    let host = input.host.as_deref().map(|h| h.trim().trim_start_matches("http://").trim_end_matches('/').to_string()).filter(|h| !h.is_empty());
     if let Some(h) = &host {
         if h.contains(['/', ' ', '?', '#']) {
             return Err(ApiError::bad_request("adresse invalide : indiquez une IP ou un nom d'hôte"));
@@ -537,28 +515,23 @@ pub async fn set_access(state: &AppState, cloud_id: &str, input: &AccessInput, a
         return Err(ApiError::bad_request("port invalide"));
     }
     let cloud = snapshot(state).await?;
-    let target = cloud
-        .iter()
-        .find(|c| c.cloud_id == cloud_id)
-        .ok_or_else(|| ApiError::not_found("installation Airzone inconnue : synchronisez d'abord le compte Airzone"))?
-        .name
-        .clone();
+    let target =
+        cloud.iter().find(|c| c.cloud_id == cloud_id).ok_or_else(|| ApiError::not_found("installation Airzone inconnue : synchronisez d'abord le compte Airzone"))?.name.clone();
     match &host {
         Some(h) => db::set_access(&state.db, cloud_id, h, port).await?,
         None => db::delete_access(&state.db, cloud_id).await?,
     }
     let report = reconcile(state, &cloud, SyncOptions { overwrite: false }, actor).await?;
     crate::airzone_schedules::sync_soon(state);
-    let installation_id = db::list_cloud_installations(&state.db)
-        .await?
-        .into_iter()
-        .find(|r| r.cloud_id == cloud_id)
-        .and_then(|r| r.installation_id);
+    let installation_id = db::list_cloud_installations(&state.db).await?.into_iter().find(|r| r.cloud_id == cloud_id).and_then(|r| r.installation_id);
     let message = match installation_id {
         Some(_) => crate::text!("« {0} » est pilotée par ce serveur.", "“{0}” is driven by this server.", "«{0}» la controla este servidor.", target),
-        None => report.notes.iter().find(|n| n.fr.starts_with(&format!("{target} :"))).cloned().unwrap_or_else(|| {
-            crate::text!("« {0} » n'a pas été trouvée.", "“{0}” was not found.", "«{0}» no se encontró.", target)
-        }),
+        None => report
+            .notes
+            .iter()
+            .find(|n| n.fr.starts_with(&format!("{target} :")))
+            .cloned()
+            .unwrap_or_else(|| crate::text!("« {0} » n'a pas été trouvée.", "“{0}” was not found.", "«{0}» no se encontró.", target)),
     };
     Ok(AttachResult { attached: installation_id.is_some(), installation_id, message, report })
 }
@@ -583,9 +556,11 @@ async fn reconcile(state: &AppState, cloud: &[CloudInstallation], opts: SyncOpti
         .iter()
         .enumerate()
         .map(|(i, c)| {
-            locals.iter().find(|l| l.cloud_id.as_deref() == Some(c.cloud_id.as_str())).map(|l| l.id).or_else(|| {
-                macs.iter().find(|(_, m)| m.as_ref().is_some_and(|m| cloud_macs[i].contains(m))).map(|(id, _)| *id)
-            })
+            locals
+                .iter()
+                .find(|l| l.cloud_id.as_deref() == Some(c.cloud_id.as_str()))
+                .map(|l| l.id)
+                .or_else(|| macs.iter().find(|(_, m)| m.as_ref().is_some_and(|m| cloud_macs[i].contains(m))).map(|(id, _)| *id))
         })
         .collect();
     let mut created_ids: HashSet<i64> = HashSet::new();
@@ -682,10 +657,9 @@ async fn reconcile(state: &AppState, cloud: &[CloudInstallation], opts: SyncOpti
                 Ok(found) => {
                     for i in pending {
                         let c = &cloud[i];
-                        let hit = found.iter().find(|f| {
-                            f.mac.as_deref().map(normalize_mac).is_some_and(|m| cloud_macs[i].contains(&m))
-                                && !known_hosts.contains(&(f.host.clone(), f.port as i64))
-                        });
+                        let hit = found
+                            .iter()
+                            .find(|f| f.mac.as_deref().map(normalize_mac).is_some_and(|m| cloud_macs[i].contains(&m)) && !known_hosts.contains(&(f.host.clone(), f.port as i64)));
                         match hit {
                             Some(f) => {
                                 let inst = db::insert_installation(&state.db, &c.name, &f.host, f.port as i64, true).await?;
@@ -837,10 +811,7 @@ async fn apply_organisation(state: &AppState, c: &CloudInstallation, local: &Ins
         };
         let group = if meaningful_groups && (overwrite || lz.group.is_none()) { cz.group.clone() } else { lz.group.clone() };
         let position = if overwrite || lz.group.is_none() { cz.position } else { lz.position };
-        state
-            .hub
-            .set_zone_meta(ZoneMeta { installation_id: id, system_id: cz.system_id, zone_id: cz.zone_id, display_name, group_name: group, position })
-            .await?;
+        state.hub.set_zone_meta(ZoneMeta { installation_id: id, system_id: cz.system_id, zone_id: cz.zone_id, display_name, group_name: group, position }).await?;
     }
     Ok(())
 }
@@ -853,19 +824,26 @@ pub async fn link(state: &AppState, installation_id: i64, cloud_id: Option<&str>
     let Some(cloud_id) = cloud_id.filter(|c| !c.is_empty()) else {
         db::clear_installation_cloud_link(&state.db, installation_id).await?;
         state.hub.reload_installations().await?;
-        state.hub.log("system", "info", Some(installation_id), Some(actor), crate::text!(
-            "« {0} » n'est plus associée au compte Airzone",
-            "“{0}” is no longer linked to the Airzone account",
-            "«{0}» ya no está asociada a la cuenta de Airzone",
-            inst.name
-        ), None).await;
+        state
+            .hub
+            .log(
+                "system",
+                "info",
+                Some(installation_id),
+                Some(actor),
+                crate::text!(
+                    "« {0} » n'est plus associée au compte Airzone",
+                    "“{0}” is no longer linked to the Airzone account",
+                    "«{0}» ya no está asociada a la cuenta de Airzone",
+                    inst.name
+                ),
+                None,
+            )
+            .await;
         return Ok(None);
     };
     let cloud = snapshot(state).await?;
-    let c = cloud
-        .iter()
-        .find(|c| c.cloud_id == cloud_id)
-        .ok_or_else(|| ApiError::not_found("installation Airzone inconnue : synchronisez d'abord le compte Airzone"))?;
+    let c = cloud.iter().find(|c| c.cloud_id == cloud_id).ok_or_else(|| ApiError::not_found("installation Airzone inconnue : synchronisez d'abord le compte Airzone"))?;
     if let Some(mac) = state.hub.current_webserver_mac(installation_id).await {
         let expected: Vec<String> = c.ws_ids.iter().map(|m| normalize_mac(m)).collect();
         if !expected.is_empty() && !expected.contains(&normalize_mac(&mac)) {

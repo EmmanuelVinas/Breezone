@@ -178,10 +178,7 @@ pub fn air_quality_level(value: i64) -> Option<&'static str> {
 /// only used when no zone of the system lists the modes.
 pub fn master_zone(zones: &[ZoneData], system_id: i64) -> Option<i64> {
     let system = || zones.iter().filter(move |z| z.system_id == system_id);
-    system()
-        .find(|z| z.modes.as_ref().is_some_and(|m| !m.is_empty()))
-        .or_else(|| system().find(|z| z.master_zone_id == Some(z.zone_id)))
-        .map(|z| z.zone_id)
+    system().find(|z| z.modes.as_ref().is_some_and(|m| !m.is_empty())).or_else(|| system().find(|z| z.master_zone_id == Some(z.zone_id))).map(|z| z.zone_id)
 }
 
 #[cfg(test)]

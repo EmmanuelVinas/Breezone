@@ -61,9 +61,7 @@ async fn cloud_sync_creates_installations_and_groups() {
     assert_eq!(s, StatusCode::BAD_REQUEST, "{v}");
 
     // Connect: the WebServer is found on the LAN by its MAC and created automatically.
-    let (s, v) = c
-        .call(reqwest::Method::PUT, "/api/cloud", Some(json!({"email": mock::MOCK_CLOUD_EMAIL, "password": mock::MOCK_CLOUD_PASSWORD})))
-        .await;
+    let (s, v) = c.call(reqwest::Method::PUT, "/api/cloud", Some(json!({"email": mock::MOCK_CLOUD_EMAIL, "password": mock::MOCK_CLOUD_PASSWORD}))).await;
     assert_eq!(s, StatusCode::OK, "{v}");
     assert_eq!(v["report"]["created"], json!(["Maison"]));
     assert_eq!(v["report"]["unreachable"], json!(["Atelier"]));
@@ -95,16 +93,12 @@ async fn cloud_sync_creates_installations_and_groups() {
     assert_eq!(cloud["email"], mock::MOCK_CLOUD_EMAIL);
 
     // Per-installation access point. A WebServer with the wrong MAC address is refused…
-    let (s, v) = c
-        .call(reqwest::Method::PUT, "/api/cloud/installations/inst-office/access", Some(json!({"host":"127.0.0.1","port":airzone_port})))
-        .await;
+    let (s, v) = c.call(reqwest::Method::PUT, "/api/cloud/installations/inst-office/access", Some(json!({"host":"127.0.0.1","port":airzone_port}))).await;
     assert_eq!(s, StatusCode::OK, "{v}");
     assert_eq!(v["result"]["attached"], false);
     assert!(v["result"]["message"].as_str().unwrap().contains("is not the one of this installation"), "{v}");
     // …the right address attaches the installation, with its cloud organisation (no new login).
-    let (s, v) = c
-        .call(reqwest::Method::PUT, "/api/cloud/installations/inst-office/access", Some(json!({"host":"127.0.0.1","port":office_port})))
-        .await;
+    let (s, v) = c.call(reqwest::Method::PUT, "/api/cloud/installations/inst-office/access", Some(json!({"host":"127.0.0.1","port":office_port}))).await;
     assert_eq!(s, StatusCode::OK, "{v}");
     assert_eq!(v["result"]["attached"], true, "{v}");
     let mkp = v["status"]["installations"].as_array().unwrap().iter().find(|i| i["cloud_id"] == "inst-office").unwrap().clone();
@@ -162,9 +156,7 @@ async fn airzone_schedules_are_mirrored_and_edited_on_airzone_cloud() {
     // No Airzone account yet.
     let (s, _) = c.call(reqwest::Method::POST, "/api/airzone/schedules/sync", None).await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
-    let (s, v) = c
-        .call(reqwest::Method::PUT, "/api/cloud", Some(json!({"email": mock::MOCK_CLOUD_EMAIL, "password": mock::MOCK_CLOUD_PASSWORD})))
-        .await;
+    let (s, v) = c.call(reqwest::Method::PUT, "/api/cloud", Some(json!({"email": mock::MOCK_CLOUD_EMAIL, "password": mock::MOCK_CLOUD_PASSWORD}))).await;
     assert_eq!(s, StatusCode::OK, "{v}");
 
     let (s, r) = c.call(reqwest::Method::POST, "/api/airzone/schedules/sync", None).await;
@@ -245,7 +237,13 @@ async fn airzone_schedules_are_mirrored_and_edited_on_airzone_cloud() {
     assert_eq!(s, StatusCode::CREATED, "{v}");
     let (_, v) = c.call(reqwest::Method::POST, "/api/auth/login", Some(json!({"username":"camille","password":"motdepasse1"}))).await;
     let user = Client { base: c.base.clone(), http: c.http.clone(), token: Some(v["access_token"].as_str().unwrap().into()) };
-    let (s, v) = user.call(reqwest::Method::PUT, &format!("/api/airzone/schedules/inst-home/{id}"), Some(json!({ "name": "X", "days": [1], "time": "10:00", "zones": [{"system_id":1,"zone_id":1}], "action": {"on": true} }))).await;
+    let (s, v) = user
+        .call(
+            reqwest::Method::PUT,
+            &format!("/api/airzone/schedules/inst-home/{id}"),
+            Some(json!({ "name": "X", "days": [1], "time": "10:00", "zones": [{"system_id":1,"zone_id":1}], "action": {"on": true} })),
+        )
+        .await;
     assert_eq!(s, StatusCode::FORBIDDEN, "{v}");
     let (s, _) = user.call(reqwest::Method::DELETE, &format!("/api/airzone/schedules/inst-home/{id}"), None).await;
     assert_eq!(s, StatusCode::FORBIDDEN);

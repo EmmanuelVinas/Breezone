@@ -162,7 +162,9 @@ async fn validate_share(state: &AppState, req: &ShareInput) -> ApiResult<(String
         return Err(ApiError::bad_request("choisissez au moins une installation"));
     }
     for id in &req.installation_ids {
-        let inst = db::installation_by_id(&state.db, *id).await?.ok_or_else(|| ApiError::bad_request(crate::text!("installation {0} inconnue", "unknown installation {0}", "instalación {0} desconocida", id)))?;
+        let inst = db::installation_by_id(&state.db, *id)
+            .await?
+            .ok_or_else(|| ApiError::bad_request(crate::text!("installation {0} inconnue", "unknown installation {0}", "instalación {0} desconocida", id)))?;
         if !inst.is_local() {
             // Re-sharing installations of another node would allow loops.
             return Err(ApiError::bad_request(crate::text!(
@@ -193,9 +195,9 @@ pub async fn create_share(State(state): State<AppState>, AdminUser(admin): Admin
     let me = federation::identity(&state.db).await?;
     let url = match req.url.as_deref().map(str::trim).filter(|u| !u.is_empty()) {
         Some(u) => federation::normalize_url(u)?,
-        None => me.public_url.clone().ok_or_else(|| {
-            ApiError::bad_request("indiquez l'adresse à laquelle l'autre serveur joindra celui-ci (Réglages › Partages › Adresse publique)")
-        })?,
+        None => {
+            me.public_url.clone().ok_or_else(|| ApiError::bad_request("indiquez l'adresse à laquelle l'autre serveur joindra celui-ci (Réglages › Partages › Adresse publique)"))?
+        }
     };
     let (code, hash) = federation::new_pairing_code();
     let mut ids = req.installation_ids.clone();
@@ -203,10 +205,7 @@ pub async fn create_share(State(state): State<AppState>, AdminUser(admin): Admin
     ids.dedup();
     let share = db::insert_share(&state.db, &label, &hash, &req.permission, expires_at, &admin.username, &ids, req.reciprocal).await?;
     let token = federation::encode_token(&Invitation { v: 2, node_id: me.node_id, name: me.name, url, code, reciprocal: req.reciprocal });
-    state
-        .hub
-        .log("system", "info", None, Some(&admin.username), share_created(false, &label, ids.len(), &req.permission), None)
-        .await;
+    state.hub.log("system", "info", None, Some(&admin.username), share_created(false, &label, ids.len(), &req.permission), None).await;
     Ok((StatusCode::CREATED, Json(CreatedShare { share: share_view(&state, share).await?, token })))
 }
 
@@ -220,7 +219,10 @@ pub async fn update_share(State(state): State<AppState>, AdminUser(admin): Admin
     ids.dedup();
     db::update_share(&state.db, id, &label, &req.permission, expires_at).await?;
     db::set_share_installations(&state.db, id, &ids).await?;
-    state.hub.log("system", "info", None, Some(&admin.username), crate::text!("Partage « {0} » modifié", "Share “{0}” changed", "Uso compartido «{0}» modificado", label), None).await;
+    state
+        .hub
+        .log("system", "info", None, Some(&admin.username), crate::text!("Partage « {0} » modifié", "Share “{0}” changed", "Uso compartido «{0}» modificado", label), None)
+        .await;
     let share = db::share_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("partage introuvable"))?;
     Ok(Json(share_view(&state, share).await?))
 }
@@ -232,18 +234,44 @@ pub async fn approve_share(State(state): State<AppState>, AdminUser(admin): Admi
         return Err(ApiError::bad_request("aucune demande d'accès en attente pour ce partage"));
     }
     let who = share.remote_name.clone().unwrap_or_else(|| "?".into());
-    state.hub.log("system", "info", None, Some(&admin.username), crate::text!("Accès accordé au serveur « {0} » (partage « {1} »)", "Access granted to server “{0}” (share “{1}”)", "Acceso concedido al servidor «{0}» (uso compartido «{1}»)", who, share.label), None).await;
+    state
+        .hub
+        .log(
+            "system",
+            "info",
+            None,
+            Some(&admin.username),
+            crate::text!(
+                "Accès accordé au serveur « {0} » (partage « {1} »)",
+                "Access granted to server “{0}” (share “{1}”)",
+                "Acceso concedido al servidor «{0}» (uso compartido «{1}»)",
+                who,
+                share.label
+            ),
+            None,
+        )
+        .await;
     // Reciprocal invitation accepted by the other node: consume what it shares back.
     if let (true, true, Some(url), Some(node_id)) = (share.reciprocal, share.remote_shares_back, share.remote_url.as_deref(), share.remote_node_id.as_deref()) {
         let node = db::upsert_node(&state.db, node_id, &who, url, "", "read").await?;
         state.hub.reload_installations().await?;
         state.hub.poll_node(node.id).await;
-        state.hub.log("system", "info", None, Some(&admin.username), crate::text!(
-            "Nœud « {0} » ajouté : il partage aussi ses installations avec ce serveur",
-            "Node “{0}” added: it also shares its installations with this server",
-            "Nodo «{0}» añadido: también comparte sus instalaciones con este servidor",
-            who
-        ), None).await;
+        state
+            .hub
+            .log(
+                "system",
+                "info",
+                None,
+                Some(&admin.username),
+                crate::text!(
+                    "Nœud « {0} » ajouté : il partage aussi ses installations avec ce serveur",
+                    "Node “{0}” added: it also shares its installations with this server",
+                    "Nodo «{0}» añadido: también comparte sus instalaciones con este servidor",
+                    who
+                ),
+                None,
+            )
+            .await;
     }
     let share = db::share_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("partage introuvable"))?;
     Ok(Json(share_view(&state, share).await?))
@@ -253,7 +281,10 @@ pub async fn approve_share(State(state): State<AppState>, AdminUser(admin): Admi
 pub async fn delete_share(State(state): State<AppState>, AdminUser(admin): AdminUser, Path(id): Path<i64>) -> ApiResult<StatusCode> {
     let share = db::share_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("partage introuvable"))?;
     db::delete_share(&state.db, id).await?;
-    state.hub.log("system", "info", None, Some(&admin.username), crate::text!("Partage « {0} » révoqué", "Share “{0}” revoked", "Uso compartido «{0}» revocado", share.label), None).await;
+    state
+        .hub
+        .log("system", "info", None, Some(&admin.username), crate::text!("Partage « {0} » révoqué", "Share “{0}” revoked", "Uso compartido «{0}» revocado", share.label), None)
+        .await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -327,12 +358,7 @@ async fn node_views(state: &AppState) -> ApiResult<Vec<NodeView>> {
                 .remove(&n.id)
                 .unwrap_or_default()
                 .into_iter()
-                .map(|o| OfferedView {
-                    included: !exclusions.get(&n.id).is_some_and(|e| e.contains(&o.remote_id)),
-                    remote_id: o.remote_id,
-                    name: o.name,
-                    location: o.location,
-                })
+                .map(|o| OfferedView { included: !exclusions.get(&n.id).is_some_and(|e| e.contains(&o.remote_id)), remote_id: o.remote_id, name: o.name, location: o.location })
                 .collect(),
             status: statuses.get(&n.id).cloned().unwrap_or(NodeStatus {
                 state: "unknown",
@@ -341,11 +367,7 @@ async fn node_views(state: &AppState) -> ApiResult<Vec<NodeView>> {
                 latency_ms: None,
                 permission: n.permission.clone(),
             }),
-            installations: installations
-                .iter()
-                .filter(|i| i.node_id == Some(n.id))
-                .map(|i| ShareInstallation { id: i.id, name: i.name.clone() })
-                .collect(),
+            installations: installations.iter().filter(|i| i.node_id == Some(n.id)).map(|i| ShareInstallation { id: i.id, name: i.name.clone() }).collect(),
             certificate_pinned: n.tls_fingerprint.is_some(),
             peer: PeerView::of(n.peer_caps.as_deref(), n.peer_caps_at),
             id: n.id,
@@ -429,9 +451,10 @@ pub async fn add_node(State(state): State<AppState>, AdminUser(admin): AdminUser
             let (label, _) = validate_share(&state, &input).await?;
             let my_url = match r.url.as_deref().map(str::trim).filter(|u| !u.is_empty()) {
                 Some(u) => federation::normalize_url(u)?,
-                None => me.public_url.clone().ok_or_else(|| {
-                    ApiError::bad_request("indiquez l'adresse à laquelle l'autre serveur joindra celui-ci (Réglages › Partages › Adresse publique)")
-                })?,
+                None => me
+                    .public_url
+                    .clone()
+                    .ok_or_else(|| ApiError::bad_request("indiquez l'adresse à laquelle l'autre serveur joindra celui-ci (Réglages › Partages › Adresse publique)"))?,
             };
             let mut ids = r.installation_ids.clone();
             ids.sort_unstable();
@@ -451,14 +474,16 @@ pub async fn add_node(State(state): State<AppState>, AdminUser(admin): AdminUser
     let paired = match client.pair(&inv.code, &me.name, back_url).await {
         Ok(p) => p,
         Err(federation::NodeError::Certificate(reason)) => return Err(certificate_error(&url, &inv.name, &reason).await),
-        Err(federation::NodeError::Unreachable(m)) => return Err(ApiError::bad_gateway(crate::text!(
+        Err(federation::NodeError::Unreachable(m)) => {
+            return Err(ApiError::bad_gateway(crate::text!(
                 "le serveur « {0} » ne répond pas à {1} ({2})",
                 "server “{0}” does not answer at {1} ({2})",
                 "el servidor «{0}» no responde en {1} ({2})",
                 inv.name,
                 url,
                 m.arg()
-            ))),
+            )))
+        }
         Err(other) => return Err(other.into()),
     };
     if paired.node_id != inv.node_id {
@@ -473,17 +498,7 @@ pub async fn add_node(State(state): State<AppState>, AdminUser(admin): AdminUser
     if let Some((label, ids, permission, _)) = &share_back {
         let public_key = paired.public_key.as_deref().ok_or_else(|| ApiError::bad_gateway("l'autre serveur n'a pas envoyé sa clé publique : mettez-le à jour"))?;
         db::insert_reverse_share(&state.db, label, permission, &admin.username, ids, &paired.node_id, &paired.name, public_key).await?;
-        state
-            .hub
-            .log(
-                "system",
-                "info",
-                None,
-                Some(&admin.username),
-                share_created(true, label, ids.len(), permission),
-                None,
-            )
-            .await;
+        state.hub.log("system", "info", None, Some(&admin.username), share_created(true, label, ids.len(), permission), None).await;
     }
     let node = db::upsert_node(&state.db, &paired.node_id, &paired.name, &url, "", "read").await?;
     db::set_node_fingerprint(&state.db, node.id, pinned.as_deref()).await?;
@@ -524,14 +539,26 @@ pub async fn update_node(State(state): State<AppState>, AdminUser(admin): AdminU
     db::set_node_url(&state.db, id, &url).await?;
     state.hub.reload_installations().await?;
     state.hub.poll_node(id).await;
-    state.hub.log("system", "info", None, Some(&admin.username), crate::text!("Nœud « {0} » : adresse {1}", "Node “{0}”: address {1}", "Nodo «{0}»: dirección {1}", node.name, url), None).await;
+    state
+        .hub
+        .log(
+            "system",
+            "info",
+            None,
+            Some(&admin.username),
+            crate::text!("Nœud « {0} » : adresse {1}", "Node “{0}”: address {1}", "Nodo «{0}»: dirección {1}", node.name, url),
+            None,
+        )
+        .await;
     node_views(&state).await?.into_iter().find(|n| n.id == id).map(Json).ok_or_else(|| ApiError::not_found("nœud introuvable"))
 }
 
 /// Certificate the node presents, to review it before trusting it.
 pub async fn node_certificate(State(state): State<AppState>, _admin: AdminUser, Path(id): Path<i64>) -> ApiResult<Json<NodeCertificate>> {
     let node = db::node_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("nœud introuvable"))?;
-    let certificate = tls::fetch_certificate(&node.url).await.ok_or_else(|| ApiError::bad_gateway(crate::text!("impossible de lire le certificat de {0}", "cannot read the certificate of {0}", "no se puede leer el certificado de {0}", node.url)))?;
+    let certificate = tls::fetch_certificate(&node.url).await.ok_or_else(|| {
+        ApiError::bad_gateway(crate::text!("impossible de lire le certificat de {0}", "cannot read the certificate of {0}", "no se puede leer el certificado de {0}", node.url))
+    })?;
     Ok(Json(NodeCertificate { pinned: node.tls_fingerprint, certificate }))
 }
 
@@ -552,7 +579,9 @@ pub struct TrustInput {
 pub async fn trust_node_certificate(State(state): State<AppState>, AdminUser(admin): AdminUser, Path(id): Path<i64>, Json(req): Json<TrustInput>) -> ApiResult<Json<NodeView>> {
     let node = db::node_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("nœud introuvable"))?;
     let wanted = tls::normalize_fingerprint(&req.fingerprint).ok_or_else(|| ApiError::bad_request("empreinte de certificat invalide"))?;
-    let current = tls::fetch_certificate(&node.url).await.ok_or_else(|| ApiError::bad_gateway(crate::text!("impossible de lire le certificat de {0}", "cannot read the certificate of {0}", "no se puede leer el certificado de {0}", node.url)))?;
+    let current = tls::fetch_certificate(&node.url).await.ok_or_else(|| {
+        ApiError::bad_gateway(crate::text!("impossible de lire le certificat de {0}", "cannot read the certificate of {0}", "no se puede leer el certificado de {0}", node.url))
+    })?;
     if current.fingerprint != wanted {
         return Err(ApiError::conflict("le certificat a changé entre-temps : examinez-le de nouveau").with_detail("certificate", current));
     }
@@ -569,12 +598,22 @@ pub async fn untrust_node_certificate(State(state): State<AppState>, AdminUser(a
     db::set_node_fingerprint(&state.db, id, None).await?;
     state.hub.reload_installations().await?;
     state.hub.poll_node(id).await;
-    state.hub.log("system", "info", None, Some(&admin.username), crate::text!(
-        "Serveur « {0} » : vérification HTTPS habituelle rétablie",
-        "Server “{0}”: usual HTTPS check restored",
-        "Servidor «{0}»: verificación HTTPS habitual restablecida",
-        node.name
-    ), None).await;
+    state
+        .hub
+        .log(
+            "system",
+            "info",
+            None,
+            Some(&admin.username),
+            crate::text!(
+                "Serveur « {0} » : vérification HTTPS habituelle rétablie",
+                "Server “{0}”: usual HTTPS check restored",
+                "Servidor «{0}»: verificación HTTPS habitual restablecida",
+                node.name
+            ),
+            None,
+        )
+        .await;
     node_views(&state).await?.into_iter().find(|n| n.id == id).map(Json).ok_or_else(|| ApiError::not_found("nœud introuvable"))
 }
 
@@ -734,10 +773,7 @@ impl FromRequest<AppState> for ShareAuth {
 /// Address of the calling node, as seen behind Cloudflare Tunnel or a reverse proxy.
 fn client_address(headers: &HeaderMap) -> Option<String> {
     let get = |name: &str| headers.get(name).and_then(|v| v.to_str().ok()).map(str::trim).filter(|v| !v.is_empty());
-    get("cf-connecting-ip")
-        .or_else(|| get("x-forwarded-for").and_then(|v| v.split(',').next()).map(str::trim))
-        .or_else(|| get("x-real-ip"))
-        .map(|v| v.chars().take(64).collect())
+    get("cf-connecting-ip").or_else(|| get("x-forwarded-for").and_then(|v| v.split(',').next()).map(str::trim)).or_else(|| get("x-real-ip")).map(|v| v.chars().take(64).collect())
 }
 
 async fn fed_snapshot(state: &AppState, auth: &ShareAuth) -> ApiResult<FedSnapshot> {
@@ -889,12 +925,7 @@ pub async fn control(State(state): State<AppState>, Path((id, system_id, zone_id
     }
     db::touch_share(&state.db, auth.share.id, None, None, auth.address.as_deref()).await?;
     let node = auth.share.remote_name.clone().unwrap_or_else(|| auth.share.label.clone());
-    let user: String = auth
-        .headers
-        .get(ACTOR_HEADER)
-        .and_then(|v| v.to_str().ok())
-        .map(|v| v.chars().filter(|c| !c.is_control()).take(60).collect())
-        .unwrap_or_default();
+    let user: String = auth.headers.get(ACTOR_HEADER).and_then(|v| v.to_str().ok()).map(|v| v.chars().filter(|c| !c.is_control()).take(60).collect()).unwrap_or_default();
     let actor = if user.is_empty() { format!("nœud {node}") } else { format!("{user} (nœud {node})") };
     state.hub.control(id, system_id, zone_id, &cmd, &actor).await?;
     state.hub.federated(&[id]).await.into_iter().next().map(Json).ok_or_else(|| ApiError::not_found("installation non partagée"))
@@ -903,8 +934,8 @@ pub async fn control(State(state): State<AppState>, Path((id, system_id, zone_id
 /// Another node changes the Airzone schedules of an installation this node shares (with control):
 /// this node applies it with its own Airzone account.
 pub async fn schedule(State(state): State<AppState>, Path(id): Path<i64>, auth: ShareAuth) -> ApiResult<Json<serde_json::Value>> {
-    let op: crate::airzone_schedules::ScheduleOp = serde_json::from_slice(&auth.body)
-        .map_err(|e| ApiError::bad_request(crate::text!("commande invalide : {0}", "invalid command: {0}", "orden no válida: {0}", e)))?;
+    let op: crate::airzone_schedules::ScheduleOp =
+        serde_json::from_slice(&auth.body).map_err(|e| ApiError::bad_request(crate::text!("commande invalide : {0}", "invalid command: {0}", "orden no válida: {0}", e)))?;
     if !auth.installation_ids.contains(&id) {
         return Err(ApiError::not_found("installation non partagée"));
     }
@@ -922,12 +953,7 @@ pub async fn schedule(State(state): State<AppState>, Path(id): Path<i64>, auth: 
     })?;
     db::touch_share(&state.db, auth.share.id, None, None, auth.address.as_deref()).await?;
     let node = auth.share.remote_name.clone().unwrap_or_else(|| auth.share.label.clone());
-    let user: String = auth
-        .headers
-        .get(ACTOR_HEADER)
-        .and_then(|v| v.to_str().ok())
-        .map(|v| v.chars().filter(|c| !c.is_control()).take(60).collect())
-        .unwrap_or_default();
+    let user: String = auth.headers.get(ACTOR_HEADER).and_then(|v| v.to_str().ok()).map(|v| v.chars().filter(|c| !c.is_control()).take(60).collect()).unwrap_or_default();
     let actor = if user.is_empty() { format!("nœud {node}") } else { format!("{user} (nœud {node})") };
     crate::airzone_schedules::apply(&state, &cloud_id, &op, &actor).await?;
     Ok(Json(serde_json::json!({ "ok": true })))

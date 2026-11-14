@@ -37,16 +37,8 @@ async fn a_poll_in_flight_does_not_undo_a_command() {
     let http = reqwest::Client::new();
     let v: Value = http.post(format!("{base}/api/setup")).json(&json!({"username":"admin","password":"motdepasse1"})).send().await.unwrap().json().await.unwrap();
     let token = v["access_token"].as_str().unwrap().to_string();
-    let inst: Value = http
-        .post(format!("{base}/api/installations"))
-        .bearer_auth(&token)
-        .json(&json!({"name":"Maison","host":"127.0.0.1","port":ws}))
-        .send()
-        .await
-        .unwrap()
-        .json()
-        .await
-        .unwrap();
+    let inst: Value =
+        http.post(format!("{base}/api/installations")).bearer_auth(&token).json(&json!({"name":"Maison","host":"127.0.0.1","port":ws})).send().await.unwrap().json().await.unwrap();
     let id = inst["id"].as_i64().unwrap();
     let before = inst["zones"].as_array().unwrap().iter().find(|z| z["zone_id"] == 2).unwrap()["setpoint"].as_f64().unwrap();
     assert_ne!(before, 22.5);

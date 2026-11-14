@@ -115,9 +115,7 @@ async fn full_flow() {
     assert_eq!(v["ok"], true);
     assert_eq!(v["zones"].as_array().unwrap().len(), 5);
 
-    let (s, v) = env
-        .call("POST", "/api/installations", Some(&token), Some(json!({"name":"Maison","host":"127.0.0.1","port":env.mock_port})))
-        .await;
+    let (s, v) = env.call("POST", "/api/installations", Some(&token), Some(json!({"name":"Maison","host":"127.0.0.1","port":env.mock_port}))).await;
     assert_eq!(s, StatusCode::CREATED, "{v}");
     let inst = v["id"].as_i64().unwrap();
     assert_eq!(v["connection"]["state"], "online");
@@ -141,9 +139,7 @@ async fn full_flow() {
     assert_eq!(snap["installations"][0]["zones"].as_array().unwrap().len(), 5);
 
     // --- Commands -------------------------------------------------------------------------
-    let (s, v) = env
-        .call("PATCH", &format!("/api/installations/{inst}/zones/1/4"), Some(&token), Some(json!({"on":true,"setpoint":20.5})))
-        .await;
+    let (s, v) = env.call("PATCH", &format!("/api/installations/{inst}/zones/1/4"), Some(&token), Some(json!({"on":true,"setpoint":20.5}))).await;
     assert_eq!(s, StatusCode::OK, "{v}");
     assert_eq!(v["on"], true);
     assert_eq!(v["setpoint"], 20.5);
@@ -165,25 +161,19 @@ async fn full_flow() {
     assert!(got_update, "websocket did not push the update");
 
     // Mode change requested on a slave zone is redirected to the master zone.
-    let (s, v) = env
-        .call("PATCH", &format!("/api/installations/{inst}/zones/1/2"), Some(&token), Some(json!({"mode":"cooling"})))
-        .await;
+    let (s, v) = env.call("PATCH", &format!("/api/installations/{inst}/zones/1/2"), Some(&token), Some(json!({"mode":"cooling"}))).await;
     assert_eq!(s, StatusCode::OK, "{v}");
     assert_eq!(v["mode"], "cooling");
     assert!(env.mock.lock().unwrap().iter().all(|z| z.mode == Some(2)));
 
     // Validation.
-    let (s, _) = env
-        .call("PATCH", &format!("/api/installations/{inst}/zones/1/4"), Some(&token), Some(json!({"setpoint":45})))
-        .await;
+    let (s, _) = env.call("PATCH", &format!("/api/installations/{inst}/zones/1/4"), Some(&token), Some(json!({"setpoint":45}))).await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
     let (s, _) = env.call("PATCH", &format!("/api/installations/{inst}/zones/1/99"), Some(&token), Some(json!({"on":true}))).await;
     assert_eq!(s, StatusCode::NOT_FOUND);
 
     // Zone metadata (group by floor, custom name).
-    let (s, v) = env
-        .call("PUT", &format!("/api/installations/{inst}/zones/1/4/meta"), Some(&token), Some(json!({"group":"Étage","display_name":"Chambre d'amis"})))
-        .await;
+    let (s, v) = env.call("PUT", &format!("/api/installations/{inst}/zones/1/4/meta"), Some(&token), Some(json!({"group":"Étage","display_name":"Chambre d'amis"}))).await;
     assert_eq!(s, StatusCode::OK, "{v}");
     assert_eq!(v["group"], "Étage");
     assert_eq!(v["name"], "Chambre d'amis");
@@ -257,9 +247,7 @@ async fn full_flow() {
     assert_eq!(s, StatusCode::NOT_FOUND, "a new user sees no installation until one is given");
     let (_, users) = env.call("GET", "/api/users", Some(&token), None).await;
     let marie_id = users.as_array().unwrap().iter().find(|u| u["username"] == "marie").unwrap()["id"].as_i64().unwrap();
-    let (s, _) = env
-        .call("PUT", &format!("/api/users/{marie_id}"), Some(&token), Some(json!({"access":[{"installation_id": inst, "permission": "control"}]})))
-        .await;
+    let (s, _) = env.call("PUT", &format!("/api/users/{marie_id}"), Some(&token), Some(json!({"access":[{"installation_id": inst, "permission": "control"}]}))).await;
     assert_eq!(s, StatusCode::OK);
     let (s, _) = env.call("PATCH", &format!("/api/installations/{inst}/zones/1/1"), Some(&marie), Some(json!({"on":true}))).await;
     assert_eq!(s, StatusCode::OK, "regular users drive the installations given to them");

@@ -44,10 +44,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/status", get(hvac::status))
         .route("/api/installations", get(hvac::list_installations).post(hvac::create_installation))
         .route("/api/installations/test", post(hvac::test_installation))
-        .route(
-            "/api/installations/{id}",
-            get(hvac::get_installation).put(hvac::update_installation).delete(hvac::delete_installation),
-        )
+        .route("/api/installations/{id}", get(hvac::get_installation).put(hvac::update_installation).delete(hvac::delete_installation))
         .route("/api/installations/{id}/refresh", post(hvac::refresh_installation))
         .route("/api/installations/{id}/cloud", put(hvac::link_cloud))
         .route("/api/installations/{id}/zones/{system_id}/{zone_id}", patch(hvac::control_zone))
@@ -72,10 +69,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/nodes/{id}", put(federation::update_node).delete(federation::delete_node))
         .route("/api/nodes/{id}/refresh", post(federation::refresh_node))
         .route("/api/nodes/{id}/installations", put(federation::set_node_installations))
-        .route(
-            "/api/nodes/{id}/certificate",
-            get(federation::node_certificate).put(federation::trust_node_certificate).delete(federation::untrust_node_certificate),
-        )
+        .route("/api/nodes/{id}/certificate", get(federation::node_certificate).put(federation::trust_node_certificate).delete(federation::untrust_node_certificate))
         .route("/api/federation/pair", post(federation::pair))
         .route("/api/federation/hello", post(federation::hello))
         .route("/api/federation/installations", get(federation::installations))
@@ -134,12 +128,7 @@ async fn client_api_guard(request: Request, next: Next) -> Response {
     let path = request.uri().path();
     let too_old = path.starts_with("/api/")
         && path != "/api/version"
-        && request
-            .headers()
-            .get(CLIENT_API_HEADER)
-            .and_then(|v| v.to_str().ok())
-            .and_then(|v| v.trim().parse::<u32>().ok())
-            .is_some_and(|v| v < MIN_CLIENT_API);
+        && request.headers().get(CLIENT_API_HEADER).and_then(|v| v.to_str().ok()).and_then(|v| v.trim().parse::<u32>().ok()).is_some_and(|v| v < MIN_CLIENT_API);
     if too_old {
         return (
             StatusCode::UPGRADE_REQUIRED,

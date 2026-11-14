@@ -298,7 +298,8 @@ async fn a_trydan_charges_with_a_maximum_and_stops_once_its_energy_is_added() {
     let (server, token) = Server::start().await;
     let t = Some(token.as_str());
 
-    let (s, source) = server.call("POST", "/api/sources", t, Some(json!({"driver":"trydan","name":"Borne","config":{"host": format!("127.0.0.1:{trydan}"), "device_id": "XY99R6"}}))).await;
+    let (s, source) =
+        server.call("POST", "/api/sources", t, Some(json!({"driver":"trydan","name":"Borne","config":{"host": format!("127.0.0.1:{trydan}"), "device_id": "XY99R6"}}))).await;
     assert_eq!(s, StatusCode::CREATED, "{source}");
     assert_eq!(source["status"]["state"], "online", "{source}");
     assert_eq!(source["status"]["model"], "V2C Trydan (monophasé · 6–32 A)");

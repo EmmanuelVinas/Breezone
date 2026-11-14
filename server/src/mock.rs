@@ -47,11 +47,9 @@ fn with_air_quality(z: ZoneData, quality: i64) -> ZoneData {
 /// Zones of a preset. "maison" mirrors a real two-floor installation.
 pub fn preset(name: &str) -> Vec<ZoneData> {
     match name {
-        "bureau" => vec![
-            zone(1, "Open space", true, 20.5, 41, 21.0, true),
-            zone(2, "Salle de réunion", false, 18.0, 44, 20.0, false),
-            zone(3, "Accueil", true, 19.0, 46, 19.5, false),
-        ],
+        "bureau" => {
+            vec![zone(1, "Open space", true, 20.5, 41, 21.0, true), zone(2, "Salle de réunion", false, 18.0, 44, 20.0, false), zone(3, "Accueil", true, 19.0, 46, 19.5, false)]
+        }
         _ => vec![
             with_air_quality(zone(1, "Salon", true, 19.5, 39, 19.0, true), 1),
             with_air_quality(zone(2, "Bureau", true, 19.5, 47, 16.0, false), 2),

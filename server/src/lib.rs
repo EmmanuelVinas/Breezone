@@ -22,21 +22,21 @@ pub mod mock;
 pub mod routines;
 pub mod stats;
 pub mod timers;
+pub mod tls;
 pub mod traits;
 pub mod update;
-pub mod tls;
 
 use crate::auth::AuthService;
 use crate::config::Config;
 use crate::db::Db;
 use crate::hub::Hub;
+use axum::http::{header, HeaderValue};
 use axum::response::Html;
 use axum::Router;
 use std::sync::Arc;
-use axum::http::{header, HeaderValue};
 use tower_http::cors::{Any, CorsLayer};
-use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::services::{ServeDir, ServeFile};
+use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::trace::TraceLayer;
 
 #[derive(Clone)]
@@ -98,10 +98,7 @@ async fn bootstrap(state: &AppState) -> anyhow::Result<()> {
                 db::insert_user(&state.db, user.trim(), &hash, "admin").await?;
                 tracing::info!("administrator « {user} » created from BREEZONE_ADMIN_USER / BREEZONE_ADMIN_PASSWORD");
             }
-            _ => tracing::warn!(
-                "no account yet: open the web UI (port {}) to create the administrator",
-                state.cfg.port
-            ),
+            _ => tracing::warn!("no account yet: open the web UI (port {}) to create the administrator", state.cfg.port),
         }
     }
     if db::list_installations(&state.db).await?.is_empty() {
@@ -122,9 +119,7 @@ pub fn app(state: AppState) -> Router {
         // Single page app: unknown paths are routed client-side.
         router.fallback_service(ServeDir::new(&web_dir).fallback(ServeFile::new(index)))
     } else {
-        router.fallback(|| async {
-            Html("<h1>Breezone</h1><p>The server is running, but the web UI is not installed (BREEZONE_WEB_DIR).</p>")
-        })
+        router.fallback(|| async { Html("<h1>Breezone</h1><p>The server is running, but the web UI is not installed (BREEZONE_WEB_DIR).</p>") })
     };
     with_security_headers(router)
         .layer(axum::middleware::from_fn(i18n::middleware))
@@ -151,10 +146,9 @@ pub fn spawn_background(state: &AppState) {
     tokio::spawn(state.hub.clone().run_poller());
     tokio::spawn(state.hub.clone().run_node_links());
     tokio::spawn(state.hub.clone().run_maintenance());
-    tokio::spawn(state.drivers.clone().run(
-        std::time::Duration::from_millis(state.cfg.device_read_ms),
-        std::time::Duration::from_secs(state.cfg.history_interval_secs.max(1) as u64),
-    ));
+    tokio::spawn(
+        state.drivers.clone().run(std::time::Duration::from_millis(state.cfg.device_read_ms), std::time::Duration::from_secs(state.cfg.history_interval_secs.max(1) as u64)),
+    );
     tokio::spawn(cloud::run_auto_sync(state.clone()));
     tokio::spawn(airzone_schedules::run_sync(state.clone()));
     tokio::spawn(timers::run_loop(state.hub.clone(), state.db.clone()));
@@ -178,10 +172,9 @@ pub async fn run(cfg: Config) -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     tracing::info!("Breezone {own} listening on http://{addr}");
     let (stop, mut stopped) = tokio::sync::watch::channel(false);
-    let server = axum::serve(listener, app(state.clone()).into_make_service_with_connect_info::<std::net::SocketAddr>())
-        .with_graceful_shutdown(async move {
-            let _ = stopped.changed().await;
-        });
+    let server = axum::serve(listener, app(state.clone()).into_make_service_with_connect_info::<std::net::SocketAddr>()).with_graceful_shutdown(async move {
+        let _ = stopped.changed().await;
+    });
     let server = tokio::spawn(async move { server.await });
     let restart = tokio::select! {
         _ = shutdown_signal() => false,
@@ -222,8 +215,7 @@ fn report_update(state: &AppState, data_dir: &std::path::Path, own: update::Vers
     tokio::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_secs(update::CONFIRM_AFTER_SECS)).await;
         if update::confirm(&data_dir, own) {
-            hub.log("system", "info", None, None, crate::text!("Breezone mis à jour en {0}", "Breezone updated to {0}", "Breezone actualizado a {0}", own), None)
-                .await;
+            hub.log("system", "info", None, None, crate::text!("Breezone mis à jour en {0}", "Breezone updated to {0}", "Breezone actualizado a {0}", own), None).await;
         }
     });
 }

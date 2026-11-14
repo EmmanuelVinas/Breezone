@@ -87,16 +87,8 @@ impl Server {
             links: None,
         };
         server.start().await;
-        let v: Value = server
-            .http
-            .post(format!("{}/api/setup", server.base))
-            .json(&json!({"username": "admin", "password": "motdepasse1"}))
-            .send()
-            .await
-            .unwrap()
-            .json()
-            .await
-            .unwrap();
+        let v: Value =
+            server.http.post(format!("{}/api/setup", server.base)).json(&json!({"username": "admin", "password": "motdepasse1"})).send().await.unwrap().json().await.unwrap();
         server.token = v["access_token"].as_str().unwrap().into();
         server
     }
@@ -166,9 +158,7 @@ impl Sites {
         let (_, inst) = office.call(Method::POST, "/api/installations", Some(json!({"name":"Atelier","host":"127.0.0.1","port":ws}))).await;
         let office_inst = inst["id"].as_i64().unwrap();
         office.call(Method::PUT, "/api/node", Some(json!({"name":"Bureau","public_url": office.base}))).await;
-        let (_, created) = office
-            .call(Method::POST, "/api/shares", Some(json!({"label":"Maison","installation_ids":[office_inst],"permission":"control"})))
-            .await;
+        let (_, created) = office.call(Method::POST, "/api/shares", Some(json!({"label":"Maison","installation_ids":[office_inst],"permission":"control"}))).await;
         let (s, node) = home.call(Method::POST, "/api/nodes", Some(json!({"token": created["token"]}))).await;
         assert_eq!(s, StatusCode::CREATED, "{node}");
         let node_id = node["id"].as_i64().unwrap();

@@ -97,9 +97,8 @@ async fn users_only_see_and_drive_the_installations_given_to_them() {
     assert_eq!(s, StatusCode::FORBIDDEN, "{v}");
     let (s, _) = user.call(Method::POST, "/api/control/batch", Some(json!({"actions":[{"installation_id": home, "system_id":1, "zone_id":1, "on": false}]}))).await;
     assert_eq!(s, StatusCode::FORBIDDEN);
-    let (s, _) = user
-        .call(Method::POST, "/api/timers", Some(json!({"delay_minutes": 60, "target": {"kind":"installation","installation_id": home}, "command": {"on": false}})))
-        .await;
+    let (s, _) =
+        user.call(Method::POST, "/api/timers", Some(json!({"delay_minutes": 60, "target": {"kind":"installation","installation_id": home}, "command": {"on": false}}))).await;
     assert_eq!(s, StatusCode::FORBIDDEN);
 
     // Events: only those of the installations the user sees (no system events).
@@ -113,19 +112,14 @@ async fn users_only_see_and_drive_the_installations_given_to_them() {
     assert_eq!(s, StatusCode::OK, "{v}");
     let (s, _) = user.call(Method::POST, "/api/timers", Some(json!({"delay_minutes": 60, "target": {"kind":"all"}, "command": {"on": false}}))).await;
     assert_eq!(s, StatusCode::FORBIDDEN);
-    let (s, _) = user
-        .call(Method::POST, "/api/timers", Some(json!({"delay_minutes": 60, "target": {"kind":"installation","installation_id": home}, "command": {"on": false}})))
-        .await;
+    let (s, _) =
+        user.call(Method::POST, "/api/timers", Some(json!({"delay_minutes": 60, "target": {"kind":"installation","installation_id": home}, "command": {"on": false}}))).await;
     assert_eq!(s, StatusCode::CREATED);
-    let (s, _) = user
-        .call(Method::POST, "/api/routines", Some(json!({"name":"Bureau","actions":[{"installation_id": office, "system_id":1, "zone_id":1, "on": false}]})))
-        .await;
+    let (s, _) = user.call(Method::POST, "/api/routines", Some(json!({"name":"Bureau","actions":[{"installation_id": office, "system_id":1, "zone_id":1, "on": false}]}))).await;
     assert_eq!(s, StatusCode::NOT_FOUND, "a routine cannot drive an installation the user does not see");
 
     // Routines and timers of other installations stay hidden.
-    let (s, _) = admin
-        .call(Method::POST, "/api/routines", Some(json!({"name":"Bureau","actions":[{"installation_id": office, "system_id":1, "zone_id":1, "on": false}]})))
-        .await;
+    let (s, _) = admin.call(Method::POST, "/api/routines", Some(json!({"name":"Bureau","actions":[{"installation_id": office, "system_id":1, "zone_id":1, "on": false}]}))).await;
     assert_eq!(s, StatusCode::CREATED);
     let (_, routines) = user.call(Method::GET, "/api/routines", None).await;
     assert!(routines.as_array().unwrap().is_empty(), "{routines}");
@@ -166,9 +160,8 @@ async fn administrators_choose_what_users_may_change_per_installation() {
     let office = v["id"].as_i64().unwrap();
 
     // Everything is allowed by default.
-    let (s, v) = admin
-        .call(Method::POST, "/api/users", Some(json!({"username":"camille","password":"motdepasse1","access":[{"installation_id": home, "permission":"control"}]})))
-        .await;
+    let (s, v) =
+        admin.call(Method::POST, "/api/users", Some(json!({"username":"camille","password":"motdepasse1","access":[{"installation_id": home, "permission":"control"}]}))).await;
     assert_eq!(s, StatusCode::CREATED, "{v}");
     assert_eq!(v["access"][0]["rights"], json!({"zones": true, "routines": true, "schedules": true}));
     let user_id = v["id"].as_i64().unwrap();

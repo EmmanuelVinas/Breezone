@@ -164,11 +164,7 @@ pub fn download_url(version: Version, file: &str) -> String {
 
 /// HTTPS on one of GitHub's hosts, without credentials or another port.
 pub fn allowed_url(url: &reqwest::Url) -> bool {
-    url.scheme() == "https"
-        && url.username().is_empty()
-        && url.password().is_none()
-        && url.port().is_none()
-        && url.host_str().is_some_and(|h| ALLOWED_HOSTS.contains(&h))
+    url.scheme() == "https" && url.username().is_empty() && url.password().is_none() && url.port().is_none() && url.host_str().is_some_and(|h| ALLOWED_HOSTS.contains(&h))
 }
 
 /// What the release workflow signs: the version, the target and the archive's SHA-256.
@@ -671,11 +667,7 @@ impl Updater {
     /// beta channel the newest one, pre-releases included.
     pub async fn check(&self) -> Result<UpdateView, String> {
         let beta = self.beta();
-        let release = if beta {
-            newest(self.get_json(&self.source.releases).await?).ok_or("no release")?
-        } else {
-            self.get_json(&self.source.latest_release).await?
-        };
+        let release = if beta { newest(self.get_json(&self.source.releases).await?).ok_or("no release")? } else { self.get_json(&self.source.latest_release).await? };
         {
             let mut s = self.status.lock().unwrap();
             // The channel changed meanwhile: this answer is for the other one.
@@ -803,10 +795,7 @@ impl Updater {
             return Err("the signature of the archive is not the project's: update refused".into());
         }
         let data_dir = self.data_dir.clone();
-        let (binary, web) = tokio::task::spawn_blocking(move || unpack(&archive, &data_dir, version))
-            .await
-            .map_err(|e| e.to_string())?
-            .map_err(|e| e.to_string())?;
+        let (binary, web) = tokio::task::spawn_blocking(move || unpack(&archive, &data_dir, version)).await.map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
         if binary_version(&binary).await != Some(version) {
             let _ = std::fs::remove_dir_all(versions_dir(&self.data_dir).join(version.to_string()));
             return Err("the new version does not run on this system".into());
@@ -1020,12 +1009,7 @@ mod tests {
         install_fake(&dir, "0.9.0");
         write_state(
             &dir,
-            &State {
-                current: Some("0.9.0".into()),
-                previous: Some("0.8.1".into()),
-                pending: Some(Pending { attempts: 1, backup: Some(backup) }),
-                ..Default::default()
-            },
+            &State { current: Some("0.9.0".into()), previous: Some("0.8.1".into()), pending: Some(Pending { attempts: 1, backup: Some(backup) }), ..Default::default() },
         )
         .unwrap();
 
@@ -1053,11 +1037,8 @@ mod tests {
         for name in ["a.db", "b.db", "c.db"] {
             std::fs::write(backups_dir(&dir).join(name), b"x").unwrap();
         }
-        write_state(
-            &dir,
-            &State { current: Some("0.9.0".into()), previous: Some("0.8.2".into()), pending: Some(Pending { attempts: 1, backup: None }), ..Default::default() },
-        )
-        .unwrap();
+        write_state(&dir, &State { current: Some("0.9.0".into()), previous: Some("0.8.2".into()), pending: Some(Pending { attempts: 1, backup: None }), ..Default::default() })
+            .unwrap();
         assert!(!confirm(&dir, v("0.8.0")), "another version runs");
         assert!(confirm(&dir, v("0.9.0")));
         assert_eq!(read_state(&dir).pending, None);

@@ -124,23 +124,14 @@ impl AuthService {
 
     pub fn access_token(&self, user: &User, session_id: i64) -> anyhow::Result<String> {
         let now = db::now();
-        let claims = Claims {
-            uid: user.id,
-            name: user.username.clone(),
-            role: user.role.clone(),
-            sid: session_id,
-            iat: now,
-            exp: now + self.access_ttl,
-        };
+        let claims = Claims { uid: user.id, name: user.username.clone(), role: user.role.clone(), sid: session_id, iat: now, exp: now + self.access_ttl };
         jsonwebtoken::encode(&Header::new(Algorithm::HS256), &claims, &self.encoding).map_err(|e| anyhow!(e))
     }
 
     pub fn verify_access(&self, token: &str) -> ApiResult<Claims> {
         let mut validation = Validation::new(Algorithm::HS256);
         validation.leeway = 30;
-        jsonwebtoken::decode::<Claims>(token, &self.decoding, &validation)
-            .map(|d| d.claims)
-            .map_err(|_| ApiError::unauthorized("invalid or expired token"))
+        jsonwebtoken::decode::<Claims>(token, &self.decoding, &validation).map(|d| d.claims).map_err(|_| ApiError::unauthorized("invalid or expired token"))
     }
 
     /// Creates a new device session and returns its tokens.
@@ -167,9 +158,7 @@ impl AuthService {
             db::delete_session(db, session.id).await?;
             return Err(ApiError::unauthorized("refresh token expired"));
         }
-        let user = db::user_by_id(db, session.user_id)
-            .await?
-            .ok_or_else(|| ApiError::unauthorized("user no longer exists"))?;
+        let user = db::user_by_id(db, session.user_id).await?.ok_or_else(|| ApiError::unauthorized("user no longer exists"))?;
         let new_refresh = new_refresh_token();
         let expires_at = now + self.refresh_ttl;
         db::rotate_session(db, session.id, &hash_token(&new_refresh), keep_prev, expires_at).await?;
@@ -197,11 +186,7 @@ impl AuthService {
 
     fn throttle_keys(username: &str, address: &str) -> [(String, u32); 3] {
         let user = username.to_lowercase();
-        [
-            (format!("pair:{address}|{user}"), MAX_FAILED_LOGINS),
-            (format!("address:{address}"), MAX_FAILED_PER_ADDRESS),
-            (format!("account:{user}"), MAX_FAILED_PER_ACCOUNT),
-        ]
+        [(format!("pair:{address}|{user}"), MAX_FAILED_LOGINS), (format!("address:{address}"), MAX_FAILED_PER_ADDRESS), (format!("account:{user}"), MAX_FAILED_PER_ACCOUNT)]
     }
 
     /// Brute-force protection: counts a login attempt (before the password is checked, in the
@@ -279,8 +264,7 @@ pub fn validate_password(password: &str) -> ApiResult<()> {
 }
 
 pub fn validate_username(username: &str) -> ApiResult<()> {
-    let ok = (2..=40).contains(&username.chars().count())
-        && username.chars().all(|c| c.is_alphanumeric() || "._-@".contains(c));
+    let ok = (2..=40).contains(&username.chars().count()) && username.chars().all(|c| c.is_alphanumeric() || "._-@".contains(c));
     if !ok {
         return Err(ApiError::bad_request("username must be 2-40 characters (letters, digits, . _ - @)"));
     }
@@ -290,13 +274,7 @@ pub fn validate_username(username: &str) -> ApiResult<()> {
 /// Argon2id hashing is CPU and memory heavy: run it off the async runtime.
 pub async fn hash_password(password: String) -> anyhow::Result<String> {
     let _permit = HASHING.acquire().await?;
-    tokio::task::spawn_blocking(move || {
-        Argon2::default()
-            .hash_password(password.as_bytes())
-            .map(|h| h.to_string())
-            .map_err(|e| anyhow!("password hashing failed: {e}"))
-    })
-    .await?
+    tokio::task::spawn_blocking(move || Argon2::default().hash_password(password.as_bytes()).map(|h| h.to_string()).map_err(|e| anyhow!("password hashing failed: {e}"))).await?
 }
 
 pub async fn verify_password(password: String, hash: String) -> bool {
@@ -344,15 +322,11 @@ impl AuthUser {
 
 pub async fn authenticate(state: &AppState, token: &str) -> ApiResult<AuthUser> {
     let claims = state.auth.verify_access(token)?;
-    let session = db::session_by_id(&state.db, claims.sid)
-        .await?
-        .ok_or_else(|| ApiError::unauthorized("session revoked"))?;
+    let session = db::session_by_id(&state.db, claims.sid).await?.ok_or_else(|| ApiError::unauthorized("session revoked"))?;
     if session.user_id != claims.uid {
         return Err(ApiError::unauthorized("session revoked"));
     }
-    let user = db::user_by_id(&state.db, claims.uid)
-        .await?
-        .ok_or_else(|| ApiError::unauthorized("user no longer exists"))?;
+    let user = db::user_by_id(&state.db, claims.uid).await?.ok_or_else(|| ApiError::unauthorized("user no longer exists"))?;
     Ok(AuthUser { id: user.id, username: user.username, role: user.role, session_id: session.id })
 }
 
@@ -360,15 +334,8 @@ impl FromRequestParts<AppState> for AuthUser {
     type Rejection = ApiError;
 
     async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
-        let header = parts
-            .headers
-            .get(AUTHORIZATION)
-            .and_then(|v| v.to_str().ok())
-            .ok_or_else(|| ApiError::unauthorized("missing Authorization header"))?;
-        let token = header
-            .strip_prefix("Bearer ")
-            .or_else(|| header.strip_prefix("bearer "))
-            .ok_or_else(|| ApiError::unauthorized("expected a Bearer token"))?;
+        let header = parts.headers.get(AUTHORIZATION).and_then(|v| v.to_str().ok()).ok_or_else(|| ApiError::unauthorized("missing Authorization header"))?;
+        let token = header.strip_prefix("Bearer ").or_else(|| header.strip_prefix("bearer ")).ok_or_else(|| ApiError::unauthorized("expected a Bearer token"))?;
         authenticate(state, token.trim()).await
     }
 }

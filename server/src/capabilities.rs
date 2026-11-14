@@ -103,11 +103,7 @@ impl Capabilities {
             // Airzone is built in: it is announced like the modules to come.
             modules: vec![
                 ModuleInfo { id: "airzone".into(), version: version.to_string(), provides: vec!["climate.zone@1".into()] },
-                ModuleInfo {
-                    id: "shelly".into(),
-                    version: version.to_string(),
-                    provides: vec!["energy.power@1".into(), "energy.meter@1".into(), "switch.relay@1".into()],
-                },
+                ModuleInfo { id: "shelly".into(), version: version.to_string(), provides: vec!["energy.power@1".into(), "energy.meter@1".into(), "switch.relay@1".into()] },
                 ModuleInfo { id: "trydan".into(), version: version.to_string(), provides: vec!["ev.charger@1".into(), "energy.power@1".into()] },
             ],
             caps_rev: String::new(),
@@ -157,10 +153,15 @@ impl Capabilities {
         self.breezone = clip(&self.breezone, 40);
         self.channel = clip(&self.channel, 16);
         self.caps_rev = clip(&self.caps_rev, 64);
-        self.traits = self.traits.into_iter().take(200).map(|(k, mut v)| {
-            v.truncate(8);
-            (clip(&k, 64), v)
-        }).collect();
+        self.traits = self
+            .traits
+            .into_iter()
+            .take(200)
+            .map(|(k, mut v)| {
+                v.truncate(8);
+                (clip(&k, 64), v)
+            })
+            .collect();
         self.features = self.features.into_iter().take(200).map(|(k, v)| (clip(&k, 64), v)).collect();
         self.modules.truncate(50);
         for m in &mut self.modules {
@@ -178,11 +179,7 @@ impl Capabilities {
         // A trait version is supported or not; a feature version includes the earlier ones.
         let lacks = |a: &Capabilities, b: &Capabilities| -> Vec<String> {
             let traits = a.traits.iter().flat_map(|(t, vs)| vs.iter().filter(|v| !b.has_trait(t, **v)).map(move |v| format!("{t}@{v}")));
-            let features = a
-                .features
-                .iter()
-                .filter(|(f, v)| FEDERATION_FEATURES.contains(&f.as_str()) && !b.has_feature(f, **v))
-                .map(|(f, v)| format!("{f}@{v}"));
+            let features = a.features.iter().filter(|(f, v)| FEDERATION_FEATURES.contains(&f.as_str()) && !b.has_feature(f, **v)).map(|(f, v)| format!("{f}@{v}"));
             traits.chain(features).collect()
         };
         let missing = lacks(self, peer);

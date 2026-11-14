@@ -48,12 +48,7 @@ async fn timers_switch_a_group_off_later() {
     // Invalid: no delay, empty command.
     let (s, _) = call(Method::POST, "/api/timers", Some(json!({"delay_minutes":0,"target":{"kind":"all"},"command":{"on":false}}))).await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
-    let (s, t) = call(
-        Method::POST,
-        "/api/timers",
-        Some(json!({"delay_minutes":120,"target":{"kind":"group","installation_id":id,"group":"Etage"},"command":{"on":false}})),
-    )
-    .await;
+    let (s, t) = call(Method::POST, "/api/timers", Some(json!({"delay_minutes":120,"target":{"kind":"group","installation_id":id,"group":"Etage"},"command":{"on":false}}))).await;
     assert_eq!(s, StatusCode::CREATED, "{t}");
     assert_eq!(t["label"], "Switch off · group Etage (Maison)");
     let (_, list) = call(Method::GET, "/api/timers", None).await;
@@ -69,7 +64,8 @@ async fn timers_switch_a_group_off_later() {
 
     // Mode + sleep on the whole installation: the mode once per system, but the sleep timer on
     // every zone (code review 2026-11-06).
-    let (s, _) = call(Method::POST, "/api/timers", Some(json!({"delay_minutes":5,"target":{"kind":"installation","installation_id":id},"command":{"mode":"heating","sleep":30}}))).await;
+    let (s, _) =
+        call(Method::POST, "/api/timers", Some(json!({"delay_minutes":5,"target":{"kind":"installation","installation_id":id},"command":{"mode":"heating","sleep":30}}))).await;
     assert_eq!(s, StatusCode::CREATED);
     sqlx::query("UPDATE timers SET run_at = 0").execute(&state.db).await.unwrap();
     breezone_server::timers::run_due(&state.hub, &state.db).await;

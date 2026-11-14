@@ -45,9 +45,6 @@ pub async fn set_channel(State(state): State<AppState>, _admin: AdminUser, Json(
 /// Installs the latest release, then restarts on it. Answers at once; the progress shows in
 /// `GET /api/system/update`, and the server comes back with its new version.
 pub async fn install(State(state): State<AppState>, AdminUser(admin): AdminUser) -> ApiResult<(StatusCode, Json<UpdateView>)> {
-    state
-        .updater
-        .start_install(state.db.clone(), state.hub.clone(), admin.username.clone())
-        .map_err(ApiError::conflict)?;
+    state.updater.start_install(state.db.clone(), state.hub.clone(), admin.username.clone()).map_err(ApiError::conflict)?;
     Ok((StatusCode::ACCEPTED, Json(state.updater.view())))
 }

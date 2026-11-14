@@ -99,13 +99,8 @@ fn mode(v: &Value) -> Option<OperationMode> {
 /// The action of a `start_conf` / `end_conf`.
 fn command(conf: &Value) -> ZoneCommand {
     let speed = conf.get("speed").or_else(|| conf.get("pspeed")).and_then(Value::as_i64).filter(|s| (0..=10).contains(s));
-    let mut cmd = ZoneCommand {
-        on: conf.get("power").and_then(power),
-        mode: conf.get("mode").and_then(mode),
-        setpoint: conf.get("setpoint").and_then(num),
-        speed,
-        ..Default::default()
-    };
+    let mut cmd =
+        ZoneCommand { on: conf.get("power").and_then(power), mode: conf.get("mode").and_then(mode), setpoint: conf.get("setpoint").and_then(num), speed, ..Default::default() };
     // Mode "stop" is how Airzone switches a system off.
     if cmd.mode == Some(OperationMode::Stop) && cmd.on.is_none() {
         cmd.on = Some(false);
@@ -126,11 +121,8 @@ fn time_of(conf: &Value) -> Option<(u32, u32)> {
 
 /// Airzone days (0 = Monday … 6 = Sunday) to ISO days (1 = Monday … 7 = Sunday).
 fn iso_days(conf: &Value) -> Vec<u8> {
-    let mut days: Vec<u8> = conf
-        .get("days")
-        .and_then(Value::as_array)
-        .map(|a| a.iter().filter_map(Value::as_u64).filter(|d| *d <= 6).map(|d| d as u8 + 1).collect())
-        .unwrap_or_default();
+    let mut days: Vec<u8> =
+        conf.get("days").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_u64).filter(|d| *d <= 6).map(|d| d as u8 + 1).collect()).unwrap_or_default();
     days.sort_unstable();
     days.dedup();
     days
@@ -177,10 +169,7 @@ pub struct ScheduleView {
 fn view(cloud_id: &str, installation: &str, installation_id: Option<i64>, raw: &Value, zones: Vec<ZoneRef>) -> ScheduleView {
     let start = raw.get("start_conf").cloned().unwrap_or(Value::Null);
     let kind = raw.get("type").and_then(Value::as_str).unwrap_or("week").to_string();
-    let end = raw
-        .get("end_conf")
-        .filter(|e| e.is_object())
-        .and_then(|e| time_of(e).map(|(h, m)| ScheduleEnd { time: format!("{h:02}:{m:02}"), action: command(e) }));
+    let end = raw.get("end_conf").filter(|e| e.is_object()).and_then(|e| time_of(e).map(|(h, m)| ScheduleEnd { time: format!("{h:02}:{m:02}"), action: command(e) }));
     let note = match kind.as_str() {
         "week" | "zone" | "system" => None,
         "calendar" => Some(crate::text!(
@@ -297,29 +286,22 @@ fn to_airzone(input: &ScheduleInput, existing: Option<&Value>, devices: &HashMap
     // Zone device ids (one per zone, as the official app does).
     let mut device_ids: Vec<String> = vec![];
     for z in &input.zones {
-        let id = devices
-            .iter()
-            .filter(|(_, zones)| zones.len() == 1 && zones[0] == (z.system_id, z.zone_id))
-            .map(|(id, _)| id.clone())
-            .next()
-            .ok_or_else(|| ApiError::bad_request(crate::text!(
-                    "zone {0}/{1} inconnue d'Airzone : actualisez les programmations",
-                    "zone {0}/{1} unknown to Airzone: refresh the schedules",
-                    "zona {0}/{1} desconocida para Airzone: actualice las programaciones",
-                    z.system_id,
-                    z.zone_id
-                )))?;
+        let id = devices.iter().filter(|(_, zones)| zones.len() == 1 && zones[0] == (z.system_id, z.zone_id)).map(|(id, _)| id.clone()).next().ok_or_else(|| {
+            ApiError::bad_request(crate::text!(
+                "zone {0}/{1} inconnue d'Airzone : actualisez les programmations",
+                "zone {0}/{1} unknown to Airzone: refresh the schedules",
+                "zona {0}/{1} desconocida para Airzone: actualice las programaciones",
+                z.system_id,
+                z.zone_id
+            ))
+        })?;
         if !device_ids.contains(&id) {
             device_ids.push(id);
         }
     }
 
     let a = &input.action;
-    let mut start: Map<String, Value> = existing
-        .and_then(|e| e.get("start_conf"))
-        .and_then(Value::as_object)
-        .cloned()
-        .unwrap_or_default();
+    let mut start: Map<String, Value> = existing.and_then(|e| e.get("start_conf")).and_then(Value::as_object).cloned().unwrap_or_default();
     for k in ["power", "mode", "setpoint", "speed", "pspeed"] {
         start.remove(k);
     }
@@ -405,9 +387,8 @@ pub async fn list(state: &AppState) -> ApiResult<SchedulesState> {
 }
 
 async fn session(state: &AppState) -> ApiResult<CloudSession> {
-    let creds = cloud::load_credentials(state)
-        .await
-        .ok_or_else(|| ApiError::bad_request("connectez le compte Airzone (Réglages › Compte Airzone) en mémorisant le mot de passe"))?;
+    let creds =
+        cloud::load_credentials(state).await.ok_or_else(|| ApiError::bad_request("connectez le compte Airzone (Réglages › Compte Airzone) en mémorisant le mot de passe"))?;
     CloudSession::login(&state.cfg.airzone_cloud_url, &state.cfg.cloud_ctrl_url(), &creds.email, &creds.password).await
 }
 
@@ -522,15 +503,8 @@ pub async fn run_sync(state: AppState) {
 // ---------------------------------------------------------------------------------------
 
 async fn devices_of(state: &AppState, cloud_id: &str) -> ApiResult<HashMap<String, Vec<(i64, i64)>>> {
-    let row = db::list_cloud_installations(&state.db)
-        .await?
-        .into_iter()
-        .find(|r| r.cloud_id == cloud_id)
-        .ok_or_else(|| ApiError::not_found("installation Airzone inconnue"))?;
-    let c: CloudInstallation = row
-        .detail
-        .and_then(|d| serde_json::from_str(&d).ok())
-        .ok_or_else(|| ApiError::bad_request("actualisez d'abord les programmations"))?;
+    let row = db::list_cloud_installations(&state.db).await?.into_iter().find(|r| r.cloud_id == cloud_id).ok_or_else(|| ApiError::not_found("installation Airzone inconnue"))?;
+    let c: CloudInstallation = row.detail.and_then(|d| serde_json::from_str(&d).ok()).ok_or_else(|| ApiError::bad_request("actualisez d'abord les programmations"))?;
     Ok(device_map(&c))
 }
 
@@ -544,13 +518,7 @@ async fn write(state: &AppState, actor: &str, what: Text, op: impl AsyncFnOnce(&
             sync(state).await
         }
         Err(e) => {
-            let text = crate::text!(
-                "Airzone : échec ({0}) : {1}",
-                "Airzone: failed ({0}): {1}",
-                "Airzone: fallo ({0}): {1}",
-                what.arg(),
-                e.message.arg()
-            );
+            let text = crate::text!("Airzone : échec ({0}) : {1}", "Airzone: failed ({0}): {1}", "Airzone: fallo ({0}): {1}", what.arg(), e.message.arg());
             state.hub.log("routine", "error", None, Some(actor), text, None).await;
             Err(e)
         }
@@ -568,10 +536,7 @@ pub async fn create(state: &AppState, input: &ScheduleInput, actor: &str) -> Api
     let path = format!("installations/{cloud_id}/schedules");
     let name = input.name.trim();
     let what = crate::text!("programmation « {0} » créée", "schedule “{0}” created", "programación «{0}» creada", name);
-    write(state, actor, what, async |s: &CloudSession| {
-        s.ctrl(reqwest::Method::POST, &path, Some(&body)).await
-    })
-    .await
+    write(state, actor, what, async |s: &CloudSession| s.ctrl(reqwest::Method::POST, &path, Some(&body)).await).await
 }
 
 async fn existing(state: &AppState, cloud_id: &str, id: &str) -> ApiResult<Value> {
@@ -594,10 +559,7 @@ pub async fn update(state: &AppState, cloud_id: &str, id: &str, input: &Schedule
     let path = format!("installations/{cloud_id}/schedule/{id}");
     let name = input.name.trim();
     let what = crate::text!("programmation « {0} » modifiée", "schedule “{0}” changed", "programación «{0}» modificada", name);
-    write(state, actor, what, async |s: &CloudSession| {
-        s.ctrl(reqwest::Method::PATCH, &path, Some(&body)).await
-    })
-    .await
+    write(state, actor, what, async |s: &CloudSession| s.ctrl(reqwest::Method::PATCH, &path, Some(&body)).await).await
 }
 
 /// Enables or disables a schedule (any type), keeping everything else.
@@ -639,10 +601,7 @@ pub async fn delete(state: &AppState, cloud_id: &str, id: &str, actor: &str) -> 
     let name = current.get("name").and_then(Value::as_str).unwrap_or("Programmation").to_string();
     let path = format!("installations/{cloud_id}/schedule/{id}");
     let what = crate::text!("programmation « {0} » supprimée", "schedule “{0}” deleted", "programación «{0}» eliminada", name);
-    write(state, actor, what, async |s: &CloudSession| {
-        s.ctrl(reqwest::Method::DELETE, &path, None).await
-    })
-    .await
+    write(state, actor, what, async |s: &CloudSession| s.ctrl(reqwest::Method::DELETE, &path, None).await).await
 }
 
 #[cfg(test)]
@@ -650,11 +609,7 @@ mod tests {
     use super::*;
 
     fn devices() -> HashMap<String, Vec<(i64, i64)>> {
-        HashMap::from([
-            ("z1".to_string(), vec![(1, 1)]),
-            ("z2".to_string(), vec![(1, 2)]),
-            ("sys1".to_string(), vec![(1, 1), (1, 2)]),
-        ])
+        HashMap::from([("z1".to_string(), vec![(1, 1)]), ("z2".to_string(), vec![(1, 2)]), ("sys1".to_string(), vec![(1, 1), (1, 2)])])
     }
 
     #[test]

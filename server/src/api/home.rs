@@ -151,8 +151,8 @@ pub(crate) async fn devices_of(state: &AppState) -> ApiResult<Vec<DeviceView>> {
                 installation_id: d.installation_id,
                 reference,
                 room_id: d.room_id,
-                    role: role.clone(),
-                    measures: measures.clone(),
+                role: role.clone(),
+                measures: measures.clone(),
                 position: d.position,
             }
         })
@@ -335,16 +335,10 @@ pub async fn act(State(state): State<AppState>, user: AuthUser, Path(id): Path<i
         access.view(i)?;
     }
     let view = devices_of(&state).await?.into_iter().find(|d| d.id == id).ok_or_else(|| ApiError::not_found("device not found"))?;
-    let version = view
-        .traits
-        .iter()
-        .find_map(|t| t.split_once('@').filter(|(n, _)| *n == input.trait_name).and_then(|(_, v)| v.parse::<u32>().ok()));
-    let action = version
-        .and_then(|v| crate::traits::get(&input.trait_name, v))
-        .and_then(|t| t.action(&input.action))
-        .ok_or_else(|| {
-            ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, format!("{}.{} is not an action of this device", input.trait_name, input.action)).with_detail("code", "unsupported")
-        })?;
+    let version = view.traits.iter().find_map(|t| t.split_once('@').filter(|(n, _)| *n == input.trait_name).and_then(|(_, v)| v.parse::<u32>().ok()));
+    let action = version.and_then(|v| crate::traits::get(&input.trait_name, v)).and_then(|t| t.action(&input.action)).ok_or_else(|| {
+        ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, format!("{}.{} is not an action of this device", input.trait_name, input.action)).with_detail("code", "unsupported")
+    })?;
     check_params(action, &input.params)?;
     match (device.source.as_str(), device.installation_id) {
         ("airzone", Some(inst)) => {

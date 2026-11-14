@@ -73,12 +73,8 @@ impl Trait {
     }
 }
 
-static CATALOG: LazyLock<Vec<Trait>> = LazyLock::new(|| {
-    FILES
-        .iter()
-        .map(|(file, json)| serde_json::from_str(json).unwrap_or_else(|e| panic!("contracts/traits/{file}: {e}")))
-        .collect()
-});
+static CATALOG: LazyLock<Vec<Trait>> =
+    LazyLock::new(|| FILES.iter().map(|(file, json)| serde_json::from_str(json).unwrap_or_else(|e| panic!("contracts/traits/{file}: {e}"))).collect());
 
 /// All the traits this server knows.
 pub fn catalog() -> &'static [Trait] {

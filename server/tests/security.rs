@@ -22,10 +22,7 @@ async fn responses_carry_the_security_headers_and_sign_in_is_throttled() {
 
     http.post(format!("{base}/api/setup")).json(&json!({"username":"admin","password":"motdepasse1"})).send().await.unwrap();
     let login = |password: &'static str, from: &'static str| {
-        http.post(format!("{base}/api/auth/login"))
-            .header("X-Forwarded-For", from)
-            .json(&json!({"username":"admin","password": password}))
-            .send()
+        http.post(format!("{base}/api/auth/login")).header("X-Forwarded-For", from).json(&json!({"username":"admin","password": password})).send()
     };
     for _ in 0..5 {
         assert_eq!(login("mauvais", "203.0.113.7").await.unwrap().status(), 401);
