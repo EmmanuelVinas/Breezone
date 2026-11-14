@@ -71,6 +71,7 @@ const STATE_LABEL: Record<SourceView["status"]["state"], string> = {
 const BY_ADDRESS = [
   { driver: "shelly", label: "Shelly" },
   { driver: "trydan", label: "V2C Trydan" },
+  { driver: "hoymiles", label: "Hoymiles (DTU)" },
 ]
 
 function watts(v: unknown) {
@@ -147,6 +148,9 @@ function DeviceRow({
     kwh(s.energy_in) && t("{value} consommés", { value: kwh(s.energy_in)! }),
     typeof s.energy_out === "number" && s.energy_out > 0
       ? t("{value} injectés", { value: kwh(s.energy_out)! })
+      : null,
+    typeof s.energy_today === "number"
+      ? t("{value} aujourd'hui", { value: kwh(s.energy_today)! })
       : null,
     typeof s.session_energy === "number" && s.session_energy > 0
       ? t("{value} cette session", { value: kwh(s.session_energy)! })
@@ -416,7 +420,7 @@ function AddModuleDialog({
           <DialogTitle>{t("Ajouter un module")}</DialogTitle>
           <DialogDescription>
             {t(
-              "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4) et bornes V2C Trydan."
+              "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan et clés Wi-Fi Hoymiles."
             )}
           </DialogDescription>
         </DialogHeader>

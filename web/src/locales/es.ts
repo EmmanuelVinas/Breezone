@@ -843,8 +843,6 @@ const es: Record<string, string> = {
   "Réseau électrique": "Red",
   Recharge: "Recarga",
   "{value} cette session": "{value} en esta sesión",
-  "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4) et bornes V2C Trydan.":
-    "Breezone busca en la red los productos que sabe controlar: WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4) y cargadores V2C Trydan.",
   "Ou par son adresse": "O por su dirección",
   Produit: "Producto",
   Disponible: "Disponible",
@@ -887,6 +885,13 @@ const es: Record<string, string> = {
     "Añada su cargador (V2C Trydan) en Ajustes › Módulos: Breezone lo encuentra en la red.",
   "Véhicule branché": "Vehículo conectado",
   "Aucun véhicule branché": "Ningún vehículo conectado",
+  "{value} aujourd'hui": "{value} hoy",
+  "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan et clés Wi-Fi Hoymiles.":
+    "Breezone busca en la red los productos que sabe controlar: WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), cargadores V2C Trydan y llaves Wi-Fi Hoymiles.",
+  "Panneaux solaires": "Paneles solares",
+  "{kwh} aujourd'hui": "{kwh} hoy",
+  "{n} panneau": "{n} panel",
+  "{n} panneaux": "{n} paneles",
 }
 
 export default es

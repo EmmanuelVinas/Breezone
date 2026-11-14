@@ -205,7 +205,7 @@ Une **source** est un matériel lu par un **pilote** (ADR 0013) : par exemple un
 | POST 👑 | `/api/discovery/products` | `{subnet?}` → `{subnet, duration_ms, products:[{brand, driver, model, host, port, mac, device_id, firmware, note, supported, added}]}` : tous les produits pris en charge du réseau (WebServers Airzone, Shelly…), identifiés jusqu'au modèle, et s'ils sont déjà ajoutés |
 
 Le scanner interroge chaque adresse pour toutes les marques à la fois (128 adresses en parallèle,
-environ 3 s pour un /24) : port 3000 pour Airzone, `GET /shelly` sur le port 80 pour Shelly, `GET /RealTimeData` sur le port 80 pour la Trydan.
+environ 3 s pour un /24) : port 3000 pour Airzone, `GET /shelly` sur le port 80 pour Shelly, `GET /RealTimeData` sur le port 80 pour la Trydan, `AppInfoData` sur le port 10081 pour une clé Hoymiles.
 
 Pilote `shelly` (Plus, Pro, Gen3, Gen4, API RPC locale) : `config: {host, device_id?}`. Avec
 `device_id` (fourni par le scanner), un autre appareil qui répondrait à cette adresse est refusé.
@@ -213,6 +213,16 @@ Les modèles sont reconnus par leur application (`Shelly Pro 3EM`, en triphasé 
 3 voies, `Shelly Plus Plug S`…) ; la 1re génération est détectée mais pas encore prise en charge. Composants lus :
 `em:N` (Pro 3EM, `energy.power` + `energy.meter`), `em1:N` (Pro EM), `switch:N` (`switch.relay`,
 avec puissance et énergie s'ils sont mesurés), `pm1:N`. Lecture toutes les 5 s.
+
+Pilote `hoymiles` (micro-onduleurs Hoymiles HM, HMS, HMT, par leur clé Wi-Fi DTU : DTU-W100,
+DTU-Lite-S, DTU-WLite, DTU-Pro) : `config: {host, device_id?}` (`device_id` est le numéro de série de la
+clé, fourni par le scanner). Protocole local de la clé sur le port TCP 10081, en lecture seule
+(`AppInfoData`, `RealDataNew`) : Breezone n'envoie aucune commande. Lue toutes les 30 s seulement, avec
+2 s au moins entre deux requêtes, car ces clés supportent mal les interrogations fréquentes. Chaque
+micro-onduleur est un appareil `energy.power@1` + `solar.inverter@1` (puissance AC, production du jour
+et totale, température, fréquence) qui peut être la production solaire de la page Énergie ; chacun de
+ses panneaux est un appareil `solar.panel@1` (puissance, tension, intensité, production). Une clé qui
+chiffre ses échanges (firmware récent) est reconnue mais pas encore prise en charge.
 
 Pilote `trydan` (borne V2C Trydan, API HTTP locale sans mot de passe : une adresse fixe est conseillée) :
 `config: {host, device_id?}` (`device_id` est l'`ID` de la borne, fourni par le scanner). La borne est un

@@ -744,7 +744,7 @@ function DayBars({ days, live }: { days: DayEnergy[]; live: EnergyLive }) {
             <YAxis
               tickLine={false}
               axisLine={false}
-              width={64}
+              width={76}
               tickFormatter={(v: number) => `${number(v, digits)} kWh`}
             />
             <ChartTooltip
@@ -1008,6 +1008,62 @@ function Measures({
   )
 }
 
+/** Each panel of the solar inverters, its power now and its production today. */
+function Panels({ devices }: { devices: DeviceView[] }) {
+  const panels = devices.filter((d) => d.traits.includes("solar.panel@1"))
+  if (!panels.length) return null
+  const num = (d: DeviceView, k: string) =>
+    typeof d.state?.[k] === "number" ? (d.state[k] as number) : null
+  const peak = Math.max(1, ...panels.map((p) => num(p, "power") ?? 0))
+  const today = panels.reduce((a, p) => a + (num(p, "energy_today") ?? 0), 0)
+  return (
+    <Card className="mb-6 rounded-3xl">
+      <CardHeader>
+        <CardTitle>{t("Panneaux solaires")}</CardTitle>
+        <CardDescription>
+          {tn(panels.length, "{n} panneau", "{n} panneaux")} ·{" "}
+          {t("{kwh} aujourd'hui", { kwh: kwh(today) })}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid grid-cols-2 gap-2 md:grid-cols-4">
+        {panels.map((p) => {
+          const power = num(p, "power")
+          return (
+            <div
+              key={p.id}
+              className={cn(
+                "rounded-2xl bg-muted/60 px-3 py-2.5",
+                !p.available && "opacity-50"
+              )}
+            >
+              <div className="truncate text-xs text-muted-foreground">
+                {p.name}
+              </div>
+              <div className="tabular text-xl font-semibold">
+                {p.available ? watts(power) : "–"}
+              </div>
+              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${((power ?? 0) / peak) * 100}%`,
+                    background: COLOR.solar,
+                  }}
+                />
+              </div>
+              <div className="tabular mt-1.5 text-xs text-muted-foreground">
+                {t("{kwh} aujourd'hui", { kwh: kwh(num(p, "energy_today")) })}
+                {num(p, "voltage") !== null &&
+                  ` · ${number(num(p, "voltage")!, 1)} V`}
+              </div>
+            </div>
+          )
+        })}
+      </CardContent>
+    </Card>
+  )
+}
+
 function NoMeasure() {
   const admin = currentUser()?.role === "admin"
   return (
@@ -1123,6 +1179,7 @@ export function EnergyPage() {
             )}
             {totals && <Breakdown totals={totals} period={period} />}
           </div>
+          <Panels devices={devices.data ?? []} />
           {totals && (
             <Measures
               devices={devices.data ?? []}

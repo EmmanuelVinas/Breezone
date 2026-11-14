@@ -350,3 +350,137 @@ async fn a_trydan_charges_with_a_maximum_and_stops_once_its_energy_is_added() {
     assert_eq!(s, StatusCode::OK);
     assert_eq!(data.lock().unwrap()["Locked"], 1);
 }
+
+/// Protobuf fields, encoded the way a Hoymiles DTU does.
+fn pb(fields: &[(u32, PbValue)]) -> Vec<u8> {
+    fn varint(out: &mut Vec<u8>, mut n: u64) {
+        loop {
+            let b = (n & 0x7f) as u8;
+            n >>= 7;
+            if n == 0 {
+                out.push(b);
+                return;
+            }
+            out.push(b | 0x80);
+        }
+    }
+    let mut out = vec![];
+    for (f, v) in fields {
+        match v {
+            PbValue::Int(n) => {
+                varint(&mut out, u64::from(*f) << 3);
+                varint(&mut out, *n as u64);
+            }
+            PbValue::Bytes(b) => {
+                varint(&mut out, (u64::from(*f) << 3) | 2);
+                varint(&mut out, b.len() as u64);
+                out.extend_from_slice(b);
+            }
+        }
+    }
+    out
+}
+
+enum PbValue {
+    Int(i64),
+    Bytes(Vec<u8>),
+}
+
+fn hm_frame(command: [u8; 2], payload: &[u8]) -> Vec<u8> {
+    let mut crc = 0xffffu16;
+    for b in payload {
+        crc ^= u16::from(*b);
+        for _ in 0..8 {
+            crc = if crc & 1 != 0 { (crc >> 1) ^ 0xa001 } else { crc >> 1 };
+        }
+    }
+    let mut out = b"HM".to_vec();
+    out.extend_from_slice(&command);
+    out.extend_from_slice(&1u16.to_be_bytes());
+    out.extend_from_slice(&crc.to_be_bytes());
+    out.extend_from_slice(&(payload.len() as u16 + 10).to_be_bytes());
+    out.extend_from_slice(payload);
+    out
+}
+
+/// A Hoymiles DTU-W100 with one HMS-1600-4T and four panels (the values of a real one). Counts
+/// the requests it gets.
+async fn fake_dtu(requests: Arc<AtomicU64>) -> u16 {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use PbValue::{Bytes, Int};
+    let serial = 19123694208274i64;
+    let dtu = pb(&[(2, Int(1537)), (11, Bytes(b"2.3.0.0-dev".to_vec()))]);
+    let app_info = pb(&[(1, Bytes(b"4133A0054CBB".to_vec())), (4, Int(4)), (8, Bytes(dtu)), (11, Bytes(pb(&[(2, Int(serial))])))]);
+    let sgs = pb(&[(1, Int(serial)), (3, Int(2322)), (4, Int(5000)), (5, Int(4869)), (7, Int(209)), (9, Int(251)), (12, Int(1))]);
+    let panel = |port: i64, w: i64, total: i64, day: i64| Bytes(pb(&[(1, Int(serial)), (2, Int(port)), (3, Int(402)), (4, Int(390)), (5, Int(w)), (6, Int(total)), (7, Int(day))]));
+    let real = pb(&[
+        (1, Bytes(b"4133A0054CBB".to_vec())),
+        (3, Int(1)),
+        (9, Bytes(sgs)),
+        (11, panel(1, 1571, 1176763, 338)),
+        (11, panel(2, 1562, 1176453, 337)),
+        (11, panel(3, 996, 957769, 224)),
+        (11, panel(4, 995, 956530, 224)),
+    ]);
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        loop {
+            let Ok((mut socket, _)) = listener.accept().await else { return };
+            requests.fetch_add(1, Ordering::SeqCst);
+            let mut buf = [0u8; 512];
+            let n = socket.read(&mut buf).await.unwrap_or(0);
+            let answer = match buf.get(2..4) {
+                Some([0xa3, 0x01]) if n >= 10 => hm_frame([0xa2, 0x01], &app_info),
+                Some([0xa3, 0x11]) if n >= 10 => hm_frame([0xa2, 0x11], &real),
+                _ => continue,
+            };
+            let _ = socket.write_all(&answer).await;
+        }
+    });
+    port
+}
+
+#[tokio::test]
+async fn a_hoymiles_dtu_gives_its_inverter_and_panels() {
+    let requests = Arc::new(AtomicU64::new(0));
+    let dtu = fake_dtu(requests.clone()).await;
+    let (server, token) = Server::start().await;
+    let t = Some(token.as_str());
+
+    let (s, source) = server
+        .call("POST", "/api/sources", t, Some(json!({"driver":"hoymiles","name":"Solaire","config":{"host": format!("127.0.0.1:{dtu}"), "device_id": "4133A0054CBB"}})))
+        .await;
+    assert_eq!(s, StatusCode::CREATED, "{source}");
+    assert_eq!(source["status"]["state"], "online", "{source}");
+    assert_eq!(source["status"]["model"], "Hoymiles DTU-W100/DTU-Lite-S (1 micro-onduleur · 4 panneaux)");
+    assert_eq!(source["status"]["firmware"], "2.3.0.0-dev");
+    assert_eq!(source["devices"], 5);
+
+    let (_, devices) = server.call("GET", "/api/devices", t, None).await;
+    let devices: Vec<Value> = devices.as_array().unwrap().iter().filter(|d| d["source"] == "hoymiles").cloned().collect();
+    let inverter = devices.iter().find(|d| d["kind"] == "solar.inverter").unwrap();
+    assert_eq!(inverter["name"], "HMS-1600/1800/2000-4T (0512)");
+    assert_eq!(inverter["traits"], json!(["energy.power@1", "solar.inverter@1"]));
+    assert_eq!(inverter["state"]["power"], 486.9);
+    assert_eq!(inverter["state"]["energy_today"], 1.123);
+    assert_eq!(inverter["state"]["temperature"], 25.1);
+    let panel = devices.iter().find(|d| d["reference"] == "pv:116495000512:1").unwrap();
+    assert_eq!(panel["name"], "Panneau 1 (0512)");
+    assert_eq!((panel["state"]["power"].clone(), panel["state"]["energy_total"].clone()), (json!(157.1), json!(1176.763)));
+
+    // Read only: nothing to drive.
+    let (s, _) = server.call("POST", &format!("/api/devices/{}/actions", inverter["id"]), t, Some(json!({"trait":"switch.relay","action":"set","params":{"on":false}}))).await;
+    assert_eq!(s, StatusCode::UNPROCESSABLE_ENTITY);
+
+    // The inverter is the solar production of the home.
+    server.call("PUT", &format!("/api/devices/{}", inverter["id"]), t, Some(json!({"role":"solar"}))).await;
+    let (_, live) = server.call("GET", "/api/energy/live", t, None).await;
+    assert_eq!(live["solar"], 486.9, "{live}");
+
+    // The DTU is not read again before its 30 s (the runtime asks every 5 s).
+    let before = requests.load(Ordering::SeqCst);
+    let (_, sources) = server.call("GET", "/api/sources", t, None).await;
+    assert_eq!(sources[0]["status"]["state"], "online");
+    assert_eq!(requests.load(Ordering::SeqCst), before);
+}

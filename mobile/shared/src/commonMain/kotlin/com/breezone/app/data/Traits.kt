@@ -111,6 +111,28 @@ data class EvChargerSetAutoLimit(
     val on: Boolean? = null,
 )
 
+/** Solar inverter (`solar.inverter@1`): state. */
+@Serializable
+data class SolarInverterState(
+    val energyToday: Double = 0.0,
+    val energyTotal: Double = 0.0,
+    val temperature: Double? = null,
+    val frequency: Double? = null,
+    val panels: Long = 0,
+)
+
+/** Solar panel (`solar.panel@1`): state. */
+@Serializable
+data class SolarPanelState(
+    val power: Double = 0.0,
+    val voltage: Double? = null,
+    val current: Double? = null,
+    val energyToday: Double = 0.0,
+    val energyTotal: Double = 0.0,
+    val inverter: String? = null,
+    val port: Long = 0,
+)
+
 /** Power (`energy.power@1`): state. */
 @Serializable
 data class EnergyPowerState(
@@ -135,4 +157,4 @@ data class SwitchRelaySet(
 )
 
 /** Traits described by this version (`trait@version`). */
-val TRAITS = listOf("climate.zone@1", "energy.meter@1", "ev.charger@1", "energy.power@1", "switch.relay@1")
+val TRAITS = listOf("climate.zone@1", "energy.meter@1", "ev.charger@1", "solar.inverter@1", "solar.panel@1", "energy.power@1", "switch.relay@1")

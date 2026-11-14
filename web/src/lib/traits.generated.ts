@@ -95,6 +95,38 @@ export type EvChargerSetAutoLimit = {
   on: boolean
 }
 
+/** Solar inverter (`solar.inverter@1`): state. */
+export type SolarInverterState = {
+  /** Production today (kWh) */
+  energy_today: number
+  /** Total production (kWh) */
+  energy_total: number
+  /** Temperature (°C) */
+  temperature: number | null
+  /** Grid frequency (Hz) */
+  frequency: number | null
+  /** Panels */
+  panels: number
+}
+
+/** Solar panel (`solar.panel@1`): state. */
+export type SolarPanelState = {
+  /** Power (W) */
+  power: number
+  /** Voltage (V) */
+  voltage: number | null
+  /** Current (A) */
+  current: number | null
+  /** Production today (kWh) */
+  energy_today: number
+  /** Total production (kWh) */
+  energy_total: number
+  /** Inverter */
+  inverter: string
+  /** Input */
+  port: number
+}
+
 /** Power (`energy.power@1`): state. */
 export type EnergyPowerState = {
   /** Power (W) */
@@ -123,4 +155,4 @@ export type SwitchRelaySet = {
 }
 
 /** Traits described by this version (`trait@version`). */
-export const TRAITS = ["climate.zone@1", "energy.meter@1", "ev.charger@1", "energy.power@1", "switch.relay@1"] as const
+export const TRAITS = ["climate.zone@1", "energy.meter@1", "ev.charger@1", "solar.inverter@1", "solar.panel@1", "energy.power@1", "switch.relay@1"] as const

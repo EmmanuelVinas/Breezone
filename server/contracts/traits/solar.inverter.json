@@ -1,0 +1,13 @@
+{
+  "trait": "solar.inverter",
+  "version": 1,
+  "label": { "fr": "Onduleur solaire", "en": "Solar inverter", "es": "Inversor solar" },
+  "state": [
+    { "name": "energy_today", "type": "number", "unit": "kWh", "label": { "fr": "Production du jour", "en": "Production today", "es": "Producción de hoy" } },
+    { "name": "energy_total", "type": "number", "unit": "kWh", "label": { "fr": "Production totale", "en": "Total production", "es": "Producción total" } },
+    { "name": "temperature", "type": "number", "unit": "°C", "optional": true, "label": { "fr": "Température", "en": "Temperature", "es": "Temperatura" } },
+    { "name": "frequency", "type": "number", "unit": "Hz", "optional": true, "label": { "fr": "Fréquence du réseau", "en": "Grid frequency", "es": "Frecuencia de la red" } },
+    { "name": "panels", "type": "integer", "label": { "fr": "Panneaux", "en": "Panels", "es": "Paneles" } }
+  ],
+  "actions": []
+}

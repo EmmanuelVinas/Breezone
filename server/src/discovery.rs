@@ -1,6 +1,7 @@
 //! LAN discovery: scans a subnet for the products Breezone supports. Each address is asked, in
 //! parallel, whether it is an Airzone WebServer (local API, port 3000), a Shelly (`/shelly`, port
-//! 80) or a V2C Trydan (`/RealTimeData`, port 80), and products are identified down to the model.
+//! 80), a V2C Trydan (`/RealTimeData`, port 80) or a Hoymiles DTU (port 10081), and products are
+//! identified down to the model.
 
 use crate::airzone::AirzoneClient;
 use serde::Serialize;
@@ -117,7 +118,7 @@ pub async fn probe(host: &str, port: u16) -> Option<Found> {
 /// A product found on the network, of a supported brand.
 #[derive(Debug, Clone, Serialize)]
 pub struct Product {
-    /// "airzone" | "shelly" | "v2c"
+    /// "airzone" | "shelly" | "v2c" | "hoymiles"
     pub brand: &'static str,
     /// What adds it: "airzone" (an installation) or the driver of a source.
     pub driver: &'static str,
@@ -145,13 +146,23 @@ pub async fn scan_products(subnet: &str, airzone_port: u16) -> Result<Vec<Produc
         tasks.push(tokio::spawn(async move {
             let _permit = limit.acquire().await.ok()?;
             let host = host.to_string();
-            let (airzone, (shelly, trydan)) = tokio::join!(probe(&host, airzone_port), async {
-                if is_open(&host, 80).await {
-                    tokio::join!(crate::drivers::shelly::probe(&host), crate::drivers::trydan::probe(&host))
-                } else {
-                    (None, None)
+            let (airzone, (shelly, trydan), hoymiles) = tokio::join!(
+                probe(&host, airzone_port),
+                async {
+                    if is_open(&host, 80).await {
+                        tokio::join!(crate::drivers::shelly::probe(&host), crate::drivers::trydan::probe(&host))
+                    } else {
+                        (None, None)
+                    }
+                },
+                async {
+                    if is_open(&host, crate::drivers::hoymiles::PORT).await {
+                        crate::drivers::hoymiles::probe(&host).await
+                    } else {
+                        None
+                    }
                 }
-            });
+            );
             let mut found = vec![];
             if let Some(a) = airzone {
                 let note = match (&a.ws_type, a.zones) {
@@ -199,6 +210,20 @@ pub async fn scan_products(subnet: &str, airzone_port: u16) -> Result<Vec<Produc
                     firmware: t.firmware,
                     note: t.note,
                     supported: true,
+                });
+            }
+            if let Some(h) = hoymiles {
+                found.push(Product {
+                    brand: "hoymiles",
+                    driver: "hoymiles",
+                    note: Some(h.note()),
+                    supported: !h.encrypted,
+                    model: h.model,
+                    host: host.clone(),
+                    port: crate::drivers::hoymiles::PORT,
+                    mac: None,
+                    device_id: Some(h.serial),
+                    firmware: h.firmware,
                 });
             }
             Some(found)

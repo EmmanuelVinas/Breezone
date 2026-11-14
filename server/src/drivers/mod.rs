@@ -6,6 +6,7 @@
 //! whose zones are still read by the hub for now (they are already devices, and their actions go
 //! through the same generic route). The future WASM modules (ADR 0012) will be drivers too.
 
+pub mod hoymiles;
 pub mod shelly;
 pub mod trydan;
 
@@ -67,6 +68,11 @@ pub trait Driver: Send + Sync {
     /// Applies an action of a trait to a device. The parameters were checked against the catalog
     /// of traits before.
     fn act<'a>(&'a self, reference: &'a str, trait_name: &'a str, action: &'a str, params: &'a State) -> DriverFuture<'a, ()>;
+    /// Shortest time between two readings of the hardware (some cope badly with frequent ones);
+    /// an action or a refresh reads it at once anyway.
+    fn read_every(&self) -> Duration {
+        Duration::ZERO
+    }
 }
 
 /// A field of a driver's configuration form.
@@ -93,7 +99,7 @@ pub struct DriverInfo {
 }
 
 pub fn available() -> Vec<DriverInfo> {
-    vec![shelly::info(), trydan::info()]
+    vec![shelly::info(), trydan::info(), hoymiles::info()]
 }
 
 /// The driver of a source, from its configuration.
@@ -101,6 +107,7 @@ pub fn create(driver: &str, config: &Value) -> Result<Arc<dyn Driver>, String> {
     match driver {
         "shelly" => Ok(Arc::new(shelly::Shelly::new(config)?)),
         "trydan" => Ok(Arc::new(trydan::Trydan::new(config)?)),
+        "hoymiles" => Ok(Arc::new(hoymiles::Hoymiles::new(config)?)),
         other => Err(format!("unknown driver: {other}")),
     }
 }
@@ -128,6 +135,7 @@ struct Running {
     status: SourceStatus,
     /// Numbers read since the last history point, by device then field.
     pending: HashMap<String, HashMap<String, Pending>>,
+    last_read: Option<Instant>,
 }
 
 /// Readings of one number since the last history point.
@@ -201,7 +209,7 @@ impl Runtime {
                         Err(e) => (None, Some(e)),
                     };
                     let status = SourceStatus { state: if error.is_some() { "error" } else { "unknown" }, last_error: error, ..Default::default() };
-                    Running { source, driver, devices: vec![], states: HashMap::new(), status, pending: HashMap::new() }
+                    Running { source, driver, devices: vec![], states: HashMap::new(), status, pending: HashMap::new(), last_read: None }
                 }
             };
             next.insert(running.source.id, running);
@@ -223,6 +231,9 @@ impl Runtime {
             None => return,
         };
         let Some(driver) = driver else { return };
+        if let Some(r) = self.sources.write().await.get_mut(&id) {
+            r.last_read = Some(Instant::now());
+        }
         let described = if known { None } else { Some(driver.describe().await) };
         let result = match &described {
             Some(Err(e)) => Err(e.clone()),
@@ -275,9 +286,20 @@ impl Runtime {
         self.check_goals(id).await;
     }
 
+    /// Reads every source that is due (see `Driver::read_every`).
     pub async fn poll_all(&self) {
-        let ids: Vec<i64> = self.sources.read().await.keys().copied().collect();
-        for id in ids {
+        let due: Vec<i64> = self
+            .sources
+            .read()
+            .await
+            .values()
+            .filter(|r| match (&r.driver, r.last_read) {
+                (Some(d), Some(last)) => last.elapsed() >= d.read_every(),
+                _ => true,
+            })
+            .map(|r| r.source.id)
+            .collect();
+        for id in due {
             self.poll(id).await;
         }
     }

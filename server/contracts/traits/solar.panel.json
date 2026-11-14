@@ -1,0 +1,15 @@
+{
+  "trait": "solar.panel",
+  "version": 1,
+  "label": { "fr": "Panneau solaire", "en": "Solar panel", "es": "Panel solar" },
+  "state": [
+    { "name": "power", "type": "number", "unit": "W", "label": { "fr": "Puissance", "en": "Power", "es": "Potencia" } },
+    { "name": "voltage", "type": "number", "unit": "V", "optional": true, "label": { "fr": "Tension", "en": "Voltage", "es": "Tensión" } },
+    { "name": "current", "type": "number", "unit": "A", "optional": true, "label": { "fr": "Intensité", "en": "Current", "es": "Intensidad" } },
+    { "name": "energy_today", "type": "number", "unit": "kWh", "label": { "fr": "Production du jour", "en": "Production today", "es": "Producción de hoy" } },
+    { "name": "energy_total", "type": "number", "unit": "kWh", "label": { "fr": "Production totale", "en": "Total production", "es": "Producción total" } },
+    { "name": "inverter", "type": "string", "label": { "fr": "Onduleur", "en": "Inverter", "es": "Inversor" } },
+    { "name": "port", "type": "integer", "label": { "fr": "Entrée", "en": "Input", "es": "Entrada" } }
+  ],
+  "actions": []
+}
