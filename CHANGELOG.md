@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.17] - 2026-11-15
+
 ### Added
 
 - Settings › Rooms: each room has an icon, guessed from its name (sofa for the living room, bed for a
