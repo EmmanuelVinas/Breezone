@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Link } from "react-router"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
@@ -8,11 +8,14 @@ import { api, currentUser } from "@/lib/api"
 import type { CoverState } from "@/lib/covers"
 import {
   coverKind,
-  coverState,
   coverText,
+  coverView,
   isCover,
+  isMoving,
   isOpen,
   isStoppable,
+  startMotion,
+  stopMotion,
 } from "@/lib/covers"
 import { t, tn } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
@@ -32,7 +35,11 @@ import { Slider } from "@/components/ui/slider"
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
-type Command = { id: number; action: "set" | "stop"; position?: number }
+type Command = {
+  device: DeviceView
+  action: "set" | "stop"
+  position?: number
+}
 
 function useCommand() {
   const qc = useQueryClient()
@@ -41,21 +48,44 @@ function useCommand() {
       Promise.all(
         cmds.map((c) =>
           api.act(
-            c.id,
+            c.device.id,
             "cover.position",
             c.action,
             c.action === "set" ? { position: c.position } : {}
           )
         )
       ),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["devices"] }),
-    onError: (e) => toast.error(errorText(e)),
+    // Shown moving at once: the hardware tells its move seconds later, if at all.
+    onMutate: (cmds) =>
+      cmds.forEach((c) =>
+        c.action === "set"
+          ? startMotion(c.device, c.position ?? 0)
+          : stopMotion(c.device)
+      ),
+    onSettled: () => qc.invalidateQueries({ queryKey: ["devices"] }),
+    onError: (e, cmds) => {
+      cmds.forEach((c) => stopMotion(c.device))
+      toast.error(errorText(e))
+    },
   })
+}
+
+/** Renders again a few times a second while a shutter moves, so its estimated move shows. */
+function useMoving(device: DeviceView) {
+  const [, tick] = useState(0)
+  const moving = isMoving(device)
+  useEffect(() => {
+    if (!moving) return
+    const id = setInterval(() => tick((n) => n + 1), 250)
+    return () => clearInterval(id)
+  }, [moving])
+  return coverView(device)
 }
 
 /** A window with its shutter down to what is closed: the sky shows above the slats. */
 function Window({ s, className }: { s: CoverState; className?: string }) {
   const open = Math.min(100, Math.max(0, s.position ?? 0))
+  const moving = s.moving === "opening" || s.moving === "closing"
   return (
     <div
       className={cn(
@@ -64,7 +94,10 @@ function Window({ s, className }: { s: CoverState; className?: string }) {
       )}
     >
       <div
-        className="absolute inset-x-0 top-0 bg-[repeating-linear-gradient(180deg,var(--color-slate-300)_0_5px,var(--color-slate-400)_5px_7px)] transition-[height] duration-700 dark:bg-[repeating-linear-gradient(180deg,var(--color-slate-400)_0_5px,var(--color-slate-500)_5px_7px)]"
+        className={cn(
+          "absolute inset-x-0 top-0 bg-[repeating-linear-gradient(180deg,var(--color-slate-300)_0_5px,var(--color-slate-400)_5px_7px)] transition-[height] dark:bg-[repeating-linear-gradient(180deg,var(--color-slate-400)_0_5px,var(--color-slate-500)_5px_7px)]",
+          moving ? "duration-300 ease-linear" : "duration-700"
+        )}
         style={{ height: `${100 - open}%` }}
       />
     </div>
@@ -93,7 +126,7 @@ function Controls({
         aria-label={t("Ouvrir")}
         onClick={(e) => {
           e.stopPropagation()
-          command.mutate([{ id: device.id, action: "set", position: 100 }])
+          command.mutate([{ device, action: "set", position: 100 }])
         }}
       >
         <ChevronUp /> {labels && t("Ouvrir")}
@@ -107,7 +140,7 @@ function Controls({
           aria-label={t("Stop")}
           onClick={(e) => {
             e.stopPropagation()
-            command.mutate([{ id: device.id, action: "stop" }])
+            command.mutate([{ device, action: "stop" }])
           }}
         >
           <Square className="fill-current" /> {labels && t("Stop")}
@@ -121,7 +154,7 @@ function Controls({
         aria-label={t("Fermer")}
         onClick={(e) => {
           e.stopPropagation()
-          command.mutate([{ id: device.id, action: "set", position: 0 }])
+          command.mutate([{ device, action: "set", position: 0 }])
         }}
       >
         <ChevronDown /> {labels && t("Fermer")}
@@ -142,7 +175,7 @@ function ShutterCard({
   canDrive: boolean
 }) {
   const command = useCommand()
-  const s = coverState(device)
+  const s = useMoving(device)
   const moving = s.moving === "opening" || s.moving === "closing"
   return (
     <Card
@@ -192,9 +225,11 @@ function Detail({
   admin: boolean
 }) {
   const command = useCommand()
-  const s = coverState(device)
+  const s = useMoving(device)
   const [draft, setDraft] = useState<number | null>(null)
-  const position = draft ?? s.position ?? 0
+  const moving = s.moving === "opening" || s.moving === "closing"
+  // The slider shows where the shutter goes, the window where it is.
+  const asked = draft ?? (moving ? s.target : s.position) ?? 0
   const room = rooms.find((r) => r.id === device.room_id)
   const disabled = !canDrive || !device.available || command.isPending
   return (
@@ -206,7 +241,10 @@ function Detail({
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-5">
-        <Window s={{ position }} className="aspect-[4/3] w-full" />
+        <Window
+          s={draft !== null ? { position: draft } : s}
+          className="aspect-[4/3] w-full"
+        />
         <div className="grid gap-2">
           <div className="flex items-baseline justify-between text-sm">
             <span className="text-muted-foreground">{t("Position")}</span>
@@ -222,11 +260,11 @@ function Detail({
             min={0}
             max={100}
             step={1}
-            value={[position]}
+            value={[asked]}
             disabled={disabled}
             onValueChange={([v]) => setDraft(v)}
             onValueCommit={([v]) =>
-              command.mutate([{ id: device.id, action: "set", position: v }], {
+              command.mutate([{ device, action: "set", position: v }], {
                 onSettled: () => setDraft(null),
               })
             }
@@ -265,12 +303,7 @@ export function ShuttersPage() {
     queryFn: api.devices,
     // Faster while one moves: its position shows as it goes.
     refetchInterval: (q) =>
-      (q.state.data ?? []).some(
-        (d) =>
-          isCover(d) &&
-          coverState(d).moving &&
-          coverState(d).moving !== "stopped"
-      )
+      (q.state.data ?? []).some((d) => isCover(d) && isMoving(d))
         ? 1_500
         : 5_000,
   })
@@ -292,7 +325,7 @@ export function ShuttersPage() {
     command.mutate(
       list
         .filter((d) => d.available)
-        .map((d) => ({ id: d.id, action: "set" as const, position }))
+        .map((d) => ({ device: d, action: "set" as const, position }))
     )
 
   return (

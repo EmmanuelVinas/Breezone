@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.18] - 2026-11-15
+
 ### Added
 
 - Automations “when… if… then…” (Routines page): a rule reads like a sentence and runs on the server.
@@ -16,6 +18,18 @@ All notable changes are documented here. The format follows
   relay, a light, a shutter…) or a scene. Example: when more than 500 W go back to the grid for
   5 min, if the living room is below 18 °C from November to March, heat the living room and charge
   the car. Each run is in the activity feed with its reason.
+
+### Changed
+
+- A shutter that cannot be stopped on the way has no stop button any more, on the web and on the
+  phone, instead of a button that answers with an error. This is the case of Legrand shutters
+  through HomeKit: their gateway has no “hold position” and only updates the position at the end of
+  the move (Home Assistant hides the button too). The new optional `stoppable` field of
+  `cover.position@1` tells it; without it, the button stays.
+- A shutter moves on the screen as soon as it is told to, on the web and on the phone: the window
+  goes down or up at the pace of a real shutter (about 25 s from closed to open) and the slider
+  stays on the position asked, instead of going back to where the shutter started until the
+  gateway tells the end of the move. What the hardware tells wins as soon as it tells it.
 
 ## [0.11.0-beta.17] - 2026-11-15
 

@@ -265,6 +265,9 @@ class Hub(
     /** The devices of each server's modules, by server id (read by [refreshDevices]). */
     val devices: StateFlow<Map<String, ServerDevices>> = _devices.asStateFlow()
 
+    /** The estimated moves of shutters, by "server/device". */
+    val coverMotions = CoverMotions()
+
     private val _deviceStatus = MutableStateFlow<Map<String, CommandStatus>>(emptyMap())
     /** Commands sent to devices of modules, by "server/device". */
     val deviceStatus: StateFlow<Map<String, CommandStatus>> = _deviceStatus.asStateFlow()
@@ -320,6 +323,7 @@ class Hub(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                coverMotions.stop(key)
                 _deviceStatus.update { it + (key to CommandStatus.Error) }
                 _messages.tryEmit(getString(Res.string.hub_command_refused, e.message.orEmpty()))
                 refreshDevices(serverId)

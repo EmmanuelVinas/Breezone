@@ -1,5 +1,8 @@
 package com.breezone.app.ui.screens
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -56,6 +59,7 @@ import com.breezone.app.ui.components.ShutterWindow
 import com.breezone.app.ui.components.groupByRoom
 import com.breezone.app.ui.icons.FzIcons
 import com.breezone.app.ui.theme.Fz
+import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -68,6 +72,28 @@ private fun DeviceView.cover() = stateAs(CoverPositionState.serializer()) ?: Cov
 private fun DeviceView.isOpen() = available && cover().position > 0
 
 private fun CoverPositionState.moving() = moving == CoverPositionMoving.Opening || moving == CoverPositionMoving.Closing
+
+/** The state to show: while it moves, where the shutter should be by now (see [com.breezone.app.data.CoverMotions]). */
+private fun Hub.coverView(serverId: String, d: DeviceView) = coverMotions.view("$serverId/${d.id}", d.cover())
+
+/** [coverView], drawn again a few times a second while the shutter moves. */
+@Composable
+private fun Hub.movingCover(serverId: String, d: DeviceView): CoverPositionState {
+    var tick by remember { mutableStateOf(0) }
+    tick
+    val s = coverView(serverId, d)
+    val moving = s.moving()
+    LaunchedEffect(moving) {
+        while (moving) {
+            delay(250)
+            tick++
+        }
+    }
+    return s
+}
+
+@Composable
+private fun animatedOpen(position: Long) = animateFloatAsState(position / 100f, tween(300, easing = LinearEasing))
 
 // Unknown counts as stoppable: only a driver that knows it cannot stop says so.
 private fun CoverPositionState.stoppable() = stoppable != false
@@ -92,6 +118,7 @@ private fun coverKind(d: DeviceView): String = stringResource(
 
 private fun Hub.setCover(serverId: String, d: DeviceView, position: Int) {
     val target = position.coerceIn(0, 100)
+    coverMotions.start("$serverId/${d.id}", d.cover(), target.toLong())
     val moving = when {
         target > d.cover().position -> "opening"
         target < d.cover().position -> "closing"
@@ -100,8 +127,10 @@ private fun Hub.setCover(serverId: String, d: DeviceView, position: Int) {
     act(serverId, d, "cover.position", "set", buildJsonObject { put("position", target) }, optimistic = buildJsonObject { put("target", target); put("moving", moving) })
 }
 
-private fun Hub.stopCover(serverId: String, d: DeviceView) =
+private fun Hub.stopCover(serverId: String, d: DeviceView) {
+    coverMotions.stop("$serverId/${d.id}")
     act(serverId, d, "cover.position", "stop", JsonObject(emptyMap()), optimistic = buildJsonObject { put("moving", "stopped") })
+}
 
 @Composable
 fun ShuttersScreen(serverId: String, onBack: () -> Unit, onOpen: (Long) -> Unit) {
@@ -111,7 +140,7 @@ fun ShuttersScreen(serverId: String, onBack: () -> Unit, onOpen: (Long) -> Unit)
     val data = all[serverId] ?: ServerDevices()
     val covers = data.withTrait(TraitIds.COVER)
     // Faster while one moves: its position shows as it goes.
-    val anyMoving = covers.any { it.cover().moving() }
+    val anyMoving = covers.any { hub.coverView(serverId, it).moving() }
     LaunchedEffect(serverId, anyMoving) { hub.followDevices(serverId, everyMs = if (anyMoving) 1_500 else 5_000) }
     val usable = covers.filter { it.available }
     val noRoom = stringResource(Res.string.room_none)
@@ -171,9 +200,10 @@ private fun CoverButtons(enabled: Boolean, onUp: () -> Unit, onStop: (() -> Unit
 
 @Composable
 private fun ShutterRow(d: DeviceView, status: CommandStatus?, onOpen: () -> Unit, hub: Hub, serverId: String) {
-    val s = d.cover()
+    val s = hub.movingCover(serverId, d)
+    val open by animatedOpen(s.position)
     Row(Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        ShutterWindow({ s.position / 100f }, Modifier.width(56.dp).height(44.dp))
+        ShutterWindow({ open }, Modifier.width(56.dp).height(44.dp))
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(d.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -196,7 +226,7 @@ fun ShutterScreen(serverId: String, deviceId: Long, onBack: () -> Unit) {
     val status by hub.deviceStatus.collectAsState()
     val data = all[serverId] ?: ServerDevices()
     val d = data.devices.firstOrNull { it.id == deviceId }
-    val moving = d?.cover()?.moving() == true
+    val moving = d?.let { hub.coverView(serverId, it).moving() } == true
     LaunchedEffect(serverId, moving) { hub.followDevices(serverId, everyMs = if (moving) 1_500 else 5_000) }
     val room = data.rooms.firstOrNull { it.id == d?.roomId }
     Scaffold(topBar = {
@@ -205,9 +235,11 @@ fun ShutterScreen(serverId: String, deviceId: Long, onBack: () -> Unit) {
         }
     }) { padding ->
         if (d == null) return@Scaffold
-        val s = d.cover()
+        val s = hub.movingCover(serverId, d)
         var draft by remember { mutableStateOf<Int?>(null) }
-        val shown = draft ?: s.position.toInt()
+        val open by animatedOpen(s.position)
+        // The bar shows where the shutter goes, the window where it is.
+        val shown = draft ?: (if (s.moving()) s.target ?: s.position else s.position).toInt()
         LazyColumn(
             Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
@@ -216,7 +248,7 @@ fun ShutterScreen(serverId: String, deviceId: Long, onBack: () -> Unit) {
             item(key = "main", contentType = "main") {
                 SectionCard {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(22.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
-                        ShutterWindow({ shown / 100f }, Modifier.width(170.dp).height(150.dp))
+                        ShutterWindow({ draft?.let { it / 100f } ?: open }, Modifier.width(170.dp).height(150.dp))
                         PositionBar(shown, enabled = d.available, onDraft = { draft = it }) { v ->
                             draft = null
                             hub.setCover(serverId, d, v)

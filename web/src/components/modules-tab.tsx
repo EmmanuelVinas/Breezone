@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react"
-import { coverKind, coverState, coverText, isCover } from "@/lib/covers"
+import { coverKind, coverText, coverView, isCover } from "@/lib/covers"
 import { RoomSelect } from "@/components/room-select"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
@@ -191,7 +191,7 @@ function DeviceRow({
   const values = [
     d_light(s),
     isCover(device)
-      ? `${coverKind(device)} · ${coverText(coverState(device))}`
+      ? `${coverKind(device)} · ${coverText(coverView(device))}`
       : null,
     device.traits.includes("button@1") && typeof s.buttons === "number"
       ? [
