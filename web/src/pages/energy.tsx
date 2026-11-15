@@ -56,13 +56,14 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 
-type Period = "day" | "week" | "month" | "year"
+type Period = "day" | "week" | "month" | "year" | "years"
 
 const PERIOD_DAYS: Record<Period, number> = {
   day: 1,
   week: 7,
   month: 30,
   year: 365,
+  years: 5 * 365 + 1,
 }
 
 /** Products providing the measures, as named in the page header. */
@@ -749,7 +750,9 @@ function barLabel(day: string, style: "long" | "short") {
   if (day.length === 7)
     return new Date(`${day}-15T12:00:00`).toLocaleDateString(
       locale(),
-      style === "long" ? { month: "long", year: "numeric" } : { month: "short" }
+      style === "long"
+        ? { month: "long", year: "numeric" }
+        : { month: "short", year: "2-digit" }
     )
   return dayLabel(day, style)
 }
@@ -1134,7 +1137,19 @@ export function EnergyPage() {
     queryFn: api.devices,
     refetchInterval: 5_000,
   })
-  const count = period === "year" ? 365 : 30
+  const count =
+    period === "years" ? PERIOD_DAYS.years : period === "year" ? 365 : 30
+  // A longer period only when the energy goes back further than the shorter one.
+  const range = useQuery({
+    queryKey: ["energy-range"],
+    queryFn: api.energyRange,
+    staleTime: 3_600_000,
+  })
+  const firstDay = range.data?.first_day
+  const age = firstDay
+    ? (range.dataUpdatedAt - new Date(`${firstDay}T00:00:00`).getTime()) /
+      86_400_000
+    : 0
   const days = useQuery({
     queryKey: ["energy-days", count],
     queryFn: () => api.energyDays(count),
@@ -1148,7 +1163,10 @@ export function EnergyPage() {
   })
   const l = live.data
   const anyRole = l && Object.values(l.roles).some(Boolean)
-  const shown = (days.data ?? []).slice(-PERIOD_DAYS[period])
+  // Long periods start at the first day with energy, not years of empty days.
+  const shown = (days.data ?? [])
+    .slice(-PERIOD_DAYS[period])
+    .filter((d) => period !== "years" || !firstDay || d.day >= firstDay)
   const totals =
     period === "day"
       ? dayTotals.data?.totals
@@ -1229,7 +1247,12 @@ export function EnergyPage() {
                 <ToggleGroupItem value="day">{t("Jour")}</ToggleGroupItem>
                 <ToggleGroupItem value="week">{t("7 jours")}</ToggleGroupItem>
                 <ToggleGroupItem value="month">{t("30 jours")}</ToggleGroupItem>
-                <ToggleGroupItem value="year">{t("Année")}</ToggleGroupItem>
+                {age > 30 && (
+                  <ToggleGroupItem value="year">{t("Année")}</ToggleGroupItem>
+                )}
+                {age > 365 && (
+                  <ToggleGroupItem value="years">{t("5 ans")}</ToggleGroupItem>
+                )}
               </ToggleGroup>
               <Button variant="outline" size="sm" onClick={exportCsv}>
                 <Download /> {t("Exporter CSV")}

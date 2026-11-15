@@ -290,8 +290,25 @@ pub async fn zone_history(
     Query(q): Query<HistoryQuery>,
 ) -> ApiResult<Json<Vec<Reading>>> {
     Access::of(&state.db, &user).await?.view(id)?;
-    let hours = q.hours.clamp(1, 24 * 90);
-    Ok(Json(db::readings(&state.db, id, system_id, zone_id, db::now() - hours * 3600).await?))
+    let hours = q.hours.clamp(1, 24 * 366 * 5);
+    let since = db::now() - hours * 3600;
+    // Beyond a month: a point per day (the detail is kept a few weeks only).
+    if hours > 24 * 31 {
+        return Ok(Json(crate::rollup::zone_days(&state.db, id, system_id, zone_id, since).await?));
+    }
+    Ok(Json(db::readings(&state.db, id, system_id, zone_id, since).await?))
+}
+
+#[derive(Serialize)]
+pub struct ZoneRange {
+    /// The oldest point of the zone (seconds): the periods offered stop there.
+    pub oldest: Option<i64>,
+}
+
+/// How far back the history of a zone goes.
+pub async fn zone_range(State(state): State<AppState>, user: AuthUser, Path((id, system_id, zone_id)): Path<(i64, i64, i64)>) -> ApiResult<Json<ZoneRange>> {
+    Access::of(&state.db, &user).await?.view(id)?;
+    Ok(Json(ZoneRange { oldest: crate::rollup::zone_oldest(&state.db, id, system_id, zone_id).await? }))
 }
 
 #[derive(Deserialize)]

@@ -199,8 +199,11 @@ class BreezoneApi(
     suspend fun status(): List<Installation> = call(HttpMethod.Get, "/api/status")
     suspend fun devices(): List<DeviceView> = call(HttpMethod.Get, "/api/devices")
     suspend fun rooms(): List<Room> = call(HttpMethod.Get, "/api/rooms")
+    suspend fun weather(): WeatherView = call(HttpMethod.Get, "/api/weather")
     suspend fun energyLive(): EnergyLive = call(HttpMethod.Get, "/api/energy/live")
     suspend fun energyDay(): EnergyDay = call(HttpMethod.Get, "/api/energy/day")
+    suspend fun deviceHistoryOver(deviceId: Long, hours: Int): DeviceHistory =
+        call(HttpMethod.Get, "/api/devices/$deviceId/history?hours=$hours&bucket=${Periods.bucket(hours)}")
     suspend fun deviceHistory(deviceId: Long, hours: Int = 24, points: Int = 96): DeviceHistory =
         call(HttpMethod.Get, "/api/devices/$deviceId/history?hours=$hours&points=$points")
     suspend fun scenes(): List<SceneView> = call(HttpMethod.Get, "/api/scenes")
@@ -216,6 +219,8 @@ class BreezoneApi(
         call(HttpMethod.Post, "/api/control/batch", FzJson.encodeToString(BatchBody.serializer(), BatchBody(actions)))
 
     suspend fun history(zone: Zone, hours: Int): List<Reading> = call(HttpMethod.Get, "${zonePath(zone)}/history?hours=$hours")
+    /** How far back the history of a zone goes. */
+    suspend fun historyRange(zone: Zone): HistoryRange = call(HttpMethod.Get, "${zonePath(zone)}/history/range")
     suspend fun daily(zone: Zone, days: Int): List<DayStats> = call(HttpMethod.Get, "${zonePath(zone)}/daily?days=$days")
     suspend fun trends(installationId: Long, hours: Int = 24): List<ZoneTrend> =
         call(HttpMethod.Get, "/api/installations/$installationId/trends?hours=$hours")

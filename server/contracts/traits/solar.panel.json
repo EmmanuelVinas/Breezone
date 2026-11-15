@@ -9,7 +9,7 @@
     { "name": "energy_today", "type": "number", "unit": "kWh", "label": { "fr": "Production du jour", "en": "Production today", "es": "Producción de hoy" } },
     { "name": "energy_total", "type": "number", "unit": "kWh", "label": { "fr": "Production totale", "en": "Total production", "es": "Producción total" } },
     { "name": "inverter", "type": "string", "label": { "fr": "Onduleur", "en": "Inverter", "es": "Inversor" } },
-    { "name": "port", "type": "integer", "label": { "fr": "Entrée", "en": "Input", "es": "Entrada" } }
+    { "name": "port", "type": "integer", "history": false, "label": { "fr": "Entrée", "en": "Input", "es": "Entrada" } }
   ],
   "actions": []
 }

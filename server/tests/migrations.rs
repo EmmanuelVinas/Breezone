@@ -28,6 +28,8 @@ const APPLIED: &[(&str, &str)] = &[
     ("0021_device_samples.sql", "5ab08c8f201231378a1cafa686c9c998fdb38a932a694439e73fa23d18c83fe2"),
     ("0022_source_secrets.sql", "6b3d19191833e0e6acd2f7d7d199bf9d38e716aa0d834e2f9e3c2fd61c311f24"),
     ("0023_history_rollups.sql", "2ca9523c6c660c77eb9c3e0d1e23e1a863d6dde00e887a4fc9a30bd7957e274e"),
+    ("0024_zone_daily.sql", "45f3dd70b866812cc24a259440eeea1f76b1bb66cea571365452a77973f35c6c"),
+    ("0025_outdoor_samples.sql", "93c7627255b9e28f0c43c65514a30f21be238f8c157a65b9f8eec64229013348"),
 ];
 
 #[test]

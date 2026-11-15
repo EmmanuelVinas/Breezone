@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -48,6 +49,7 @@ import com.breezone.app.data.EnergyPowerState
 import com.breezone.app.data.EvChargerState
 import com.breezone.app.data.EvChargerStatus
 import com.breezone.app.data.Hub
+import com.breezone.app.data.Periods
 import com.breezone.app.data.ServerDevices
 import com.breezone.app.data.SolarInverterState
 import com.breezone.app.data.SolarPanelState
@@ -57,6 +59,7 @@ import com.breezone.app.ui.components.CommandIndicator
 import com.breezone.app.ui.components.DeviceGroupCard
 import com.breezone.app.ui.components.FzSlider
 import com.breezone.app.ui.components.IconBadge
+import com.breezone.app.ui.components.PeriodChips
 import com.breezone.app.ui.components.PowerDayChart
 import com.breezone.app.ui.components.PowerSeries
 import com.breezone.app.ui.components.Sparkline
@@ -294,9 +297,13 @@ fun ChargingScreen(serverId: String, onBack: () -> Unit) {
     val data = all[serverId] ?: ServerDevices()
     val charger: DeviceView? = data.withTrait(TraitIds.CHARGER).firstOrNull()
     var history by remember { mutableStateOf<List<List<Double>>>(emptyList()) }
-    LaunchedEffect(serverId, charger?.id) {
+    var oldest by remember { mutableStateOf<Long?>(null) }
+    var hours by remember { mutableIntStateOf(Periods.DAY) }
+    LaunchedEffect(serverId, charger?.id, hours) {
         val id = charger?.id ?: return@LaunchedEffect
-        history = runCatching { hub.api(serverId)?.deviceHistory(id) }.getOrNull()?.series?.get("power").orEmpty()
+        val read = runCatching { hub.api(serverId)?.deviceHistoryOver(id, hours) }.getOrNull() ?: return@LaunchedEffect
+        history = read.series["power"].orEmpty()
+        oldest = read.oldest
     }
     Scaffold(topBar = {
         FzTopBar(stringResource(Res.string.house_charging), charger?.name, onBack) {
@@ -361,7 +368,8 @@ fun ChargingScreen(serverId: String, onBack: () -> Unit) {
                 if (history.size > 1) {
                     item(key = "history", contentType = "history") {
                         SectionCard {
-                            SectionTitle(stringResource(Res.string.charger_power_24h))
+                            SectionTitle(stringResource(Res.string.charger_power))
+                            PeriodChips(hours, oldest) { hours = it }
                             Sparkline(history, MaterialTheme.colorScheme.primary, Modifier.fillMaxWidth().height(72.dp))
                         }
                     }

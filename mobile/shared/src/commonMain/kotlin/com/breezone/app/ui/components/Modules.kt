@@ -33,6 +33,14 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.breezone.app.data.DeviceView
+import com.breezone.app.data.Periods
+import com.breezone.app.resources.Res
+import com.breezone.app.resources.period_1y
+import com.breezone.app.resources.period_5y
+import com.breezone.app.resources.zone_comfort_30d
+import com.breezone.app.resources.zone_history_24h
+import com.breezone.app.resources.zone_history_7d
+import org.jetbrains.compose.resources.stringResource
 import com.breezone.app.data.Room
 import com.breezone.app.ui.theme.Fz
 import kotlin.math.ln
@@ -164,4 +172,28 @@ fun FzSlider(
         colors = colors,
         interactionSource = source,
     )
+}
+
+/** "24 h", "7 j", "30 j", "1 an", "5 ans". */
+@Composable
+fun periodLabel(hours: Int): String = stringResource(
+    when {
+        hours <= Periods.DAY -> Res.string.zone_history_24h
+        hours <= Periods.WEEK -> Res.string.zone_history_7d
+        hours <= Periods.MONTH -> Res.string.zone_comfort_30d
+        hours <= Periods.YEAR -> Res.string.period_1y
+        else -> Res.string.period_5y
+    },
+)
+
+/** Chips of the periods a history covers (see [Periods.available]); none when only one. */
+@Composable
+fun PeriodChips(hours: Int, oldest: Long?, onChange: (Int) -> Unit) {
+    val periods = Periods.available(oldest, com.breezone.app.ui.nowSeconds())
+    if (periods.size < 2) return
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        periods.forEach { h ->
+            androidx.compose.material3.FilterChip(selected = hours == h, onClick = { onChange(h) }, label = { Text(periodLabel(h)) })
+        }
+    }
 }

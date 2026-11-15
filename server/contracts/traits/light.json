@@ -6,11 +6,11 @@
     { "name": "on", "type": "bool", "label": { "fr": "Allumée", "en": "On", "es": "Encendida" } },
     { "name": "brightness", "type": "integer", "unit": "%", "min": 0, "max": 100, "optional": true, "label": { "fr": "Intensité", "en": "Brightness", "es": "Intensidad" } },
     { "name": "color_temp", "type": "integer", "unit": "K", "optional": true, "label": { "fr": "Température de blanc", "en": "White temperature", "es": "Temperatura de blanco" } },
-    { "name": "color_temp_min", "type": "integer", "unit": "K", "optional": true, "label": { "fr": "Blanc le plus chaud", "en": "Warmest white", "es": "Blanco más cálido" } },
-    { "name": "color_temp_max", "type": "integer", "unit": "K", "optional": true, "label": { "fr": "Blanc le plus froid", "en": "Coolest white", "es": "Blanco más frío" } },
+    { "name": "color_temp_min", "type": "integer", "history": false, "unit": "K", "optional": true, "label": { "fr": "Blanc le plus chaud", "en": "Warmest white", "es": "Blanco más cálido" } },
+    { "name": "color_temp_max", "type": "integer", "history": false, "unit": "K", "optional": true, "label": { "fr": "Blanc le plus froid", "en": "Coolest white", "es": "Blanco más frío" } },
     { "name": "color", "type": "string", "optional": true, "label": { "fr": "Couleur", "en": "Color", "es": "Color" } },
     { "name": "mode", "type": "enum", "values": ["white", "color"], "optional": true, "label": { "fr": "Mode", "en": "Mode", "es": "Modo" } },
-    { "name": "reachable", "type": "bool", "optional": true, "label": { "fr": "Joignable", "en": "Reachable", "es": "Accesible" } }
+    { "name": "reachable", "type": "bool", "history": false, "optional": true, "label": { "fr": "Joignable", "en": "Reachable", "es": "Accesible" } }
   ],
   "actions": [
     {

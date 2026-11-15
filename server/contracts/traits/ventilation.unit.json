@@ -9,7 +9,7 @@
     { "name": "main_pollutant", "type": "enum", "values": ["humidity", "co2", "voc", "other"], "optional": true, "label": { "fr": "Cause principale", "en": "Main cause", "es": "Causa principal" } },
     { "name": "worst_room", "type": "string", "optional": true, "label": { "fr": "Pièce la plus en demande", "en": "Room most in demand", "es": "Estancia con más demanda" } },
     { "name": "boost", "type": "bool", "label": { "fr": "Boost en cours", "en": "Boosting", "es": "Boost activo" } },
-    { "name": "sensors", "type": "bool", "label": { "fr": "Mesures des pièces", "en": "Room measures", "es": "Medidas de las estancias" } }
+    { "name": "sensors", "type": "bool", "history": false, "label": { "fr": "Mesures des pièces", "en": "Room measures", "es": "Medidas de las estancias" } }
   ],
   "actions": [
     {

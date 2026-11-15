@@ -178,7 +178,8 @@ historique. Toute valeur est `null` quand la maison n'a pas de mesure de ce rôl
 |---------|--------|-------------|
 | GET 🔒 | `/api/energy/live` | `{roles:{grid, solar, battery, consumption}, grid, solar, battery, home, consumers:[{name, device_id, room_id, power}], other}` : puissances (W) à la dernière lecture |
 | GET 🔒 | `/api/energy/day?date=YYYY-MM-DD` | `{date, bucket, points:[{ts, grid, solar, battery, home}], totals}` : puissance moyenne par quart d'heure d'un jour local (aujourd'hui par défaut), et son énergie (`totals`, comme un élément de `/days`) |
-| GET 🔒 | `/api/energy/days?days=30` | `[{day, imported, exported, production, charged, discharged, consumption, self_consumed, consumers:[{name, device_id, room_id, energy}], other, devices:[{device_id, energy_in, energy_out}]}]` : énergie (kWh) par jour local, du plus ancien à aujourd'hui (1 à 366 jours) |
+| GET 🔒 | `/api/energy/days?days=30` | `[{day, imported, exported, production, charged, discharged, consumption, self_consumed, consumers:[{name, device_id, room_id, energy}], other, devices:[{device_id, energy_in, energy_out}]}]` : énergie (kWh) par jour local, du plus ancien à aujourd'hui (1 jour à 5 ans) ; un jour dont le détail est effacé vient de ce qui a été gardé |
+| GET 🔒 | `/api/energy/range` | `{first_day}` : premier jour local avec une mesure d'énergie (les périodes proposées s'arrêtent là) |
 
 Conventions :
 - `grid` est positif quand la maison tire du réseau. `energy_in` correspond à l'énergie importée, `energy_out` à l'énergie injectée.
@@ -190,7 +191,34 @@ Conventions :
 - L'énergie vient des compteurs des appareils quand ils en ont, sinon de la puissance moyenne.
 - Un trou de plus de deux intervalles (appareil non lu) ne compte pas.
 
+### Historique long
+
+Le détail (toutes les 5 min) est gardé quelques semaines ; chaque heure, le serveur le résume par
+heure (gardé environ un an) et par jour local (gardé pour toujours). Une courbe lit le résumé qui
+convient à sa période : jusqu'à 5 ans pour `/api/devices/{id}/history` (réponse avec `oldest`, le
+plus ancien point) et pour l'historique d'une zone (un point par jour au-delà d'un mois). Les
+réglages et valeurs fixes du matériel (`"history": false` dans le catalogue des traits) n'ont pas
+d'historique.
+
+| Méthode | Chemin | Description |
+|---------|--------|-------------|
+| GET 🔒 | `/api/installations/{id}/zones/{system_id}/{zone_id}/history/range` | `{oldest}` : plus ancien point de la zone |
+
+### Météo et soleil
+
+La ville de la maison (sa première installation, ou celle réglée) est convertie une fois en
+coordonnées par Open-Meteo ; la météo est relevée toutes les 30 min. Le lever et le coucher du soleil
+sont calculés par le serveur.
+
+| Méthode | Chemin | Description |
+|---------|--------|-------------|
+| GET 🔒 | `/api/weather` | `{weather:{place, temperature, apparent, code, precipitation, wind, today_min, today_max, tomorrow_min, tomorrow_max, tomorrow_code, hours:[{ts, temperature, code, precipitation_probability}], read_at} \| null, sun:{sunrise, sunset} \| null}` (`code` : code météo OMM) |
+| GET 🔒 | `/api/weather/history?hours=24` | `[[ts, °C]]` : température extérieure (un point par 30 min, par jour au-delà d'un mois) |
+| PUT 👑 | `/api/weather/place` | `{place}` : la ville de la météo (vide : celle de la première installation) |
+
 ### Sources d'appareils 👑
+
+`GET /api/sources/{id}/diagnostic` 👑 : ce que le matériel dit de lui-même, brut (base d'un accessoire HomeKit…), avec ce que Breezone en lit ; sans secret.
 
 Une **source** est un matériel lu par un **pilote** (ADR 0013) : par exemple un Shelly à
 192.168.1.40. Ses appareils apparaissent dans `/api/devices`.

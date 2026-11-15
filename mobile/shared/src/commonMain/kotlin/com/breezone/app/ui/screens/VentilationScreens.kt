@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -42,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import com.breezone.app.data.DeviceHistory
 import com.breezone.app.data.DeviceView
 import com.breezone.app.data.Hub
+import com.breezone.app.data.Periods
 import com.breezone.app.data.ServerDevices
 import com.breezone.app.data.TraitIds
 import com.breezone.app.data.VentilationRoomProfile
@@ -52,6 +54,7 @@ import com.breezone.app.resources.*
 import com.breezone.app.ui.components.CommandIndicator
 import com.breezone.app.ui.components.DeviceGroupCard
 import com.breezone.app.ui.components.IconBadge
+import com.breezone.app.ui.components.PeriodChips
 import com.breezone.app.ui.components.Sparkline
 import com.breezone.app.ui.icons.FzIcons
 import com.breezone.app.ui.theme.Fz
@@ -115,10 +118,10 @@ private fun LevelBar(level: Int, color: Color = Fz.colors.fan) {
 }
 
 @Composable
-private fun rememberHistory(hub: Hub, serverId: String, deviceId: Long): DeviceHistory? {
+private fun rememberHistory(hub: Hub, serverId: String, deviceId: Long, hours: Int = Periods.DAY): DeviceHistory? {
     var history by remember(deviceId) { mutableStateOf<DeviceHistory?>(null) }
-    LaunchedEffect(serverId, deviceId) {
-        history = runCatching { hub.api(serverId)?.deviceHistory(deviceId) }.getOrNull()
+    LaunchedEffect(serverId, deviceId, hours) {
+        history = runCatching { hub.api(serverId)?.deviceHistoryOver(deviceId, hours) }.getOrNull() ?: history
     }
     return history
 }
@@ -224,7 +227,8 @@ fun VentilationRoomScreen(serverId: String, deviceId: Long, onBack: () -> Unit) 
     val data = all[serverId] ?: ServerDevices()
     val d = data.devices.firstOrNull { it.id == deviceId }
     val unit = data.withTrait(TraitIds.VENTILATION_UNIT).firstOrNull()?.stateAs(VentilationUnitState.serializer())
-    val history = rememberHistory(hub, serverId, deviceId)
+    var hours by remember { mutableIntStateOf(Periods.DAY) }
+    val history = rememberHistory(hub, serverId, deviceId, hours)
     val room = data.rooms.firstOrNull { it.id == d?.roomId }
     Scaffold(topBar = {
         FzTopBar(d?.name ?: stringResource(Res.string.house_ventilation), room?.let { stringResource(Res.string.ventilation_breezone_room, it.name) }, onBack) {
@@ -257,6 +261,9 @@ fun VentilationRoomScreen(serverId: String, deviceId: Long, onBack: () -> Unit) 
         ) {
             item(key = "sentence", contentType = "sentence") {
                 SectionCard { Text(sentence, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, lineHeight = 26.sp) }
+            }
+            item(key = "periods", contentType = "periods") {
+                PeriodChips(hours, history?.oldest) { hours = it }
             }
             item(key = "flow", contentType = "measure") {
                 SectionCard {

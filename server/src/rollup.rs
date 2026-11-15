@@ -24,6 +24,7 @@ const HOURS_PER_STEP: i64 = 24;
 
 const NEXT_HOUR: &str = "rollup.next_hour";
 const NEXT_DAY: &str = "rollup.next_day";
+const NEXT_ZONE_DAY: &str = "rollup.next_zone_day";
 
 /// `CASE` picking the last value for a counter, the mean otherwise.
 fn value_sql() -> String {
@@ -102,7 +103,93 @@ pub async fn roll_up(db: &Db, tz: Tz, now: i64) -> sqlx::Result<()> {
         day = after;
         tokio::time::sleep(PAUSE).await;
     }
+    roll_up_zones(db, tz, now).await
+}
+
+/// The days of the Airzone zones, from their readings, once the day is over.
+async fn roll_up_zones(db: &Db, tz: Tz, now: i64) -> sqlx::Result<()> {
+    let today = local_day(now, tz);
+    let mut day = match db::get_setting(db, NEXT_ZONE_DAY).await?.and_then(|v| NaiveDate::parse_from_str(&v, "%Y-%m-%d").ok()) {
+        Some(d) => d,
+        None => match sqlx::query_scalar::<_, Option<i64>>("SELECT MIN(ts) FROM readings").fetch_one(db).await? {
+            Some(first) => local_day(first, tz),
+            None => today,
+        },
+    };
+    while day < today {
+        let (start, end) = (midnight(day, tz), midnight(day + Days::new(1), tz));
+        let mut tx = db.begin().await?;
+        sqlx::query(
+            "INSERT OR REPLACE INTO zone_daily (installation_id, system_id, zone_id, ts, room_temp, humidity, setpoint, on_ratio, demand_secs, air_quality)
+             SELECT installation_id, system_id, zone_id, ?, AVG(room_temp), AVG(humidity), AVG(CASE WHEN is_on THEN setpoint END),
+                    AVG(CASE WHEN is_on THEN 1.0 WHEN is_on IS NULL THEN NULL ELSE 0.0 END), SUM(demand_secs), AVG(air_quality)
+             FROM readings WHERE ts >= ? AND ts < ? GROUP BY installation_id, system_id, zone_id",
+        )
+        .bind(start)
+        .bind(start)
+        .bind(end)
+        .execute(&mut *tx)
+        .await?;
+        let after = day + Days::new(1);
+        sqlx::query("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value")
+            .bind(NEXT_ZONE_DAY)
+            .bind(after.format("%Y-%m-%d").to_string())
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        day = after;
+        tokio::time::sleep(PAUSE).await;
+    }
     Ok(())
+}
+
+/// A row of `zone_daily`: ts, room temperature, humidity, setpoint, share on, demand, air quality.
+type ZoneDay = (i64, Option<f64>, Option<f64>, Option<f64>, Option<f64>, Option<i64>, Option<f64>);
+
+/// The days of a zone since `since`, as readings (on when it was on most of the day).
+pub async fn zone_days(db: &Db, installation_id: i64, system_id: i64, zone_id: i64, since: i64) -> sqlx::Result<Vec<db::Reading>> {
+    let rows: Vec<ZoneDay> = sqlx::query_as(
+        "SELECT ts, room_temp, humidity, setpoint, on_ratio, demand_secs, air_quality FROM zone_daily
+         WHERE installation_id = ? AND system_id = ? AND zone_id = ? AND ts >= ? ORDER BY ts",
+    )
+    .bind(installation_id)
+    .bind(system_id)
+    .bind(zone_id)
+    .bind(since)
+    .fetch_all(db)
+    .await?;
+    let round = |v: Option<f64>| v.map(|v| (v * 10.0).round() / 10.0);
+    Ok(rows
+        .into_iter()
+        .map(|(ts, room_temp, humidity, setpoint, on, demand_secs, air)| db::Reading {
+            ts,
+            room_temp: round(room_temp),
+            humidity: humidity.map(|h| h.round() as i64),
+            setpoint: round(setpoint),
+            is_on: on.map(|r| r >= 0.5),
+            mode: None,
+            demand_secs,
+            air_quality: air.map(|a| a.round() as i64),
+        })
+        .collect())
+}
+
+/// The oldest point of a zone, its days included.
+pub async fn zone_oldest(db: &Db, installation_id: i64, system_id: i64, zone_id: i64) -> sqlx::Result<Option<i64>> {
+    let mut oldest: Option<i64> = None;
+    for table in ["zone_daily", "readings"] {
+        let t: Option<i64> = sqlx::query_scalar(AssertSqlSafe(format!("SELECT MIN(ts) FROM {table} WHERE installation_id = ? AND system_id = ? AND zone_id = ?")))
+            .bind(installation_id)
+            .bind(system_id)
+            .bind(zone_id)
+            .fetch_one(db)
+            .await?;
+        oldest = match (oldest, t) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        };
+    }
+    Ok(oldest)
 }
 
 /// Deletes the rows of `table` older than `before`, a batch at a time.
@@ -128,7 +215,9 @@ pub async fn purge(db: &Db, tz: Tz, history_days: i64, events_days: i64) -> sqlx
     let detail = (now - history_days * 86_400).min(rolled);
     delete_before(db, "device_samples", "device_id, field, ts", detail).await?;
     delete_before(db, "device_hourly", "device_id, field, ts", now - HOURLY_DAYS * 86_400).await?;
-    delete_before(db, "readings", "rowid", now - history_days * 86_400).await?;
+    // The readings of a zone go once its day is summed up.
+    let zones_rolled = db::get_setting(db, NEXT_ZONE_DAY).await?.and_then(|v| NaiveDate::parse_from_str(&v, "%Y-%m-%d").ok()).map_or(0, |d| midnight(d, tz));
+    delete_before(db, "readings", "rowid", (now - history_days * 86_400).min(zones_rolled)).await?;
     delete_before(db, "events", "rowid", now - events_days * 86_400).await?;
     sqlx::query("DELETE FROM sessions WHERE expires_at < ?").bind(now).execute(db).await?;
     Ok(())

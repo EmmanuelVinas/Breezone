@@ -11,6 +11,7 @@ mod schedules;
 mod sources;
 mod system;
 mod timers;
+mod weather;
 mod ws;
 
 use crate::AppState;
@@ -50,6 +51,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/installations/{id}/zones/{system_id}/{zone_id}", patch(hvac::control_zone))
         .route("/api/installations/{id}/zones/{system_id}/{zone_id}/meta", put(hvac::update_zone_meta))
         .route("/api/installations/{id}/zones/{system_id}/{zone_id}/history", get(hvac::zone_history))
+        .route("/api/installations/{id}/zones/{system_id}/{zone_id}/history/range", get(hvac::zone_range))
         .route("/api/installations/{id}/zones/{system_id}/{zone_id}/daily", get(hvac::zone_daily))
         .route("/api/installations/{id}/trends", get(hvac::trends))
         .route("/api/control/batch", post(hvac::batch))
@@ -99,6 +101,9 @@ pub fn router() -> Router<AppState> {
         .route("/api/energy/day", get(energy::day))
         .route("/api/energy/days", get(energy::days))
         .route("/api/energy/range", get(energy::range))
+        .route("/api/weather", get(weather::weather))
+        .route("/api/weather/history", get(weather::history))
+        .route("/api/weather/place", put(weather::set_place))
         .route("/api/drivers", get(sources::drivers))
         .route("/api/sources", get(sources::list).post(sources::create))
         .route("/api/sources/{id}", put(sources::update).delete(sources::delete))
@@ -110,6 +115,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/hue/link", post(sources::link_hue))
         .route("/api/sources/{id}/rooms", post(sources::take_rooms))
         .route("/api/sources/{id}/key", post(sources::unlock))
+        .route("/api/sources/{id}/diagnostic", get(sources::diagnostic))
         .route("/api/scenes", get(sources::scenes))
         .route("/api/scenes/{source_id}/{scene}", post(sources::activate_scene))
         .route("/api/discovery/products", post(sources::scan))

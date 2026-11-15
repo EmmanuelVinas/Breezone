@@ -98,6 +98,10 @@ pub trait Driver: Send + Sync {
     /// Starts listening to what the hardware tells without being asked (the presses of a remote's
     /// buttons), sent to `sink` until the driver is dropped.
     fn listen(&self, _sink: Sink) {}
+    /// What the hardware says about itself, raw, to understand how a model behaves (support).
+    fn diagnostic(&self) -> DriverFuture<'_, Value> {
+        Box::pin(async { Ok(Value::Null) })
+    }
 }
 
 /// A press of a button of a remote (`button@1`).
@@ -368,6 +372,10 @@ impl Runtime {
                     for (reference, state) in &states {
                         let pending = r.pending.entry(reference.clone()).or_default();
                         for (field, v) in state {
+                            // Settings and fixed values of the hardware have no history.
+                            if !crate::traits::keeps_history(field) {
+                                continue;
+                            }
                             let Some(v) = number(v) else { continue };
                             let p = pending.entry(field.clone()).or_insert(Pending { sum: 0.0, count: 0, last: v });
                             p.sum += v;

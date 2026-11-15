@@ -4,6 +4,7 @@ import { RoomSelect } from "@/components/room-select"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   AirVent,
+  Download,
   Blinds,
   Fan,
   KeyRound,
@@ -747,6 +748,21 @@ function SourceDetail({
     },
     onError: (e) => toast.error(errorText(e)),
   })
+  // The raw answers of the hardware, as a file to send for support.
+  const diagnostic = useMutation({
+    mutationFn: () => api.sourceDiagnostic(source.id),
+    onSuccess: (data) => {
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: "application/json",
+      })
+      const a = document.createElement("a")
+      a.href = URL.createObjectURL(blob)
+      a.download = `breezone-diagnostic-${source.driver}-${source.id}.json`
+      a.click()
+      URL.revokeObjectURL(a.href)
+    },
+    onError: (e) => toast.error(errorText(e)),
+  })
   const takeRooms = useMutation({
     mutationFn: () => api.takeRooms(source.id),
     onSuccess: (r) => {
@@ -833,6 +849,21 @@ function SourceDetail({
                   className={refresh.isPending ? "animate-spin" : ""}
                 />{" "}
                 {t("Tester")}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => diagnostic.mutate()}
+                disabled={diagnostic.isPending}
+                title={t(
+                  "Ce que le matériel dit de lui-même, pour comprendre un comportement : sans aucun secret"
+                )}
+              >
+                {diagnostic.isPending ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <Download />
+                )}
+                {t("Diagnostic")}
               </Button>
             </div>
           </div>

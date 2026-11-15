@@ -6,6 +6,32 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Periods back to five years wherever a curve goes over time: Énergie (« 5 ans », by month),
+  Solaire (30 days, 1 year, 5 years, by month), the charger and the ventilation (24 h to 5 years),
+  the history of a zone (« 1 an », « 5 ans », a point per day). A longer period shows only when the
+  history goes back further than the shorter one. In the app too: zone history, charger,
+  ventilation. The days of the Airzone zones are kept for good, as those of the devices.
+- Weather and sun (roadmap F9): sunrise and sunset computed by the server; the weather of the home
+  from Open-Meteo (no account; the city of the first installation, turned once into coordinates)
+  every 30 minutes. A weather card on « Mes installations » and on the house screen of the app,
+  and the outdoor temperature on the history of the zones (`GET /api/weather`,
+  `GET /api/weather/history`, `PUT /api/weather/place`).
+- Settings › Modules › a module › « Diagnostic »: a file of what the hardware says about itself
+  (the database of a HomeKit accessory…), to understand how a model behaves; without any secret.
+
+### Changed
+
+- The settings and fixed values of the hardware (limits of a charger, whites of a lamp, nominal
+  flow of a valve, target of a shutter…) are no longer written to the history every few minutes.
+
+### Fixed
+
+- HomeKit shutters without « hold position » (Legrand): « Stop » sent the shutter to its current
+  position, which the gateway updates only at the end of a move: the shutter went back where it
+  started. Such a shutter now says it cannot be stopped through HomeKit.
+
 ## [0.11.0-beta.15] - 2026-11-15
 
 ### Fixed

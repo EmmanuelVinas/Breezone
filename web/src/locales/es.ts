@@ -1208,6 +1208,24 @@ const es: Record<string, string> = {
   "Ajouter la clé": "Añadir la clave",
   "Simple mesure, non comptée": "Medida simple, no contada",
   "Consommation, comptée d'office": "Consumo, contado por defecto",
+  "5 ans": "5 años",
+  "Courbe sur {period}": "Curva en {period}",
+  "Par mois, sur {period}": "Por mes, en {period}",
+  "max {max} · min {min}": "máx {max} · mín {min}",
+  "{n} km/h": "{n} km/h",
+  "ressenti {t}": "sensación {t}",
+  Extérieur: "Exterior",
+  Ensoleillé: "Soleado",
+  Éclaircies: "Claros",
+  Couvert: "Cubierto",
+  Brouillard: "Niebla",
+  Bruine: "Llovizna",
+  Pluie: "Lluvia",
+  Neige: "Nieve",
+  Orage: "Tormenta",
+  "Ce que le matériel dit de lui-même, pour comprendre un comportement : sans aucun secret":
+    "Lo que el equipo dice de sí mismo, para entender un comportamiento: sin ningún secreto",
+  Diagnostic: "Diagnóstico",
 }
 
 export default es

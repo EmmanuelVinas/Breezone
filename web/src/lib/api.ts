@@ -1,4 +1,5 @@
 // Typed client for the Breezone server API (see docs/API.md).
+import type { WeatherView } from "@/lib/weather"
 
 /** The Android app on Google Play. */
 export const ANDROID_APP_URL =
@@ -877,6 +878,8 @@ export type EnergyDay = {
 export type DeviceHistory = {
   bucket: number
   series: Record<string, [number, number][]>
+  /** The oldest point of the device (seconds): the periods offered stop there. */
+  oldest?: number | null
 }
 
 export const api = {
@@ -891,6 +894,12 @@ export const api = {
     request<DeviceHistory>(
       "GET",
       `/api/devices/${id}/history?from=${from}&until=${until}&bucket=${bucket}`
+    ),
+  /** The history of a device over the last `hours`, `bucket` seconds per point. */
+  deviceHistoryOver: (id: number, hours: number, bucket: number) =>
+    request<DeviceHistory>(
+      "GET",
+      `/api/devices/${id}/history?hours=${hours}&bucket=${bucket}`
     ),
   deviceHistory: (id: number, hours = 24, points = 96) =>
     request<DeviceHistory>(
@@ -913,6 +922,14 @@ export const api = {
     request<EnergyDay>("GET", `/api/energy/day${date ? `?date=${date}` : ""}`),
   energyDays: (days: number) =>
     request<DayEnergy[]>("GET", `/api/energy/days?days=${days}`),
+  /** The weather of the home and the sun of today. */
+  weather: () => request<WeatherView>("GET", "/api/weather"),
+  /** The outdoor temperature over the last hours: `[ts, °C]`. */
+  outdoorHistory: (hours: number) =>
+    request<[number, number][]>("GET", `/api/weather/history?hours=${hours}`),
+  /** The first day the home has an energy measure of. */
+  energyRange: () =>
+    request<{ first_day: string | null }>("GET", "/api/energy/range"),
   updateDevice: (id: number, input: DeviceInput) =>
     request<DeviceView>("PUT", `/api/devices/${id}`, input),
   rooms: () => request<Room[]>("GET", "/api/rooms"),
@@ -949,6 +966,9 @@ export const api = {
       "POST",
       `/api/sources/${sourceId}/rooms`
     ),
+  /** What a module's hardware says about itself, raw (support). */
+  sourceDiagnostic: (sourceId: number) =>
+    request<unknown>("GET", `/api/sources/${sourceId}/diagnostic`),
   /** Gives a module its maker's key (Renson): the hardware keeps it, Breezone does not. */
   unlockSource: (sourceId: number, key: string) =>
     request<{ accepted: boolean }>("POST", `/api/sources/${sourceId}/key`, {
@@ -1161,6 +1181,16 @@ export const api = {
     request<Reading[]>(
       "GET",
       `/api/installations/${z.installation_id}/zones/${z.system_id}/${z.zone_id}/history?hours=${hours}`
+    ),
+  /** How far back the history of a zone goes. */
+  historyRange: (z: {
+    installation_id: number
+    system_id: number
+    zone_id: number
+  }) =>
+    request<{ oldest: number | null }>(
+      "GET",
+      `/api/installations/${z.installation_id}/zones/${z.system_id}/${z.zone_id}/history/range`
     ),
   daily: (
     z: { installation_id: number; system_id: number; zone_id: number },

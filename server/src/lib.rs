@@ -29,6 +29,7 @@ pub mod timers;
 pub mod tls;
 pub mod traits;
 pub mod update;
+pub mod weather;
 
 use crate::auth::AuthService;
 use crate::config::Config;
@@ -55,6 +56,8 @@ pub struct AppState {
     pub updater: Arc<update::Updater>,
     /// Sources of devices read by drivers (ADR 0013).
     pub drivers: Arc<drivers::Runtime>,
+    /// The sun and the weather of the home (roadmap F9).
+    pub weather: Arc<weather::Weather>,
 }
 
 /// Opens the database, applies migrations, bootstraps accounts/installations from the
@@ -72,7 +75,8 @@ pub async fn init_state(cfg: Config) -> anyhow::Result<AppState> {
     let drivers = Arc::new(drivers::Runtime::new(db.clone(), *cloud_key));
     drivers.reload().await?;
     drivers.clone().hear();
-    let state = AppState { db, cfg, hub, auth, cloud_key, updater, drivers };
+    let weather = Arc::new(weather::Weather::new(db.clone(), cfg.timezone));
+    let state = AppState { db, cfg, hub, auth, cloud_key, updater, drivers, weather };
     bootstrap(&state).await?;
     state.hub.reload_installations().await?;
     Ok(state)
@@ -162,6 +166,7 @@ pub fn spawn_background(state: &AppState) {
     tokio::spawn(airzone_schedules::run_sync(state.clone()));
     tokio::spawn(timers::run_loop(state.hub.clone(), state.db.clone()));
     tokio::spawn(state.updater.clone().run_checks());
+    tokio::spawn(state.weather.clone().run());
 }
 
 pub async fn run(cfg: Config) -> anyhow::Result<()> {

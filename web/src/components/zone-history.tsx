@@ -49,6 +49,13 @@ import {
 import type { ChartConfig } from "@/components/ui/chart"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import {
+  PERIOD_HOURS,
+  PERIOD_LABEL,
+  periodPoint,
+  periodTick,
+  periodsFor,
+} from "@/lib/periods"
 
 /** Longest time between two readings still drawn as one line (they are 5 minutes apart). */
 const GAP_SECS = 1800
@@ -57,6 +64,7 @@ const chartConfig = {
   room_temp: { label: t("Température"), color: "var(--heat)" },
   setpoint: { label: t("Consigne"), color: "var(--primary)" },
   humidity: { label: t("Humidité"), color: "var(--cool)" },
+  outdoor: { label: t("Extérieur"), color: "var(--warning)" },
   ...Object.fromEntries(
     ZONE_STATES.map((s) => [
       `st_${s}`,
@@ -71,17 +79,20 @@ const chartConfig = {
   ),
 } satisfies ChartConfig
 
-type Series = "room_temp" | "setpoint" | "humidity" | "air" | "state"
+type Series =
+  "room_temp" | "setpoint" | "humidity" | "outdoor" | "air" | "state"
 
 type Point = AirSeriesPoint & {
   state: ZoneState | null
+  /** The outdoor temperature at that time, from the weather of the home. */
+  outdoor: number | null
 } & Partial<Record<`st_${ZoneState}`, number | null>>
 
 /** A gap without readings (installation unreachable) breaks the lines instead of joining them. */
-function withGaps(readings: Reading[]): Reading[] {
+function withGaps(readings: Reading[], gapSecs = GAP_SECS): Reading[] {
   return readings.flatMap((r, i) => {
     const previous = readings[i - 1]
-    if (!previous || r.ts - previous.ts <= GAP_SECS) return [r]
+    if (!previous || r.ts - previous.ts <= gapSecs) return [r]
     const gap: Reading = {
       ...r,
       ts: previous.ts + 1,
@@ -112,13 +123,42 @@ export function ZoneHistory({ zone }: { zone: Zone }) {
     queryFn: () => api.history(zone, Number(hours)),
     refetchInterval: 60_000,
   })
-  const readings = withGaps(history.data ?? [])
+  const outdoor = useQuery({
+    queryKey: ["outdoor", hours],
+    queryFn: () => api.outdoorHistory(Number(hours)),
+    staleTime: 10 * 60_000,
+  })
+  const range = useQuery({
+    queryKey: [
+      "history-range",
+      zone.installation_id,
+      zone.system_id,
+      zone.zone_id,
+    ],
+    queryFn: () => api.historyRange(zone),
+    staleTime: 3_600_000,
+  })
+  const periods = periodsFor(range.data?.oldest, range.dataUpdatedAt / 1000)
+  // Over a year and more, a point per day: two days apart is a gap.
+  const daily = Number(hours) > 24 * 31
+  const readings = withGaps(history.data ?? [], daily ? 2 * 86_400 : GAP_SECS)
   const air = !!zone.air_quality && readings.some((r) => r.air_quality)
   const states = zoneStates(readings)
   const shownStates = ZONE_STATES.filter((s) => states.includes(s))
   // Like the air quality bands: a state also holds the next point, so that its step reaches it.
+  // The outdoor temperature (every 30 min, or per day) set on each reading: the last one before it.
+  const outdoorPoints = outdoor.data ?? []
+  const outdoorAt = (ts: number) => {
+    let found: number | null = null
+    for (const [at, v] of outdoorPoints) {
+      if (at > ts) break
+      if (ts - at <= (daily ? 1.5 * 86_400 : 3600)) found = v
+    }
+    return found
+  }
   const data: Point[] = airQualitySeries(readings).map((r, i) => ({
     ...r,
+    outdoor: r.room_temp === null ? null : outdoorAt(r.ts),
     setpoint: r.is_on ? r.setpoint : null,
     state: states[i],
     ...Object.fromEntries(
@@ -132,12 +172,14 @@ export function ZoneHistory({ zone }: { zone: Zone }) {
   }))
   // Several days: the hour too, as a zoom can show the same day twice.
   const tickFormat = (ts: number) =>
-    Number(hours) <= 24
-      ? time(ts)
-      : `${new Date(ts * 1000).toLocaleDateString(locale(), {
-          day: "2-digit",
-          month: "2-digit",
-        })} ${time(ts)}`
+    daily
+      ? periodTick(Number(hours) > 24 * 400 ? "5y" : "1y", ts)
+      : Number(hours) <= 24
+        ? time(ts)
+        : `${new Date(ts * 1000).toLocaleDateString(locale(), {
+            day: "2-digit",
+            month: "2-digit",
+          })} ${time(ts)}`
   const toggle = (s: Series) =>
     setHidden((h) => {
       const next = new Set(h)
@@ -158,6 +200,15 @@ export function ZoneHistory({ zone }: { zone: Zone }) {
     { key: "room_temp", label: t("Température"), color: "var(--heat)" },
     { key: "setpoint", label: t("Consigne"), color: "var(--primary)" },
     { key: "humidity", label: t("Humidité"), color: "var(--cool)" },
+    ...((outdoor.data?.length ?? 0) > 0
+      ? [
+          {
+            key: "outdoor" as const,
+            label: t("Extérieur"),
+            color: "var(--warning)",
+          },
+        ]
+      : []),
     ...(air
       ? [
           {
@@ -187,9 +238,11 @@ export function ZoneHistory({ zone }: { zone: Zone }) {
           variant="outline"
           size="sm"
         >
-          <ToggleGroupItem value="24">{t("24 h")}</ToggleGroupItem>
-          <ToggleGroupItem value="168">{t("7 j")}</ToggleGroupItem>
-          <ToggleGroupItem value="720">{t("30 j")}</ToggleGroupItem>
+          {periods.map((p) => (
+            <ToggleGroupItem key={p} value={String(PERIOD_HOURS[p])}>
+              {PERIOD_LABEL[p]}
+            </ToggleGroupItem>
+          ))}
         </ToggleGroup>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -245,7 +298,11 @@ export function ZoneHistory({ zone }: { zone: Zone }) {
                 content={
                   <ChartTooltipContent
                     labelFormatter={(_, p) =>
-                      p?.[0] ? dateTime(Number(p[0].payload.ts)) : ""
+                      p?.[0]
+                        ? daily
+                          ? periodPoint("1y", Number(p[0].payload.ts))
+                          : dateTime(Number(p[0].payload.ts))
+                        : ""
                     }
                     formatter={(value, name, item) => {
                       const key = String(name)
@@ -350,6 +407,17 @@ export function ZoneHistory({ zone }: { zone: Zone }) {
                 dot={false}
                 connectNulls={false}
                 hide={hidden.has("setpoint")}
+              />
+              <Line
+                yAxisId="t"
+                dataKey="outdoor"
+                type="monotone"
+                stroke="var(--color-outdoor)"
+                strokeWidth={1.5}
+                strokeDasharray="5 4"
+                dot={false}
+                connectNulls
+                hide={hidden.has("outdoor")}
               />
               <Line
                 yAxisId="t"

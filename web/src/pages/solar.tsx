@@ -1,3 +1,4 @@
+import { useState } from "react"
 import type { ReactNode } from "react"
 import { useQuery } from "@tanstack/react-query"
 import {
@@ -17,6 +18,9 @@ import { api } from "@/lib/api"
 import { percent, time } from "@/lib/format"
 import { locale, t, tn } from "@/lib/i18n"
 import { PageHeader } from "@/components/app-shell"
+import { PeriodPicker } from "@/components/period-picker"
+import type { HistoryPeriod } from "@/lib/periods"
+import { PERIOD_LABEL, periodsFor } from "@/lib/periods"
 import {
   Card,
   CardContent,
@@ -196,30 +200,82 @@ const barsConfig = {
   },
 } satisfies ChartConfig
 
-/** What the panels gave each day of the last 30, used on the spot or returned. */
+/** What the panels gave each day (or month), used on the spot or returned: 30 days to 5 years. */
 function DaysCard() {
+  const [period, setPeriod] = useState<HistoryPeriod>("30d")
+  const count = period === "5y" ? 5 * 365 + 1 : period === "1y" ? 365 : 30
   const days = useQuery({
-    queryKey: ["energy-days", 30],
-    queryFn: () => api.energyDays(30),
+    queryKey: ["energy-days", count],
+    queryFn: () => api.energyDays(count),
     refetchInterval: 60_000,
   })
-  const data = (days.data ?? []).map((d) => ({
-    day: d.day,
-    self_consumed: d.self_consumed ?? d.production ?? 0,
-    exported: d.exported ?? 0,
+  const range = useQuery({
+    queryKey: ["energy-range"],
+    queryFn: api.energyRange,
+    staleTime: 3_600_000,
+  })
+  const first = range.data?.first_day
+  const periods = periodsFor(
+    first ? new Date(`${first}T00:00:00`).getTime() / 1000 : null,
+    range.dataUpdatedAt / 1000,
+    ["30d", "1y", "5y"]
+  )
+  const shown = (days.data ?? []).filter((d) => !first || d.day >= first)
+  // Over a year and more: one bar a month.
+  const monthly = period !== "30d"
+  const rows = monthly
+    ? Object.values(
+        shown.reduce<
+          Record<
+            string,
+            { day: string; self: number; out: number; prod: number }
+          >
+        >((m, d) => {
+          const k = d.day.slice(0, 7)
+          const r = (m[k] ??= { day: k, self: 0, out: 0, prod: 0 })
+          r.self += d.self_consumed ?? d.production ?? 0
+          r.out += d.exported ?? 0
+          r.prod += d.production ?? 0
+          return m
+        }, {})
+      )
+    : shown.map((d) => ({
+        day: d.day,
+        self: d.self_consumed ?? d.production ?? 0,
+        out: d.exported ?? 0,
+        prod: d.production ?? 0,
+      }))
+  const data = rows.map((r) => ({
+    day: r.day,
+    self_consumed: r.self,
+    exported: r.out,
   }))
-  const total = sum((days.data ?? []).map((d) => d.production))
+  const total = sum(rows.map((r) => r.prod))
   const label = (day: string, style: "long" | "short") =>
-    new Date(`${day}T12:00:00`).toLocaleDateString(
-      locale(),
-      style === "long"
-        ? { weekday: "long", day: "numeric", month: "long" }
-        : { day: "2-digit", month: "2-digit" }
-    )
+    day.length === 7
+      ? new Date(`${day}-15T12:00:00`).toLocaleDateString(
+          locale(),
+          style === "long"
+            ? { month: "long", year: "numeric" }
+            : { month: "short", year: "2-digit" }
+        )
+      : new Date(`${day}T12:00:00`).toLocaleDateString(
+          locale(),
+          style === "long"
+            ? { weekday: "long", day: "numeric", month: "long" }
+            : { day: "2-digit", month: "2-digit" }
+        )
   return (
     <Card className="rounded-3xl">
       <CardHeader>
-        <CardTitle>{t("30 derniers jours")}</CardTitle>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <CardTitle>
+            {period === "30d"
+              ? t("30 derniers jours")
+              : t("Par mois, sur {period}", { period: PERIOD_LABEL[period] })}
+          </CardTitle>
+          <PeriodPicker value={period} periods={periods} onChange={setPeriod} />
+        </div>
         <CardDescription>
           {t("{kwh} produits · autoconsommés ou injectés", {
             kwh: kwh(total),

@@ -20,6 +20,16 @@ import { duration, relativeTime, time } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { locale, t } from "@/lib/i18n"
 import { PageHeader } from "@/components/app-shell"
+import { PeriodPicker } from "@/components/period-picker"
+import type { HistoryPeriod } from "@/lib/periods"
+import {
+  bucketFor,
+  PERIOD_HOURS,
+  PERIOD_LABEL,
+  periodPoint,
+  periodTick,
+  periodsFor,
+} from "@/lib/periods"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -259,13 +269,18 @@ const curveConfig = {
  * returns to the grid, plus what the charger takes): it needs a main meter and a solar measure.
  */
 function PowerCurve({ device }: { device: DeviceView }) {
+  const [period, setPeriod] = useState<HistoryPeriod>("24h")
   const history = useQuery({
-    queryKey: ["device-history", device.id, 24],
-    queryFn: () => api.deviceHistory(device.id, 24, 96),
+    queryKey: ["device-history", device.id, period],
+    queryFn: () =>
+      api.deviceHistoryOver(device.id, PERIOD_HOURS[period], bucketFor(period)),
     refetchInterval: 60_000,
   })
+  const periods = periodsFor(history.data?.oldest, history.dataUpdatedAt / 1000)
   const live = useQuery({ queryKey: ["energy-live"], queryFn: api.energyLive })
-  const withSurplus = !!live.data?.roles.grid && !!live.data?.roles.solar
+  // The surplus of today: over the last 24 hours only.
+  const withSurplus =
+    period === "24h" && !!live.data?.roles.grid && !!live.data?.roles.solar
   const day = useQuery({
     queryKey: ["energy-day", "today"],
     queryFn: () => api.energyDay(),
@@ -288,7 +303,14 @@ function PowerCurve({ device }: { device: DeviceView }) {
   return (
     <Card className="rounded-3xl">
       <CardHeader>
-        <CardTitle>{t("Dernières 24 heures")}</CardTitle>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <CardTitle>
+            {period === "24h"
+              ? t("Dernières 24 heures")
+              : t("Courbe sur {period}", { period: PERIOD_LABEL[period] })}
+          </CardTitle>
+          <PeriodPicker value={period} periods={periods} onChange={setPeriod} />
+        </div>
         <CardDescription>
           {withSurplus
             ? t("Puissance de charge et surplus solaire disponible")
@@ -316,7 +338,7 @@ function PowerCurve({ device }: { device: DeviceView }) {
                 type="number"
                 domain={["dataMin", "dataMax"]}
                 scale="time"
-                tickFormatter={(ts: number) => time(ts)}
+                tickFormatter={(ts: number) => periodTick(period, ts)}
                 tickLine={false}
                 axisLine={false}
                 minTickGap={48}
@@ -331,7 +353,7 @@ function PowerCurve({ device }: { device: DeviceView }) {
                 content={
                   <ChartTooltipContent
                     labelFormatter={(_, p) =>
-                      p?.[0] ? time(Number(p[0].payload.ts)) : ""
+                      p?.[0] ? periodPoint(period, Number(p[0].payload.ts)) : ""
                     }
                     formatter={(value, name, item) => (
                       <div className="flex w-full items-center justify-between gap-4">

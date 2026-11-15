@@ -28,6 +28,11 @@ import com.breezone.app.data.LightState
 import com.breezone.app.data.ServerDevices
 import com.breezone.app.data.TraitIds
 import com.breezone.app.data.VentilationRoomState
+import com.breezone.app.data.WeatherView
+import com.breezone.app.ui.components.WeatherCard
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import com.breezone.app.data.installation
 import com.breezone.app.data.modulesHere
 import com.breezone.app.resources.*
@@ -65,6 +70,13 @@ fun HouseScreen(serverId: String, installationId: Long, onBack: () -> Unit, onOp
     val devices = all[serverId] ?: ServerDevices()
     val here = server?.modulesHere(inst) ?: false
     LaunchedEffect(serverId) { hub.followDevices(serverId, everyMs = 10_000) }
+    var weather by remember { mutableStateOf<WeatherView?>(null) }
+    LaunchedEffect(serverId) {
+        while (true) {
+            weather = runCatching { hub.api(serverId)?.weather() }.getOrNull() ?: weather
+            kotlinx.coroutines.delay(10 * 60_000L)
+        }
+    }
 
     val zonesOn = inst?.zones?.count { it.on } ?: 0
     val tiles = buildList {
@@ -125,6 +137,8 @@ fun HouseScreen(serverId: String, installationId: Long, onBack: () -> Unit, onOp
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // The weather is the home's: shown with this server's installations.
+            if (here) item(key = "weather", contentType = "weather") { WeatherCard(weather) }
             items(tiles.chunked(2), key = { row -> row.first().type.name }, contentType = { "tiles" }) { row ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     row.forEach { t ->

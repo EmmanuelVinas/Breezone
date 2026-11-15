@@ -91,6 +91,8 @@ fun ServerState.modulesHere(installation: Installation?): Boolean =
 data class DeviceHistory(
     val bucket: Long = 0,
     val series: Map<String, List<List<Double>>> = emptyMap(),
+    /** The oldest point of the device (seconds): the periods offered stop there. */
+    val oldest: Long? = null,
 )
 
 /** Which roles the home has a measure of (`/api/energy/live`). */
@@ -157,3 +159,60 @@ data class EnergyDay(
     val points: List<EnergyPoint> = emptyList(),
     val totals: DayEnergy = DayEnergy(),
 )
+
+/** The oldest point of a history (seconds): the periods offered stop there. */
+@Serializable
+data class HistoryRange(val oldest: Long? = null)
+
+/** Periods of a curve over time, in hours; a longer one only when the history goes back further. */
+object Periods {
+    const val DAY = 24
+    const val WEEK = 24 * 7
+    const val MONTH = 24 * 30
+    const val YEAR = 24 * 365
+    const val FIVE_YEARS = 24 * 365 * 5
+    val ALL = listOf(DAY, WEEK, MONTH, YEAR, FIVE_YEARS)
+
+    fun available(oldest: Long?, now: Long, all: List<Int> = ALL): List<Int> {
+        val age = if (oldest == null) 0L else now - oldest
+        return all.filterIndexed { i, _ -> i == 0 || age > all[i - 1] * 3600L }
+    }
+
+    /** Seconds per point: about one every 15 min on a day, one a month over five years. */
+    fun bucket(hours: Int): Int = when {
+        hours <= DAY -> 900
+        hours <= WEEK -> 3600
+        hours <= MONTH -> 4 * 3600
+        hours <= YEAR -> 86_400
+        else -> 30 * 86_400
+    }
+}
+
+/** An hour of the forecast (`/api/weather`). */
+@Serializable
+data class WeatherHour(
+    val ts: Long,
+    val temperature: Double? = null,
+    /** WMO weather code. */
+    val code: Long? = null,
+    val precipitationProbability: Double? = null,
+)
+
+@Serializable
+data class WeatherReport(
+    val place: String = "",
+    val temperature: Double? = null,
+    val apparent: Double? = null,
+    val code: Long? = null,
+    val wind: Double? = null,
+    val todayMin: Double? = null,
+    val todayMax: Double? = null,
+    val hours: List<WeatherHour> = emptyList(),
+)
+
+@Serializable
+data class SunTimes(val sunrise: Long? = null, val sunset: Long? = null)
+
+/** The weather of the home (null without a city) and the sun of today. */
+@Serializable
+data class WeatherView(val weather: WeatherReport? = null, val sun: SunTimes? = null)

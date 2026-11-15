@@ -459,6 +459,99 @@ object FzIcons {
         )
     }
 
+    val CloudSun: ImageVector by lazy {
+        lucide(
+            "CloudSun",
+            "M12 2v2",
+            "m4.93 4.93 1.41 1.41",
+            "M20 12h2",
+            "m19.07 4.93-1.41 1.41",
+            "M15.947 12.65a4 4 0 0 0-5.925-4.128",
+            "M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6Z",
+        )
+    }
+
+    val CloudRain: ImageVector by lazy {
+        lucide(
+            "CloudRain",
+            "M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242",
+            "M16 14v6",
+            "M8 14v6",
+            "M12 16v6",
+        )
+    }
+
+    val CloudSnow: ImageVector by lazy {
+        lucide(
+            "CloudSnow",
+            "M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242",
+            "M8 15h.01",
+            "M8 19h.01",
+            "M12 17h.01",
+            "M12 21h.01",
+            "M16 15h.01",
+            "M16 19h.01",
+        )
+    }
+
+    val CloudFog: ImageVector by lazy {
+        lucide(
+            "CloudFog",
+            "M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242",
+            "M16 17H7",
+            "M17 21H9",
+        )
+    }
+
+    val CloudDrizzle: ImageVector by lazy {
+        lucide(
+            "CloudDrizzle",
+            "M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242",
+            "M8 19v1",
+            "M8 14v1",
+            "M16 19v1",
+            "M16 14v1",
+            "M12 21v1",
+            "M12 16v1",
+        )
+    }
+
+    val CloudLightning: ImageVector by lazy {
+        lucide(
+            "CloudLightning",
+            "M6 16.326A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 .5 8.973",
+            "m13 12-3 5h4l-3 5",
+        )
+    }
+
+    val Sunrise: ImageVector by lazy {
+        lucide(
+            "Sunrise",
+            "M12 2v8",
+            "m4.93 10.93 1.41 1.41",
+            "M2 18h2",
+            "M20 18h2",
+            "m19.07 10.93-1.41 1.41",
+            "M22 22H2",
+            "m8 6 4-4 4 4",
+            "M16 18a4 4 0 0 0-8 0",
+        )
+    }
+
+    val Sunset: ImageVector by lazy {
+        lucide(
+            "Sunset",
+            "M12 10V2",
+            "m4.93 10.93 1.41 1.41",
+            "M2 18h2",
+            "M20 18h2",
+            "m19.07 10.93-1.41 1.41",
+            "M22 22H2",
+            "m16 6-4 4-4-4",
+            "M16 18a4 4 0 0 0-8 0",
+        )
+    }
+
     val Blinds: ImageVector by lazy {
         lucide(
             "Blinds",

@@ -35,6 +35,7 @@ import { useGroupPower, useZoneControl } from "@/hooks/use-zone-control"
 import { cn } from "@/lib/utils"
 import { ConfirmDialog } from "@/components/confirm"
 import { PageHeader } from "@/components/app-shell"
+import { WeatherCard } from "@/components/weather-card"
 import { ConnectionBadge, ConnectionDot } from "@/components/connection-badge"
 import { ZoneCard } from "@/components/zone-card"
 import { Button } from "@/components/ui/button"
@@ -485,6 +486,7 @@ export function DashboardPage({
               ))}
             </div>
           )}
+          {view === "installations" && <WeatherCard />}
 
           {view === "climate" && selected && (
             <>

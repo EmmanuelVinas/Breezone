@@ -1198,6 +1198,24 @@ const en: Record<string, string> = {
   "Ajouter la clé": "Add the key",
   "Simple mesure, non comptée": "Plain measure, not counted",
   "Consommation, comptée d'office": "Consumption, counted by default",
+  "5 ans": "5 years",
+  "Courbe sur {period}": "Curve over {period}",
+  "Par mois, sur {period}": "By month, over {period}",
+  "max {max} · min {min}": "max {max} · min {min}",
+  "{n} km/h": "{n} km/h",
+  "ressenti {t}": "feels like {t}",
+  Extérieur: "Outdoor",
+  Ensoleillé: "Sunny",
+  Éclaircies: "Sunny spells",
+  Couvert: "Overcast",
+  Brouillard: "Fog",
+  Bruine: "Drizzle",
+  Pluie: "Rain",
+  Neige: "Snow",
+  Orage: "Storm",
+  "Ce que le matériel dit de lui-même, pour comprendre un comportement : sans aucun secret":
+    "What the hardware says about itself, to understand a behaviour: without any secret",
+  Diagnostic: "Diagnostic",
 }
 
 export default en

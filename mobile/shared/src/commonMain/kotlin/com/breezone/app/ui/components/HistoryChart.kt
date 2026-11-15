@@ -101,7 +101,7 @@ private val StateKinds = ExtraStore.Key<List<ZoneState>>()
 private val LEVELS = listOf("good", "regular", "bad")
 
 /** Consecutive readings with a value and no gap, as `(x in hours, value)` series. */
-private fun runs(readings: List<Reading>, t0: Long, value: (Reading) -> Double?): List<List<Pair<Double, Double>>> {
+private fun runs(readings: List<Reading>, t0: Long, gap: Long = GAP_SECS, value: (Reading) -> Double?): List<List<Pair<Double, Double>>> {
     val result = mutableListOf<MutableList<Pair<Double, Double>>>()
     var previous: Reading? = null
     for (r in readings) {
@@ -111,7 +111,7 @@ private fun runs(readings: List<Reading>, t0: Long, value: (Reading) -> Double?)
             continue
         }
         val x = round((r.ts - t0) / HOUR * 10_000) / 10_000
-        if (previous == null || r.ts - previous.ts > GAP_SECS) result.add(mutableListOf())
+        if (previous == null || r.ts - previous.ts > gap) result.add(mutableListOf())
         result.last().add(x to v)
         previous = r
     }
@@ -119,13 +119,13 @@ private fun runs(readings: List<Reading>, t0: Long, value: (Reading) -> Double?)
 }
 
 /** Runs of the same air quality level; each holds the next reading, so that it reaches it. */
-private fun airRuns(readings: List<Reading>, t0: Long): List<Pair<Int, List<Pair<Double, Double>>>> {
+private fun airRuns(readings: List<Reading>, t0: Long, gap: Long = GAP_SECS): List<Pair<Int, List<Pair<Double, Double>>>> {
     val result = mutableListOf<Pair<Int, MutableList<Pair<Double, Double>>>>()
     var previous: Reading? = null
     for (r in readings) {
         val level = r.airQuality?.toInt()?.takeIf { it in 1..3 }
         val x = round((r.ts - t0) / HOUR * 10_000) / 10_000
-        val continues = previous != null && r.ts - previous.ts <= GAP_SECS
+        val continues = previous != null && r.ts - previous.ts <= gap
         val last = result.lastOrNull()
         if (continues && last != null) last.second.add(x to 0.5)
         if (level != null && !(continues && last?.first == level)) result.add(level to mutableListOf(x to 0.5))
@@ -135,13 +135,13 @@ private fun airRuns(readings: List<Reading>, t0: Long): List<Pair<Int, List<Pair
 }
 
 /** Runs of the same state, each up to the next reading, as full-height bands (y = 100 on 0-100). */
-private fun stateRuns(readings: List<Reading>, t0: Long): List<Pair<ZoneState, List<Pair<Double, Double>>>> {
+private fun stateRuns(readings: List<Reading>, t0: Long, gap: Long = GAP_SECS): List<Pair<ZoneState, List<Pair<Double, Double>>>> {
     val states = zoneStates(readings)
     val result = mutableListOf<Pair<ZoneState, MutableList<Pair<Double, Double>>>>()
     readings.forEachIndexed { i, r ->
         val x = round((r.ts - t0) / HOUR * 10_000) / 10_000
         val previous = readings.getOrNull(i - 1)
-        val continues = previous != null && r.ts - previous.ts <= GAP_SECS
+        val continues = previous != null && r.ts - previous.ts <= gap
         val last = result.lastOrNull()
         if (continues && last != null && states[i - 1] == last.first) last.second.add(x to 100.0)
         // Bands for heating and cooling only: none when the zone is off or at its setpoint.
@@ -159,11 +159,14 @@ private fun stateRuns(readings: List<Reading>, t0: Long): List<Pair<ZoneState, L
 @Composable
 fun HistoryChart(readings: List<Reading>, hours: Int, hidden: Set<HistorySeries> = emptySet(), modifier: Modifier = Modifier) {
     val t0 = readings.firstOrNull()?.ts ?: 0L
-    val temperature = remember(readings) { runs(readings, t0) { it.roomTemp } }
-    val setpoint = remember(readings) { runs(readings, t0) { r -> r.setpoint.takeIf { r.isOn == true } } }
-    val humidity = remember(readings) { runs(readings, t0) { r -> r.humidity?.toDouble() } }
-    val air = remember(readings) { airRuns(readings, t0) }
-    val periods = remember(readings) { stateRuns(readings, t0) }
+    // Over a year and more, a point per day: two days apart is a gap.
+    val daily = hours > 24 * 31
+    val gap = if (daily) 2 * 86_400L else GAP_SECS
+    val temperature = remember(readings) { runs(readings, t0, gap) { it.roomTemp } }
+    val setpoint = remember(readings) { runs(readings, t0, gap) { r -> r.setpoint.takeIf { r.isOn == true } } }
+    val humidity = remember(readings) { runs(readings, t0, gap) { r -> r.humidity?.toDouble() } }
+    val air = remember(readings) { airRuns(readings, t0, gap) }
+    val periods = remember(readings) { stateRuns(readings, t0, gap) }
 
     val producer = remember { CartesianChartModelProducer() }
     LaunchedEffect(readings) {
@@ -297,7 +300,13 @@ fun HistoryChart(readings: List<Reading>, hours: Int, hidden: Set<HistorySeries>
         val index = readings.indices.minByOrNull { abs(readings[it].ts - ts) } ?: return@rememberTextMarker ""
         val r = readings[index]
         buildString {
-            append(if (hours <= 24) clock(r.ts) else "${day(r.ts).dropLast(5)} ${clock(r.ts)}")
+            append(
+                when {
+                    daily -> day(r.ts)
+                    hours <= 24 -> clock(r.ts)
+                    else -> "${day(r.ts).dropLast(5)} ${clock(r.ts)}"
+                },
+            )
             if (HistorySeries.Temperature !in hidden) r.roomTemp?.let { append("\n${labels.temperature} ${formatTemp(it)}") }
             if (HistorySeries.Setpoint !in hidden && r.isOn == true) r.setpoint?.let { append("\n${labels.setpoint} ${formatTemp(it)}") }
             if (HistorySeries.Humidity !in hidden) r.humidity?.let { append("\n${labels.humidity} $it %") }
@@ -312,7 +321,11 @@ fun HistoryChart(readings: List<Reading>, hours: Int, hidden: Set<HistorySeries>
     val timeFormatter = remember(t0, hours) {
         CartesianValueFormatter { _, x, _ ->
             val ts = t0 + (x * HOUR).toLong()
-            if (hours <= 24) clock(ts) else day(ts).dropLast(5)
+            when {
+                hours > 24 * 400 -> day(ts).takeLast(7)
+                hours <= 24 -> clock(ts)
+                else -> day(ts).dropLast(5)
+            }
         }
     }
     val tempFormatter = remember { CartesianValueFormatter { _, y, _ -> "${y.toInt()}°" } }
@@ -339,7 +352,18 @@ fun HistoryChart(readings: List<Reading>, hours: Int, hidden: Set<HistorySeries>
                 label = axisLabel,
                 valueFormatter = timeFormatter,
                 guideline = null,
-                itemPlacer = remember(hours) { HorizontalAxis.ItemPlacer.aligned(spacing = { if (hours <= 24) 6 else 24 }) },
+                itemPlacer = remember(hours) {
+                    HorizontalAxis.ItemPlacer.aligned(
+                        spacing = {
+                            when {
+                                hours <= 24 -> 6
+                                hours <= 24 * 31 -> 24
+                                hours <= 24 * 400 -> 24 * 30
+                                else -> 24 * 180
+                            }
+                        },
+                    )
+                },
             ),
             marker = marker,
             getXStep = { _, _, _ -> 1.0 },

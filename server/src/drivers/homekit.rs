@@ -425,12 +425,16 @@ impl Driver for HomeKit {
                     let position = params.get("position").and_then(Value::as_i64).ok_or_else(|| DriverError::Invalid("`position` is required".into()))?;
                     self.put(write(*target, json!(position.clamp(0, 100)))).await
                 }
-                (Kind::Cover { hold: Some(hold), .. }, "cover.position", "stop") => self.put(write(*hold, json!(true))).await,
-                (Kind::Cover { current, target, .. }, "cover.position", "stop") => {
-                    // Without "hold position": asked to stay where it is now.
-                    let now = self.get(&format!("/characteristics?id={}.{current}", t.aid)).await?;
-                    let position = now["characteristics"][0]["value"].as_i64().ok_or_else(|| DriverError::Invalid("no position".into()))?;
-                    self.put(write(*target, json!(position))).await
+                (Kind::Cover { hold: Some(hold), .. }, "cover.position", "stop") => {
+                    tracing::info!("HomeKit {reference}: stop with « hold position »");
+                    self.put(write(*hold, json!(true))).await
+                }
+                (Kind::Cover { .. }, "cover.position", "stop") => {
+                    // Without « hold position », a shutter cannot be stopped through HomeKit: sending
+                    // it to its current position would send it back where it started when, as the
+                    // Legrand gateway does, the position is only updated at the end of the move.
+                    tracing::info!("HomeKit {reference}: no « hold position », stop refused");
+                    Err(DriverError::Unsupported("ce volet ne peut pas être arrêté en cours de route par HomeKit : utilisez l'interrupteur ou l'application Legrand".into()))
                 }
                 (Kind::Switch { on }, "switch.relay", "set") => {
                     let value = params.get("on").and_then(Value::as_bool).ok_or_else(|| DriverError::Invalid("`on` is required".into()))?;
@@ -443,6 +447,14 @@ impl Driver for HomeKit {
 
     fn read_every(&self) -> Duration {
         Duration::from_secs(10)
+    }
+
+    /// The accessory's database and the values of its characteristics now, as HomeKit gives them.
+    fn diagnostic(&self) -> DriverFuture<'_, Value> {
+        Box::pin(async move {
+            let database = self.get("/accessories").await?;
+            Ok(json!({ "accessories": database["accessories"] }))
+        })
     }
 
     fn listen(&self, sink: Sink) {

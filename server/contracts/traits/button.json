@@ -3,10 +3,10 @@
   "version": 1,
   "label": { "fr": "Télécommande ou bouton", "en": "Remote or button", "es": "Mando o botón" },
   "state": [
-    { "name": "buttons", "type": "integer", "min": 1, "label": { "fr": "Boutons", "en": "Buttons", "es": "Botones" } },
-    { "name": "last_button", "type": "integer", "min": 1, "optional": true, "label": { "fr": "Dernier bouton appuyé", "en": "Last button pressed", "es": "Último botón pulsado" } },
+    { "name": "buttons", "type": "integer", "history": false, "min": 1, "label": { "fr": "Boutons", "en": "Buttons", "es": "Botones" } },
+    { "name": "last_button", "type": "integer", "history": false, "min": 1, "optional": true, "label": { "fr": "Dernier bouton appuyé", "en": "Last button pressed", "es": "Último botón pulsado" } },
     { "name": "last_press", "type": "enum", "values": ["single", "double", "long"], "optional": true, "label": { "fr": "Dernier appui", "en": "Last press", "es": "Última pulsación" } },
-    { "name": "last_at", "type": "integer", "unit": "s", "optional": true, "label": { "fr": "Heure du dernier appui", "en": "Time of the last press", "es": "Hora de la última pulsación" } }
+    { "name": "last_at", "type": "integer", "history": false, "unit": "s", "optional": true, "label": { "fr": "Heure du dernier appui", "en": "Time of the last press", "es": "Hora de la última pulsación" } }
   ],
   "actions": []
 }

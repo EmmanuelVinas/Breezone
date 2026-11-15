@@ -49,6 +49,9 @@ import androidx.compose.ui.unit.sp
 import com.breezone.app.data.AirQuality
 import com.breezone.app.data.DayStats
 import com.breezone.app.data.Hub
+import com.breezone.app.data.Periods
+import com.breezone.app.ui.nowSeconds
+import com.breezone.app.ui.components.periodLabel
 import com.breezone.app.data.installation
 import com.breezone.app.data.zone
 import com.breezone.app.data.Mode
@@ -250,6 +253,10 @@ private fun History(hub: Hub, serverId: String, zone: Zone) {
     var hours by remember { mutableIntStateOf(24) }
     var readings by remember { mutableStateOf<List<Reading>?>(null) }
     var hidden by remember { mutableStateOf(emptySet<HistorySeries>()) }
+    var oldest by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(zone.installationId, zone.systemId, zone.zoneId) {
+        oldest = runCatching { hub.api(serverId)?.historyRange(zone)?.oldest }.getOrNull()
+    }
     LaunchedEffect(zone.installationId, zone.systemId, zone.zoneId, hours) {
         while (true) {
             readings = runCatching { hub.api(serverId)?.history(zone, hours) }.getOrNull() ?: readings
@@ -259,8 +266,11 @@ private fun History(hub: Hub, serverId: String, zone: Zone) {
     SectionCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f)) { SectionTitle(stringResource(Res.string.zone_history_title), FzIcons.Activity) }
-            listOf(24 to Res.string.zone_history_24h, 168 to Res.string.zone_history_7d, 720 to Res.string.zone_comfort_30d).forEach { (h, label) ->
-                FilterChip(selected = hours == h, onClick = { hours = h }, label = { Text(stringResource(label)) }, modifier = Modifier.padding(start = 6.dp))
+        }
+        // A longer period only when the history goes back further.
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Periods.available(oldest, nowSeconds()).forEach { h ->
+                FilterChip(selected = hours == h, onClick = { hours = h }, label = { Text(periodLabel(h)) })
             }
         }
         val data = readings

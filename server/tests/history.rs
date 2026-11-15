@@ -71,3 +71,35 @@ async fn hours_and_days_are_summed_up_and_read_by_period() {
     let kept: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM device_daily").fetch_one(&db).await.unwrap();
     assert_eq!(kept, 4);
 }
+
+#[tokio::test]
+async fn the_days_of_a_zone_are_kept_once_its_readings_go() {
+    let db = database().await;
+    let inst = db::insert_installation(&db, "Maison", "127.0.0.1", 3000, true).await.unwrap();
+    // The 28th of March: on until noon at 19 °C for a setpoint of 20 °C, then off at 17 °C.
+    for hour in 0..24u32 {
+        for minute in (0..60).step_by(5) {
+            let on = hour < 12;
+            sqlx::query("INSERT INTO readings (installation_id, system_id, zone_id, ts, room_temp, humidity, setpoint, is_on, mode) VALUES (?, 1, 2, ?, ?, 50, 20.0, ?, 3)")
+                .bind(inst.id)
+                .bind(at(28, hour, minute))
+                .bind(if on { 19.0 } else { 17.0 })
+                .bind(on)
+                .execute(&db)
+                .await
+                .unwrap();
+        }
+    }
+    rollup::roll_up(&db, Paris, at(30, 10, 0)).await.unwrap();
+    let days = rollup::zone_days(&db, inst.id, 1, 2, at(27, 0, 0)).await.unwrap();
+    assert_eq!(days.len(), 1);
+    let d = &days[0];
+    assert_eq!((d.ts, d.room_temp, d.humidity, d.setpoint), (at(28, 0, 0), Some(18.0), Some(50), Some(20.0)));
+    assert_eq!(d.is_on, Some(true), "on half of the day");
+    assert_eq!(rollup::zone_oldest(&db, inst.id, 1, 2).await.unwrap(), Some(at(28, 0, 0)));
+
+    rollup::purge(&db, Paris, 1, 30).await.unwrap();
+    let left: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM readings").fetch_one(&db).await.unwrap();
+    assert_eq!(left, 0, "the readings went, their day stays");
+    assert_eq!(rollup::zone_days(&db, inst.id, 1, 2, 0).await.unwrap().len(), 1);
+}

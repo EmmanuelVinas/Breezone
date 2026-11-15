@@ -486,7 +486,6 @@
     <string name="charger_goal">Objectif : %1$s</string>
     <string name="charger_pause">Suspendre la charge</string>
     <string name="charger_start">Lancer la charge</string>
-    <string name="charger_power_24h">Puissance sur 24 h</string>
     <string name="charger_settings">Réglages</string>
     <string name="charger_auto_limit">La borne règle seule son courant</string>
     <string name="charger_auto_limit_hint">Selon sa pince de mesure (mode dynamique)</string>
@@ -494,4 +493,16 @@
     <string name="charger_amps">%1$d A</string>
     <string name="charger_locked">Verrouillée</string>
     <string name="ventilation_no_key">Sans la clé API Renson, la Healthbox ne donne que les débits : l’humidité, le CO₂ et la température de chaque pièce viennent avec la clé (Réglages › Modules, sur le web).</string>
+    <string name="period_1y">1 an</string>
+    <string name="period_5y">5 ans</string>
+    <string name="charger_power">Puissance de charge</string>
+    <string name="weather_clear">Ensoleillé</string>
+    <string name="weather_spells">Éclaircies</string>
+    <string name="weather_cloudy">Couvert</string>
+    <string name="weather_fog">Brouillard</string>
+    <string name="weather_drizzle">Bruine</string>
+    <string name="weather_rain">Pluie</string>
+    <string name="weather_snow">Neige</string>
+    <string name="weather_storm">Orage</string>
+    <string name="weather_max_min">%1$s · max %2$s · min %3$s</string>
 </resources>

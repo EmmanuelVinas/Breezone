@@ -432,3 +432,22 @@ pub async fn unlock(State(state): State<AppState>, _admin: AdminUser, Path(id): 
     }
     Ok(Json(KeyView { accepted }))
 }
+
+/// What a module's hardware says about itself, raw (the database of a HomeKit accessory…), with
+/// what Breezone reads of it: to understand how a model behaves. No secret is in it.
+pub async fn diagnostic(State(state): State<AppState>, _admin: AdminUser, Path(id): Path<i64>) -> ApiResult<Json<Value>> {
+    let source = db::source_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("source not found"))?;
+    let driver = state.drivers.driver(id).await.ok_or_else(|| ApiError::not_found("source not configured"))?;
+    let hardware = driver.diagnostic().await.map_err(driver_error)?;
+    let read = driver.read().await.map_err(driver_error)?;
+    let described = driver.describe().await.map_err(driver_error)?;
+    Ok(Json(serde_json::json!({
+        "breezone": env!("CARGO_PKG_VERSION"),
+        "driver": source.driver,
+        "model": described.model,
+        "firmware": described.firmware,
+        "devices": described.devices,
+        "states": read,
+        "hardware": hardware,
+    })))
+}

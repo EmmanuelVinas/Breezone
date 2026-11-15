@@ -14,6 +14,14 @@ import { cn } from "@/lib/utils"
 import { PageHeader } from "@/components/app-shell"
 import { RoomSelect } from "@/components/room-select"
 import { Sparkline } from "@/components/sparkline"
+import { PeriodPicker } from "@/components/period-picker"
+import type { HistoryPeriod } from "@/lib/periods"
+import {
+  bucketFor,
+  PERIOD_HOURS,
+  PERIOD_LABEL,
+  periodsFor,
+} from "@/lib/periods"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -110,12 +118,13 @@ function useCommand() {
   })
 }
 
-function useHistory(id: number) {
+function useHistory(id: number, period: HistoryPeriod = "24h") {
   return useQuery({
-    queryKey: ["device-history", id, 24],
-    queryFn: () => api.deviceHistory(id, 24, 96),
+    queryKey: ["device-history", id, period],
+    queryFn: () =>
+      api.deviceHistoryOver(id, PERIOD_HOURS[period], bucketFor(period)),
     staleTime: 60_000,
-  }).data?.series
+  })
 }
 
 function Bar({ value, className }: { value: number; className?: string }) {
@@ -175,7 +184,7 @@ function RoomCard({
   const s = roomState(device)
   const q = quality(s)
   const left = minutesLeft(s)
-  const flow = useHistory(device.id)?.flow ?? []
+  const flow = useHistory(device.id).data?.series.flow ?? []
   return (
     <Card
       className={cn(
@@ -298,7 +307,11 @@ function Detail({
   const s = roomState(device)
   const q = quality(s)
   const left = minutesLeft(s)
-  const history = useHistory(device.id)
+  const [period, setPeriod] = useState<HistoryPeriod>("24h")
+  const read = useHistory(device.id, period)
+  const history = read.data?.series
+  const periods = periodsFor(read.data?.oldest, read.dataUpdatedAt / 1000)
+  const curve = t("Courbe sur {period}", { period: PERIOD_LABEL[period] })
   const room = rooms.find((r) => r.id === device.room_id)
   const disabled = !canDrive || !device.available || command.isPending
   const sentence = s.boost
@@ -331,6 +344,7 @@ function Detail({
       </CardHeader>
       <CardContent className="grid gap-4">
         <p className="text-lg leading-snug font-semibold">{sentence}</p>
+        <PeriodPicker value={period} periods={periods} onChange={setPeriod} />
         <div className="grid gap-1.5 rounded-2xl bg-muted/50 p-3">
           <div className="flex justify-between text-sm">
             <span className="flex items-center gap-1.5 font-medium">
@@ -351,7 +365,7 @@ function Detail({
           <Sparkline
             points={history?.flow ?? []}
             className="h-16 text-fan"
-            label={t("Débit des dernières 24 h")}
+            label={curve}
           />
         </div>
         {typeof s.humidity === "number" && (
@@ -365,7 +379,7 @@ function Detail({
             <Sparkline
               points={history?.humidity ?? []}
               className="h-16 text-cool"
-              label={t("Humidité des dernières 24 h")}
+              label={curve}
             />
           </div>
         )}
@@ -462,7 +476,7 @@ function House({
 }) {
   const command = useCommand()
   const s = unitState(unit)
-  const flow = useHistory(unit.id)?.flow ?? []
+  const flow = useHistory(unit.id).data?.series.flow ?? []
   const nominal = rooms.reduce((n, d) => n + (roomState(d).nominal ?? 0), 0)
   const valves = rooms.reduce((n, d) => n + (roomState(d).flow ?? 0), 0)
   const level = nominal > 0 ? Math.round((valves / nominal) * 100) : null

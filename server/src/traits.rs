@@ -46,7 +46,19 @@ pub struct Field {
     pub max: Option<f64>,
     #[serde(default)]
     pub optional: bool,
+    /// Worth a history (a measure): false for a setting or a fixed value (`"history": false`),
+    /// which is then not written every few minutes.
+    #[serde(default = "yes", skip_serializing_if = "is_true")]
+    pub history: bool,
     pub label: Label,
+}
+
+fn yes() -> bool {
+    true
+}
+
+fn is_true(b: &bool) -> bool {
+    *b
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -90,6 +102,11 @@ pub fn catalog() -> &'static [Trait] {
 
 pub fn get(name: &str, version: u32) -> Option<&'static Trait> {
     catalog().iter().find(|t| t.name == name && t.version == version)
+}
+
+/// A field worth a history: a measure, not a setting or a fixed value of the hardware.
+pub fn keeps_history(field: &str) -> bool {
+    !catalog().iter().flat_map(|t| &t.state).any(|f| f.name == field && !f.history)
 }
 
 /// A field that counts up (an energy in kWh): its history keeps the last value, not the mean.
@@ -138,6 +155,16 @@ mod tests {
                     check_field(&format!("{}.{}", t.name, a.name), p);
                 }
             }
+        }
+    }
+
+    #[test]
+    fn measures_have_a_history_settings_do_not() {
+        for f in ["power", "energy_in", "position", "brightness", "flow", "humidity", "on"] {
+            assert!(keeps_history(f), "{f}");
+        }
+        for f in ["limit_min", "color_temp_max", "nominal", "target", "last_at"] {
+            assert!(!keeps_history(f), "{f}");
         }
     }
 
