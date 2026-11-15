@@ -46,7 +46,14 @@ export function zoneStates(readings: Reading[]): (ZoneState | null)[] {
     const recorded = next?.demand_secs ?? null
     const tooCold = r.room_temp < sp - MARGIN
     const tooHot = r.room_temp > sp + MARGIN
-    const demand = recorded !== null ? recorded > 0 : tooCold || tooHot
+    // Estimated: heating asks for heat only when the room is too cold, cooling only when it is
+    // too hot (a room warmer than its heating setpoint is not heated).
+    const estimated = HEATING.includes(mode)
+      ? tooCold
+      : mode === COOLING
+        ? tooHot
+        : tooCold || tooHot
+    const demand = recorded !== null ? recorded > 0 : estimated
     if (!demand) return "comfort"
     if (HEATING.includes(mode)) return "heating"
     if (mode === COOLING) return "cooling"

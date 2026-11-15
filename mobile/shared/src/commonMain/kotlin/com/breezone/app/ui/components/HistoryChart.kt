@@ -72,7 +72,15 @@ fun zoneStates(readings: List<Reading>): List<ZoneState?> = readings.mapIndexed 
     if (!heating && mode != 2 && mode != 7) return@mapIndexed null
     val setpoint = r.setpoint ?: temp
     val recorded = readings.getOrNull(i + 1)?.demandSecs
-    val demand = recorded?.let { it > 0 } ?: (temp < setpoint - STATE_MARGIN || temp > setpoint + STATE_MARGIN)
+    val tooCold = temp < setpoint - STATE_MARGIN
+    val tooHot = temp > setpoint + STATE_MARGIN
+    // Estimated: heating asks for heat only when the room is too cold, cooling only when too hot.
+    val estimated = when {
+        heating -> tooCold
+        mode == 2 -> tooHot
+        else -> tooCold || tooHot
+    }
+    val demand = recorded?.let { it > 0 } ?: estimated
     when {
         !demand -> ZoneState.Comfort
         heating -> ZoneState.Heating

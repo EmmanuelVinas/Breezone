@@ -362,12 +362,25 @@ export function ZoneHistory({ zone }: { zone: Zone }) {
               />
               <Brush
                 dataKey="ts"
-                height={24}
+                height={32}
                 travellerWidth={8}
                 stroke="var(--border)"
                 fill="var(--card)"
                 tickFormatter={tickFormat}
-              />
+              >
+                {/* An outline of the temperature, so that the zoom shows where it is. */}
+                <ComposedChart data={data}>
+                  <Line
+                    dataKey="room_temp"
+                    type="monotone"
+                    stroke="var(--color-room_temp)"
+                    strokeWidth={1}
+                    strokeOpacity={0.7}
+                    dot={false}
+                    isAnimationActive={false}
+                  />
+                </ComposedChart>
+              </Brush>
             </ComposedChart>
           </ChartContainer>
         )}

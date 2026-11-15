@@ -6,6 +6,14 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Zone history (web and app): without a recorded demand time, a zone heating while warmer than its
+  setpoint was drawn as « Chauffage ». Heating is now estimated only when the room is too cold,
+  cooling only when it is too hot.
+- Zone history (web): the zoom bar under the chart shows an outline of the temperature instead of
+  an empty strip.
+
 ### Changed
 
 - History goes back years and the database stays small: every hour, the detail of the devices
