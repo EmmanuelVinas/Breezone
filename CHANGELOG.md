@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.15] - 2026-11-15
+
 ### Fixed
 
 - Zone history (web and app): without a recorded demand time, a zone heating while warmer than its
