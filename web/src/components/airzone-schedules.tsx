@@ -18,6 +18,7 @@ import type {
   ZoneCommand,
 } from "@/lib/api"
 import { api } from "@/lib/api"
+import { useChosenInstallations } from "@/lib/selected-installation"
 import { DAY_LABEL, DAY_SHORT, MODE_LABEL, relativeTime } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Confirm } from "@/components/confirm"
@@ -195,7 +196,7 @@ function ScheduleEditor({
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-5">
-          {!schedule && (
+          {!schedule && linked.length > 1 && (
             <div className="grid gap-2">
               <Label>{t("Installation")}</Label>
               <Select
@@ -482,12 +483,19 @@ export function AirzoneSchedulesSection() {
     onSuccess: (r) => qc.setQueryData(["airzone-schedules"], r),
     onError: (e) => toast.error(errorText(e)),
   })
+  const { chosen } = useChosenInstallations()
   const st = data.data
-  const cloudInstallations = cloud.data?.installations ?? []
+  // The installation chosen only: its schedules, and new ones for it.
+  const cloudInstallations = (cloud.data?.installations ?? []).filter(
+    (c) => !chosen || c.installation_id === chosen.id
+  )
   if (!st || (!st.account && st.schedules.length === 0)) return null
+  const schedules = st.schedules.filter(
+    (s) => !chosen || s.installation_id === chosen.id
+  )
 
   const groups = new Map<string, AirzoneSchedule[]>()
-  for (const s of st.schedules) {
+  for (const s of schedules) {
     groups.set(s.installation, [...(groups.get(s.installation) ?? []), s])
   }
 
@@ -554,7 +562,7 @@ export function AirzoneSchedulesSection() {
           </div>
         )
       })}
-      {st.schedules.length === 0 && (
+      {schedules.length === 0 && (
         <p className="rounded-3xl border border-dashed p-6 text-center text-sm text-muted-foreground">
           {t("Aucune programmation dans l'application Airzone.")}
         </p>

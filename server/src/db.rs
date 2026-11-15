@@ -1268,6 +1268,8 @@ pub struct Room {
     pub name: String,
     pub position: i64,
     pub created_at: i64,
+    /// Chosen by hand (a Lucide name, "sofa"); none: the clients guess it from the name.
+    pub icon: Option<String>,
 }
 
 pub async fn list_rooms(db: &Db) -> sqlx::Result<Vec<Room>> {
@@ -1285,6 +1287,12 @@ pub async fn insert_room(db: &Db, name: &str, position: i64) -> sqlx::Result<Roo
 
 pub async fn update_room(db: &Db, id: i64, name: &str, position: i64) -> sqlx::Result<bool> {
     Ok(sqlx::query("UPDATE rooms SET name = ?, position = ? WHERE id = ?").bind(name).bind(position).bind(id).execute(db).await?.rows_affected() > 0)
+}
+
+/// Sets the icon of a room (`None`: guessed from its name again).
+pub async fn set_room_icon(db: &Db, id: i64, icon: Option<&str>) -> sqlx::Result<()> {
+    sqlx::query("UPDATE rooms SET icon = ? WHERE id = ?").bind(icon).bind(id).execute(db).await?;
+    Ok(())
 }
 
 /// The devices of the room stay, without a room.

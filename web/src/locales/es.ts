@@ -1231,6 +1231,8 @@ const es: Record<string, string> = {
   Pays: "País",
   "Pour la météo et le soleil. Ajoutez le département ou la région s'il y a plusieurs villes du même nom. Vide : celle du compte Airzone.":
     "Para el tiempo y el sol. Añada la provincia o la región si varias ciudades tienen el mismo nombre. Vacío: la de la cuenta Airzone.",
+  "Icône de « {name} »": "Icono de «{name}»",
+  "Deviner d'après le nom": "Adivinar por el nombre",
 }
 
 export default es

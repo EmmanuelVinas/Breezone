@@ -258,6 +258,19 @@ pub struct RoomInput {
     pub name: String,
     #[serde(default)]
     pub position: i64,
+    /// A Lucide name ("sofa"); empty: guessed from the name again. Unchanged when absent.
+    #[serde(default)]
+    pub icon: Option<String>,
+}
+
+/// The icon given, checked: `Some(None)` clears it.
+fn room_icon(input: &RoomInput) -> ApiResult<Option<Option<&str>>> {
+    match input.icon.as_deref().map(str::trim) {
+        None => Ok(None),
+        Some("") => Ok(Some(None)),
+        Some(i) if i.len() <= 40 && i.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-') => Ok(Some(Some(i))),
+        Some(_) => Err(ApiError::bad_request("icon: a Lucide name expected")),
+    }
 }
 
 fn room_name(input: &RoomInput) -> ApiResult<String> {
@@ -269,13 +282,22 @@ fn room_name(input: &RoomInput) -> ApiResult<String> {
 }
 
 pub async fn create_room(State(state): State<AppState>, _admin: AdminUser, Json(input): Json<RoomInput>) -> ApiResult<(StatusCode, Json<Room>)> {
+    let icon = room_icon(&input)?;
     let room = db::insert_room(&state.db, &room_name(&input)?, input.position).await?;
+    if let Some(icon) = icon {
+        db::set_room_icon(&state.db, room.id, icon).await?;
+    }
+    let room = db::room_by_id(&state.db, room.id).await?.unwrap_or(room);
     Ok((StatusCode::CREATED, Json(room)))
 }
 
 pub async fn update_room(State(state): State<AppState>, _admin: AdminUser, Path(id): Path<i64>, Json(input): Json<RoomInput>) -> ApiResult<Json<Room>> {
+    let icon = room_icon(&input)?;
     if !db::update_room(&state.db, id, &room_name(&input)?, input.position).await? {
         return Err(ApiError::not_found("room not found"));
+    }
+    if let Some(icon) = icon {
+        db::set_room_icon(&state.db, id, icon).await?;
     }
     db::room_by_id(&state.db, id).await?.map(Json).ok_or_else(|| ApiError::not_found("room not found"))
 }

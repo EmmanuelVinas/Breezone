@@ -8,10 +8,18 @@ All notable changes are documented here. The format follows
 
 ### Added
 
+- Settings › Rooms: each room has an icon, guessed from its name (sofa for the living room, bed for a
+  bedroom, bath, kitchen, garden…) or chosen among 24; shown on the Lights and Shutters pages too.
+
 - The city and country of an installation can be edited (Settings › Installations › an
   installation): the weather and the sun follow them at once, and the Airzone account no longer
   replaces a city set by hand (emptied, it goes back to the account's). The country helps to find
   the right city among those of the same name.
+
+### Changed
+
+- Programmations and Routines follow the installation chosen: its Airzone schedules (new ones for
+  it), its scenes, its timers and its Airzone routines only, no longer those of every installation.
 
 ## [0.11.0-beta.16] - 2026-11-15
 

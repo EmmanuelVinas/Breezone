@@ -66,3 +66,16 @@ export function useModulesHere() {
   const chosen = useChosenInstallation()
   return !(chosen?.access === "node" && list?.some((x) => x.access === "local"))
 }
+
+/**
+ * The installations a page of automations works on: the one chosen (its schedules, scenes and
+ * timers only), or all of them before any is chosen.
+ */
+export function useChosenInstallations() {
+  const list =
+    useQuery({ queryKey: ["status"], queryFn: api.status, staleTime: 60_000 })
+      .data ?? []
+  const chosen = useChosenInstallation()
+  const shown = chosen ? list.filter((i) => i.id === chosen.id) : list
+  return { chosen, installations: shown, ids: new Set(shown.map((i) => i.id)) }
+}

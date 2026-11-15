@@ -8,6 +8,7 @@ import { useSelectedInstallationId } from "@/lib/selected-installation"
 import { t, tn } from "@/lib/i18n"
 import { Confirm } from "@/components/confirm"
 import { RoomSelect } from "@/components/room-select"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -18,6 +19,13 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { ROOM_ICONS, roomIconName } from "@/lib/room-icons"
 import { Switch } from "@/components/ui/switch"
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
@@ -58,6 +66,14 @@ function RoomRow({
     onSuccess: refresh,
     onError: (e) => toast.error(errorText(e)),
   })
+  const setIcon = useMutation({
+    mutationFn: (icon: string) =>
+      api.updateRoom(room.id, { name: room.name, position: index, icon }),
+    onSuccess: refresh,
+    onError: (e) => toast.error(errorText(e)),
+  })
+  const shownIcon = setIcon.isPending ? setIcon.variables : roomIconName(room)
+  const Icon = ROOM_ICONS[shownIcon || "house"] ?? ROOM_ICONS.house
   const remove = useMutation({
     mutationFn: () => api.deleteRoom(room.id),
     onSuccess: () => {
@@ -68,7 +84,48 @@ function RoomRow({
   })
   return (
     <div className="flex items-center gap-2 rounded-2xl border p-2 pl-3">
-      <House className="size-4 shrink-0 text-muted-foreground" />
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8 shrink-0 text-muted-foreground"
+            aria-label={t("Icône de « {name} »", { name: room.name })}
+          >
+            {setIcon.isPending ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <Icon />
+            )}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="start"
+          className="grid w-64 grid-cols-6 gap-1 p-2"
+        >
+          {Object.entries(ROOM_ICONS).map(([name, I]) => (
+            <DropdownMenuItem
+              key={name}
+              className={cn(
+                "justify-center p-2",
+                name === shownIcon && "bg-primary/15 text-primary"
+              )}
+              aria-label={name}
+              onSelect={() => setIcon.mutate(name)}
+            >
+              <I className="size-5" />
+            </DropdownMenuItem>
+          ))}
+          {room.icon && (
+            <DropdownMenuItem
+              className="col-span-6 justify-center text-xs text-muted-foreground"
+              onSelect={() => setIcon.mutate("")}
+            >
+              {t("Deviner d'après le nom")}
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
       <Input
         value={draft ?? room.name}
         maxLength={60}

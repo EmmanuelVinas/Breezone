@@ -1221,6 +1221,8 @@ const en: Record<string, string> = {
   Pays: "Country",
   "Pour la météo et le soleil. Ajoutez le département ou la région s'il y a plusieurs villes du même nom. Vide : celle du compte Airzone.":
     "For the weather and the sun. Add the county or region if several cities have the same name. Empty: the one of the Airzone account.",
+  "Icône de « {name} »": "Icon of “{name}”",
+  "Deviner d'après le nom": "Guess from the name",
 }
 
 export default en

@@ -785,6 +785,8 @@ export type Room = {
   name: string
   position: number
   created_at: number
+  /** Chosen by hand (a Lucide name); null: guessed from the name. */
+  icon: string | null
 }
 
 export type DriverInfo = {
@@ -943,8 +945,11 @@ export const api = {
   rooms: () => request<Room[]>("GET", "/api/rooms"),
   createRoom: (input: { name: string; position: number }) =>
     request<Room>("POST", "/api/rooms", input),
-  updateRoom: (id: number, input: { name: string; position: number }) =>
-    request<Room>("PUT", `/api/rooms/${id}`, input),
+  /** `icon` left out: unchanged; empty: guessed from the name again. */
+  updateRoom: (
+    id: number,
+    input: { name: string; position: number; icon?: string }
+  ) => request<Room>("PUT", `/api/rooms/${id}`, input),
   deleteRoom: (id: number) => request<void>("DELETE", `/api/rooms/${id}`),
   drivers: () => request<DriverInfo[]>("GET", "/api/drivers"),
   sources: () => request<SourceView[]>("GET", "/api/sources"),

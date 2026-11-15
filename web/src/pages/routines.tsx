@@ -12,6 +12,7 @@ import type {
 import { api } from "@/lib/api"
 import { MODE_LABEL, relativeTime } from "@/lib/format"
 import { PageHeader } from "@/components/app-shell"
+import { useChosenInstallations } from "@/lib/selected-installation"
 import { AirzoneSchedulesSection } from "@/components/airzone-schedules"
 import { AirzoneRoutinesSection, TimersSection } from "@/components/timers"
 import { Button } from "@/components/ui/button"
@@ -227,9 +228,9 @@ function RoutineEditor({
   onOpenChange: (o: boolean) => void
 }) {
   const qc = useQueryClient()
-  const status = useQuery({ queryKey: ["status"], queryFn: api.status })
+  const { installations } = useChosenInstallations()
   const options = zoneOptions(
-    (status.data ?? []).filter((i) => i.controllable && i.rights.routines)
+    installations.filter((i) => i.controllable && i.rights.routines)
   )
   const [draft, setDraft] = useState<Draft>(() => toDraft(routine))
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }))
@@ -507,11 +508,11 @@ function BreezoneRoutines({
   empty: string
 }) {
   const routines = useQuery({ queryKey: ["routines"], queryFn: api.routines })
-  const status = useQuery({ queryKey: ["status"], queryFn: api.status })
-  const options = zoneOptions(status.data ?? [])
+  const { installations, ids } = useChosenInstallations()
+  const options = zoneOptions(installations)
   // Installations whose routines this user may change.
   const editable = new Set(
-    (status.data ?? [])
+    installations
       .filter((i) => i.controllable && i.rights.routines)
       .map((i) => i.id)
   )
@@ -521,7 +522,12 @@ function BreezoneRoutines({
     routine?: Routine
     nonce: number
   } | null>(null)
-  const list = routines.data ?? []
+  // The scenes of the installation chosen (those that act on it).
+  const list = (routines.data ?? []).filter(
+    (r) =>
+      r.actions.length === 0 ||
+      r.actions.some((a) => ids.has(a.installation_id))
+  )
   return (
     <section className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">

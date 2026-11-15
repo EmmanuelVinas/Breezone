@@ -4,6 +4,7 @@ import { Cloud, Hourglass, Plus, X } from "lucide-react"
 import { toast } from "sonner"
 import type { Installation, Mode, TimerTarget, ZoneCommand } from "@/lib/api"
 import { api } from "@/lib/api"
+import { useChosenInstallations } from "@/lib/selected-installation"
 import { MODE_LABEL } from "@/lib/format"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -154,8 +155,8 @@ export function TimersSection() {
     queryFn: api.timers,
     refetchInterval: 30_000,
   })
-  const status = useQuery({ queryKey: ["status"], queryFn: api.status })
-  const options = targets(status.data ?? [])
+  const { installations, ids } = useChosenInstallations()
+  const options = targets(installations)
   const [delay, setDelay] = useState("120")
   const [targetKey, setTargetKey] = useState("")
   const [action, setAction] = useState<"off" | "on" | "setpoint" | "mode">(
@@ -298,15 +299,21 @@ export function TimersSection() {
           </Button>
         </CardContent>
       </Card>
-      {(timers.data ?? []).map((timer) => (
-        <TimerRow
-          key={timer.id}
-          id={timer.id}
-          label={timer.label}
-          runAt={timer.run_at}
-          by={timer.created_by}
-        />
-      ))}
+      {(timers.data ?? [])
+        // The timers of the installation chosen (and those on every installation).
+        .filter(
+          (timer) =>
+            timer.target.kind === "all" || ids.has(timer.target.installation_id)
+        )
+        .map((timer) => (
+          <TimerRow
+            key={timer.id}
+            id={timer.id}
+            label={timer.label}
+            runAt={timer.run_at}
+            by={timer.created_by}
+          />
+        ))}
     </section>
   )
 }
@@ -317,7 +324,10 @@ export function AirzoneRoutinesSection() {
     queryKey: ["airzone-routines"],
     queryFn: api.airzoneRoutines,
   })
-  const list = routines.data ?? []
+  const { chosen } = useChosenInstallations()
+  const list = (routines.data ?? []).filter(
+    (r) => !chosen || r.installation === chosen.name
+  )
   if (!list.length) return null
   return (
     <section className="grid gap-3">

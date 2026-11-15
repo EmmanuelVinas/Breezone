@@ -8,6 +8,7 @@ import { api, currentUser } from "@/lib/api"
 import { t, tn } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { PageHeader } from "@/components/app-shell"
+import { RoomTitle } from "@/components/room-title"
 import { Level } from "@/components/level"
 import { Button } from "@/components/ui/button"
 import {
@@ -520,9 +521,7 @@ export function LightsPage() {
                 <section key={g.room?.id ?? "none"} className="grid gap-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-baseline gap-2">
-                      <h2 className="font-heading text-lg font-semibold">
-                        {g.room?.name ?? t("Sans pièce")}
-                      </h2>
+                      <RoomTitle room={g.room} />
                       <span className="text-sm text-muted-foreground">
                         {tn(on.length, "{n} allumée", "{n} allumées")} /{" "}
                         {g.lights.length}

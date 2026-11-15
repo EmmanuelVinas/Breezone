@@ -31,6 +31,7 @@ const APPLIED: &[(&str, &str)] = &[
     ("0024_zone_daily.sql", "45f3dd70b866812cc24a259440eeea1f76b1bb66cea571365452a77973f35c6c"),
     ("0025_outdoor_samples.sql", "93c7627255b9e28f0c43c65514a30f21be238f8c157a65b9f8eec64229013348"),
     ("0026_installation_place.sql", "43720e691176822cb6f0b77f524015b9d701fb0957fc703f5b45b20f1e4b2e03"),
+    ("0027_room_icons.sql", "2b8579f3e153fce3b0e1bfe6bacace45e68ab5d5f5108653460a4411ce091c77"),
 ];
 
 #[test]

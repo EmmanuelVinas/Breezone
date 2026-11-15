@@ -449,6 +449,17 @@ async fn zones_are_devices_in_rooms() {
     assert_eq!(room["name"], "Salon");
     let (s, _) = env.call("POST", "/api/rooms", t, Some(json!({"name":" "}))).await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
+    // Its icon: chosen, kept when not given, cleared when empty.
+    assert_eq!(room["icon"], Value::Null, "guessed by the clients");
+    let room_path = format!("/api/rooms/{}", room["id"]);
+    let (s, r) = env.call("PUT", &room_path, t, Some(json!({"name":"Salon","icon":"sofa"}))).await;
+    assert_eq!((s, r["icon"].clone()), (StatusCode::OK, json!("sofa")));
+    let (_, r) = env.call("PUT", &room_path, t, Some(json!({"name":"Salon"}))).await;
+    assert_eq!(r["icon"], "sofa");
+    let (s, _) = env.call("PUT", &room_path, t, Some(json!({"name":"Salon","icon":"<svg>"}))).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+    let (_, r) = env.call("PUT", &room_path, t, Some(json!({"name":"Salon","icon":""}))).await;
+    assert_eq!(r["icon"], Value::Null);
     let id = salon["id"].as_i64().unwrap();
     let (s, d) = env.call("PUT", &format!("/api/devices/{id}"), t, Some(json!({"name":"Séjour","room_id": room["id"]}))).await;
     assert_eq!(s, StatusCode::OK, "{d}");
