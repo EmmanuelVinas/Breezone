@@ -129,6 +129,18 @@ async fn full_flow() {
     assert_eq!(bureau["is_master"], false);
     assert_eq!(bureau["modes"].as_array().unwrap().len(), 5, "slave zones expose the system modes");
 
+    // --- City and country, set by hand ----------------------------------------------------
+    let path = format!("/api/installations/{inst}");
+    let (s, _) = env.call("PUT", &path, Some(&token), Some(json!({"name":"Maison","host":"127.0.0.1","port":env.mock_port,"country":"France"}))).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST, "a two-letter code");
+    let (s, v) =
+        env.call("PUT", &path, Some(&token), Some(json!({"name":"Maison","host":"127.0.0.1","port":env.mock_port,"location":"Labège, Haute-Garonne","country":"fr"}))).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    assert_eq!((v["location"].clone(), v["country"].clone()), (json!("Labège, Haute-Garonne"), json!("FR")));
+    // Not given: unchanged.
+    let (_, v) = env.call("PUT", &path, Some(&token), Some(json!({"name":"Maison","host":"127.0.0.1","port":env.mock_port}))).await;
+    assert_eq!(v["location"], "Labège, Haute-Garonne");
+
     // --- WebSocket: auth, hello, snapshot, live update -----------------------------------
     let ws_url = env.base.replace("http://", "ws://") + "/api/ws";
     let (mut ws, _) = tokio_tungstenite::connect_async(ws_url.as_str()).await.unwrap();

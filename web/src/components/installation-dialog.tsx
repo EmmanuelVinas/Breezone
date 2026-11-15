@@ -4,7 +4,7 @@ import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import type { InstallationConfig } from "@/lib/api"
 import { api } from "@/lib/api"
-import { t } from "@/lib/i18n"
+import { locale, t } from "@/lib/i18n"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {
@@ -17,6 +17,13 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
@@ -27,6 +34,38 @@ type InstallationForm = {
   port: string
   enabled: boolean
   record_demand: boolean
+  location: string
+  country: string
+}
+
+/** Countries offered for the weather (the others can be added on request). */
+const COUNTRIES = [
+  "FR",
+  "BE",
+  "CH",
+  "LU",
+  "MC",
+  "ES",
+  "AD",
+  "PT",
+  "IT",
+  "DE",
+  "AT",
+  "NL",
+  "GB",
+  "IE",
+  "MA",
+  "CA",
+]
+
+const countryName = (code: string) => {
+  try {
+    return (
+      new Intl.DisplayNames([locale()], { type: "region" }).of(code) ?? code
+    )
+  } catch {
+    return code
+  }
 }
 
 /** Adds or edits an installation reached directly by this server (or renames a shared one). */
@@ -45,6 +84,8 @@ export function InstallationDialog({
     port: String(initial?.port ?? 3000),
     enabled: editing?.enabled ?? true,
     record_demand: editing?.record_demand ?? false,
+    location: editing?.location ?? "",
+    country: editing?.country ?? "FR",
   })
   // Set on the server that owns the installation: a shared one follows it.
   const owned = !editing || editing.node_id === null
@@ -74,7 +115,11 @@ export function InstallationDialog({
         host: form.host,
         port: Number(form.port),
         enabled: form.enabled,
-        ...(owned && { record_demand: form.record_demand }),
+        ...(owned && {
+          record_demand: form.record_demand,
+          location: form.location.trim(),
+          country: form.country,
+        }),
       }
       return editing
         ? api.updateInstallation(editing.id, data)
@@ -86,6 +131,7 @@ export function InstallationDialog({
       )
       qc.invalidateQueries({ queryKey: ["installations"] })
       qc.invalidateQueries({ queryKey: ["status"] })
+      qc.invalidateQueries({ queryKey: ["weather"] })
       onClose()
     },
     onError: (e) => toast.error(errorText(e)),
@@ -136,6 +182,43 @@ export function InstallationDialog({
               />
             </div>
           </div>
+          {owned && (
+            <div className="grid grid-cols-[1fr_10rem] gap-3">
+              <div className="grid gap-2">
+                <Label htmlFor="iv">{t("Ville")}</Label>
+                <Input
+                  id="iv"
+                  value={form.location}
+                  maxLength={120}
+                  placeholder={t("Labège, Haute-Garonne")}
+                  onChange={(e) => set({ location: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>{t("Pays")}</Label>
+                <Select
+                  value={form.country}
+                  onValueChange={(country) => set({ country })}
+                >
+                  <SelectTrigger className="w-full" aria-label={t("Pays")}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {COUNTRIES.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {countryName(c)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="col-span-2 -mt-1 text-xs text-muted-foreground">
+                {t(
+                  "Pour la météo et le soleil. Ajoutez le département ou la région s'il y a plusieurs villes du même nom. Vide : celle du compte Airzone."
+                )}
+              </p>
+            </div>
+          )}
           <label className="flex items-center gap-3 text-sm">
             <Switch
               checked={form.enabled}

@@ -99,9 +99,9 @@ de l'utilisateur ; les clients relisent alors `/api/me`.
 | GET 🔒 | `/api/status` | État complet : `[Installation]` |
 | GET 🔒 | `/api/installations/{id}` | Une `Installation` |
 | POST 🔒 | `/api/installations/{id}/refresh` | Interroge immédiatement le WebServer |
-| GET 🔒 | `/api/installations` | Configuration (`host`, `port`, `mac`, `location`, `enabled`, `cloud_id`, `node_id`, `remote_id`, `record_demand`) |
-| POST 👑 | `/api/installations` | `{name, host, port?=3000, enabled?=true, record_demand?=false}` |
-| PUT 🛠 | `/api/installations/{id}` | Idem, `record_demand` inchangé s'il est absent (installation via un nœud : seuls `name` et `enabled` changent) |
+| GET 🔒 | `/api/installations` | Configuration (`host`, `port`, `mac`, `location`, `country`, `location_set`, `enabled`, `cloud_id`, `node_id`, `remote_id`, `record_demand`) |
+| POST 👑 | `/api/installations` | `{name, host, port?=3000, enabled?=true, record_demand?=false, location?, country?}` : `location` la ville (« Labège, Haute-Garonne »), `country` son code ISO à deux lettres ; une ville saisie n'est plus remplacée par celle du compte Airzone (vide : retour à celle du compte). La météo de la maison s'en sert |
+| PUT 🛠 | `/api/installations/{id}` | Idem, `record_demand`, `location` et `country` inchangés s'ils sont absents (installation via un nœud : seuls `name` et `enabled` changent) |
 | PUT 🛠 | `/api/installations/{id}/cloud` | `{cloud_id: string\|null}` : installation du compte Airzone à laquelle elle correspond (refusé si la MAC du WebServer prouve le contraire) → `Installation` |
 | DELETE 🛠 | `/api/installations/{id}` | Supprime (historique et réglages Breezone compris) |
 | POST 🛠 | `/api/installations/test` | `{host, port}` → `{ok, zones, webserver}` ou `{ok:false, error}` |

@@ -132,21 +132,24 @@ impl Weather {
         Self { db, tz, http, last: RwLock::new(None) }
     }
 
-    /// The city of the home: set in the settings, else that of its first installation.
-    async fn place(&self) -> sqlx::Result<Option<String>> {
+    /// The city of the home and its country: set in the settings, else those of its first
+    /// installation (its city as set by hand or read from the Airzone account).
+    async fn place(&self) -> sqlx::Result<Option<(String, Option<String>)>> {
         if let Some(p) = db::get_setting(&self.db, PLACE).await?.filter(|p| !p.trim().is_empty()) {
-            return Ok(Some(p));
+            return Ok(Some((p, None)));
         }
-        sqlx::query_scalar("SELECT location FROM installations WHERE node_id IS NULL AND location IS NOT NULL AND location <> '' ORDER BY id LIMIT 1")
+        sqlx::query_as("SELECT location, country FROM installations WHERE node_id IS NULL AND location IS NOT NULL AND location <> '' ORDER BY id LIMIT 1")
             .fetch_optional(&self.db)
             .await
     }
 
-    /// The coordinates of `place`, asked once to Open-Meteo's geocoding and kept.
-    async fn coords(&self, place: &str) -> Option<(f64, f64)> {
+    /// The coordinates of `place` (in `country` when known), asked once to Open-Meteo's geocoding
+    /// and kept.
+    async fn coords(&self, place: &str, country: Option<&str>) -> Option<(f64, f64)> {
+        let key = format!("{place}#{}", country.unwrap_or(""));
         if let Ok(Some(kept)) = db::get_setting(&self.db, COORDS).await {
             if let Some((p, lat, lon)) = kept.split_once('|').and_then(|(p, rest)| rest.split_once('|').map(|(a, b)| (p, a, b))) {
-                if p == place {
+                if p == key {
                     return Some((lat.parse().ok()?, lon.parse().ok()?));
                 }
             }
@@ -157,6 +160,8 @@ impl Weather {
             .http
             .get("https://geocoding-api.open-meteo.com/v1/search")
             .query(&[("name", city), ("count", "10"), ("language", "fr"), ("format", "json")])
+            // An empty country code finds nothing: only when known.
+            .query(&country.map(|c| vec![("countryCode", c)]).unwrap_or_default())
             .send()
             .await
             .ok()?
@@ -167,14 +172,14 @@ impl Weather {
         let best =
             results.iter().find(|r| !region.is_empty() && r["admin2"].as_str().or(r["admin1"].as_str()).is_some_and(|a| a.eq_ignore_ascii_case(region))).or(results.first())?;
         let (lat, lon) = (best["latitude"].as_f64()?, best["longitude"].as_f64()?);
-        let _ = db::set_setting(&self.db, COORDS, &format!("{place}|{lat}|{lon}")).await;
+        let _ = db::set_setting(&self.db, COORDS, &format!("{key}|{lat}|{lon}")).await;
         Some((lat, lon))
     }
 
     /// Reads the weather now; keeps the outdoor temperature.
     pub async fn refresh(&self) -> Option<Report> {
-        let place = self.place().await.ok()??;
-        let (lat, lon) = self.coords(&place).await?;
+        let (place, country) = self.place().await.ok()??;
+        let (lat, lon) = self.coords(&place, country.as_deref()).await?;
         let data: Value = self
             .http
             .get("https://api.open-meteo.com/v1/forecast")
@@ -209,7 +214,7 @@ impl Weather {
         let weather = self.last.read().await.clone();
         let today = chrono::Utc::now().with_timezone(&self.tz).date_naive();
         let sun = match self.place().await.ok().flatten() {
-            Some(place) => self.coords(&place).await.map(|(lat, lon)| sun(today, lat, lon)),
+            Some((place, country)) => self.coords(&place, country.as_deref()).await.map(|(lat, lon)| sun(today, lat, lon)),
             None => None,
         };
         View { weather, sun }

@@ -257,8 +257,12 @@ pub struct Installation {
     pub port: i64,
     pub enabled: bool,
     pub created_at: i64,
-    /// City / location (from Airzone Cloud), shown in "Mes installations".
+    /// City / location (from Airzone Cloud, or set by hand), shown in "Mes installations".
     pub location: Option<String>,
+    /// Country (ISO 3166-1 alpha-2), set by hand.
+    pub country: Option<String>,
+    /// The city was set by hand: the Airzone account no longer overwrites it.
+    pub location_set: bool,
     /// WebServer MAC address, used to match Airzone Cloud installations.
     pub mac: Option<String>,
     /// Airzone Cloud installation this installation was matched to.
@@ -359,8 +363,22 @@ pub async fn set_installation_record_demand(db: &Db, id: i64, record: bool) -> s
     Ok(())
 }
 
+/// The city and country of an installation, set by hand (an empty city goes back to the account's).
+pub async fn set_installation_place(db: &Db, id: i64, location: Option<&str>, country: Option<&str>) -> sqlx::Result<()> {
+    let location = location.map(str::trim).filter(|l| !l.is_empty());
+    sqlx::query("UPDATE installations SET location = ?, location_set = ?, country = ? WHERE id = ?")
+        .bind(location)
+        .bind(location.is_some())
+        .bind(country.map(str::trim).filter(|c| !c.is_empty()).map(str::to_ascii_uppercase))
+        .bind(id)
+        .execute(db)
+        .await?;
+    Ok(())
+}
+
+/// The city from the Airzone account: kept only when not set by hand.
 pub async fn set_installation_location(db: &Db, id: i64, location: Option<&str>) -> sqlx::Result<()> {
-    sqlx::query("UPDATE installations SET location = ? WHERE id = ?").bind(location).bind(id).execute(db).await?;
+    sqlx::query("UPDATE installations SET location = ? WHERE id = ? AND location_set = 0").bind(location).bind(id).execute(db).await?;
     Ok(())
 }
 

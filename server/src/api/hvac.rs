@@ -53,6 +53,35 @@ pub struct InstallationInput {
     /// Unchanged when absent.
     #[serde(default)]
     pub record_demand: Option<bool>,
+    /// City ("Labège, Haute-Garonne"): set by hand; empty goes back to the Airzone account's.
+    /// Unchanged when absent.
+    #[serde(default)]
+    pub location: Option<String>,
+    /// Country (ISO 3166-1 alpha-2, "FR"). Unchanged when absent.
+    #[serde(default)]
+    pub country: Option<String>,
+}
+
+/// Checks the city and the country of an installation.
+fn validate_place(i: &InstallationInput) -> ApiResult<()> {
+    if i.location.as_deref().is_some_and(|l| l.chars().count() > 120) {
+        return Err(ApiError::bad_request("location must be at most 120 characters"));
+    }
+    if i.country.as_deref().map(str::trim).is_some_and(|c| !c.is_empty() && (c.len() != 2 || !c.chars().all(|c| c.is_ascii_alphabetic()))) {
+        return Err(ApiError::bad_request("country: a two-letter ISO code expected"));
+    }
+    Ok(())
+}
+
+/// Saves the city and the country given (both, or none of them).
+async fn save_place(state: &AppState, id: i64, req: &InstallationInput, current: Option<&db::Installation>) -> ApiResult<()> {
+    if req.location.is_none() && req.country.is_none() {
+        return Ok(());
+    }
+    let location = req.location.as_deref().or(current.and_then(|c| c.location.as_deref()));
+    let country = req.country.as_deref().or(current.and_then(|c| c.country.as_deref()));
+    db::set_installation_place(&state.db, id, location, country).await?;
+    Ok(())
 }
 
 fn default_port() -> i64 {
@@ -84,7 +113,9 @@ pub async fn create_installation(
     Json(req): Json<InstallationInput>,
 ) -> ApiResult<(StatusCode, Json<InstallationView>)> {
     let (name, host) = validate_installation(&req)?;
+    validate_place(&req)?;
     let inst = db::insert_installation(&state.db, &name, &host, req.port, req.enabled).await?;
+    save_place(&state, inst.id, &req, None).await?;
     if let Some(record) = req.record_demand {
         db::set_installation_record_demand(&state.db, inst.id, record).await?;
     }
@@ -124,7 +155,16 @@ pub async fn update_installation(State(state): State<AppState>, admin: AuthUser,
         }
         (name, current.host.clone(), current.port)
     };
+    validate_place(&req)?;
     db::update_installation(&state.db, id, &name, &host, port, req.enabled).await?;
+    if current.is_local() {
+        save_place(&state, id, &req, Some(&current)).await?;
+        if req.location.is_some() || req.country.is_some() {
+            // The weather follows the new place at once.
+            let weather = state.weather.clone();
+            tokio::spawn(async move { weather.refresh().await });
+        }
+    }
     // A shared installation records the demand time if the server that owns it does.
     if let Some(record) = req.record_demand.filter(|_| current.is_local()) {
         db::set_installation_record_demand(&state.db, id, record).await?;

@@ -6,6 +6,13 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- The city and country of an installation can be edited (Settings › Installations › an
+  installation): the weather and the sun follow them at once, and the Airzone account no longer
+  replaces a city set by hand (emptied, it goes back to the account's). The country helps to find
+  the right city among those of the same name.
+
 ## [0.11.0-beta.16] - 2026-11-15
 
 ### Added

@@ -111,6 +111,10 @@ export type InstallationInput = {
   enabled: boolean
   /** Left out: unchanged. */
   record_demand?: boolean
+  /** City ("Labège, Haute-Garonne"); empty: back to the Airzone account's. Left out: unchanged. */
+  location?: string
+  /** ISO 3166-1 alpha-2 ("FR"). Left out: unchanged. */
+  country?: string
 }
 
 export type InstallationConfig = {
@@ -121,6 +125,10 @@ export type InstallationConfig = {
   enabled: boolean
   created_at: number
   location: string | null
+  /** ISO 3166-1 alpha-2, set by hand. */
+  country: string | null
+  /** The city was set by hand: the Airzone account no longer changes it. */
+  location_set: boolean
   mac: string | null
   cloud_id: string | null
   node_id: number | null

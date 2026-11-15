@@ -30,6 +30,7 @@ const APPLIED: &[(&str, &str)] = &[
     ("0023_history_rollups.sql", "2ca9523c6c660c77eb9c3e0d1e23e1a863d6dde00e887a4fc9a30bd7957e274e"),
     ("0024_zone_daily.sql", "45f3dd70b866812cc24a259440eeea1f76b1bb66cea571365452a77973f35c6c"),
     ("0025_outdoor_samples.sql", "93c7627255b9e28f0c43c65514a30f21be238f8c157a65b9f8eec64229013348"),
+    ("0026_installation_place.sql", "43720e691176822cb6f0b77f524015b9d701fb0957fc703f5b45b20f1e4b2e03"),
 ];
 
 #[test]

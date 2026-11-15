@@ -102,6 +102,9 @@ pub struct InstallationView {
     pub id: i64,
     pub name: String,
     pub location: Option<String>,
+    /// Country (ISO 3166-1 alpha-2), set by hand.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub country: Option<String>,
     pub host: String,
     pub port: i64,
     pub enabled: bool,
@@ -462,6 +465,7 @@ impl InstState {
             id: self.inst.id,
             name: self.inst.name.clone(),
             location: self.inst.location.clone(),
+            country: self.inst.country.clone(),
             host: self.inst.host.clone(),
             port: self.inst.port,
             enabled: self.inst.enabled,
@@ -1760,6 +1764,8 @@ mod tests {
             enabled: true,
             created_at: 0,
             location: None,
+            country: None,
+            location_set: false,
             mac: None,
             cloud_id: None,
             node_id: None,

@@ -1216,6 +1216,11 @@ const en: Record<string, string> = {
   "Ce que le matériel dit de lui-même, pour comprendre un comportement : sans aucun secret":
     "What the hardware says about itself, to understand a behaviour: without any secret",
   Diagnostic: "Diagnostic",
+  Ville: "City",
+  "Labège, Haute-Garonne": "Labège, Haute-Garonne",
+  Pays: "Country",
+  "Pour la météo et le soleil. Ajoutez le département ou la région s'il y a plusieurs villes du même nom. Vide : celle du compte Airzone.":
+    "For the weather and the sun. Add the county or region if several cities have the same name. Empty: the one of the Airzone account.",
 }
 
 export default en
