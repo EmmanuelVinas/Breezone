@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.13] - 2026-11-15
+
 ### Added
 
 - Ventilation: the Renson Healthbox 3.0, through its local API (no Renson account), found by the
