@@ -939,6 +939,8 @@ export type AutomationMeasure =
         | "rain_next_hour"
         | "tomorrow_min"
         | "tomorrow_max"
+        /** Relative humidity outside (%). */
+        | "humidity"
         /** 0 green, 1 yellow, 2 orange, 3 red (Météo-France, through MeteoAlarm). */
         | "vigilance"
     }
@@ -1077,7 +1079,12 @@ export type AutomationSettings = {
 export type Presence = {
   me: boolean | null
   someone_home: boolean | null
-  people: { user_id: number; username: string; home: boolean; changed_at: number }[]
+  people: {
+    user_id: number
+    username: string
+    home: boolean
+    changed_at: number
+  }[]
 }
 
 /** A run of an automation, or a time it did not run (and why). */
@@ -1158,10 +1165,18 @@ export const api = {
   energyDays: (days: number) =>
     request<DayEnergy[]>("GET", `/api/energy/days?days=${days}`),
   /** The weather of the home and the sun of today. */
-  weather: () => request<WeatherView>("GET", "/api/weather"),
+  /** The weather of an installation (by default the home). */
+  weather: (installationId?: number) =>
+    request<WeatherView>(
+      "GET",
+      `/api/weather${installationId ? `?installation_id=${installationId}` : ""}`
+    ),
   /** The outdoor temperature over the last hours: `[ts, °C]`. */
-  outdoorHistory: (hours: number) =>
-    request<[number, number][]>("GET", `/api/weather/history?hours=${hours}`),
+  outdoorHistory: (hours: number, installationId?: number) =>
+    request<[number, number][]>(
+      "GET",
+      `/api/weather/history?hours=${hours}${installationId ? `&installation_id=${installationId}` : ""}`
+    ),
   /** The first day the home has an energy measure of. */
   energyRange: () =>
     request<{ first_day: string | null }>("GET", "/api/energy/range"),

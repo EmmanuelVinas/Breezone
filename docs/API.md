@@ -206,15 +206,19 @@ d'historique.
 
 ### Météo et soleil
 
-La ville de la maison (sa première installation, ou celle réglée) est convertie une fois en
-coordonnées par Open-Meteo ; la météo est relevée toutes les 30 min. Le lever et le coucher du soleil
-sont calculés par le serveur.
+Chaque installation a sa météo. Sa ville est convertie **une fois**, quand elle est réglée (à la
+main, depuis le compte Airzone ou par un autre nœud), en coordonnées par le géocodage d'Open-Meteo ;
+coordonnées, département et pays sont gardés sur l'installation (jamais envoyés aux clients). La
+météo de chaque lieu est relevée toutes les 30 min (un seul relevé pour des installations voisines),
+avec la vigilance de son département (MeteoAlarm). Le lever et le coucher du soleil sont calculés
+par le serveur. Sans `installation_id` : la maison, c'est-à-dire la première installation de ce
+serveur qui a une ville.
 
 | Méthode | Chemin | Description |
 |---------|--------|-------------|
-| GET 🔒 | `/api/weather` | `{weather:{place, temperature, apparent, code, precipitation, wind, today_min, today_max, tomorrow_min, tomorrow_max, tomorrow_code, hours:[{ts, temperature, code, precipitation_probability}], read_at} \| null, sun:{sunrise, sunset} \| null}` (`code` : code météo OMM) |
-| GET 🔒 | `/api/weather/history?hours=24` | `[[ts, °C]]` : température extérieure (un point par 30 min, par jour au-delà d'un mois) |
-| PUT 👑 | `/api/weather/place` | `{place}` : la ville de la météo (vide : celle de la première installation) |
+| GET 🔒 | `/api/weather?installation_id=` | `{weather:{place, temperature, apparent, humidity, code, precipitation, wind, today_min, today_max, tomorrow_min, tomorrow_max, tomorrow_code, hours:[{ts, temperature, code, precipitation_probability}], read_at, vigilance:{level, events, area} \| null} \| null, sun:{sunrise, sunset} \| null}` (`code` : code météo OMM ; `vigilance.level` : 0 vert … 3 rouge) |
+| GET 🔒 | `/api/weather/history?hours=24&installation_id=` | `[[ts, °C]]` : température extérieure de l'installation (un point par 30 min, par jour au-delà d'un mois) |
+| PUT 👑 | `/api/weather/place` | `{place}` : la ville de la première installation de ce serveur (préférer la ville de chaque installation, `PUT /api/installations/{id}`) |
 
 ### Sources d'appareils 👑
 
@@ -355,8 +359,10 @@ Fonction `automations@1`. Une règle : 1 à 3 déclencheurs (un seul suffit), ju
 
 `Measure` : `{kind:"energy", flow:"export"|"import"|"solar"|"home"}` (W ; `export` = puissance
 injectée au réseau) | `{kind:"device", device_id, field}` | `{kind:"outdoor"}` |
-`{kind:"weather", field:"precipitation"|"wind"|"rain_next_hour"|"tomorrow_min"|"tomorrow_max"|"vigilance"}`
-(mm, km/h, %, °C ; relevé Open-Meteo de moins de 3 h). `vigilance` : l'avertissement en cours pour
+`{kind:"weather", field:"precipitation"|"wind"|"rain_next_hour"|"humidity"|"tomorrow_min"|"tomorrow_max"|"vigilance"}`
+(mm, km/h, %, %, °C ; relevé Open-Meteo de moins de 3 h ; `humidity` : humidité extérieure). La
+météo, la température extérieure et le soleil d'une règle sont ceux de l'installation de la première
+zone qu'elle pilote, sinon qu'elle lit ; à défaut, ceux de la maison. `vigilance` : l'avertissement en cours pour
 le département de la maison, 0 vert, 1 jaune, 2 orange, 3 rouge (vigilance Météo-France relayée par
 MeteoAlarm, flux public sous licence CC BY 4.0 ; France, Belgique, Suisse, Espagne, Italie,
 Allemagne, Portugal, Luxembourg, Pays-Bas, Autriche).

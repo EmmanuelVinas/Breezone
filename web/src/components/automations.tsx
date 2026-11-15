@@ -235,6 +235,7 @@ function measureOptions(home: Home, current?: AutomationMeasure) {
   out.push(weather("wind", t("Vent"), "km/h"))
   out.push(weather("tomorrow_min", t("Minimale de demain"), "°C"))
   out.push(weather("tomorrow_max", t("Maximale de demain"), "°C"))
+  out.push(weather("humidity", t("Humidité extérieure"), "%"))
   out.push(weather("vigilance", t("Vigilance météo"), ""))
   for (const { d, type } of byType(home.devices))
     for (const trait of traitsOf(home, d))
@@ -439,6 +440,7 @@ function suggested(o: MeasureOption | undefined, op: AutomationOp): number {
       rain_next_hour: pick(70, 20),
       tomorrow_min: pick(20, 0),
       tomorrow_max: pick(33, 10),
+      humidity: pick(85, 40),
       // Above yellow: orange or red.
       vigilance: pick(1, 1),
     }[m.field]

@@ -71,9 +71,10 @@ fun HouseScreen(serverId: String, installationId: Long, onBack: () -> Unit, onOp
     val here = server?.modulesHere(inst) ?: false
     LaunchedEffect(serverId) { hub.followDevices(serverId, everyMs = 10_000) }
     var weather by remember { mutableStateOf<WeatherView?>(null) }
-    LaunchedEffect(serverId) {
+    LaunchedEffect(serverId, installationId) {
+        weather = null
         while (true) {
-            weather = runCatching { hub.api(serverId)?.weather() }.getOrNull() ?: weather
+            weather = runCatching { hub.api(serverId)?.weather(installationId) }.getOrNull() ?: weather
             kotlinx.coroutines.delay(10 * 60_000L)
         }
     }

@@ -1,21 +1,25 @@
-//! The context of the home (roadmap F9): the sun, computed here without any network, and the
-//! weather, read every 30 minutes from Open-Meteo (free, no account, Météo-France data for France).
-//! The place is the city of the home (its first installation of this server), turned once into
-//! coordinates; nothing else leaves the server. The outdoor temperature is kept, so that the
-//! curves of the zones can show it.
+//! The context of each installation (roadmap F9): the sun, computed here without any network, and
+//! the weather, read every 30 minutes from Open-Meteo (free, no account, Météo-France data for
+//! France), with the weather warnings of its area (MeteoAlarm).
+//!
+//! The city of an installation is turned into coordinates once, when it is set (by hand, from the
+//! Airzone account, from another node), and kept on the installation with its area and country:
+//! only the city goes to Open-Meteo's geocoding, only the coordinates to its forecast. Installations
+//! in the same place share one reading. The outdoor temperature of each is kept, so that the curves
+//! of its zones can show it.
 
 use crate::db::{self, Db};
 use chrono::{Datelike, NaiveDate};
 use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::f64::consts::PI;
 use std::time::Duration;
 use tokio::sync::RwLock;
 
 const EVERY: Duration = Duration::from_secs(1800);
-const PLACE: &str = "weather.place";
-const COORDS: &str = "weather.coords";
 
 /// Sunrise and sunset of a day (timestamps); `None` in a polar day or night.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
@@ -92,6 +96,9 @@ pub struct Report {
     pub place: String,
     pub temperature: Option<f64>,
     pub apparent: Option<f64>,
+    /// Relative humidity outside (%).
+    #[serde(default)]
+    pub humidity: Option<f64>,
     pub code: Option<i64>,
     pub precipitation: Option<f64>,
     pub wind: Option<f64>,
@@ -196,7 +203,7 @@ pub fn vigilance_of(feed: &str, area: &str, now: i64) -> Vigilance {
             found.push((level, event.to_string()));
         }
     }
-    found.sort_by(|a, b| b.0.cmp(&a.0));
+    found.sort_by_key(|(level, _)| std::cmp::Reverse(*level));
     Vigilance { level: found.first().map_or(0, |(l, _)| *l), events: found.into_iter().map(|(_, e)| e).collect(), area: area.to_string() }
 }
 
@@ -229,6 +236,7 @@ pub fn report_of(place: &str, data: &Value, now: i64) -> Option<Report> {
         place: place.to_string(),
         temperature: num(&cur["temperature_2m"]),
         apparent: num(&cur["apparent_temperature"]),
+        humidity: num(&cur["relative_humidity_2m"]),
         code: num(&cur["weather_code"]).map(|c| c as i64),
         precipitation: num(&cur["precipitation"]),
         wind: num(&cur["wind_speed_10m"]),
@@ -243,69 +251,69 @@ pub fn report_of(place: &str, data: &Value, now: i64) -> Option<Report> {
     })
 }
 
-/// Where the home is.
-struct Located {
-    lat: f64,
-    lon: f64,
-    /// Its area ("Haute-Garonne") and country ("FR").
-    area: Option<String>,
-    country: Option<String>,
+/// Where an installation is, as found when its city was set.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Place {
+    pub installation_id: i64,
+    /// Its city ("Labège, Haute-Garonne").
+    pub city: String,
+    pub lat: f64,
+    pub lon: f64,
+    /// Its area ("Haute-Garonne") and country ("FR"), for the weather warnings.
+    pub area: Option<String>,
+    pub country: Option<String>,
+}
+
+/// What a city was looked up with: its name and its country, as set.
+fn geo_key(location: &str, country: Option<&str>) -> String {
+    format!("{}#{}", location.trim(), country.unwrap_or("").trim().to_ascii_uppercase())
 }
 
 pub struct Weather {
     db: Db,
     tz: Tz,
     http: reqwest::Client,
-    last: RwLock<Option<Report>>,
+    /// The last weather of each installation.
+    last: RwLock<HashMap<i64, Report>>,
 }
 
 impl Weather {
     pub fn new(db: Db, tz: Tz) -> Self {
         let http = reqwest::Client::builder().timeout(Duration::from_secs(10)).user_agent("Breezone").build().unwrap_or_default();
-        Self { db, tz, http, last: RwLock::new(None) }
+        Self { db, tz, http, last: RwLock::new(HashMap::new()) }
     }
 
-    /// The city of the home and its country: set in the settings, else those of its first
-    /// installation (its city as set by hand or read from the Airzone account).
-    async fn place(&self) -> sqlx::Result<Option<(String, Option<String>)>> {
-        if let Some(p) = db::get_setting(&self.db, PLACE).await?.filter(|p| !p.trim().is_empty()) {
-            return Ok(Some((p, None)));
-        }
-        sqlx::query_as("SELECT location, country FROM installations WHERE node_id IS NULL AND location IS NOT NULL AND location <> '' ORDER BY id LIMIT 1")
-            .fetch_optional(&self.db)
-            .await
-    }
-
-    /// The coordinates of `place` (in `country` when known), asked once to Open-Meteo's geocoding
-    /// and kept.
-    async fn coords(&self, place: &str, country: Option<&str>) -> Option<(f64, f64)> {
-        self.locate(place, country).await.map(|l| (l.lat, l.lon))
-    }
-
-    /// Where `place` is: asked once to Open-Meteo's geocoding and kept (with its area and country,
-    /// for the weather warnings).
-    async fn locate(&self, place: &str, country: Option<&str>) -> Option<Located> {
-        let key = format!("{place}#{}", country.unwrap_or(""));
-        if let Ok(Some(kept)) = db::get_setting(&self.db, COORDS).await {
-            let parts: Vec<&str> = kept.split('|').collect();
-            // Kept before the area was (fewer parts): asked again once.
-            if let [p, lat, lon, area, code] = parts[..] {
-                if p == key {
-                    return Some(Located {
-                        lat: lat.parse().ok()?,
-                        lon: lon.parse().ok()?,
-                        area: Some(area.to_string()).filter(|a| !a.is_empty()),
-                        country: Some(code.to_string()).filter(|c| !c.is_empty()),
-                    });
-                }
+    /// Looks up the cities set since the last time (once each): their coordinates, area and country
+    /// are kept on the installation.
+    pub async fn locate(&self) {
+        let installations = match db::list_installations(&self.db).await {
+            Ok(list) => list,
+            Err(e) => return tracing::warn!("cannot read the installations: {e}"),
+        };
+        for inst in installations {
+            let Some(city) = inst.location.as_deref().map(str::trim).filter(|l| !l.is_empty()) else { continue };
+            let key = geo_key(city, inst.country.as_deref());
+            if inst.geo_key.as_deref() == Some(key.as_str()) {
+                continue;
+            }
+            let found = self.geocode(city, inst.country.as_deref()).await;
+            // Not found (or no network): asked again at the next reading.
+            let Some((lat, lon, area, country)) = found else { continue };
+            if let Err(e) = db::set_installation_geo(&self.db, inst.id, &key, Some((lat, lon)), area.as_deref(), country.as_deref()).await {
+                tracing::warn!("cannot keep where installation {} is: {e}", inst.id);
             }
         }
+    }
+
+    /// Where `city` is (in `country` when known), from Open-Meteo's geocoding: (latitude,
+    /// longitude, area, country).
+    async fn geocode(&self, city: &str, country: Option<&str>) -> Option<(f64, f64, Option<String>, Option<String>)> {
         // "Labège, Haute-Garonne": the city is asked, the region helps to choose.
-        let (city, region) = place.split_once(',').map_or((place.trim(), ""), |(c, r)| (c.trim(), r.trim()));
+        let (name, region) = city.split_once(',').map_or((city.trim(), ""), |(c, r)| (c.trim(), r.trim()));
         let answer: Value = self
             .http
             .get("https://geocoding-api.open-meteo.com/v1/search")
-            .query(&[("name", city), ("count", "10"), ("language", "fr"), ("format", "json")])
+            .query(&[("name", name), ("count", "10"), ("language", "fr"), ("format", "json")])
             // An empty country code finds nothing: only when known.
             .query(&country.map(|c| vec![("countryCode", c)]).unwrap_or_default())
             .send()
@@ -317,12 +325,35 @@ impl Weather {
         let results = answer["results"].as_array()?;
         let best =
             results.iter().find(|r| !region.is_empty() && r["admin2"].as_str().or(r["admin1"].as_str()).is_some_and(|a| a.eq_ignore_ascii_case(region))).or(results.first())?;
-        let (lat, lon) = (best["latitude"].as_f64()?, best["longitude"].as_f64()?);
         // The French "département" is admin2.
-        let area = best["admin2"].as_str().or(best["admin1"].as_str()).unwrap_or_default().replace('|', " ");
-        let code = best["country_code"].as_str().map(str::to_string).or(country.map(str::to_string)).unwrap_or_default();
-        let _ = db::set_setting(&self.db, COORDS, &format!("{key}|{lat}|{lon}|{area}|{code}")).await;
-        Some(Located { lat, lon, area: Some(area).filter(|a| !a.is_empty()), country: Some(code).filter(|c| !c.is_empty()) })
+        let area = best["admin2"].as_str().or(best["admin1"].as_str()).map(str::to_string);
+        let code = best["country_code"].as_str().map(str::to_string).or(country.map(str::to_string));
+        Some((best["latitude"].as_f64()?, best["longitude"].as_f64()?, area, code))
+    }
+
+    /// The installations whose place is known, those of this server first.
+    pub async fn places(&self) -> Vec<Place> {
+        let mut list = db::list_installations(&self.db).await.unwrap_or_default();
+        list.sort_by_key(|i| (i.node_id.is_some(), i.id));
+        list.into_iter()
+            .filter_map(|i| {
+                Some(Place {
+                    installation_id: i.id,
+                    city: i.location.clone().filter(|l| !l.trim().is_empty())?,
+                    lat: i.latitude?,
+                    lon: i.longitude?,
+                    area: i.area.clone(),
+                    country: i.geo_country.clone().or(i.country.clone()),
+                })
+            })
+            .collect()
+    }
+
+    /// The place of an installation, or (none given, or not located) that of the home: the first
+    /// installation of this server with a city.
+    pub async fn place(&self, installation_id: Option<i64>) -> Option<Place> {
+        let places = self.places().await;
+        installation_id.and_then(|id| places.iter().find(|p| p.installation_id == id).cloned()).or_else(|| places.into_iter().next())
     }
 
     /// The warnings in force for `area` (`None`: its country has no feed, or it does not answer).
@@ -333,18 +364,15 @@ impl Weather {
         Some(vigilance_of(&text, area, db::now()))
     }
 
-    /// Reads the weather now; keeps the outdoor temperature.
-    pub async fn refresh(&self) -> Option<Report> {
-        let (place, country) = self.place().await.ok()??;
-        let located = self.locate(&place, country.as_deref()).await?;
-        let (lat, lon) = (located.lat, located.lon);
+    /// The forecast at a place.
+    async fn forecast(&self, place: &Place) -> Option<Report> {
         let data: Value = self
             .http
             .get("https://api.open-meteo.com/v1/forecast")
             .query(&[
-                ("latitude", lat.to_string()),
-                ("longitude", lon.to_string()),
-                ("current", "temperature_2m,apparent_temperature,weather_code,precipitation,wind_speed_10m".into()),
+                ("latitude", place.lat.to_string()),
+                ("longitude", place.lon.to_string()),
+                ("current", "temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,precipitation,wind_speed_10m".into()),
                 ("hourly", "temperature_2m,weather_code,precipitation_probability".into()),
                 ("daily", "temperature_2m_max,temperature_2m_min,weather_code".into()),
                 ("timezone", self.tz.name().into()),
@@ -357,51 +385,71 @@ impl Weather {
             .json()
             .await
             .ok()?;
-        let mut report = report_of(&place, &data, db::now())?;
-        if let (Some(area), Some(code)) = (&located.area, &located.country) {
-            report.vigilance = self.vigilance(area, code).await;
-        }
-        if let Some(t) = report.temperature {
-            if let Err(e) = sqlx::query("INSERT OR REPLACE INTO outdoor_samples (ts, temperature) VALUES (?, ?)").bind(db::now()).bind(t).execute(&self.db).await {
-                tracing::warn!("cannot keep the outdoor temperature: {e}");
-            }
-        }
-        *self.last.write().await = Some(report.clone());
-        Some(report)
+        report_of(&place.city, &data, db::now())
     }
 
-    /// The last weather read (`None` before the first one, or without a city).
-    pub async fn report(&self) -> Option<Report> {
+    /// Reads the weather of every installation now (one reading per place); keeps their outdoor
+    /// temperature.
+    pub async fn refresh(&self) {
+        self.locate().await;
+        // Installations a few hundred metres apart share a reading.
+        let mut read: HashMap<(i64, i64), Option<Report>> = HashMap::new();
+        let mut warnings: HashMap<(String, String), Option<Vigilance>> = HashMap::new();
+        let mut reports = HashMap::new();
+        for place in self.places().await {
+            let spot = ((place.lat * 100.0).round() as i64, (place.lon * 100.0).round() as i64);
+            if let Entry::Vacant(e) = read.entry(spot) {
+                e.insert(self.forecast(&place).await);
+            }
+            let Some(mut report) = read[&spot].clone() else { continue };
+            report.place = place.city.clone();
+            if let (Some(area), Some(country)) = (&place.area, &place.country) {
+                let key = (area.clone(), country.clone());
+                if let Entry::Vacant(e) = warnings.entry(key.clone()) {
+                    e.insert(self.vigilance(area, country).await);
+                }
+                report.vigilance = warnings[&key].clone();
+            }
+            if let Some(t) = report.temperature {
+                let kept = sqlx::query("INSERT OR REPLACE INTO outdoor_samples (installation_id, ts, temperature) VALUES (?, ?, ?)")
+                    .bind(place.installation_id)
+                    .bind(db::now())
+                    .bind(t)
+                    .execute(&self.db)
+                    .await;
+                if let Err(e) = kept {
+                    tracing::warn!("cannot keep the outdoor temperature: {e}");
+                }
+            }
+            reports.insert(place.installation_id, report);
+        }
+        // A reading that failed keeps the last one.
+        let mut last = self.last.write().await;
+        last.retain(|id, _| !reports.contains_key(id));
+        last.extend(reports);
+    }
+
+    /// The last weather of each installation read.
+    pub async fn reports(&self) -> HashMap<i64, Report> {
         self.last.read().await.clone()
     }
 
-    /// The last outdoor temperature read.
-    pub async fn temperature(&self) -> Option<f64> {
-        self.last.read().await.as_ref().and_then(|r| r.temperature)
-    }
-
-    /// Where the home is (latitude, longitude), when its city is known.
-    pub async fn coordinates(&self) -> Option<(f64, f64)> {
-        let (place, country) = self.place().await.ok()??;
-        self.coords(&place, country.as_deref()).await
-    }
-
-    /// The weather (the last one read) and the sun of today.
-    pub async fn view(&self) -> View {
-        let weather = self.last.read().await.clone();
+    /// The weather of an installation (or of the home) and the sun of today there.
+    pub async fn view(&self, installation_id: Option<i64>) -> View {
+        let Some(place) = self.place(installation_id).await else { return View { weather: None, sun: None } };
+        let weather = self.last.read().await.get(&place.installation_id).cloned();
         let today = chrono::Utc::now().with_timezone(&self.tz).date_naive();
-        let sun = match self.place().await.ok().flatten() {
-            Some((place, country)) => self.coords(&place, country.as_deref()).await.map(|(lat, lon)| sun(today, lat, lon)),
-            None => None,
-        };
-        View { weather, sun }
+        View { weather, sun: Some(sun(today, place.lat, place.lon)) }
     }
 
-    /// The outdoor temperature since `since`: `[ts, °C]`, one point per `bucket` seconds at most.
-    pub async fn history(&self, since: i64, bucket: i64) -> sqlx::Result<Vec<(i64, f64)>> {
-        sqlx::query_as("SELECT (ts / ?) * ?, ROUND(AVG(temperature), 1) FROM outdoor_samples WHERE ts >= ? GROUP BY ts / ? ORDER BY 1")
+    /// The outdoor temperature of an installation (or of the home) since `since`: `[ts, °C]`, one
+    /// point per `bucket` seconds at most.
+    pub async fn history(&self, installation_id: Option<i64>, since: i64, bucket: i64) -> sqlx::Result<Vec<(i64, f64)>> {
+        let Some(place) = self.place(installation_id).await else { return Ok(vec![]) };
+        sqlx::query_as("SELECT (ts / ?) * ?, ROUND(AVG(temperature), 1) FROM outdoor_samples WHERE installation_id = ? AND ts >= ? GROUP BY ts / ? ORDER BY 1")
             .bind(bucket)
             .bind(bucket)
+            .bind(place.installation_id)
             .bind(since)
             .bind(bucket)
             .fetch_all(&self.db)
@@ -411,9 +459,7 @@ impl Weather {
     /// Reads the weather every 30 minutes.
     pub async fn run(self: std::sync::Arc<Self>) {
         loop {
-            if self.refresh().await.is_none() {
-                tracing::debug!("no weather: no city for the home, or Open-Meteo unreachable");
-            }
+            self.refresh().await;
             tokio::time::sleep(EVERY).await;
         }
     }

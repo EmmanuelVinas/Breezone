@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.19] - 2026-11-15
+
 ### Added
 
 - Automations go further, without becoming a programming language:
@@ -36,9 +38,15 @@ All notable changes are documented here. The format follows
   - the app shows the automations of an installation (Schedules tab): the rule as a sentence,
     switch on or off, try, history, "I am home"; they are still created and changed on the web.
 - Lights: a coloured light that is on is framed by its colour.
+- Automations: the outdoor humidity, as a measure of the weather.
 
 ### Changed
 
+- The weather follows the installation chosen (web and app): each installation has its own weather,
+  sun, weather warnings and outdoor temperature curve. Its city is looked up once, when it is set (by
+  hand, from the Airzone account or from another server), and kept with the installation; a rule uses
+  the weather and the sun of the installation it drives. The city set for "the home" in earlier
+  versions goes to the first installation.
 - The ventilation is shown in a pale sky blue instead of violet (web and app).
 - Automation editor: the thresholds follow the measure chosen (no more "500 °C"), and the lists of
   devices are grouped by type with an icon.

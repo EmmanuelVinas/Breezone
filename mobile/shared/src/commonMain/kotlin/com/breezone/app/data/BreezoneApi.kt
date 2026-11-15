@@ -199,7 +199,8 @@ class BreezoneApi(
     suspend fun status(): List<Installation> = call(HttpMethod.Get, "/api/status")
     suspend fun devices(): List<DeviceView> = call(HttpMethod.Get, "/api/devices")
     suspend fun rooms(): List<Room> = call(HttpMethod.Get, "/api/rooms")
-    suspend fun weather(): WeatherView = call(HttpMethod.Get, "/api/weather")
+    /** The weather of an installation (servers before 0.11.0-beta.19 give that of the home). */
+    suspend fun weather(installationId: Long): WeatherView = call(HttpMethod.Get, "/api/weather?installation_id=$installationId")
     suspend fun energyLive(): EnergyLive = call(HttpMethod.Get, "/api/energy/live")
     suspend fun energyDay(): EnergyDay = call(HttpMethod.Get, "/api/energy/day")
     suspend fun deviceHistoryOver(deviceId: Long, hours: Int): DeviceHistory =

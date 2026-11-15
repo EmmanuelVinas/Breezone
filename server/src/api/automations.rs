@@ -75,7 +75,9 @@ async fn view_of(state: &AppState, id: i64) -> ApiResult<AutomationView> {
     let missing = || ApiError::not_found("automation not found");
     let row = db::automation_by_id(&state.db, id).await?.ok_or_else(missing)?;
     let rule = Automation::of(&row).ok_or_else(missing)?;
-    Ok(automations::view(&row, rule, &Context::load(state).await?, state.automations.is_running(id)))
+    let ctx = Context::load(state).await?;
+    let here = ctx.at(rule.place(&ctx));
+    Ok(automations::view(&row, rule, &here, state.automations.is_running(id)))
 }
 
 /// The rule as stored, as JSON: (triggers, conditions, actions, else).
@@ -109,7 +111,8 @@ pub async fn list(State(state): State<AppState>, user: AuthUser) -> ApiResult<Js
     for (row, rule) in rules {
         if sees(&state, &access, &rule, &ctx).await? {
             let running = state.automations.is_running(row.id);
-            let mut view = automations::view(&row, rule, &ctx, running);
+            let here = ctx.at(rule.place(&ctx));
+            let mut view = automations::view(&row, rule, &here, running);
             view.conflicts = conflicts.remove(&row.id).unwrap_or_default();
             out.push(view);
         }
@@ -126,7 +129,8 @@ pub async fn get(State(state): State<AppState>, user: AuthUser, Path(id): Path<i
     let access = Access::of(&state.db, &user).await?;
     let ctx = Context::load(&state).await?;
     let (row, rule) = load(&state, &access, &ctx, id).await?;
-    Ok(Json(automations::view(&row, rule, &ctx, state.automations.is_running(id))))
+    let here = ctx.at(rule.place(&ctx));
+    Ok(Json(automations::view(&row, rule, &here, state.automations.is_running(id))))
 }
 
 /// The last runs of a rule, those that did not happen included.
@@ -150,7 +154,8 @@ pub async fn create(State(state): State<AppState>, user: AuthUser, Json(input): 
         .log("automation", "info", None, Some(&user.username), crate::text!("Automatisme « {0} » créé", "Automation “{0}” created", "Automatismo «{0}» creado", name), None)
         .await;
     state.hub.routines_changed();
-    Ok((StatusCode::CREATED, Json(automations::view(&row, rule, &ctx, false))))
+    let here = ctx.at(rule.place(&ctx));
+    Ok((StatusCode::CREATED, Json(automations::view(&row, rule, &here, false))))
 }
 
 pub async fn update(State(state): State<AppState>, user: AuthUser, Path(id): Path<i64>, Json(input): Json<AutomationInput>) -> ApiResult<Json<AutomationView>> {

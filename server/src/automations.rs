@@ -107,6 +107,8 @@ pub enum WeatherField {
     TomorrowMin,
     /// Highest temperature tomorrow (°C): heat wave.
     TomorrowMax,
+    /// Relative humidity outside (%).
+    Humidity,
     /// Weather warning in force (Météo-France vigilance, through MeteoAlarm): 0 green, 1 yellow,
     /// 2 orange, 3 red.
     Vigilance,
@@ -475,6 +477,12 @@ impl Automation {
             .collect()
     }
 
+    /// The installation a rule is about: that of the first zone it drives, else reads (its sun, its
+    /// weather); `None`: the home.
+    pub fn place(&self, ctx: &Context) -> Option<i64> {
+        self.driven_devices().into_iter().chain(self.read_devices()).find_map(|id| ctx.device(id)?.installation_id)
+    }
+
     pub fn scenes(&self) -> Vec<i64> {
         self.steps()
             .filter_map(|s| match s {
@@ -527,10 +535,15 @@ pub struct Context {
     pub weather: Option<Report>,
     /// Someone is at home (`None`: nobody ever told).
     pub presence: Option<bool>,
-    /// Latitude and longitude of the home, for the sun.
+    /// Latitude and longitude of the place, for the sun.
     pub coords: Option<(f64, f64)>,
     /// Scenes, by id.
     pub scenes: HashMap<i64, String>,
+    /// Where each located installation is, and its weather; `outdoor`, `weather` and `coords` are
+    /// those of the place a rule is looked at for (see [`Context::at`]).
+    pub places: HashMap<i64, ((f64, f64), Option<Report>)>,
+    /// The home: the first installation of this server with a city.
+    pub home: Option<i64>,
 }
 
 impl Context {
@@ -542,15 +555,33 @@ impl Context {
             tz: state.cfg.timezone,
             flows,
             devices,
-            outdoor: state.weather.temperature().await,
-            weather: state.weather.report().await,
+            outdoor: None,
+            weather: None,
             presence: {
                 let people = db::list_presence(&state.db).await?;
                 (!people.is_empty()).then(|| people.iter().any(|p| p.home))
             },
-            coords: state.weather.coordinates().await,
+            coords: None,
             scenes: db::list_routines(&state.db).await?.into_iter().map(|r| (r.id, r.name)).collect(),
-        })
+            places: {
+                let mut reports = state.weather.reports().await;
+                state.weather.places().await.into_iter().map(|p| (p.installation_id, ((p.lat, p.lon), reports.remove(&p.installation_id)))).collect()
+            },
+            home: state.weather.place(None).await.map(|p| p.installation_id),
+        }
+        .at(None))
+    }
+
+    /// The home as seen from an installation (its sun, its weather), or from the home.
+    pub fn at(&self, installation_id: Option<i64>) -> Context {
+        let mut here = self.clone();
+        let id = installation_id.filter(|i| self.places.contains_key(i)).or(self.home);
+        if let Some((coords, weather)) = id.and_then(|i| self.places.get(&i)) {
+            here.coords = Some(*coords);
+            here.outdoor = weather.as_ref().and_then(|w| w.temperature);
+            here.weather = weather.clone();
+        }
+        here
     }
 
     pub fn device(&self, id: i64) -> Option<&DeviceView> {
@@ -591,6 +622,7 @@ impl Context {
                     WeatherField::TomorrowMin => w.tomorrow_min,
                     WeatherField::TomorrowMax => w.tomorrow_max,
                     WeatherField::Vigilance => w.vigilance.as_ref().map(|v| v.level as f64),
+                    WeatherField::Humidity => w.humidity,
                 }
             }
         }
@@ -605,7 +637,7 @@ impl Context {
                 match field {
                     WeatherField::Precipitation => "mm",
                     WeatherField::Wind => "km/h",
-                    WeatherField::RainNextHour => "%",
+                    WeatherField::RainNextHour | WeatherField::Humidity => "%",
                     WeatherField::TomorrowMin | WeatherField::TomorrowMax => "°C",
                     WeatherField::Vigilance => return None,
                 }
@@ -879,6 +911,7 @@ impl Context {
                 WeatherField::TomorrowMin => crate::text!("Minimale de demain", "Tomorrow's low", "Mínima de mañana"),
                 WeatherField::TomorrowMax => crate::text!("Maximale de demain", "Tomorrow's high", "Máxima de mañana"),
                 WeatherField::Vigilance => crate::text!("Vigilance météo", "Weather warning", "Aviso meteorológico"),
+                WeatherField::Humidity => crate::text!("Humidité extérieure", "Outdoor humidity", "Humedad exterior"),
             },
             Measure::Device { device_id, field } => {
                 let (name, field) = (self.device_name(*device_id), self.field_label(*device_id, field));
@@ -1617,6 +1650,9 @@ impl Engine {
         let mut out = vec![];
         self.watches.retain(|(id, _), _| rules.iter().any(|(row, _)| row.id == *id && row.enabled));
         for (row, rule) in rules.iter().filter(|(row, _)| row.enabled) {
+            // Its sun and its weather are those of the installation it is about.
+            let here = ctx.at(rule.place(ctx));
+            let ctx = &here;
             // The triggers that start the rule now: (index, holds for a while).
             let mut started: Vec<(usize, bool)> = vec![];
             for (i, t) in rule.triggers.iter().enumerate() {
@@ -1820,13 +1856,14 @@ pub async fn start(
     if let Err(e) = db::set_automation_run(&state.db, row.id, db::now(), &reason.store()).await {
         tracing::error!("automation {}: {e}", row.id);
     }
+    let place = rule.place(&ctx);
     let steps = if branch == Branch::Else { rule.otherwise.clone() } else { rule.actions.clone() };
     let generation = runs.next.fetch_add(1, Ordering::Relaxed);
     let (state2, row2, actor2) = (state.clone(), row.clone(), actor.to_string());
     // Registered before it starts, so that a run that ends at once removes itself.
     let mut running = runs.running.lock().unwrap_or_else(|e| e.into_inner());
     let task = tokio::spawn(async move {
-        let (done, ended) = execute(&state2, &row2, run_id, &steps, ctx, &actor2).await;
+        let (done, ended) = execute(&state2, &row2, run_id, &steps, ctx.at(place), place, &actor2).await;
         let stored = Value::Array(done.iter().map(StepDone::stored).collect()).to_string();
         if let Err(e) = db::finish_automation_run(&state2.db, run_id, ended, &stored).await {
             tracing::error!("automation {}: {e}", row2.id);
@@ -1921,11 +1958,11 @@ fn done(what: Text, r: ApiResult<()>) -> StepDone {
 }
 
 /// Runs the steps one after the other. Returns what was done and how it ended.
-async fn execute(state: &AppState, row: &AutomationRow, run_id: i64, steps: &[Step], mut ctx: Context, actor: &str) -> (Vec<StepDone>, &'static str) {
+async fn execute(state: &AppState, row: &AutomationRow, run_id: i64, steps: &[Step], mut ctx: Context, place: Option<i64>, actor: &str) -> (Vec<StepDone>, &'static str) {
     let who = format!("{actor} · automatisme « {} »", row.name);
     let mut out: Vec<StepDone> = vec![];
     let mut touched: Vec<Touched> = vec![];
-    let reload = |ctx: Context| async move { Context::load(state).await.unwrap_or(ctx) };
+    let reload = |ctx: Context| async move { Context::load(state).await.map(|c| c.at(place)).unwrap_or(ctx) };
     for step in steps {
         let what = ctx.describe_step(step);
         match step {
@@ -2167,6 +2204,8 @@ mod tests {
             // Toulouse.
             coords: Some((43.6045, 1.444)),
             scenes: HashMap::from([(7, "Je pars".to_string())]),
+            places: HashMap::new(),
+            home: None,
         }
     }
 
@@ -2382,6 +2421,7 @@ mod tests {
             place: "Toulouse".into(),
             temperature: Some(6.0),
             apparent: None,
+            humidity: None,
             code: None,
             precipitation: Some(0.0),
             wind: Some(42.0),
@@ -2565,6 +2605,7 @@ mod tests {
             place: "Toulouse".into(),
             temperature: None,
             apparent: None,
+            humidity: None,
             code: None,
             precipitation: None,
             wind: None,
@@ -2601,6 +2642,51 @@ mod tests {
         assert_eq!(names(3), vec!["d".to_string()], "c is on Saturday: only d, every day");
         assert_eq!(names(5), vec!["f".to_string()], "start and stop");
         assert_eq!(found[&1][0].what.fr, "Salon (Consigne)");
+    }
+
+    #[test]
+    fn each_rule_sees_the_weather_of_its_installation() {
+        let report = |t: f64, h: f64| Report {
+            place: String::new(),
+            temperature: Some(t),
+            apparent: None,
+            humidity: Some(h),
+            code: None,
+            precipitation: None,
+            wind: None,
+            today_min: None,
+            today_max: None,
+            tomorrow_min: None,
+            tomorrow_max: None,
+            tomorrow_code: None,
+            hours: vec![],
+            read_at: 0,
+            vigilance: None,
+        };
+        let mut c = ctx(0, 0.0, 20.0);
+        // The home (installation 1) in Toulouse, installation 2 in Lille.
+        c.places = HashMap::from([(1, ((43.6, 1.44), Some(report(14.0, 60.0)))), (2, ((50.63, 3.06), Some(report(6.0, 91.0))))]);
+        c.home = Some(1);
+        let mut lille = zone(5, "Bureau", 19.0);
+        lille.installation_id = Some(2);
+        c.devices.push(lille);
+        let humid = Measure::Weather { field: WeatherField::Humidity };
+        let rule = |device: i64| {
+            validate(
+                input(json!({"name": "x", "when": {"kind": "time", "time": "08:00"}, "actions": [{"kind": "device", "device_id": device, "trait": "climate.zone", "action": "set", "params": {"on": true}}]})),
+                &c,
+            )
+            .unwrap()
+            .1
+        };
+        let (salon, bureau) = (rule(1), rule(5));
+        assert_eq!(bureau.place(&c), Some(2));
+        let (here, there) = (c.at(salon.place(&c)), c.at(bureau.place(&c)));
+        assert_eq!((here.outdoor, here.read(&humid)), (Some(14.0), Some(60.0)));
+        assert_eq!((there.outdoor, there.read(&humid)), (Some(6.0), Some(91.0)));
+        assert_eq!(there.coords, Some((50.63, 3.06)));
+        assert_eq!(c.at(None).outdoor, Some(14.0), "a rule of the modules alone: the home");
+        assert_eq!(c.describe_condition(&Condition::Measure { measure: humid, op: Op::Above, value: 80.0 }).fr, "Humidité extérieure > 80 %");
     }
 
     #[test]

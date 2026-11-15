@@ -274,6 +274,20 @@ pub struct Installation {
     /// Record the time each zone spends in demand (only used for the installations of this
     /// server: a shared installation follows the server that owns it).
     pub record_demand: bool,
+    /// Where its city is, found once when the city is set (see `weather`); not sent to clients.
+    #[serde(skip)]
+    pub latitude: Option<f64>,
+    #[serde(skip)]
+    pub longitude: Option<f64>,
+    /// The area of the city (the French "département"), for the weather warnings.
+    #[serde(skip)]
+    pub area: Option<String>,
+    /// The country found with it (ISO 3166-1 alpha-2).
+    #[serde(skip)]
+    pub geo_country: Option<String>,
+    /// The city and country the coordinates were found for.
+    #[serde(skip)]
+    pub geo_key: Option<String>,
 }
 
 impl Installation {
@@ -379,6 +393,21 @@ pub async fn set_installation_place(db: &Db, id: i64, location: Option<&str>, co
 /// The city from the Airzone account: kept only when not set by hand.
 pub async fn set_installation_location(db: &Db, id: i64, location: Option<&str>) -> sqlx::Result<()> {
     sqlx::query("UPDATE installations SET location = ? WHERE id = ? AND location_set = 0").bind(location).bind(id).execute(db).await?;
+    Ok(())
+}
+
+/// Where the city of an installation is (`key`: the city and country it was found for; no
+/// coordinates: not found).
+pub async fn set_installation_geo(db: &Db, id: i64, key: &str, coords: Option<(f64, f64)>, area: Option<&str>, country: Option<&str>) -> sqlx::Result<()> {
+    sqlx::query("UPDATE installations SET geo_key = ?, latitude = ?, longitude = ?, area = ?, geo_country = ? WHERE id = ?")
+        .bind(key)
+        .bind(coords.map(|c| c.0))
+        .bind(coords.map(|c| c.1))
+        .bind(area)
+        .bind(country)
+        .bind(id)
+        .execute(db)
+        .await?;
     Ok(())
 }
 

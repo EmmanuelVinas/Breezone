@@ -4,16 +4,18 @@ import { api } from "@/lib/api"
 import { time } from "@/lib/format"
 import { t } from "@/lib/i18n"
 import { weatherLook } from "@/lib/weather"
+import { useChosenInstallation } from "@/lib/selected-installation"
 import { Card, CardContent } from "@/components/ui/card"
 
 const deg = (v: number | null | undefined) =>
   v === null || v === undefined ? "–" : `${Math.round(v)}°`
 
-/** The weather of the home: now, today, the sun and the next hours (none without a city). */
+/** The weather of the installation chosen: now, today, the sun and the next hours (none without a city). */
 export function WeatherCard() {
+  const chosen = useChosenInstallation()
   const view = useQuery({
-    queryKey: ["weather"],
-    queryFn: api.weather,
+    queryKey: ["weather", chosen?.id ?? null],
+    queryFn: () => api.weather(chosen?.id),
     refetchInterval: 10 * 60_000,
   }).data
   const w = view?.weather

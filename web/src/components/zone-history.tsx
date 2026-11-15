@@ -124,8 +124,8 @@ export function ZoneHistory({ zone }: { zone: Zone }) {
     refetchInterval: 60_000,
   })
   const outdoor = useQuery({
-    queryKey: ["outdoor", hours],
-    queryFn: () => api.outdoorHistory(Number(hours)),
+    queryKey: ["outdoor", zone.installation_id, hours],
+    queryFn: () => api.outdoorHistory(Number(hours), zone.installation_id),
     staleTime: 10 * 60_000,
   })
   const range = useQuery({

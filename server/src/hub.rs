@@ -1771,6 +1771,11 @@ mod tests {
             node_id: None,
             remote_id: None,
             record_demand,
+            latitude: None,
+            longitude: None,
+            area: None,
+            geo_country: None,
+            geo_key: None,
         };
         InstState::new(inst, vec![], None, true)
     }

@@ -794,6 +794,11 @@ async fn apply_organisation(state: &AppState, c: &CloudInstallation, local: &Ins
     db::set_installation_cloud_id(&state.db, id, &c.cloud_id).await?;
     db::set_cloud_installation_link(&state.db, &c.cloud_id, Some(id)).await?;
     db::set_installation_location(&state.db, id, c.location.as_deref()).await?;
+    if local.location.as_deref() != c.location.as_deref() {
+        // A new city: found once, and its weather read at once.
+        let weather = state.weather.clone();
+        tokio::spawn(async move { weather.refresh().await });
+    }
     if overwrite && c.name.trim() != local.name {
         db::update_installation(&state.db, id, c.name.trim(), &local.host, local.port, local.enabled).await?;
     }
