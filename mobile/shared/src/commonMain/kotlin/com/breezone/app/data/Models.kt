@@ -3,6 +3,7 @@ package com.breezone.app.data
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNamingStrategy
 
@@ -313,3 +314,73 @@ data class AirzoneScheduleInput(
 )
 
 fun Installation.zone(systemId: Long, zoneId: Long): Zone? = zones.firstOrNull { it.systemId == systemId && it.zoneId == zoneId }
+
+/** An automation as the server tells it: its sentence and what it sees now (edited on the web). */
+@Serializable
+data class Automation(
+    val id: Long,
+    val name: String,
+    val enabled: Boolean = true,
+    val summary: AutomationSummary = AutomationSummary(),
+    val status: AutomationStatus = AutomationStatus(),
+    val conflicts: List<AutomationConflict> = emptyList(),
+    val lastRunAt: Long? = null,
+    val lastReason: String? = null,
+    val triggers: List<JsonObject> = emptyList(),
+    val conditions: List<JsonObject> = emptyList(),
+    val actions: List<JsonObject> = emptyList(),
+    @SerialName("else") val otherwise: List<JsonObject> = emptyList(),
+)
+
+@Serializable
+data class AutomationSummary(
+    val triggers: List<String> = emptyList(),
+    val conditions: List<String> = emptyList(),
+    /** "et" or "ou". */
+    val joined: String = "",
+    val actions: List<String> = emptyList(),
+    @SerialName("else") val otherwise: List<String> = emptyList(),
+)
+
+@Serializable
+data class AutomationStatus(
+    val value: Double? = null,
+    val unit: String? = null,
+    val conditions: List<Boolean?> = emptyList(),
+    val nextAt: Long? = null,
+    val running: Boolean = false,
+)
+
+@Serializable
+data class AutomationConflict(val id: Long, val name: String, val what: String)
+
+@Serializable
+data class AutomationRunStep(val what: String, val ok: Boolean, val error: String? = null)
+
+/** A run of an automation, or a time it did not run (and why). */
+@Serializable
+data class AutomationRun(
+    val startedAt: Long,
+    /** "then" | "else" | "skipped" | "busy" */
+    val branch: String,
+    val reason: String,
+    /** "done" | "stopped" | "cancelled" | "interrupted"; null while it runs. */
+    val ended: String? = null,
+    val steps: List<AutomationRunStep> = emptyList(),
+)
+
+@Serializable
+data class AutomationRunResult(val results: List<ActionResult> = emptyList(), val running: Boolean = false)
+
+@Serializable
+data class AutomationSettings(val pausedUntil: Long? = null)
+
+/** Who is at home, as each user told it. */
+@Serializable
+data class Presence(val me: Boolean? = null, val someoneHome: Boolean? = null)
+
+@Serializable
+data class EnabledBody(val enabled: Boolean)
+
+@Serializable
+data class PresenceBody(val home: Boolean)

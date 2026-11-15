@@ -621,4 +621,22 @@ object FzIcons {
             "M6 4v4",
         )
     }
+
+    val Workflow: ImageVector by lazy {
+        lucide(
+            "Workflow",
+            "M5 3h4a2 2 0 0 1 2 2v4a2 2 0 0 1 -2 2h-4a2 2 0 0 1 -2 -2v-4a2 2 0 0 1 2 -2Z",
+            "M7 11v4a2 2 0 0 0 2 2h4",
+            "M15 13h4a2 2 0 0 1 2 2v4a2 2 0 0 1 -2 2h-4a2 2 0 0 1 -2 -2v-4a2 2 0 0 1 2 -2Z",
+        )
+    }
+
+    val History: ImageVector by lazy {
+        lucide(
+            "History",
+            "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8",
+            "M3 3v5h5",
+            "M12 7v5l4 2",
+        )
+    }
 }

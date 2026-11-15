@@ -1,7 +1,7 @@
 //! Automations ("quand… si… alors…"): CRUD, activation and manual run.
 
 use crate::access::Access;
-use crate::auth::AuthUser;
+use crate::auth::{AdminUser, AuthUser};
 use crate::automations::{self, Automation, AutomationInput, AutomationView, Branch, Context, RunView};
 use crate::db::{self, AutomationFields, AutomationRow};
 use crate::error::{ApiError, ApiResult};
@@ -10,7 +10,7 @@ use crate::AppState;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::Json;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 /// The actions of the scenes a rule starts.
@@ -103,13 +103,21 @@ pub async fn list(State(state): State<AppState>, user: AuthUser) -> ApiResult<Js
         return Ok(Json(vec![]));
     }
     let ctx = Context::load(&state).await?;
+    let rules: Vec<(AutomationRow, Automation)> = rows.into_iter().filter_map(|row| Automation::of(&row).map(|rule| (row, rule))).collect();
+    let mut conflicts = automations::conflicts(&rules, &ctx);
     let mut out = vec![];
-    for row in rows {
-        let Some(rule) = Automation::of(&row) else { continue };
+    for (row, rule) in rules {
         if sees(&state, &access, &rule, &ctx).await? {
             let running = state.automations.is_running(row.id);
-            out.push(automations::view(&row, rule, &ctx, running));
+            let mut view = automations::view(&row, rule, &ctx, running);
+            view.conflicts = conflicts.remove(&row.id).unwrap_or_default();
+            out.push(view);
         }
+    }
+    // A rule this user cannot see is not named to them.
+    let seen: Vec<i64> = out.iter().map(|v| v.id).collect();
+    for v in &mut out {
+        v.conflicts.retain(|c| seen.contains(&c.id));
     }
     Ok(Json(out))
 }
@@ -226,4 +234,107 @@ pub async fn run(State(state): State<AppState>, user: AuthUser, Path(id): Path<i
         Ok(Ok(done)) => Ok(Json(json!({ "results": done, "running": false }))),
         _ => Ok(Json(json!({ "results": [], "running": true }))),
     }
+}
+
+/// What the automations of this server share: the holiday pause, the ntfy topic.
+#[derive(Serialize)]
+pub struct SettingsView {
+    /// While set, no rule starts by itself: until this time, or until switched back on (0).
+    pub paused_until: Option<i64>,
+    /// Shown to administrators only (the address of the topic is enough to write to it).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ntfy_url: Option<String>,
+}
+
+pub async fn settings(State(state): State<AppState>, user: AuthUser) -> ApiResult<Json<SettingsView>> {
+    let ntfy_url = if user.is_admin() { Some(db::get_setting(&state.db, automations::NTFY).await?.unwrap_or_default()) } else { None };
+    Ok(Json(SettingsView { paused_until: automations::paused_until(&state.db).await, ntfy_url }))
+}
+
+/// Only the fields given change; `null` clears.
+#[derive(Deserialize)]
+pub struct SettingsInput {
+    #[serde(default, deserialize_with = "present")]
+    pub paused_until: Option<Option<i64>>,
+    #[serde(default, deserialize_with = "present")]
+    pub ntfy_url: Option<Option<String>>,
+}
+
+fn present<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Option<Option<T>>, D::Error> {
+    Ok(Some(Option::deserialize(d)?))
+}
+
+pub async fn save_settings(State(state): State<AppState>, admin: AdminUser, Json(input): Json<SettingsInput>) -> ApiResult<Json<SettingsView>> {
+    let user = &admin.0.username;
+    if let Some(paused) = input.paused_until {
+        match paused {
+            Some(until) if until < 0 => return Err(ApiError::bad_request("paused_until: a time, or 0")),
+            Some(until) => {
+                db::set_setting(&state.db, automations::PAUSED, &until.to_string()).await?;
+                let message = if until == 0 {
+                    crate::text!("Automatismes en pause", "Automations paused", "Automatismos en pausa")
+                } else {
+                    let day = chrono::DateTime::from_timestamp(until, 0).unwrap_or_default().with_timezone(&state.cfg.timezone).format("%d/%m/%Y %H:%M").to_string();
+                    crate::text!("Automatismes en pause jusqu'au {0}", "Automations paused until {0}", "Automatismos en pausa hasta el {0}", day)
+                };
+                state.hub.log("automation", "info", None, Some(user), message, None).await;
+            }
+            None => {
+                db::delete_setting(&state.db, automations::PAUSED).await?;
+                state.hub.log("automation", "info", None, Some(user), crate::text!("Automatismes repris", "Automations resumed", "Automatismos reanudados"), None).await;
+            }
+        }
+    }
+    if let Some(url) = input.ntfy_url {
+        match url.map(|u| u.trim().to_string()).filter(|u| !u.is_empty()) {
+            Some(u) if !(u.starts_with("https://") || u.starts_with("http://")) => {
+                return Err(ApiError::bad_request("adresse invalide : https:// ou http:// attendu"));
+            }
+            Some(u) => db::set_setting(&state.db, automations::NTFY, &u).await?,
+            None => db::delete_setting(&state.db, automations::NTFY).await?,
+        }
+    }
+    state.hub.routines_changed();
+    settings(State(state), admin.0).await
+}
+
+/// Sends a notification now, to try the ntfy topic.
+pub async fn notify_test(State(state): State<AppState>, admin: AdminUser) -> ApiResult<StatusCode> {
+    let message = crate::text!("Les notifications de Breezone arrivent bien.", "Breezone notifications get through.", "Las notificaciones de Breezone llegan bien.");
+    automations::notify(&state, "Test", &message.current(), &admin.0.username).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Who is at home, as each user told it.
+#[derive(Serialize)]
+pub struct PresenceView {
+    /// This user (`None`: never told).
+    pub me: Option<bool>,
+    /// Someone is at home (`None`: nobody ever told).
+    pub someone_home: Option<bool>,
+    pub people: Vec<db::Presence>,
+}
+
+pub async fn presence(State(state): State<AppState>, user: AuthUser) -> ApiResult<Json<PresenceView>> {
+    let people = db::list_presence(&state.db).await?;
+    Ok(Json(PresenceView { me: people.iter().find(|p| p.user_id == user.id).map(|p| p.home), someone_home: (!people.is_empty()).then(|| people.iter().any(|p| p.home)), people }))
+}
+
+#[derive(Deserialize)]
+pub struct PresenceInput {
+    pub home: bool,
+}
+
+/// A user tells whether they are at home (the app, by itself or by hand; the web, by hand).
+pub async fn set_presence(State(state): State<AppState>, user: AuthUser, Json(input): Json<PresenceInput>) -> ApiResult<Json<PresenceView>> {
+    if db::set_presence(&state.db, user.id, input.home).await? {
+        let message = if input.home {
+            crate::text!("{0} : à la maison", "{0}: at home", "{0}: en casa", user.username)
+        } else {
+            crate::text!("{0} : parti de la maison", "{0}: away from home", "{0}: fuera de casa", user.username)
+        };
+        state.hub.log("presence", "info", None, Some(&user.username), message, None).await;
+        state.hub.routines_changed();
+    }
+    presence(State(state), user).await
 }

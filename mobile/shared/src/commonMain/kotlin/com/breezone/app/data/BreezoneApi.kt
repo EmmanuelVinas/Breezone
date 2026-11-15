@@ -233,6 +233,15 @@ class BreezoneApi(
 
     suspend fun deleteRoutine(id: Long) = callUnit(HttpMethod.Delete, "/api/routines/$id")
     suspend fun runRoutine(id: Long): RunResult = call(HttpMethod.Post, "/api/routines/$id/run")
+    suspend fun automations(): List<Automation> = call(HttpMethod.Get, "/api/automations")
+    suspend fun enableAutomation(id: Long, enabled: Boolean): Automation =
+        call(HttpMethod.Put, "/api/automations/$id/enabled", FzJson.encodeToString(EnabledBody.serializer(), EnabledBody(enabled)))
+    suspend fun runAutomation(id: Long): AutomationRunResult = call(HttpMethod.Post, "/api/automations/$id/run")
+    suspend fun automationRuns(id: Long): List<AutomationRun> = call(HttpMethod.Get, "/api/automations/$id/runs")
+    suspend fun automationSettings(): AutomationSettings = call(HttpMethod.Get, "/api/automations/settings")
+    suspend fun presence(): Presence = call(HttpMethod.Get, "/api/presence")
+    suspend fun setPresence(home: Boolean): Presence =
+        call(HttpMethod.Put, "/api/presence", FzJson.encodeToString(PresenceBody.serializer(), PresenceBody(home)))
     suspend fun schedules(): SchedulesState = call(HttpMethod.Get, "/api/airzone/schedules")
     suspend fun createSchedule(input: AirzoneScheduleInput): SchedulesState =
         call(HttpMethod.Post, "/api/airzone/schedules", FzJson.encodeToString(AirzoneScheduleInput.serializer(), input))

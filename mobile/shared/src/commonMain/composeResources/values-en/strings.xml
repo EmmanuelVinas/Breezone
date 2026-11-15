@@ -493,4 +493,26 @@
     <string name="weather_snow">Snow</string>
     <string name="weather_storm">Storm</string>
     <string name="weather_max_min">%1$s · max %2$s · min %3$s</string>
+    <string name="automations_title">Automations</string>
+    <string name="automations_home">I am home</string>
+    <string name="automations_paused">Holiday pause: no automation starts.</string>
+    <string name="automations_empty">No automation for this installation.</string>
+    <string name="automations_on_web">Automations are created and changed from Breezone on the web (Schedules).</string>
+    <string name="automations_started">“%1$s” started; it goes on while it waits.</string>
+    <string name="automations_failed">“%1$s”: %2$d action(s) failed</string>
+    <string name="automations_running">Running</string>
+    <string name="automations_when">When</string>
+    <string name="automations_if">If</string>
+    <string name="automations_then">Then</string>
+    <string name="automations_else">Else</string>
+    <string name="automations_or">or</string>
+    <string name="automations_conflict">May contradict %1$s: %2$s, at the same time.</string>
+    <string name="automations_last">Last: %1$s — %2$s</string>
+    <string name="automations_never">Never run</string>
+    <string name="automations_history">History</string>
+    <string name="automations_try">Try</string>
+    <string name="automations_history_empty">Nothing yet.</string>
+    <string name="automations_ran">Ran</string>
+    <string name="automations_busy">Already running</string>
+    <string name="automations_skipped">Did not run</string>
 </resources>

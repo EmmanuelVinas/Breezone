@@ -505,4 +505,26 @@
     <string name="weather_snow">Neige</string>
     <string name="weather_storm">Orage</string>
     <string name="weather_max_min">%1$s · max %2$s · min %3$s</string>
+    <string name="automations_title">Automatismes</string>
+    <string name="automations_home">Je suis à la maison</string>
+    <string name="automations_paused">Pause vacances : aucun automatisme ne se déclenche.</string>
+    <string name="automations_empty">Aucun automatisme pour cette installation.</string>
+    <string name="automations_on_web">Les automatismes se créent et se modifient depuis Breezone sur le web (Programmations).</string>
+    <string name="automations_started">« %1$s » a démarré ; elle continue en attendant.</string>
+    <string name="automations_failed">« %1$s » : %2$d action(s) en échec</string>
+    <string name="automations_running">En cours</string>
+    <string name="automations_when">Quand</string>
+    <string name="automations_if">Si</string>
+    <string name="automations_then">Alors</string>
+    <string name="automations_else">Sinon</string>
+    <string name="automations_or">ou</string>
+    <string name="automations_conflict">Peut contredire %1$s : %2$s, au même moment.</string>
+    <string name="automations_last">Dernier : %1$s — %2$s</string>
+    <string name="automations_never">Jamais déclenché</string>
+    <string name="automations_history">Historique</string>
+    <string name="automations_try">Essayer</string>
+    <string name="automations_history_empty">Rien encore.</string>
+    <string name="automations_ran">Exécuté</string>
+    <string name="automations_busy">Déjà en cours</string>
+    <string name="automations_skipped">Pas déclenché</string>
 </resources>

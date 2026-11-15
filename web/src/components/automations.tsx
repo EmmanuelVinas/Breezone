@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
+  Bell,
   BookOpen,
   Copy,
   History,
@@ -113,6 +114,23 @@ const FACINGS: [number, string][] = [
   [315, t("Nord-ouest")],
 ]
 
+/** The colours of the weather warnings, 0 to 3. */
+const VIGILANCE = [t("verte"), t("jaune"), t("orange"), t("rouge")]
+
+const PRESSES: [string, string][] = [
+  ["any", t("tout appui")],
+  ["single", t("appui")],
+  ["double", t("double appui")],
+  ["long", t("appui long")],
+]
+
+/** The remotes of the home (`button@1`). */
+function remotes(home: Home) {
+  return home.devices.filter((d) =>
+    d.traits.some((x) => x.startsWith("button@"))
+  )
+}
+
 const SUN_EVENTS: [SunEvent, string][] = [
   ["dawn", t("Aube")],
   ["sunrise", t("Lever du soleil")],
@@ -217,6 +235,7 @@ function measureOptions(home: Home, current?: AutomationMeasure) {
   out.push(weather("wind", t("Vent"), "km/h"))
   out.push(weather("tomorrow_min", t("Minimale de demain"), "°C"))
   out.push(weather("tomorrow_max", t("Maximale de demain"), "°C"))
+  out.push(weather("vigilance", t("Vigilance météo"), ""))
   for (const { d, type } of byType(home.devices))
     for (const trait of traitsOf(home, d))
       for (const f of trait.state)
@@ -420,6 +439,8 @@ function suggested(o: MeasureOption | undefined, op: AutomationOp): number {
       rain_next_hour: pick(70, 20),
       tomorrow_min: pick(20, 0),
       tomorrow_max: pick(33, 10),
+      // Above yellow: orange or red.
+      vigilance: pick(1, 1),
     }[m.field]
   if (m.field === "room_temp") return pick(26, 18)
   switch (o.unit) {
@@ -509,11 +530,20 @@ function Comparison({
         ]}
         className="w-full lg:w-40"
       />
-      <NumberInput
-        value={value}
-        unit={chosen?.unit}
-        onChange={(v) => onChange({ measure, op, value: v ?? NaN })}
-      />
+      {measure.kind === "weather" && measure.field === "vigilance" ? (
+        <Pick
+          value={String(value)}
+          onChange={(v) => onChange({ measure, op, value: Number(v) })}
+          options={VIGILANCE.map((name, i): Option => [String(i), name])}
+          className="w-full lg:w-32"
+        />
+      ) : (
+        <NumberInput
+          value={value}
+          unit={chosen?.unit || undefined}
+          onChange={(v) => onChange({ measure, op, value: v ?? NaN })}
+        />
+      )}
     </>
   )
 }
@@ -603,6 +633,10 @@ function TriggerEditor({
     ["time", t("À heure fixe")],
     ["sun", t("Le soleil (lever, coucher…)")],
     ["facade", t("Le soleil arrive sur une façade")],
+    ["presence", t("Quelqu'un arrive ou part")],
+    ...(remotes(home).length
+      ? [["button", t("Un bouton de télécommande")] as Option]
+      : []),
   ]
   const states = stateOptions(home)
   const setKind = (k: string) => {
@@ -689,6 +723,24 @@ function TriggerEditor({
           onChange={(facing) => onChange({ ...when, facing })}
         />
       )}
+      {when.kind === "presence" && (
+        <Pick
+          value={String(when.home)}
+          onChange={(v) => onChange({ ...when, home: v === "true" })}
+          options={[
+            ["true", t("Le premier arrive à la maison")],
+            ["false", t("Le dernier part de la maison")],
+          ]}
+          className="w-full lg:w-64"
+        />
+      )}
+      {when.kind === "button" && (
+        <ButtonPick
+          home={home}
+          trigger={when}
+          onChange={(next) => onChange(next)}
+        />
+      )}
       {(when.kind === "time" || when.kind === "sun") && (
         <div className="grid gap-1">
           <DaysPicker
@@ -724,6 +776,60 @@ function FacadePick({
   )
 }
 
+type ButtonTrigger = Extract<AutomationTrigger, { kind: "button" }>
+
+/** Which remote, which button, which press. */
+function ButtonPick({
+  home,
+  trigger,
+  onChange,
+}: {
+  home: Home
+  trigger: ButtonTrigger
+  onChange: (t: ButtonTrigger) => void
+}) {
+  const list = remotes(home)
+  const remote = list.find((r) => r.id === trigger.device_id)
+  const count = Number(remote?.state?.buttons ?? 4) || 4
+  return (
+    <>
+      <Pick
+        value={String(trigger.device_id)}
+        onChange={(v) =>
+          onChange({ ...trigger, device_id: Number(v), button: 1 })
+        }
+        options={list.map((r): Option => [String(r.id), r.name, deviceType(r)])}
+        className="w-full lg:w-56"
+      />
+      <Pick
+        value={String(trigger.button ?? "any")}
+        onChange={(v) =>
+          onChange({ ...trigger, button: v === "any" ? null : Number(v) })
+        }
+        options={[
+          ["any", t("n'importe quel bouton")],
+          ...Array.from({ length: count }, (_, i): Option => [
+            String(i + 1),
+            t("bouton {n}", { n: i + 1 }),
+          ]),
+        ]}
+        className="w-full lg:w-48"
+      />
+      <Pick
+        value={trigger.press ?? "any"}
+        onChange={(v) =>
+          onChange({
+            ...trigger,
+            press: v === "any" ? null : (v as "single" | "double" | "long"),
+          })
+        }
+        options={PRESSES}
+        className="w-full lg:w-40"
+      />
+    </>
+  )
+}
+
 function newTrigger(kind: string, home: Home): AutomationTrigger | null {
   switch (kind) {
     case "time":
@@ -732,6 +838,12 @@ function newTrigger(kind: string, home: Home): AutomationTrigger | null {
       return { kind: "sun", event: "sunset", offset_minutes: 0, days: [] }
     case "facade":
       return { kind: "facade", facing: 180 }
+    case "presence":
+      return { kind: "presence", home: false }
+    case "button": {
+      const r = remotes(home)[0]
+      return r ? { kind: "button", device_id: r.id, button: 1 } : null
+    }
     case "state": {
       const options = stateOptions(home)
       // A charger that starts charging is the most common change watched.
@@ -769,6 +881,7 @@ const CONDITION_KINDS = (): Option[] => [
   ["days", t("Des jours de la semaine")],
   ["daylight", t("Le jour ou la nuit")],
   ["facade", t("Le soleil sur une façade")],
+  ["presence", t("Quelqu'un à la maison, ou personne")],
 ]
 
 function newCondition(kind: string, home: Home): AutomationCondition | null {
@@ -805,6 +918,8 @@ function newCondition(kind: string, home: Home): AutomationCondition | null {
       return { kind: "days", days: [1, 2, 3, 4, 5] }
     case "facade":
       return { kind: "facade", facing: 180 }
+    case "presence":
+      return { kind: "presence", home: false }
     default:
       return { kind: "daylight", day: true }
   }
@@ -912,6 +1027,18 @@ function ConditionEditor({
             onChange={(facing) => onChange({ ...c, facing })}
           />
         </>
+      )
+    case "presence":
+      return (
+        <Pick
+          value={String(c.home)}
+          onChange={(v) => onChange({ kind: "presence", home: v === "true" })}
+          options={[
+            ["true", t("Quelqu'un est à la maison")],
+            ["false", t("Personne n'est à la maison")],
+          ]}
+          className="w-full lg:w-64"
+        />
       )
   }
 }
@@ -1315,6 +1442,19 @@ function StepEditor({
         </>
       )
     }
+    case "notify":
+      return (
+        <>
+          <span className="text-sm">{t("Prévenir")}</span>
+          <Input
+            className="w-full lg:w-96"
+            maxLength={200}
+            value={step.message}
+            placeholder={t("ex. Le surplus solaire charge la voiture")}
+            onChange={(e) => onChange({ ...step, message: e.target.value })}
+          />
+        </>
+      )
     case "restore":
       return (
         <span className="text-sm">
@@ -1345,6 +1485,7 @@ function StepList({
     ...(home.scenes.length ? [["scene", t("Lancer une scène")] as Option] : []),
     ["wait", t("Attendre")],
     ["wait_until", t("Attendre que…")],
+    ["notify", t("Prévenir")],
     ...(drivesDevice ? [["restore", t("Remettre comme avant")] as Option] : []),
   ]
   const add = (k: string) => {
@@ -1354,6 +1495,7 @@ function StepList({
       step = { kind: "scene", routine_id: home.scenes[0].id }
     else if (k === "wait") step = { kind: "wait", seconds: 600 }
     else if (k === "restore") step = { kind: "restore" }
+    else if (k === "notify") step = { kind: "notify", message: "" }
     else if (k === "wait_until") {
       const condition = newCondition("measure", home)!
       step = {
@@ -1455,7 +1597,9 @@ function complete(d: AutomationInput) {
     (w) => w.kind !== "measure" || Number.isFinite(w.value)
   )
   const stepsOk = [...d.actions, ...d.else].every(
-    (s) => s.kind !== "wait_until" || conditionComplete(s.condition)
+    (s) =>
+      (s.kind !== "wait_until" || conditionComplete(s.condition)) &&
+      (s.kind !== "notify" || s.message.trim().length > 0)
   )
   return (
     Boolean(d.name.trim()) &&
@@ -2004,6 +2148,50 @@ function recipes(home: Home): Recipe[] {
     })
   if (zones.length)
     out.push({
+      title: t("Tout le monde est parti : éteindre la climatisation"),
+      description: t(
+        "Quand le dernier quitte la maison, éteindre les zones et prévenir."
+      ),
+      rule: {
+        ...base(t("Maison vide"), [{ kind: "presence", home: false }]),
+        actions: [
+          ...zones
+            .slice(0, MAX_ACTIONS - 1)
+            .map((d) => step(d, "climate.zone", "set", { on: false })),
+          {
+            kind: "notify",
+            message: t(
+              "Tout le monde est parti : la climatisation est éteinte."
+            ),
+          },
+        ],
+      },
+    })
+  out.push({
+    title: t("Vigilance orange ou rouge : prévenir"),
+    description: t(
+      "Quand Météo-France passe le département en vigilance orange ou rouge, prévenir."
+    ),
+    rule: {
+      ...base(t("Vigilance météo"), [
+        {
+          kind: "measure",
+          measure: { kind: "weather", field: "vigilance" },
+          op: "above",
+          value: 1,
+          for_minutes: 0,
+        },
+      ]),
+      actions: [
+        {
+          kind: "notify",
+          message: t("Vigilance météo orange ou rouge dans le département."),
+        },
+      ],
+    },
+  })
+  if (zones.length)
+    out.push({
       title: t("Gel annoncé : garder la maison hors gel"),
       description: t(
         "À 22 h, si la minimale de demain est sous 0 °C, chauffer les zones à 16°."
@@ -2294,6 +2482,19 @@ function AutomationCard({
               <div key={i}>{s}</div>
             ))}
           </Line>
+          {(a.conflicts ?? []).length > 0 && (
+            <p className="rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-xs">
+              {t(
+                "Peut contredire {names} : {what}, au même moment. Vérifiez qu'elles ne se battent pas.",
+                {
+                  names: a.conflicts
+                    .map((c) => t("« {name} »", { name: c.name }))
+                    .join(", "),
+                  what: a.conflicts[0].what,
+                }
+              )}
+            </p>
+          )}
           {(a.summary.else ?? []).length > 0 && (
             <Line badge={t("Sinon")} tone={ELSE_TONE}>
               {a.summary.else.map((s, i) => (
@@ -2390,6 +2591,160 @@ function AutomationCard({
         {history && <RunsPanel id={a.id} />}
       </CardContent>
     </Card>
+  )
+}
+
+/** Where the notifications go: an ntfy topic (administrators). */
+function NotificationsDialog({
+  current,
+  onClose,
+}: {
+  current: string
+  onClose: () => void
+}) {
+  const qc = useQueryClient()
+  const [url, setUrl] = useState(current)
+  const onError = (e: unknown) =>
+    toast.error(e instanceof Error ? e.message : String(e))
+  const save = useMutation({
+    mutationFn: () =>
+      api.saveAutomationSettings({ ntfy_url: url.trim() || null }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["automation-settings"] })
+      toast.success(t("Enregistré"))
+    },
+    onError,
+  })
+  const test = useMutation({
+    mutationFn: async () => {
+      await api.saveAutomationSettings({ ntfy_url: url.trim() || null })
+      await api.notifyTest()
+    },
+    onSuccess: () => toast.success(t("Notification de test envoyée")),
+    onError,
+  })
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{t("Notifications")}</DialogTitle>
+          <DialogDescription>
+            {t(
+              "L'action « Prévenir » écrit dans Activité et s'affiche dans Breezone ouvert. Pour la recevoir aussi sur votre téléphone, installez l'application ntfy (gratuite, sans compte) et abonnez-vous à un sujet que vous seul connaissez ; collez son adresse ici."
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-2">
+          <Label htmlFor="ntfy">{t("Adresse du sujet ntfy")}</Label>
+          <Input
+            id="ntfy"
+            value={url}
+            placeholder="https://ntfy.sh/breezone-maison-7f3k2"
+            onChange={(e) => setUrl(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">
+            {t(
+              "Un sujet sur ntfy.sh est public pour qui connaît son nom : choisissez un nom long et difficile à deviner, ou votre propre serveur ntfy."
+            )}
+          </p>
+        </div>
+        <DialogFooter className="gap-2">
+          <Button
+            variant="outline"
+            onClick={() => test.mutate()}
+            disabled={test.isPending}
+          >
+            {t("Envoyer un test")}
+          </Button>
+          <Button onClick={() => save.mutate()} disabled={save.isPending}>
+            {t("Enregistrer")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/** "I'm home", the holiday pause, the notifications. */
+function AutomationsBar({ admin }: { admin: boolean }) {
+  const qc = useQueryClient()
+  const settings = useQuery({
+    queryKey: ["automation-settings"],
+    queryFn: api.automationSettings,
+  })
+  const presence = useQuery({ queryKey: ["presence"], queryFn: api.presence })
+  const [notifications, setNotifications] = useState(false)
+  const onError = (e: unknown) =>
+    toast.error(e instanceof Error ? e.message : String(e))
+  const pause = useMutation({
+    mutationFn: (paused: boolean) =>
+      api.saveAutomationSettings({ paused_until: paused ? 0 : null }),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ["automation-settings"] }),
+    onError,
+  })
+  const home = useMutation({
+    mutationFn: api.setPresence,
+    onSuccess: (p) => qc.setQueryData(["presence"], p),
+    onError,
+  })
+  const paused = settings.data?.paused_until != null
+  const others = (presence.data?.people ?? []).filter(
+    (p) => p.username !== currentUser()?.username
+  )
+  return (
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-2xl border bg-muted/30 px-4 py-3 text-sm">
+      <label className="flex items-center gap-2">
+        <Switch
+          checked={presence.data?.me ?? false}
+          loading={home.isPending}
+          onCheckedChange={(v) => home.mutate(v)}
+        />
+        {t("Je suis à la maison")}
+      </label>
+      {others.length > 0 && (
+        <span className="text-xs text-muted-foreground">
+          {others
+            .map((p) =>
+              p.home
+                ? t("{name} : à la maison", { name: p.username })
+                : t("{name} : absent", { name: p.username })
+            )
+            .join(" · ")}
+        </span>
+      )}
+      {admin && (
+        <label className="flex items-center gap-2">
+          <Switch
+            checked={paused}
+            loading={pause.isPending}
+            onCheckedChange={(v) => pause.mutate(v)}
+          />
+          {t("Pause vacances")}
+        </label>
+      )}
+      {paused && (
+        <Badge variant="outline" className="border-warning/40 text-warning">
+          {t("Aucun automatisme ne se déclenche")}
+        </Badge>
+      )}
+      {admin && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="ml-auto"
+          onClick={() => setNotifications(true)}
+        >
+          <Bell /> {t("Notifications")}
+        </Button>
+      )}
+      {notifications && (
+        <NotificationsDialog
+          current={settings.data?.ntfy_url ?? ""}
+          onClose={() => setNotifications(false)}
+        />
+      )}
+    </div>
   )
 }
 
@@ -2510,6 +2865,7 @@ export function AutomationsSection() {
           </div>
         )}
       </div>
+      <AutomationsBar admin={admin} />
       {automations.isLoading ? (
         <div className="grid gap-4 md:grid-cols-2">
           <Skeleton className="h-40 rounded-3xl" />

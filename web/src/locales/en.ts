@@ -1410,6 +1410,57 @@ const en: Record<string, string> = {
   "Aucun automatisme. Partez d'une recette, ou par exemple : quand l'injection au réseau dépasse 500 W pendant 5 min, si le salon est sous 18 °C de novembre à mars, alors allumer le salon à 21°.":
     "No automation. Start from a recipe, or for example: when the grid export is above 500 W for 5 min, if the living room is below 18 °C from November to March, then switch the living room on at 21°.",
   Météo: "Weather",
+  verte: "green",
+  jaune: "yellow",
+  orange: "orange",
+  rouge: "red",
+  "tout appui": "any press",
+  appui: "press",
+  "double appui": "double press",
+  "appui long": "long press",
+  "Vigilance météo": "Weather warning",
+  "Quelqu'un arrive ou part": "Someone arrives or leaves",
+  "Un bouton de télécommande": "A button of a remote",
+  "Le premier arrive à la maison": "The first one gets home",
+  "Le dernier part de la maison": "The last one leaves home",
+  "n'importe quel bouton": "any button",
+  "bouton {n}": "button {n}",
+  "Quelqu'un à la maison, ou personne": "Someone home, or nobody",
+  "Quelqu'un est à la maison": "Someone is home",
+  "Personne n'est à la maison": "Nobody is home",
+  Prévenir: "Notify",
+  "ex. Le surplus solaire charge la voiture":
+    "e.g. The solar surplus is charging the car",
+  "Tout le monde est parti : éteindre la climatisation":
+    "Everyone left: switch the air conditioning off",
+  "Quand le dernier quitte la maison, éteindre les zones et prévenir.":
+    "When the last one leaves home, switch the zones off and notify.",
+  "Maison vide": "Empty home",
+  "Tout le monde est parti : la climatisation est éteinte.":
+    "Everyone left: the air conditioning is off.",
+  "Vigilance orange ou rouge : prévenir": "Orange or red warning: notify",
+  "Quand Météo-France passe le département en vigilance orange ou rouge, prévenir.":
+    "When Météo-France puts the area on orange or red warning, notify.",
+  "Vigilance météo orange ou rouge dans le département.":
+    "Orange or red weather warning in the area.",
+  "Peut contredire {names} : {what}, au même moment. Vérifiez qu'elles ne se battent pas.":
+    "May contradict {names}: {what}, at the same time. Check they do not fight.",
+  Enregistré: "Saved",
+  "Notification de test envoyée": "Test notification sent",
+  Notifications: "Notifications",
+  "L'action « Prévenir » écrit dans Activité et s'affiche dans Breezone ouvert. Pour la recevoir aussi sur votre téléphone, installez l'application ntfy (gratuite, sans compte) et abonnez-vous à un sujet que vous seul connaissez ; collez son adresse ici.":
+    "The “Notify” action writes to Activity and shows in Breezone when it is open. To get it on your phone too, install the ntfy app (free, no account) and subscribe to a topic only you know; paste its address here.",
+  "Adresse du sujet ntfy": "Address of the ntfy topic",
+  "Un sujet sur ntfy.sh est public pour qui connaît son nom : choisissez un nom long et difficile à deviner, ou votre propre serveur ntfy.":
+    "A topic on ntfy.sh is public to whoever knows its name: choose a long name that is hard to guess, or your own ntfy server.",
+  "Envoyer un test": "Send a test",
+  "Je suis à la maison": "I am home",
+  "{name} : à la maison": "{name}: at home",
+  "{name} : absent": "{name}: away",
+  "Pause vacances": "Holiday pause",
+  "Aucun automatisme ne se déclenche": "No automation starts",
+  Présence: "Presence",
+  "« {name} »": "“{name}”",
 }
 
 export default en

@@ -105,6 +105,8 @@ impl Capabilities {
                 ("energy", 1),
                 // Rules "quand… si… alors…" run by this server: /api/automations.
                 ("automations", 1),
+                // Who is at home: /api/presence.
+                ("presence", 1),
             ]
             .into_iter()
             .map(|(k, v)| (k.to_string(), v))

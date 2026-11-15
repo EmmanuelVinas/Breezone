@@ -112,6 +112,8 @@ fun InstallationSchedules(serverId: String, inst: Installation, canEdit: Boolean
                 onEnabled = { enabled -> apply { hub.api(serverId)?.setScheduleEnabled(schedule, enabled) } },
             )
         }
+        // Breezone's own automations, under the Airzone schedules: what runs by itself.
+        item(key = "automations", contentType = "automations") { AutomationsSection(serverId, inst) }
     }
 
     if (creating || editing != null) {

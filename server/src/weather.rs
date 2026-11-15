@@ -104,6 +104,100 @@ pub struct Report {
     pub hours: Vec<Hour>,
     /// When it was read (seconds).
     pub read_at: i64,
+    /// The weather warnings of the home's area in force now (MeteoAlarm), when its country has some.
+    #[serde(default)]
+    pub vigilance: Option<Vigilance>,
+}
+
+/// The weather warnings in force for an area: Météo-France's vigilance, relayed by MeteoAlarm.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Vigilance {
+    /// 0 green, 1 yellow, 2 orange, 3 red: the highest warning in force.
+    pub level: u8,
+    /// What the warnings are about ("Wind", "Rain-flood"…), the highest first.
+    pub events: Vec<String>,
+    /// The area they are for ("Haute-Garonne").
+    pub area: String,
+}
+
+/// The MeteoAlarm feed of a country (ISO 3166-1 alpha-2), for the countries it covers.
+fn meteoalarm_feed(country: &str) -> Option<&'static str> {
+    Some(match country.to_ascii_uppercase().as_str() {
+        "FR" => "france",
+        "BE" => "belgium",
+        "CH" => "switzerland",
+        "ES" => "spain",
+        "IT" => "italy",
+        "DE" => "germany",
+        "PT" => "portugal",
+        "LU" => "luxembourg",
+        "NL" => "netherlands",
+        "AT" => "austria",
+        _ => return None,
+    })
+}
+
+/// "Côte-d'Or" and "cote d or" are the same area.
+fn same_area(a: &str) -> String {
+    let plain: String = a
+        .chars()
+        .map(|c| match c {
+            'à' | 'â' | 'ä' | 'á' => 'a',
+            'é' | 'è' | 'ê' | 'ë' => 'e',
+            'î' | 'ï' | 'í' => 'i',
+            'ô' | 'ö' | 'ó' => 'o',
+            'ù' | 'û' | 'ü' | 'ú' => 'u',
+            'ç' => 'c',
+            'ñ' => 'n',
+            '-' | '\'' | '’' => ' ',
+            c => c,
+        })
+        .collect::<String>()
+        .to_lowercase();
+    plain.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// The text of the first `<tag>…</tag>` in `xml`.
+fn tag<'a>(xml: &'a str, tag: &str) -> Option<&'a str> {
+    let open = format!("<{tag}>");
+    let start = xml.find(&open)? + open.len();
+    let end = xml[start..].find(&format!("</{tag}>"))? + start;
+    Some(xml[start..end].trim())
+}
+
+/// The warnings of `area` in force at `now`, from a MeteoAlarm Atom feed (CAP 1.2): the colour is
+/// its severity (Moderate yellow, Severe orange, Extreme red), else the colour in its title.
+pub fn vigilance_of(feed: &str, area: &str, now: i64) -> Vigilance {
+    let wanted = same_area(area);
+    let mut found: Vec<(u8, String)> = vec![];
+    for entry in feed.split("<entry>").skip(1) {
+        if tag(entry, "cap:areaDesc").map(same_area).as_deref() != Some(wanted.as_str()) {
+            continue;
+        }
+        let time = |t: &str| tag(entry, t).and_then(|v| chrono::DateTime::parse_from_rfc3339(v).ok()).map(|d| d.timestamp());
+        let from = time("cap:onset").or(time("cap:effective")).unwrap_or(i64::MIN);
+        let until = time("cap:expires").unwrap_or(i64::MAX);
+        if now < from || now >= until {
+            continue;
+        }
+        let title = tag(entry, "title").unwrap_or_default().to_lowercase();
+        let level = match tag(entry, "cap:severity") {
+            Some("Extreme") => 3,
+            Some("Severe") => 2,
+            Some("Moderate") => 1,
+            _ if title.starts_with("red") => 3,
+            _ if title.starts_with("orange") => 2,
+            _ if title.starts_with("yellow") => 1,
+            _ => 0,
+        };
+        let event =
+            tag(entry, "cap:event").unwrap_or_default().trim_end_matches(" warning").trim_start_matches("Moderate ").trim_start_matches("Severe ").trim_start_matches("Extreme ");
+        if level > 0 && !found.iter().any(|(_, e)| e == event) {
+            found.push((level, event.to_string()));
+        }
+    }
+    found.sort_by(|a, b| b.0.cmp(&a.0));
+    Vigilance { level: found.first().map_or(0, |(l, _)| *l), events: found.into_iter().map(|(_, e)| e).collect(), area: area.to_string() }
 }
 
 /// What the weather page gets: the weather (if any) and the sun of today.
@@ -145,7 +239,17 @@ pub fn report_of(place: &str, data: &Value, now: i64) -> Option<Report> {
         tomorrow_code: daily("weather_code", 1).map(|c| c as i64),
         hours,
         read_at: now,
+        vigilance: None,
     })
+}
+
+/// Where the home is.
+struct Located {
+    lat: f64,
+    lon: f64,
+    /// Its area ("Haute-Garonne") and country ("FR").
+    area: Option<String>,
+    country: Option<String>,
 }
 
 pub struct Weather {
@@ -175,11 +279,24 @@ impl Weather {
     /// The coordinates of `place` (in `country` when known), asked once to Open-Meteo's geocoding
     /// and kept.
     async fn coords(&self, place: &str, country: Option<&str>) -> Option<(f64, f64)> {
+        self.locate(place, country).await.map(|l| (l.lat, l.lon))
+    }
+
+    /// Where `place` is: asked once to Open-Meteo's geocoding and kept (with its area and country,
+    /// for the weather warnings).
+    async fn locate(&self, place: &str, country: Option<&str>) -> Option<Located> {
         let key = format!("{place}#{}", country.unwrap_or(""));
         if let Ok(Some(kept)) = db::get_setting(&self.db, COORDS).await {
-            if let Some((p, lat, lon)) = kept.split_once('|').and_then(|(p, rest)| rest.split_once('|').map(|(a, b)| (p, a, b))) {
+            let parts: Vec<&str> = kept.split('|').collect();
+            // Kept before the area was (fewer parts): asked again once.
+            if let [p, lat, lon, area, code] = parts[..] {
                 if p == key {
-                    return Some((lat.parse().ok()?, lon.parse().ok()?));
+                    return Some(Located {
+                        lat: lat.parse().ok()?,
+                        lon: lon.parse().ok()?,
+                        area: Some(area.to_string()).filter(|a| !a.is_empty()),
+                        country: Some(code.to_string()).filter(|c| !c.is_empty()),
+                    });
                 }
             }
         }
@@ -201,14 +318,26 @@ impl Weather {
         let best =
             results.iter().find(|r| !region.is_empty() && r["admin2"].as_str().or(r["admin1"].as_str()).is_some_and(|a| a.eq_ignore_ascii_case(region))).or(results.first())?;
         let (lat, lon) = (best["latitude"].as_f64()?, best["longitude"].as_f64()?);
-        let _ = db::set_setting(&self.db, COORDS, &format!("{key}|{lat}|{lon}")).await;
-        Some((lat, lon))
+        // The French "département" is admin2.
+        let area = best["admin2"].as_str().or(best["admin1"].as_str()).unwrap_or_default().replace('|', " ");
+        let code = best["country_code"].as_str().map(str::to_string).or(country.map(str::to_string)).unwrap_or_default();
+        let _ = db::set_setting(&self.db, COORDS, &format!("{key}|{lat}|{lon}|{area}|{code}")).await;
+        Some(Located { lat, lon, area: Some(area).filter(|a| !a.is_empty()), country: Some(code).filter(|c| !c.is_empty()) })
+    }
+
+    /// The warnings in force for `area` (`None`: its country has no feed, or it does not answer).
+    async fn vigilance(&self, area: &str, country: &str) -> Option<Vigilance> {
+        let feed = meteoalarm_feed(country)?;
+        let url = format!("https://feeds.meteoalarm.org/feeds/meteoalarm-legacy-atom-{feed}");
+        let text = self.http.get(url).timeout(Duration::from_secs(20)).send().await.ok()?.error_for_status().ok()?.text().await.ok()?;
+        Some(vigilance_of(&text, area, db::now()))
     }
 
     /// Reads the weather now; keeps the outdoor temperature.
     pub async fn refresh(&self) -> Option<Report> {
         let (place, country) = self.place().await.ok()??;
-        let (lat, lon) = self.coords(&place, country.as_deref()).await?;
+        let located = self.locate(&place, country.as_deref()).await?;
+        let (lat, lon) = (located.lat, located.lon);
         let data: Value = self
             .http
             .get("https://api.open-meteo.com/v1/forecast")
@@ -228,7 +357,10 @@ impl Weather {
             .json()
             .await
             .ok()?;
-        let report = report_of(&place, &data, db::now())?;
+        let mut report = report_of(&place, &data, db::now())?;
+        if let (Some(area), Some(code)) = (&located.area, &located.country) {
+            report.vigilance = self.vigilance(area, code).await;
+        }
         if let Some(t) = report.temperature {
             if let Err(e) = sqlx::query("INSERT OR REPLACE INTO outdoor_samples (ts, temperature) VALUES (?, ?)").bind(db::now()).bind(t).execute(&self.db).await {
                 tracing::warn!("cannot keep the outdoor temperature: {e}");
@@ -327,6 +459,29 @@ mod tests {
         // At 09:00 it is south-east and low.
         let (elevation, azimuth) = position(noon - 3 * 3600 - 39 * 60, 43.6045, 1.444);
         assert!((5.0..20.0).contains(&elevation) && (120.0..150.0).contains(&azimuth), "{elevation} {azimuth}");
+    }
+
+    #[test]
+    fn the_warnings_of_the_area() {
+        let entry = |area: &str, severity: &str, event: &str, onset: &str, expires: &str| {
+            format!(
+                "<entry><title>Yellow {event} issued for France - {area}</title><cap:areaDesc>{area}</cap:areaDesc><cap:event>{severity} {event}</cap:event>\
+                 <cap:severity>{severity}</cap:severity><cap:onset>{onset}</cap:onset><cap:expires>{expires}</cap:expires></entry>"
+            )
+        };
+        let feed = [
+            entry("Haute-Garonne", "Moderate", "rain-flood warning", "2026-11-15T06:00:00+00:00", "2026-11-16T06:00:00+00:00"),
+            entry("Haute-Garonne", "Severe", "wind warning", "2026-11-15T10:00:00+00:00", "2026-11-15T20:00:00+00:00"),
+            entry("Haute-Garonne", "Extreme", "flooding warning", "2026-11-17T10:00:00+00:00", "2026-11-18T20:00:00+00:00"),
+            entry("Côte-d'Or", "Extreme", "snow-ice warning", "2026-11-15T00:00:00+00:00", "2026-11-16T00:00:00+00:00"),
+        ]
+        .join("");
+        let noon = chrono::DateTime::parse_from_rfc3339("2026-11-15T12:00:00+00:00").unwrap().timestamp();
+        let v = vigilance_of(&feed, "Haute-Garonne", noon);
+        assert_eq!((v.level, v.events.clone()), (2, vec!["wind".to_string(), "rain-flood".to_string()]), "orange wind, yellow rain; red not yet");
+        assert_eq!(vigilance_of(&feed, "cote d'or", noon).level, 3, "names compared without accents or dashes");
+        assert_eq!(vigilance_of(&feed, "Ariège", noon).level, 0, "nothing: green");
+        assert_eq!(vigilance_of(&feed, "Haute-Garonne", noon + 86_400).level, 0, "over");
     }
 
     #[test]

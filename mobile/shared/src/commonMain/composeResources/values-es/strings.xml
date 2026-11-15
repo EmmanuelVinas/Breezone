@@ -345,4 +345,26 @@
     <string name="mode_confirm_title">¿Pasar al modo %1$s?</string>
     <string name="mode_confirm_text">El modo se aplica a todas las zonas del sistema.</string>
     <string name="mode_confirm">Cambiar</string>
+    <string name="automations_title">Automatismos</string>
+    <string name="automations_home">Estoy en casa</string>
+    <string name="automations_paused">Pausa de vacaciones: ningún automatismo se activa.</string>
+    <string name="automations_empty">Ningún automatismo para esta instalación.</string>
+    <string name="automations_on_web">Los automatismos se crean y modifican desde Breezone en la web (Programaciones).</string>
+    <string name="automations_started">«%1$s» ha empezado; continúa mientras espera.</string>
+    <string name="automations_failed">«%1$s»: %2$d acción(es) con fallo</string>
+    <string name="automations_running">En curso</string>
+    <string name="automations_when">Cuando</string>
+    <string name="automations_if">Si</string>
+    <string name="automations_then">Entonces</string>
+    <string name="automations_else">Si no</string>
+    <string name="automations_or">o</string>
+    <string name="automations_conflict">Puede contradecir %1$s: %2$s, al mismo tiempo.</string>
+    <string name="automations_last">Último: %1$s — %2$s</string>
+    <string name="automations_never">Nunca activado</string>
+    <string name="automations_history">Historial</string>
+    <string name="automations_try">Probar</string>
+    <string name="automations_history_empty">Nada todavía.</string>
+    <string name="automations_ran">Ejecutado</string>
+    <string name="automations_busy">Ya en curso</string>
+    <string name="automations_skipped">No activado</string>
 </resources>

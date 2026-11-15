@@ -1422,6 +1422,57 @@ const es: Record<string, string> = {
   "Aucun automatisme. Partez d'une recette, ou par exemple : quand l'injection au réseau dépasse 500 W pendant 5 min, si le salon est sous 18 °C de novembre à mars, alors allumer le salon à 21°.":
     "Ningún automatismo. Parta de una receta o, por ejemplo: cuando la inyección a la red supera 500 W durante 5 min, si el salón está por debajo de 18 °C de noviembre a marzo, entonces encender el salón a 21°.",
   Météo: "Tiempo",
+  verte: "verde",
+  jaune: "amarilla",
+  orange: "naranja",
+  rouge: "roja",
+  "tout appui": "cualquier pulsación",
+  appui: "pulsación",
+  "double appui": "doble pulsación",
+  "appui long": "pulsación larga",
+  "Vigilance météo": "Aviso meteorológico",
+  "Quelqu'un arrive ou part": "Alguien llega o se va",
+  "Un bouton de télécommande": "Un botón de un mando",
+  "Le premier arrive à la maison": "Llega el primero a casa",
+  "Le dernier part de la maison": "Se va el último de casa",
+  "n'importe quel bouton": "cualquier botón",
+  "bouton {n}": "botón {n}",
+  "Quelqu'un à la maison, ou personne": "Alguien en casa, o nadie",
+  "Quelqu'un est à la maison": "Hay alguien en casa",
+  "Personne n'est à la maison": "No hay nadie en casa",
+  Prévenir: "Avisar",
+  "ex. Le surplus solaire charge la voiture":
+    "p. ej. El excedente solar carga el coche",
+  "Tout le monde est parti : éteindre la climatisation":
+    "Todos se han ido: apagar la climatización",
+  "Quand le dernier quitte la maison, éteindre les zones et prévenir.":
+    "Cuando el último sale de casa, apagar las zonas y avisar.",
+  "Maison vide": "Casa vacía",
+  "Tout le monde est parti : la climatisation est éteinte.":
+    "Todos se han ido: la climatización está apagada.",
+  "Vigilance orange ou rouge : prévenir": "Aviso naranja o rojo: avisar",
+  "Quand Météo-France passe le département en vigilance orange ou rouge, prévenir.":
+    "Cuando Météo-France pone el departamento en aviso naranja o rojo, avisar.",
+  "Vigilance météo orange ou rouge dans le département.":
+    "Aviso meteorológico naranja o rojo en el departamento.",
+  "Peut contredire {names} : {what}, au même moment. Vérifiez qu'elles ne se battent pas.":
+    "Puede contradecir {names}: {what}, al mismo tiempo. Compruebe que no se contradicen.",
+  Enregistré: "Guardado",
+  "Notification de test envoyée": "Notificación de prueba enviada",
+  Notifications: "Notificaciones",
+  "L'action « Prévenir » écrit dans Activité et s'affiche dans Breezone ouvert. Pour la recevoir aussi sur votre téléphone, installez l'application ntfy (gratuite, sans compte) et abonnez-vous à un sujet que vous seul connaissez ; collez son adresse ici.":
+    "La acción «Avisar» escribe en Actividad y se muestra en Breezone abierto. Para recibirla también en el teléfono, instale la aplicación ntfy (gratuita, sin cuenta) y suscríbase a un tema que solo usted conozca; pegue aquí su dirección.",
+  "Adresse du sujet ntfy": "Dirección del tema ntfy",
+  "Un sujet sur ntfy.sh est public pour qui connaît son nom : choisissez un nom long et difficile à deviner, ou votre propre serveur ntfy.":
+    "Un tema en ntfy.sh es público para quien conozca su nombre: elija un nombre largo y difícil de adivinar, o su propio servidor ntfy.",
+  "Envoyer un test": "Enviar una prueba",
+  "Je suis à la maison": "Estoy en casa",
+  "{name} : à la maison": "{name}: en casa",
+  "{name} : absent": "{name}: fuera",
+  "Pause vacances": "Pausa de vacaciones",
+  "Aucun automatisme ne se déclenche": "Ningún automatismo se activa",
+  Présence: "Presencia",
+  "« {name} »": "«{name}»",
 }
 
 export default es

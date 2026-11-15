@@ -331,6 +331,11 @@ Fonction `automations@1`. Une règle : 1 à 3 déclencheurs (un seul suffit), ju
 | PUT 🔒 | `/api/automations/{id}/enabled` | `{enabled}` ; désactiver arrête une exécution en cours |
 | POST 🔒 | `/api/automations/{id}/run` | Lance les étapes « alors » maintenant, sans regarder déclencheurs ni conditions → `{results, running}` (`running` : elle attend encore après 10 s ; `409` si elle tourne déjà en mode `single`) |
 | GET 🔒 | `/api/automations/{id}/runs` | Les 20 derniers passages : `[{started_at, finished_at, branch, reason, ended, steps:[{what, ok, error}]}]` |
+| GET 🔒 | `/api/automations/settings` | `{paused_until, ntfy_url?}` : pause vacances (`null` : pas de pause ; `0` : jusqu'à la reprise ; sinon un instant) ; `ntfy_url` aux administrateurs seulement |
+| PUT 👑 | `/api/automations/settings` | `{paused_until?, ntfy_url?}` (seuls les champs donnés changent ; `null` efface) |
+| POST 👑 | `/api/automations/notify-test` | Envoie une notification de test (journal et ntfy) |
+| GET 🔒 | `/api/presence` | `{me, someone_home, people:[{user_id, username, home, changed_at}]}` (fonction `presence@1`) |
+| PUT 🔒 | `/api/presence` | `{home}` : l'utilisateur dit s'il est à la maison |
 
 `AutomationInput` : `{name, enabled?, triggers: [Trigger], match?: "all"|"any", conditions?: [Condition], actions: [Step], else?: [Step], mode?: "single"|"restart"}`.
 `when: Trigger` (un seul déclencheur, forme de 0.11.0-beta.18) est encore accepté à la place de `triggers`.
@@ -343,17 +348,24 @@ Fonction `automations@1`. Une règle : 1 à 3 déclencheurs (un seul suffit), ju
 - `{kind:"sun", event:"sunrise"|"sunset"|"dawn"|"dusk", offset_minutes? (−180 … 180), days?}`
   (aube et crépuscule civils : le soleil à 6° sous l'horizon) ;
 - `{kind:"facade", facing}` : le soleil arrive sur une façade orientée à `facing` degrés (0 nord,
-  180 sud) : à plus de 3° de hauteur et à moins de 80° de son orientation.
+  180 sud) : à plus de 3° de hauteur et à moins de 80° de son orientation ;
+- `{kind:"button", device_id, button?, press?: "single"|"double"|"long"}` : un bouton d'une
+  télécommande (`button@1`) ; tout bouton, tout appui quand ils manquent ;
+- `{kind:"presence", home}` : le premier arrive à la maison (`true`) ou le dernier part (`false`).
 
 `Measure` : `{kind:"energy", flow:"export"|"import"|"solar"|"home"}` (W ; `export` = puissance
 injectée au réseau) | `{kind:"device", device_id, field}` | `{kind:"outdoor"}` |
-`{kind:"weather", field:"precipitation"|"wind"|"rain_next_hour"|"tomorrow_min"|"tomorrow_max"}`
-(mm, km/h, %, °C ; relevé Open-Meteo de moins de 3 h).
+`{kind:"weather", field:"precipitation"|"wind"|"rain_next_hour"|"tomorrow_min"|"tomorrow_max"|"vigilance"}`
+(mm, km/h, %, °C ; relevé Open-Meteo de moins de 3 h). `vigilance` : l'avertissement en cours pour
+le département de la maison, 0 vert, 1 jaune, 2 orange, 3 rouge (vigilance Météo-France relayée par
+MeteoAlarm, flux public sous licence CC BY 4.0 ; France, Belgique, Suisse, Espagne, Italie,
+Allemagne, Portugal, Luxembourg, Pays-Bas, Autriche).
 
 `Condition` : `{kind:"measure", measure, op, value}` | `{kind:"state", device_id, field, value}` |
 `{kind:"months", from, to}` (1 … 12 ; `from` > `to` passe par le nouvel an) | `{kind:"hours",
 from:"HH:MM", to:"HH:MM"}` | `{kind:"days", days}` | `{kind:"daylight", day}` | `{kind:"facade",
-facing}` | `{kind:"group", match, conditions}` (2 conditions ou plus, un seul niveau). `match` dit
+facing}` | `{kind:"presence", home}` (quelqu'un est à la maison, ou personne) |
+`{kind:"group", match, conditions}` (2 conditions ou plus, un seul niveau). `match` dit
 comment les conditions sont réunies : `all` (et, par défaut) ou `any` (ou) ; une condition qu'on ne
 peut pas lire (appareil injoignable) ne décide que si les autres ne le font pas.
 
@@ -362,12 +374,15 @@ peut pas lire (appareil injoignable) ne décide que si les autres ne le font pas
 condition, for_seconds?, timeout_seconds, on_timeout?: "continue"|"stop"}` (attend que la condition
 soit vraie, `for_seconds` d'affilée, au plus `timeout_seconds`) | `{kind:"restore"}` (remet les
 appareils pilotés plus haut dans la même liste comme ils étaient : réglages changés, charge, boost ;
-vient après une action sur un appareil).
+vient après une action sur un appareil) | `{kind:"notify", message}` (1 à 200 caractères : écrit dans
+le journal, `kind: "notification"`, que les applis ouvertes affichent aussitôt ; envoyé aussi au
+sujet ntfy réglé, avec le titre « Breezone · nom de la règle »).
 
 `Automation` ajoute `{id, when` (le premier déclencheur)`, summary:{when, triggers, conditions,
 joined, actions, else}` (la règle en phrases, dans la langue de la requête ; `joined` = « et » ou
 « ou »)`, status:{value, unit, holds, conditions:[true|false|null], next_at, running}, last_run_at,
-last_reason, created_at, updated_at}`.
+last_reason, conflicts:[{id, name, what}], created_at, updated_at}` (`conflicts` : les règles activées
+qui peuvent donner au même appareil un autre réglage au même moment).
 
 `branch` d'un passage : `then`, `else`, `skipped` (déclenchée, conditions fausses, pas de « sinon » :
 `reason` dit lesquelles et ce qu'elles valaient) ou `busy` (elle tournait déjà). `ended` : `done`,
@@ -385,7 +400,9 @@ Comportement :
 - les étapes s'exécutent en arrière-plan ; redéclenchée pendant qu'elle attend, la règle ignore ce
   nouveau départ (`single`, noté `busy`) ou recommence (`restart`) ; un arrêt du serveur termine les
   exécutions en cours ;
-- chaque exécution est dans le journal (`kind: "automation"`) avec sa raison.
+- chaque exécution est dans le journal (`kind: "automation"`) avec sa raison ;
+- en pause vacances, aucune règle ne démarre d'elle-même (« Essayer » reste possible) et rien n'est
+  rattrapé à la reprise.
 
 Droits : piloter une zone demande le pilotage de son installation et le droit « routines » ; les
 appareils des modules (borne, relais, lumières…) sont réservés aux administrateurs.
@@ -531,7 +548,7 @@ Le binaire répond à `breezone-server --version` (« Breezone x.y.z ») sans d�
 ## Journal
 
 `GET 🔒 /api/events?limit=100&before=<id>&installation_id=` → `[{id, ts, kind, level, installation_id, actor, message, data}]`
-avec `kind` ∈ `connection | command | routine | automation | system | auth` et `level` ∈ `info | warn | error`.
+avec `kind` ∈ `connection | command | routine | automation | notification | presence | system | auth` et `level` ∈ `info | warn | error`.
 
 ## Temps réel (WebSocket)
 

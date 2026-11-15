@@ -200,6 +200,65 @@ async fn a_rule_drives_a_zone_when_its_measure_crosses_the_threshold() {
     let (_, runs) = call(Method::GET, &format!("/api/automations/{waiting_id}/runs"), None).await;
     assert_eq!(runs[0]["ended"], "cancelled", "{runs}");
 
+    // Presence, a notification to ntfy, and the holiday pause.
+    let received: Arc<Mutex<Vec<(String, String)>>> = Arc::default();
+    let ntfy = {
+        let received = received.clone();
+        serve(axum::Router::new().route(
+            "/breezone",
+            axum::routing::post(move |query: axum::extract::Query<std::collections::HashMap<String, String>>, body: String| {
+                let received = received.clone();
+                async move {
+                    let title = query.get("title").cloned().unwrap_or_default();
+                    received.lock().unwrap().push((title, body));
+                }
+            }),
+        ))
+        .await
+    };
+    let (s, saved) = call(Method::PUT, "/api/automations/settings", Some(json!({"ntfy_url": format!("http://127.0.0.1:{ntfy}/breezone")}))).await;
+    assert_eq!(s, StatusCode::OK, "{saved}");
+    let (s, _) = call(Method::POST, "/api/automations/notify-test", None).await;
+    assert_eq!(s, StatusCode::NO_CONTENT);
+    assert_eq!(received.lock().unwrap().len(), 1, "the test notification");
+    let (_, presence) = call(Method::GET, "/api/presence", None).await;
+    assert_eq!((&presence["me"], &presence["someone_home"]), (&Value::Null, &Value::Null), "nobody told yet");
+    call(Method::PUT, "/api/presence", Some(json!({"home": true}))).await;
+    let (s, empty) = call(
+        Method::POST,
+        "/api/automations",
+        Some(json!({
+            "name": "Maison vide",
+            "triggers": [{"kind": "presence", "home": false}],
+            "actions": [{"kind": "notify", "message": "Tout le monde est parti"}]
+        })),
+    )
+    .await;
+    assert_eq!(s, StatusCode::CREATED, "{empty}");
+    let empty_id = empty["id"].as_i64().unwrap();
+    let mut engine = Engine::new(breezone_server::db::now());
+    automations::tick(&state, &mut engine).await;
+    // On holiday: the last one leaves, nothing starts.
+    let (_, paused) = call(Method::PUT, "/api/automations/settings", Some(json!({"paused_until": 0}))).await;
+    assert_eq!(paused["paused_until"], 0);
+    let (_, presence) = call(Method::PUT, "/api/presence", Some(json!({"home": false}))).await;
+    assert_eq!(presence["someone_home"], false);
+    automations::tick(&state, &mut engine).await;
+    settle(&state, empty_id).await;
+    assert_eq!(received.lock().unwrap().len(), 1, "paused");
+    // Back from holiday, the next departure starts it.
+    call(Method::PUT, "/api/automations/settings", Some(json!({"paused_until": null}))).await;
+    call(Method::PUT, "/api/presence", Some(json!({"home": true}))).await;
+    automations::tick(&state, &mut engine).await;
+    call(Method::PUT, "/api/presence", Some(json!({"home": false}))).await;
+    automations::tick(&state, &mut engine).await;
+    settle(&state, empty_id).await;
+    let got = received.lock().unwrap().clone();
+    assert_eq!(got.len(), 2, "{got:?}");
+    assert_eq!(got[1], ("Breezone · Maison vide".to_string(), "Tout le monde est parti".to_string()));
+    let (_, events) = call(Method::GET, "/api/events", None).await;
+    assert!(events.as_array().unwrap().iter().any(|e| e["kind"] == "notification" && e["message"] == "Maison vide : Tout le monde est parti"), "{events}");
+
     // A user without access to the installation does not see the rule.
     let (s, _) = call(Method::POST, "/api/users", Some(json!({"username":"lea","password":"motdepasse2","role":"user"}))).await;
     assert_eq!(s, StatusCode::CREATED);

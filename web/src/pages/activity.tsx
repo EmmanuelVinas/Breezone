@@ -1,7 +1,9 @@
 import { useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
+  Bell,
   CalendarClock,
+  House,
   Workflow,
   ChevronDown,
   KeyRound,
@@ -33,6 +35,8 @@ const KIND: Record<FeedEvent["kind"], { label: string; icon: LucideIcon }> = {
   connection: { label: t("Connexion"), icon: Plug },
   routine: { label: t("Programmations"), icon: CalendarClock },
   automation: { label: t("Automatismes"), icon: Workflow },
+  notification: { label: t("Notifications"), icon: Bell },
+  presence: { label: t("Présence"), icon: House },
   system: { label: t("Système"), icon: Server },
   auth: { label: t("Sécurité"), icon: KeyRound },
 }

@@ -22,6 +22,19 @@ All notable changes are documented here. The format follows
   - ready-made recipes built with your devices (solar surplus to the car or a room, shutters at
     sunset and sunrise, heat protection, window open, rain coming, light at dusk, ventilation boost,
     frost coming), and "duplicate".
+- Automations, the rest of the plan:
+  - the buttons of a remote start a rule (any button or one of them, single, double or long press);
+  - presence: each user says "I am home" (web and app); "the first one gets home", "the last one
+    leaves" and "someone is home" in the rules;
+  - "Notify": the activity feed, a notice in Breezone while it is open (web and app), and a phone
+    notification through ntfy (free, no account, can be self-hosted), with a test button;
+  - the weather warning of the home's area (Météo-France vigilance through MeteoAlarm), from green to
+    red;
+  - holiday pause: no rule starts by itself until it is switched back off;
+  - rules that may contradict each other (same device, another setting, at the same time) are flagged
+    on both cards;
+  - the app shows the automations of an installation (Schedules tab): the rule as a sentence,
+    switch on or off, try, history, "I am home"; they are still created and changed on the web.
 - Lights: a coloured light that is on is framed by its colour.
 
 ### Changed

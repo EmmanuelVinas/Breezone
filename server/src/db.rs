@@ -729,6 +729,31 @@ pub async fn automation_runs(db: &Db, automation_id: i64) -> sqlx::Result<Vec<Au
     sqlx::query_as("SELECT * FROM automation_runs WHERE automation_id = ? ORDER BY id DESC").bind(automation_id).fetch_all(db).await
 }
 
+/// Whether a user is at home, as they last told it.
+#[derive(Debug, Clone, FromRow, serde::Serialize)]
+pub struct Presence {
+    pub user_id: i64,
+    pub username: String,
+    pub home: bool,
+    pub changed_at: i64,
+}
+
+pub async fn list_presence(db: &Db) -> sqlx::Result<Vec<Presence>> {
+    sqlx::query_as("SELECT p.user_id, u.username, p.home, p.changed_at FROM presence p JOIN users u ON u.id = p.user_id ORDER BY u.username").fetch_all(db).await
+}
+
+/// Records whether a user is at home; `true` when it changed.
+pub async fn set_presence(db: &Db, user_id: i64, home: bool) -> sqlx::Result<bool> {
+    let changed = sqlx::query("INSERT INTO presence (user_id, home, changed_at) VALUES (?, ?, ?) ON CONFLICT (user_id) DO UPDATE SET home = excluded.home, changed_at = excluded.changed_at WHERE presence.home <> excluded.home")
+        .bind(user_id)
+        .bind(home)
+        .bind(now())
+        .execute(db)
+        .await?
+        .rows_affected();
+    Ok(changed > 0)
+}
+
 pub async fn delete_automation(db: &Db, id: i64) -> sqlx::Result<()> {
     sqlx::query("DELETE FROM automations WHERE id = ?").bind(id).execute(db).await?;
     Ok(())

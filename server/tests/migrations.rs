@@ -35,6 +35,7 @@ const APPLIED: &[(&str, &str)] = &[
     ("0028_automations.sql", "e1c4434c8920921179ea115dbf96dcb778e8f37bef2796d3d45f78e31faadf86"),
     ("0029_automation_match.sql", "64a22929763d3214ab0862660807ca53e0474d623cd8287f580a81221180cc41"),
     ("0030_automation_runs.sql", "bd7b8a6e203f8e0ad8142710b97ecf1bc1c1c1713822b1f77193c0c82dd8aac5"),
+    ("0031_presence.sql", "cf7e18aa3c5895e0905343e486a66c4dd4bf3151e8a8d77d165a532e7bf18c97"),
 ];
 
 #[test]

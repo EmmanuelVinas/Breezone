@@ -384,7 +384,15 @@ export type DayStats = {
 export type FeedEvent = {
   id: number
   ts: number
-  kind: "connection" | "command" | "routine" | "automation" | "system" | "auth"
+  kind:
+    | "connection"
+    | "command"
+    | "routine"
+    | "automation"
+    | "notification"
+    | "presence"
+    | "system"
+    | "auth"
   level: "info" | "warn" | "error"
   installation_id: number | null
   actor: string | null
@@ -931,6 +939,8 @@ export type AutomationMeasure =
         | "rain_next_hour"
         | "tomorrow_min"
         | "tomorrow_max"
+        /** 0 green, 1 yellow, 2 orange, 3 red (Météo-France, through MeteoAlarm). */
+        | "vigilance"
     }
 
 export type AutomationOp = "above" | "below"
@@ -957,6 +967,15 @@ export type AutomationTrigger =
   | { kind: "sun"; event: SunEvent; offset_minutes: number; days: number[] }
   /** The sun reaches a façade facing `facing` (degrees from the north). */
   | { kind: "facade"; facing: number }
+  /** A button of a remote; any button or press when absent. */
+  | {
+      kind: "button"
+      device_id: number
+      button?: number | null
+      press?: "single" | "double" | "long" | null
+    }
+  /** The first one arrives home (`home`), or the last one leaves. */
+  | { kind: "presence"; home: boolean }
 
 /** All true ("et") or at least one ("ou"). */
 export type AutomationMatch = "all" | "any"
@@ -974,6 +993,7 @@ export type AutomationCondition =
   | { kind: "days"; days: number[] }
   | { kind: "daylight"; day: boolean }
   | { kind: "facade"; facing: number }
+  | { kind: "presence"; home: boolean }
   /** One level only: no group in a group. */
   | {
       kind: "group"
@@ -1000,6 +1020,8 @@ export type AutomationStep =
     }
   /** Puts back the devices driven before, as they were. */
   | { kind: "restore" }
+  /** The activity feed, the open apps and, when set, an ntfy topic. */
+  | { kind: "notify"; message: string }
 
 export type AutomationInput = {
   name: string
@@ -1035,10 +1057,27 @@ export type Automation = AutomationInput & {
     next_at: number | null
     running: boolean
   }
+  /** Enabled rules that may set the same device otherwise at the same time. */
+  conflicts: { id: number; name: string; what: string }[]
   last_run_at: number | null
   last_reason: string | null
   created_at: number
   updated_at: number
+}
+
+/** What the automations share. */
+export type AutomationSettings = {
+  /** While set, no rule starts by itself: until this time, or until switched back on (0). */
+  paused_until: number | null
+  /** Administrators only. */
+  ntfy_url?: string
+}
+
+/** Who is at home, as each user told it. */
+export type Presence = {
+  me: boolean | null
+  someone_home: boolean | null
+  people: { user_id: number; username: string; home: boolean; changed_at: number }[]
 }
 
 /** A run of an automation, or a time it did not run (and why). */
@@ -1068,6 +1107,15 @@ export const api = {
       "POST",
       `/api/automations/${id}/run`
     ),
+  automationSettings: () =>
+    request<AutomationSettings>("GET", "/api/automations/settings"),
+  saveAutomationSettings: (
+    input: Partial<{ paused_until: number | null; ntfy_url: string | null }>
+  ) => request<AutomationSettings>("PUT", "/api/automations/settings", input),
+  notifyTest: () => request<void>("POST", "/api/automations/notify-test"),
+  presence: () => request<Presence>("GET", "/api/presence"),
+  setPresence: (home: boolean) =>
+    request<Presence>("PUT", "/api/presence", { home }),
   automationRuns: (id: number) =>
     request<AutomationRun[]>("GET", `/api/automations/${id}/runs`),
   devices: () => request<DeviceView[]>("GET", "/api/devices"),

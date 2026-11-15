@@ -1,3 +1,4 @@
+import { toast } from "sonner"
 import { useEffect, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import type { FeedEvent, Installation } from "@/lib/api"
@@ -82,10 +83,15 @@ export function useLive(enabled: boolean): LiveState {
             )
             if (msg.event.kind === "system")
               qc.invalidateQueries({ queryKey: ["cloud"] })
+            // A rule that notifies: shown at once to whoever has Breezone open.
+            if (msg.event.kind === "notification")
+              toast.info(msg.event.message, { duration: 10_000 })
             break
           case "routines_changed":
             qc.invalidateQueries({ queryKey: ["routines"] })
             qc.invalidateQueries({ queryKey: ["automations"] })
+            qc.invalidateQueries({ queryKey: ["presence"] })
+            qc.invalidateQueries({ queryKey: ["automation-settings"] })
             break
         }
       }

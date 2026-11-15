@@ -65,6 +65,14 @@ const FACADE_MIN_ELEVATION: f64 = 3.0;
 /// …and at most this far from the direction the façade faces (degrees).
 const FACADE_HALF_WIDTH: f64 = 80.0;
 const CHECKED: &str = "automations.checked_at";
+/// While set (a timestamp, or 0 for "until switched back on"), no rule starts by itself.
+pub const PAUSED: &str = "automations.paused_until";
+/// An ntfy topic (https://ntfy.sh/… or a server of one's own) the notifications are sent to.
+pub const NTFY: &str = "automations.ntfy_url";
+/// Longest notification (characters).
+const MAX_MESSAGE: usize = 200;
+/// The presses of a remote: single, double, long.
+const PRESSES: [&str; 3] = ["single", "double", "long"];
 /// Who acts, in the activity feed, when a rule runs by itself.
 const ACTOR: &str = "Breezone";
 
@@ -99,6 +107,9 @@ pub enum WeatherField {
     TomorrowMin,
     /// Highest temperature tomorrow (°C): heat wave.
     TomorrowMax,
+    /// Weather warning in force (Météo-France vigilance, through MeteoAlarm): 0 green, 1 yellow,
+    /// 2 orange, 3 red.
+    Vigilance,
 }
 
 /// A number that can be read now.
@@ -199,6 +210,16 @@ pub enum Trigger {
     },
     /// The sun reaches a façade facing `facing` (degrees from the north: 180 south).
     Facade { facing: u32 },
+    /// A button of a remote is pressed (`button@1`); any button or press when not given.
+    Button {
+        device_id: i64,
+        #[serde(default)]
+        button: Option<u32>,
+        #[serde(default)]
+        press: Option<String>,
+    },
+    /// The first one arrives home (`home`), or the last one leaves.
+    Presence { home: bool },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -235,6 +256,10 @@ pub enum Condition {
     /// The sun is on a façade facing `facing` (degrees from the north).
     Facade {
         facing: u32,
+    },
+    /// Someone is at home (`home`), or nobody.
+    Presence {
+        home: bool,
     },
     /// Conditions joined the other way ("A and (B or C)"): one level, no group in a group.
     Group {
@@ -330,6 +355,10 @@ pub enum Step {
     },
     /// Puts back the devices this run drove before, as they were before it.
     Restore,
+    /// Tells it: the activity feed, the open apps and, when set, an ntfy topic.
+    Notify {
+        message: String,
+    },
 }
 
 /// What a rule does when it is started again while it still runs.
@@ -426,7 +455,7 @@ impl Automation {
     /// The devices the rule reads.
     pub fn read_devices(&self) -> Vec<i64> {
         let triggers = self.triggers.iter().filter_map(|t| match t {
-            Trigger::Measure { measure: Measure::Device { device_id, .. }, .. } | Trigger::State { device_id, .. } => Some(*device_id),
+            Trigger::Measure { measure: Measure::Device { device_id, .. }, .. } | Trigger::State { device_id, .. } | Trigger::Button { device_id, .. } => Some(*device_id),
             _ => None,
         });
         let conditions = self.leaves().into_iter().filter_map(|c| match c {
@@ -496,6 +525,8 @@ pub struct Context {
     pub flows: Flows,
     pub outdoor: Option<f64>,
     pub weather: Option<Report>,
+    /// Someone is at home (`None`: nobody ever told).
+    pub presence: Option<bool>,
     /// Latitude and longitude of the home, for the sun.
     pub coords: Option<(f64, f64)>,
     /// Scenes, by id.
@@ -513,6 +544,10 @@ impl Context {
             devices,
             outdoor: state.weather.temperature().await,
             weather: state.weather.report().await,
+            presence: {
+                let people = db::list_presence(&state.db).await?;
+                (!people.is_empty()).then(|| people.iter().any(|p| p.home))
+            },
             coords: state.weather.coordinates().await,
             scenes: db::list_routines(&state.db).await?.into_iter().map(|r| (r.id, r.name)).collect(),
         })
@@ -555,6 +590,7 @@ impl Context {
                     }
                     WeatherField::TomorrowMin => w.tomorrow_min,
                     WeatherField::TomorrowMax => w.tomorrow_max,
+                    WeatherField::Vigilance => w.vigilance.as_ref().map(|v| v.level as f64),
                 }
             }
         }
@@ -571,6 +607,7 @@ impl Context {
                     WeatherField::Wind => "km/h",
                     WeatherField::RainNextHour => "%",
                     WeatherField::TomorrowMin | WeatherField::TomorrowMax => "°C",
+                    WeatherField::Vigilance => return None,
                 }
                 .into(),
             ),
@@ -672,6 +709,17 @@ impl Trigger {
                 let holds = ctx.on_facade(*facing)?;
                 Look::Holds { holds, released: !holds, edge: true, for_minutes: 0 }
             }
+            Trigger::Presence { home } => {
+                let holds = ctx.presence? == *home;
+                Look::Holds { holds, released: !holds, edge: true, for_minutes: 0 }
+            }
+            Trigger::Button { device_id, button, press } => {
+                let state = &ctx.device(*device_id)?.state;
+                let at = state.get("last_at").and_then(Value::as_i64).unwrap_or(0);
+                let which = button.is_none_or(|b| state.get("last_button").and_then(Value::as_u64) == Some(b as u64));
+                let how = press.as_deref().is_none_or(|p| state.get("last_press").and_then(Value::as_str) == Some(p));
+                Look::Event(at > since && at <= ctx.now && which && how)
+            }
             Trigger::Time { .. } | Trigger::Sun { .. } => Look::Event(self.due(ctx, since, ctx.now).is_some()),
         })
     }
@@ -698,6 +746,7 @@ impl Condition {
                 Some((ctx.now >= sun.sunrise? && ctx.now < sun.sunset?) == *day)
             }
             Condition::Facade { facing } => ctx.on_facade(*facing),
+            Condition::Presence { home } => ctx.presence.map(|p| p == *home),
             Condition::Group { joined, conditions } => joined.join(conditions.iter().map(|c| c.met(ctx))),
         }
     }
@@ -774,6 +823,21 @@ const FACINGS: [(&str, &str, &str); 8] = [
     ("nord-ouest", "north-west", "noroeste"),
 ];
 
+/// The colours of the weather warnings, 0 to 3.
+const VIGILANCE: [(&str, &str, &str); 4] = [("verte", "green", "verde"), ("jaune", "yellow", "amarilla"), ("orange", "orange", "naranja"), ("rouge", "red", "roja")];
+
+fn colour(level: f64) -> Text {
+    named(&VIGILANCE, (level.round().clamp(0.0, 3.0) as u32) + 1)
+}
+
+fn press_name(press: &str) -> Text {
+    match press {
+        "double" => crate::text!("double appui", "double press", "doble pulsación"),
+        "long" => crate::text!("appui long", "long press", "pulsación larga"),
+        _ => crate::text!("appui", "press", "pulsación"),
+    }
+}
+
 fn named(table: &[(&str, &str, &str)], n: u32) -> Text {
     let (fr, en, es) = table.get((n as usize).wrapping_sub(1)).copied().unwrap_or(("?", "?", "?"));
     Text { fr: fr.into(), en: en.into(), es: es.into() }
@@ -814,6 +878,7 @@ impl Context {
                 WeatherField::RainNextHour => crate::text!("Risque de pluie dans l'heure", "Chance of rain within the hour", "Probabilidad de lluvia en la próxima hora"),
                 WeatherField::TomorrowMin => crate::text!("Minimale de demain", "Tomorrow's low", "Mínima de mañana"),
                 WeatherField::TomorrowMax => crate::text!("Maximale de demain", "Tomorrow's high", "Máxima de mañana"),
+                WeatherField::Vigilance => crate::text!("Vigilance météo", "Weather warning", "Aviso meteorológico"),
             },
             Measure::Device { device_id, field } => {
                 let (name, field) = (self.device_name(*device_id), self.field_label(*device_id, field));
@@ -822,9 +887,18 @@ impl Context {
         }
     }
 
+    /// A value of a measure, in words: "742 W", "orange".
+    fn value_text(&self, m: &Measure, v: f64) -> Text {
+        match m {
+            Measure::Weather { field: WeatherField::Vigilance } => colour(v),
+            _ => Text::plain(amount(v, self.unit(m).as_deref())),
+        }
+    }
+
     /// "Injection au réseau > 500 W".
     fn comparison(&self, m: &Measure, op: Op, value: f64) -> Text {
-        let (name, threshold) = (self.measure_label(m), amount(value, self.unit(m).as_deref()));
+        let (name, threshold) = (self.measure_label(m), self.value_text(m, value));
+        let threshold = threshold.arg();
         crate::text!("{0} {1} {2}", "{0} {1} {2}", "{0} {1} {2}", name.arg(), op.sign(), threshold)
     }
 
@@ -881,6 +955,18 @@ impl Context {
                 let f = facing(*f);
                 crate::text!("quand le soleil arrive sur la façade {0}", "when the sun reaches the {0} façade", "cuando el sol llega a la fachada {0}", f.arg())
             }
+            Trigger::Presence { home: true } => crate::text!("quand le premier arrive à la maison", "when the first one gets home", "cuando llega el primero a casa"),
+            Trigger::Presence { home: false } => crate::text!("quand le dernier part de la maison", "when the last one leaves home", "cuando se va el último de casa"),
+            Trigger::Button { device_id, button, press } => {
+                let name = self.device_name(*device_id);
+                let how = press_name(press.as_deref().unwrap_or("single"));
+                match (button, press) {
+                    (Some(b), Some(_)) => crate::text!("{0} : bouton {1}, {2}", "{0}: button {1}, {2}", "{0}: botón {1}, {2}", name.arg(), b, how.arg()),
+                    (Some(b), None) => crate::text!("{0} : bouton {1}", "{0}: button {1}", "{0}: botón {1}", name.arg(), b),
+                    (None, Some(_)) => crate::text!("{0} : {1}", "{0}: {1}", "{0}: {1}", name.arg(), how.arg()),
+                    (None, None) => crate::text!("{0} : un bouton", "{0}: a button", "{0}: un botón", name.arg()),
+                }
+            }
         }
     }
 
@@ -911,6 +997,8 @@ impl Context {
                 let f = facing(*f);
                 crate::text!("le soleil est sur la façade {0}", "the sun is on the {0} façade", "el sol da en la fachada {0}", f.arg())
             }
+            Condition::Presence { home: true } => crate::text!("quelqu'un est à la maison", "someone is home", "hay alguien en casa"),
+            Condition::Presence { home: false } => crate::text!("personne n'est à la maison", "nobody is home", "no hay nadie en casa"),
             Condition::Group { joined, conditions } => {
                 let inner = self.describe_conditions(*joined, conditions);
                 crate::text!("({0})", "({0})", "({0})", inner.arg())
@@ -953,6 +1041,7 @@ impl Context {
                 }
             }
             Step::Restore => crate::text!("remettre comme avant", "put back as before", "dejar como antes"),
+            Step::Notify { message } => crate::text!("prévenir : « {0} »", "notify: “{0}”", "avisar: «{0}»", message),
         }
     }
 
@@ -993,8 +1082,15 @@ impl Context {
     fn reason(&self, t: &Trigger) -> Text {
         match t {
             Trigger::Measure { measure, for_minutes, .. } => {
-                let (name, unit) = (self.measure_label(measure), self.unit(measure));
-                let value = self.read(measure).map_or_else(|| "?".to_string(), |v| amount(v, unit.as_deref()));
+                let name = self.measure_label(measure);
+                let mut value = self.read(measure).map_or_else(|| Text::plain("?"), |v| self.value_text(measure, v));
+                if let (Measure::Weather { field: WeatherField::Vigilance }, Some(v)) = (measure, self.weather.as_ref().and_then(|w| w.vigilance.as_ref())) {
+                    if !v.events.is_empty() {
+                        let events = v.events.join(", ");
+                        value = crate::text!("{0} ({1})", "{0} ({1})", "{0} ({1})", value.arg(), events);
+                    }
+                }
+                let value = value.arg();
                 if *for_minutes > 0 {
                     crate::text!("{0} : {1} depuis {2} min", "{0}: {1} for {2} min", "{0}: {1} desde hace {2} min", name.arg(), value, for_minutes)
                 } else {
@@ -1021,7 +1117,10 @@ impl Context {
                 Some(match (met, c) {
                     (None, _) => crate::text!("{0} : inconnu", "{0}: unknown", "{0}: desconocido", text.arg()),
                     (_, Condition::Measure { measure, .. }) => match self.read(measure) {
-                        Some(v) => crate::text!("{0} ({1})", "{0} ({1})", "{0} ({1})", text.arg(), amount(v, self.unit(measure).as_deref())),
+                        Some(v) => {
+                            let now = self.value_text(measure, v);
+                            crate::text!("{0} ({1})", "{0} ({1})", "{0} ({1})", text.arg(), now.arg())
+                        }
                         None => text,
                     },
                     _ => text,
@@ -1085,6 +1184,8 @@ pub struct AutomationView {
     pub mode: RunMode,
     pub summary: Summary,
     pub status: Status,
+    /// Enabled rules that may set the same device otherwise at the same time.
+    pub conflicts: Vec<Conflict>,
     pub last_run_at: Option<i64>,
     pub last_reason: Option<Text>,
     pub created_at: i64,
@@ -1130,6 +1231,7 @@ pub fn view(row: &AutomationRow, rule: Automation, ctx: &Context, running: bool)
         actions: rule.actions,
         otherwise: rule.otherwise,
         mode: rule.mode,
+        conflicts: vec![],
         last_run_at: row.last_run_at,
         last_reason: row.last_reason.as_deref().map(Text::load),
         created_at: row.created_at,
@@ -1234,6 +1336,18 @@ impl Context {
                 check_days(days)
             }
             Trigger::Facade { facing } => check_facing(*facing),
+            Trigger::Presence { .. } => Ok(()),
+            Trigger::Button { device_id, button, press } => {
+                let device = self.known(*device_id)?;
+                if !device.traits.iter().any(|t| t.starts_with("button@")) {
+                    return Err(ApiError::bad_request(crate::text!("cet appareil n'a pas de boutons", "this device has no buttons", "este dispositivo no tiene botones")));
+                }
+                let buttons = device.state.get("buttons").and_then(Value::as_u64).unwrap_or(u64::MAX);
+                if button.is_some_and(|b| b == 0 || b as u64 > buttons) || press.as_deref().is_some_and(|p| !PRESSES.contains(&p)) {
+                    return Err(ApiError::bad_request(crate::text!("bouton ou appui inconnu", "unknown button or press", "botón o pulsación desconocidos")));
+                }
+                Ok(())
+            }
         }
     }
 
@@ -1258,7 +1372,7 @@ impl Context {
                 }
                 check_days(days)
             }
-            Condition::Daylight { .. } => Ok(()),
+            Condition::Daylight { .. } | Condition::Presence { .. } => Ok(()),
             Condition::Facade { facing } => check_facing(*facing),
             Condition::Group { conditions, .. } => {
                 if conditions.len() < 2 {
@@ -1308,6 +1422,18 @@ impl Context {
                 self.check_condition(condition)
             }
             Step::Restore => Ok(()),
+            Step::Notify { message } => {
+                let n = message.trim().chars().count();
+                if n == 0 || n > MAX_MESSAGE {
+                    return Err(ApiError::bad_request(crate::text!(
+                        "message de 1 à {0} caractères",
+                        "a message of 1 to {0} characters",
+                        "mensaje de 1 a {0} caracteres",
+                        MAX_MESSAGE
+                    )));
+                }
+                Ok(())
+            }
         }
     }
 
@@ -1348,6 +1474,82 @@ pub fn validate(input: AutomationInput, ctx: &Context) -> ApiResult<(String, Aut
     ctx.check_branch(&input.actions, true)?;
     ctx.check_branch(&input.otherwise, false)?;
     Ok((name, Automation { triggers, joined: input.joined, conditions: input.conditions, actions: input.actions, otherwise: input.otherwise, mode: input.mode }))
+}
+
+// ---------------------------------------------------------------------------------------
+// Rules that contradict each other
+// ---------------------------------------------------------------------------------------
+
+/// Two triggers may start their rules at the same time.
+fn coincide(a: &Trigger, b: &Trigger) -> bool {
+    let days = |x: &[u32], y: &[u32]| x.is_empty() || y.is_empty() || x.iter().any(|d| y.contains(d));
+    match (a, b) {
+        (Trigger::Time { time: t1, days: d1 }, Trigger::Time { time: t2, days: d2 }) => t1 == t2 && days(d1, d2),
+        (Trigger::Sun { event: e1, offset_minutes: o1, days: d1 }, Trigger::Sun { event: e2, offset_minutes: o2, days: d2 }) => e1 == e2 && o1 == o2 && days(d1, d2),
+        (Trigger::Measure { measure: m1, op: o1, .. }, Trigger::Measure { measure: m2, op: o2, .. }) => m1 == m2 && o1 == o2,
+        (Trigger::Button { device_id: d1, button: b1, .. }, Trigger::Button { device_id: d2, button: b2, .. }) => d1 == d2 && (b1.is_none() || b2.is_none() || b1 == b2),
+        _ => a == b,
+    }
+}
+
+/// A setting both rules give a device, with different values: (device, setting).
+fn clash(a: &[Step], b: &[Step]) -> Option<(i64, String)> {
+    for x in a {
+        let Step::Device { device_id, trait_name, action, params } = x else { continue };
+        for y in b {
+            let Step::Device { device_id: d2, trait_name: t2, action: a2, params: p2 } = y else { continue };
+            if device_id != d2 || trait_name != t2 {
+                continue;
+            }
+            if action != a2 && matches!((action.as_str(), a2.as_str()), ("start", "stop") | ("stop", "start") | ("boost", "stop_boost") | ("stop_boost", "boost")) {
+                return Some((*device_id, action.clone()));
+            }
+            if action == a2 {
+                if let Some(k) = params.keys().find(|k| p2.get(*k).is_some_and(|v| Some(v) != params.get(*k))) {
+                    return Some((*device_id, k.clone()));
+                }
+            }
+        }
+    }
+    None
+}
+
+/// A rule that may contradict another one.
+#[derive(Debug, Clone, Serialize)]
+pub struct Conflict {
+    pub id: i64,
+    pub name: String,
+    /// "Salon (consigne)".
+    pub what: Text,
+}
+
+/// For each enabled rule, the enabled ones that may set the same device otherwise at the same time.
+pub fn conflicts(rules: &[(AutomationRow, Automation)], ctx: &Context) -> HashMap<i64, Vec<Conflict>> {
+    let mut out: HashMap<i64, Vec<Conflict>> = HashMap::new();
+    let enabled: Vec<&(AutomationRow, Automation)> = rules.iter().filter(|(r, _)| r.enabled).collect();
+    for (i, (ra, a)) in enabled.iter().enumerate() {
+        for (rb, b) in enabled.iter().skip(i + 1) {
+            if !a.triggers.iter().any(|x| b.triggers.iter().any(|y| coincide(x, y))) {
+                continue;
+            }
+            let (sa, sb): (Vec<Step>, Vec<Step>) = (a.steps().cloned().collect(), b.steps().cloned().collect());
+            let Some((device, setting)) = clash(&sa, &sb) else { continue };
+            let name = ctx.device_name(device);
+            let setting = ctx.device(device).and_then(|d| {
+                d.traits.iter().find_map(|t| {
+                    let (n, v) = t.split_once('@')?;
+                    crate::traits::get(n, v.parse().ok()?)?.actions.iter().flat_map(|a| &a.params).find(|p| p.name == setting).map(|p| label(&p.label))
+                })
+            });
+            let what = match setting {
+                Some(s) => crate::text!("{0} ({1})", "{0} ({1})", "{0} ({1})", name.arg(), s.arg()),
+                None => name,
+            };
+            out.entry(ra.id).or_default().push(Conflict { id: rb.id, name: rb.name.clone(), what: what.clone() });
+            out.entry(rb.id).or_default().push(Conflict { id: ra.id, name: ra.name.clone(), what });
+        }
+    }
+    out
 }
 
 // ---------------------------------------------------------------------------------------
@@ -1797,6 +1999,9 @@ async fn execute(state: &AppState, row: &AutomationRow, run_id: i64, steps: &[St
                     }
                 }
             }
+            Step::Notify { message } => {
+                out.push(done(what, notify(state, &row.name, message.trim(), actor).await));
+            }
             Step::Restore => {
                 out.push(done(what, Ok(())));
                 ctx = reload(ctx).await;
@@ -1815,6 +2020,33 @@ async fn execute(state: &AppState, row: &AutomationRow, run_id: i64, steps: &[St
     (out, "done")
 }
 
+/// Tells a message: in the activity feed (the open apps show it at once) and, when set, to an
+/// ntfy topic (a phone notification, with no account and no cloud of ours).
+pub async fn notify(state: &AppState, rule: &str, message: &str, actor: &str) -> ApiResult<()> {
+    let text = crate::text!("{0} : {1}", "{0}: {1}", "{0}: {1}", rule, message);
+    state.hub.log("notification", "info", None, Some(actor), text, None).await;
+    let Some(url) = db::get_setting(&state.db, NTFY).await?.filter(|u| !u.trim().is_empty()) else { return Ok(()) };
+    let sent = reqwest::Client::new()
+        .post(url.trim())
+        // In the address: a header carries no accent.
+        .query(&[("title", format!("Breezone · {rule}")), ("tags", "house".into())])
+        .timeout(Duration::from_secs(10))
+        .body(message.to_string())
+        .send()
+        .await
+        .and_then(|r| r.error_for_status());
+    sent.map(|_| ()).map_err(|e| {
+        let e = e.without_url().to_string();
+        ApiError::bad_gateway(crate::text!("ntfy : {0}", "ntfy: {0}", "ntfy: {0}", e))
+    })
+}
+
+/// No rule starts by itself until this time (`Some(0)`: until switched back on).
+pub async fn paused_until(db: &db::Db) -> Option<i64> {
+    let until: i64 = db::get_setting(db, PAUSED).await.ok()??.parse().ok()?;
+    (until == 0 || until > db::now()).then_some(until)
+}
+
 /// Keeps the steps done so far, so that the history shows a run that waits.
 async fn save_steps(state: &AppState, run_id: i64, done: &[StepDone]) {
     let stored = Value::Array(done.iter().map(StepDone::stored).collect()).to_string();
@@ -1831,6 +2063,11 @@ pub async fn tick(state: &AppState, engine: &mut Engine) {
     };
     if !rows.iter().any(|r| r.enabled) {
         engine.watches.clear();
+        engine.checked = db::now();
+        return;
+    }
+    // On holiday: nothing starts by itself; what happened meanwhile is not caught up afterwards.
+    if paused_until(&state.db).await.is_some() {
         engine.checked = db::now();
         return;
     }
@@ -1926,6 +2163,7 @@ mod tests {
             flows: Flows { grid: Some(grid), solar: Some(3000.0), battery: None, home: Some(3000.0 + grid) },
             outdoor: Some(6.0),
             weather: None,
+            presence: None,
             // Toulouse.
             coords: Some((43.6045, 1.444)),
             scenes: HashMap::from([(7, "Je pars".to_string())]),
@@ -2154,6 +2392,7 @@ mod tests {
             tomorrow_code: None,
             hours: vec![hour(c.now - 1800, 10.0), hour(c.now + 1800, 80.0), hour(c.now + 7200, 100.0)],
             read_at: c.now - 600,
+            vigilance: None,
         });
         assert_eq!(c.read(&rain), Some(80.0), "the hour under way and the next one");
         assert_eq!(c.read(&Measure::Weather { field: WeatherField::TomorrowMin }), Some(-2.0));
@@ -2260,6 +2499,108 @@ mod tests {
         ]))
         .is_ok());
         assert!(check(|v| v["else"] = json!([{"kind": "wait", "seconds": 90000}])).is_err(), "a wait of more than a day");
+    }
+
+    #[test]
+    fn remotes_presence_and_warnings() {
+        let t0 = at(2026, 11, 15, 12, 0);
+        let remote = |at: i64, button: u64, press: &str| DeviceView {
+            kind: "remote".into(),
+            traits: vec!["button@1".into()],
+            source: "homekit".into(),
+            source_id: Some(4),
+            installation_id: None,
+            reference: json!("remote"),
+            state: json!({"buttons": 4, "last_button": button, "last_press": press, "last_at": at}),
+            ..zone(3, "Télécommande", 0.0)
+        };
+        let c = |secs: i64, r: DeviceView, home: Option<bool>| {
+            let mut c = ctx(t0 + secs, 0.0, 20.0);
+            c.devices.push(r);
+            c.presence = home;
+            c
+        };
+        let rule = validate(
+            input(json!({
+                "name": "Télécommande",
+                "triggers": [{"kind": "button", "device_id": 3, "button": 2, "press": "long"}, {"kind": "presence", "home": false}],
+                "conditions": [{"kind": "presence", "home": false}],
+                "actions": [{"kind": "notify", "message": "Maison vide"}]
+            })),
+            &c(0, remote(0, 1, "single"), None),
+        )
+        .unwrap()
+        .1;
+        let words = c(0, remote(0, 1, "single"), None).describe_triggers(&rule.triggers);
+        assert_eq!(words.fr, "Télécommande : bouton 2, appui long ou quand le dernier part de la maison");
+        assert_eq!(c(0, remote(0, 1, "single"), None).describe_step(&rule.actions[0]).fr, "prévenir : « Maison vide »");
+        let rules = vec![(row(1, None), rule)];
+        let mut engine = Engine::new(t0);
+        // Someone home, then button 2 long pressed: the condition (nobody home) is false.
+        assert!(started(&mut engine, &rules, &c(5, remote(0, 1, "single"), Some(true))).is_empty());
+        assert!(started(&mut engine, &rules, &c(10, remote(t0 + 8, 2, "long"), Some(true))).is_empty());
+        // The last one leaves: starts once.
+        assert_eq!(started(&mut engine, &rules, &c(80, remote(t0 + 8, 2, "long"), Some(false))).len(), 1);
+        assert!(started(&mut engine, &rules, &c(90, remote(t0 + 8, 2, "long"), Some(false))).is_empty(), "the same press is not seen twice");
+        // Another press, nobody home: starts again (a minute after the last start).
+        assert!(started(&mut engine, &rules, &c(140, remote(t0 + 138, 1, "long"), Some(false))).is_empty(), "button 1");
+        assert_eq!(started(&mut engine, &rules, &c(200, remote(t0 + 198, 2, "long"), Some(false))).len(), 1);
+
+        // A remote that has 4 buttons has no 5th; a zone has none.
+        let check = |t: Value| validate(input(json!({"name": "x", "triggers": [t], "actions": [{"kind": "notify", "message": "x"}]})), &c(0, remote(0, 1, "single"), None)).is_ok();
+        assert!(!check(json!({"kind": "button", "device_id": 3, "button": 5})));
+        assert!(!check(json!({"kind": "button", "device_id": 1})));
+        assert!(!check(json!({"kind": "button", "device_id": 3, "press": "triple"})));
+        assert!(validate(
+            input(json!({"name": "x", "when": {"kind": "time", "time": "08:00"}, "actions": [{"kind": "notify", "message": " "}]})),
+            &c(0, remote(0, 1, "single"), None)
+        )
+        .is_err());
+
+        // The weather warning, in words.
+        let mut w = c(0, remote(0, 1, "single"), None);
+        let orange = Trigger::Measure { measure: Measure::Weather { field: WeatherField::Vigilance }, op: Op::Above, value: 1.0, for_minutes: 0 };
+        assert_eq!(w.describe_trigger(&orange).fr, "Vigilance météo > jaune");
+        w.weather = Some(Report {
+            place: "Toulouse".into(),
+            temperature: None,
+            apparent: None,
+            code: None,
+            precipitation: None,
+            wind: None,
+            today_min: None,
+            today_max: None,
+            tomorrow_min: None,
+            tomorrow_max: None,
+            tomorrow_code: None,
+            hours: vec![],
+            read_at: w.now,
+            vigilance: Some(crate::weather::Vigilance { level: 2, events: vec!["wind".into()], area: "Haute-Garonne".into() }),
+        });
+        assert_eq!(w.reason(&orange).fr, "Vigilance météo : orange (wind)");
+    }
+
+    #[test]
+    fn rules_that_contradict_each_other() {
+        let c = ctx(0, 0.0, 20.0);
+        let rule = |v: Value| validate(input(v), &c).unwrap().1;
+        let named = |id: i64, name: &str| AutomationRow { name: name.into(), ..row(id, None) };
+        let set = |sp: f64| json!({"kind": "device", "device_id": 1, "trait": "climate.zone", "action": "set", "params": {"setpoint": sp}});
+        let at = |t: &str, days: Value| json!({"kind": "time", "time": t, "days": days});
+        let rules = vec![
+            (named(1, "a"), rule(json!({"name": "a", "when": at("07:00", json!([1, 2])), "actions": [set(21.0)]}))),
+            (named(2, "b"), rule(json!({"name": "b", "when": at("07:00", json!([2, 3])), "actions": [set(18.0)]}))),
+            (named(3, "c"), rule(json!({"name": "c", "when": at("07:00", json!([6])), "actions": [set(17.0)]}))),
+            (named(4, "d"), rule(json!({"name": "d", "when": at("07:00", json!([])), "actions": [set(21.0)]}))),
+            (named(5, "e"), rule(json!({"name": "e", "when": at("07:00", json!([])), "actions": [{"kind": "device", "device_id": 2, "trait": "ev.charger", "action": "start"}]}))),
+            (named(6, "f"), rule(json!({"name": "f", "when": at("07:00", json!([])), "actions": [{"kind": "device", "device_id": 2, "trait": "ev.charger", "action": "stop"}]}))),
+        ];
+        let found = conflicts(&rules, &c);
+        let names = |id: i64| found.get(&id).map(|v| v.iter().map(|x| x.name.clone()).collect::<Vec<_>>()).unwrap_or_default();
+        assert_eq!(names(1), vec!["b".to_string()], "same time on Tuesday, 21° and 18°; d sets 21° too");
+        assert_eq!(names(3), vec!["d".to_string()], "c is on Saturday: only d, every day");
+        assert_eq!(names(5), vec!["f".to_string()], "start and stop");
+        assert_eq!(found[&1][0].what.fr, "Salon (Consigne)");
     }
 
     #[test]

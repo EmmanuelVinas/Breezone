@@ -217,6 +217,13 @@ class Hub(
                 val removed = msg["id"]!!.jsonPrimitive.long
                 updateServer(id) { s -> s.copy(installations = s.installations.filterNot { it.id == removed }) }
             }
+            "event" -> {
+                // A rule that notifies: shown at once while the app is open.
+                val event = msg["event"] as? JsonObject ?: return
+                if (event["kind"]?.jsonPrimitive?.content == "notification") {
+                    event["message"]?.jsonPrimitive?.content?.let { notify(it) }
+                }
+            }
             "error" -> updateServer(id) { it.copy(live = Live.Offline) }
         }
     }
