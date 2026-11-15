@@ -1,0 +1,34 @@
+{
+  "trait": "ventilation.room",
+  "version": 1,
+  "label": { "fr": "Bouche de VMC", "en": "Ventilation valve", "es": "Boca de ventilación" },
+  "state": [
+    { "name": "flow", "type": "number", "unit": "m³/h", "min": 0, "label": { "fr": "Débit d'air", "en": "Air flow", "es": "Caudal de aire" } },
+    { "name": "nominal", "type": "number", "unit": "m³/h", "min": 0, "optional": true, "label": { "fr": "Débit nominal", "en": "Nominal flow", "es": "Caudal nominal" } },
+    { "name": "level", "type": "integer", "unit": "%", "min": 0, "optional": true, "label": { "fr": "Niveau de ventilation", "en": "Ventilation level", "es": "Nivel de ventilación" } },
+    { "name": "profile", "type": "enum", "values": ["eco", "health", "intense"], "optional": true, "label": { "fr": "Profil", "en": "Profile", "es": "Perfil" } },
+    { "name": "boost", "type": "bool", "label": { "fr": "Boost en cours", "en": "Boosting", "es": "Boost activo" } },
+    { "name": "boost_remaining", "type": "integer", "unit": "s", "min": 0, "optional": true, "label": { "fr": "Fin du boost dans", "en": "Boost ends in", "es": "El boost termina en" } },
+    { "name": "humidity", "type": "number", "unit": "%", "min": 0, "max": 100, "optional": true, "label": { "fr": "Humidité", "en": "Humidity", "es": "Humedad" } },
+    { "name": "temperature", "type": "number", "unit": "°C", "optional": true, "label": { "fr": "Température", "en": "Temperature", "es": "Temperatura" } },
+    { "name": "co2", "type": "number", "unit": "ppm", "min": 0, "optional": true, "label": { "fr": "CO₂", "en": "CO₂", "es": "CO₂" } },
+    { "name": "voc", "type": "number", "unit": "ppm", "min": 0, "optional": true, "label": { "fr": "COV", "en": "VOC", "es": "COV" } }
+  ],
+  "actions": [
+    {
+      "name": "boost",
+      "label": { "fr": "Boost de la pièce", "en": "Boost the room", "es": "Boost de la estancia" },
+      "params": [
+        { "name": "minutes", "type": "integer", "unit": "min", "min": 5, "max": 480, "label": { "fr": "Durée", "en": "Duration", "es": "Duración" } }
+      ]
+    },
+    { "name": "stop_boost", "label": { "fr": "Arrêter le boost", "en": "Stop the boost", "es": "Detener el boost" }, "params": [] },
+    {
+      "name": "set_profile",
+      "label": { "fr": "Changer le profil", "en": "Change the profile", "es": "Cambiar el perfil" },
+      "params": [
+        { "name": "profile", "type": "enum", "values": ["eco", "health", "intense"], "label": { "fr": "Profil", "en": "Profile", "es": "Perfil" } }
+      ]
+    }
+  ]
+}

@@ -66,6 +66,8 @@ pub struct Connection {
     /// Bytes received (decrypted) not used yet.
     pending: Vec<u8>,
     host: String,
+    /// How long a read waits: an answer comes quickly, an event may take hours.
+    timeout: Duration,
 }
 
 fn io(e: impl std::fmt::Display) -> HapError {
@@ -76,7 +78,7 @@ impl Connection {
     pub async fn connect(addr: &str) -> Result<Self, HapError> {
         let stream = tokio::time::timeout(TIMEOUT, TcpStream::connect(addr)).await.map_err(|_| io("timed out"))?.map_err(io)?;
         stream.set_nodelay(true).ok();
-        Ok(Self { stream, keys: None, pending: vec![], host: addr.to_string() })
+        Ok(Self { stream, keys: None, pending: vec![], host: addr.to_string(), timeout: TIMEOUT })
     }
 
     async fn send(&mut self, data: &[u8]) -> Result<(), HapError> {
@@ -95,7 +97,7 @@ impl Connection {
 
     async fn read_raw(&mut self, n: usize) -> Result<Vec<u8>, HapError> {
         let mut buf = vec![0u8; n];
-        tokio::time::timeout(TIMEOUT, self.stream.read_exact(&mut buf)).await.map_err(|_| io("timed out"))?.map_err(io)?;
+        tokio::time::timeout(self.timeout, self.stream.read_exact(&mut buf)).await.map_err(|_| io("timed out"))?.map_err(io)?;
         Ok(buf)
     }
 
@@ -103,7 +105,7 @@ impl Connection {
     async fn fill(&mut self) -> Result<(), HapError> {
         if self.keys.is_none() {
             let mut buf = [0u8; 4096];
-            let n = tokio::time::timeout(TIMEOUT, self.stream.read(&mut buf)).await.map_err(|_| io("timed out"))?.map_err(io)?;
+            let n = tokio::time::timeout(self.timeout, self.stream.read(&mut buf)).await.map_err(|_| io("timed out"))?.map_err(io)?;
             if n == 0 {
                 return Err(io("connection closed by the accessory"));
             }
@@ -143,42 +145,66 @@ impl Connection {
         }
     }
 
+    /// One message: its status line and body.
+    async fn message(&mut self) -> Result<(String, Vec<u8>), HapError> {
+        let status_line = self.line().await?;
+        let mut headers = vec![];
+        loop {
+            let l = self.line().await?;
+            if l.is_empty() {
+                break;
+            }
+            if let Some((k, v)) = l.split_once(':') {
+                headers.push((k.trim().to_ascii_lowercase(), v.trim().to_string()));
+            }
+        }
+        let header = |name: &str| headers.iter().find(|(k, _)| k == name).map(|(_, v)| v.as_str());
+        let body = if header("transfer-encoding").is_some_and(|v| v.eq_ignore_ascii_case("chunked")) {
+            let mut body = vec![];
+            loop {
+                let size = usize::from_str_radix(self.line().await?.split(';').next().unwrap_or("0").trim(), 16).map_err(|_| HapError::Protocol("bad chunk".into()))?;
+                let chunk = self.take(size + 2).await?;
+                if size == 0 {
+                    break;
+                }
+                body.extend_from_slice(&chunk[..size]);
+            }
+            body
+        } else {
+            let len = header("content-length").and_then(|v| v.parse().ok()).unwrap_or(0);
+            self.take(len).await?
+        };
+        Ok((status_line, body))
+    }
+
     /// One answer; the events the accessory may send in between (EVENT/1.0) are skipped.
     async fn response(&mut self) -> Result<Response, HapError> {
         loop {
-            let status_line = self.line().await?;
-            let mut headers = vec![];
-            loop {
-                let l = self.line().await?;
-                if l.is_empty() {
-                    break;
-                }
-                if let Some((k, v)) = l.split_once(':') {
-                    headers.push((k.trim().to_ascii_lowercase(), v.trim().to_string()));
-                }
-            }
-            let header = |name: &str| headers.iter().find(|(k, _)| k == name).map(|(_, v)| v.as_str());
-            let body = if header("transfer-encoding").is_some_and(|v| v.eq_ignore_ascii_case("chunked")) {
-                let mut body = vec![];
-                loop {
-                    let size = usize::from_str_radix(self.line().await?.split(';').next().unwrap_or("0").trim(), 16).map_err(|_| HapError::Protocol("bad chunk".into()))?;
-                    let chunk = self.take(size + 2).await?;
-                    if size == 0 {
-                        break;
-                    }
-                    body.extend_from_slice(&chunk[..size]);
-                }
-                body
-            } else {
-                let len = header("content-length").and_then(|v| v.parse().ok()).unwrap_or(0);
-                self.take(len).await?
-            };
+            let (status_line, body) = self.message().await?;
             if status_line.starts_with("EVENT/") {
                 continue;
             }
             let status = status_line.split_whitespace().nth(1).and_then(|s| s.parse().ok()).ok_or_else(|| HapError::Protocol(format!("bad answer: {status_line}")))?;
             return Ok(Response { status, body });
         }
+    }
+
+    /// Asks the accessory to send the changes of these characteristics (`aid`, `iid`) as events.
+    pub async fn subscribe(&mut self, ids: &[(u64, u64)]) -> Result<(), HapError> {
+        let characteristics: Vec<serde_json::Value> = ids.iter().map(|(aid, iid)| serde_json::json!({"aid": aid, "iid": iid, "ev": true})).collect();
+        self.put_json("/characteristics", &serde_json::json!({ "characteristics": characteristics })).await
+    }
+
+    /// The next event (`{"characteristics": [{"aid", "iid", "value"}]}`), waiting up to `wait`.
+    pub async fn next_event(&mut self, wait: Duration) -> Result<serde_json::Value, HapError> {
+        self.timeout = wait;
+        let message = self.message().await;
+        self.timeout = TIMEOUT;
+        let (status_line, body) = message?;
+        if !status_line.starts_with("EVENT/") {
+            return Err(HapError::Protocol(format!("unexpected message: {status_line}")));
+        }
+        serde_json::from_slice(&body).map_err(|e| HapError::Protocol(format!("event: {e}")))
     }
 
     pub async fn request(&mut self, method: &str, path: &str, content_type: Option<&str>, body: &[u8]) -> Result<Response, HapError> {

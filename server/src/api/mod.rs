@@ -108,6 +108,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/homekit/pair/cancel", post(sources::cancel_homekit_pairing))
         .route("/api/hue/link", post(sources::link_hue))
         .route("/api/sources/{id}/rooms", post(sources::take_rooms))
+        .route("/api/sources/{id}/key", post(sources::unlock))
         .route("/api/scenes", get(sources::scenes))
         .route("/api/scenes/{source_id}/{scene}", post(sources::activate_scene))
         .route("/api/discovery/products", post(sources::scan))

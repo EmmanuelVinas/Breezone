@@ -5,10 +5,11 @@
 //! The source keeps the accessory's address (`host`, "ip:port") and pairing id (`device_id`); the
 //! pairing itself (Breezone's key) is its secret, stored encrypted.
 
-use super::{Described, DeviceInfo, Driver, DriverError, DriverFuture, DriverInfo, State};
+use super::{Described, DeviceInfo, Driver, DriverError, DriverFuture, DriverInfo, Sink, State};
 use crate::homekit::{Connection, HapError, Pairing};
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 
@@ -30,7 +31,15 @@ mod hap {
     pub const POSITION_STATE: &str = "72";
     pub const HOLD_POSITION: &str = "6F";
     pub const ON: &str = "25";
+    pub const STATELESS_SWITCH: &str = "89";
+    pub const SWITCH_EVENT: &str = "73";
+    pub const LABEL_INDEX: &str = "CB";
 }
+
+/// A remote's events: the presses, HomeKit's values 0, 1, 2.
+const PRESSES: [&str; 3] = ["single", "double", "long"];
+/// Without any event this long, the listening session is opened again (it may be dead).
+const QUIET: Duration = Duration::from_secs(600);
 
 /// "0000008C-0000-1000-8000-0026BB765291" or "8C" → "8C"; any other UUID as it is.
 fn short(kind: &str) -> String {
@@ -43,8 +52,19 @@ fn short(kind: &str) -> String {
 
 #[derive(Debug, Clone, PartialEq)]
 enum Kind {
-    Cover { current: u64, target: u64, state: Option<u64>, hold: Option<u64> },
-    Switch { on: u64 },
+    Cover {
+        current: u64,
+        target: u64,
+        state: Option<u64>,
+        hold: Option<u64>,
+    },
+    Switch {
+        on: u64,
+    },
+    /// A remote: the event of each button, with its number.
+    Buttons {
+        events: Vec<(u64, u32)>,
+    },
 }
 
 /// A device of the accessory: where its characteristics are.
@@ -91,6 +111,30 @@ fn layout(database: &Value) -> Layout {
             .filter(|s| matches!(s["type"].as_str().map(short).as_deref(), Some(hap::WINDOW_COVERING | hap::WINDOW | hap::DOOR | hap::SWITCH | hap::OUTLET | hap::LIGHTBULB)))
             .count()
             > 1;
+        // The buttons of a remote are one device: the remote.
+        let mut buttons: Vec<(u64, u32)> = services
+            .iter()
+            .filter(|s| s["type"].as_str().map(short).as_deref() == Some(hap::STATELESS_SWITCH))
+            .filter_map(|s| {
+                let event = iid(s, hap::SWITCH_EVENT)?;
+                let index = characteristic(s, hap::LABEL_INDEX).and_then(|c| c["value"].as_u64()).map(|i| i as u32);
+                Some((event, index.unwrap_or(0)))
+            })
+            .collect();
+        if !buttons.is_empty() {
+            // Numbered as the accessory labels them, else in their order.
+            if buttons.iter().any(|(_, i)| *i == 0) {
+                for (n, b) in buttons.iter_mut().enumerate() {
+                    b.1 = n as u32 + 1;
+                }
+            }
+            buttons.sort_by_key(|(_, i)| *i);
+            let reference = format!("{aid}.buttons");
+            devices.push((
+                DeviceInfo { reference: reference.clone(), kind: "remote".into(), traits: vec!["button@1".into()], name: accessory_name.clone() },
+                Tracked { reference, aid, kind: Kind::Buttons { events: buttons } },
+            ));
+        }
         for s in &services {
             let Some(siid) = s["iid"].as_u64() else { continue };
             let kind = s["type"].as_str().map(short).unwrap_or_default();
@@ -126,7 +170,7 @@ fn layout(database: &Value) -> Layout {
 }
 
 /// The state of each device, from the values read (`aid.iid` → value).
-fn states_of(layout: &Layout, values: &HashMap<(u64, u64), Value>) -> HashMap<String, State> {
+fn states_of(layout: &Layout, values: &HashMap<(u64, u64), Value>, presses: &HashMap<String, State>) -> HashMap<String, State> {
     let mut out = HashMap::new();
     for (_, t) in &layout.devices {
         let get = |iid: u64| values.get(&(t.aid, iid)).filter(|v| !v.is_null());
@@ -147,6 +191,13 @@ fn states_of(layout: &Layout, values: &HashMap<(u64, u64), Value>) -> HashMap<St
                 let Some(v) = get(*on) else { continue };
                 s.insert("on".into(), json!(v.as_bool().unwrap_or_else(|| v.as_i64() == Some(1))));
             }
+            // A remote has no state to read: its last press is what was heard.
+            Kind::Buttons { events } => {
+                s.insert("buttons".into(), json!(events.len()));
+                if let Some(last) = presses.get(&t.reference) {
+                    s.extend(last.clone());
+                }
+            }
         }
         out.insert(t.reference.clone(), s);
     }
@@ -157,7 +208,7 @@ pub fn info() -> DriverInfo {
     DriverInfo {
         id: "homekit",
         label: "HomeKit (Legrand, VELUX…)",
-        provides: vec!["cover.position@1", "switch.relay@1"],
+        provides: vec!["cover.position@1", "switch.relay@1", "button@1"],
         models: vec!["Legrand Home + Control".into(), "VELUX App Control (KIG 300)".into()],
         config: vec![],
     }
@@ -169,6 +220,87 @@ pub struct HomeKit {
     /// One encrypted session, kept open; opened again after an error.
     conn: Mutex<Option<Connection>>,
     layout: Mutex<Option<Layout>>,
+    /// The last press of each remote, heard by the listening session.
+    presses: Arc<std::sync::Mutex<HashMap<String, State>>>,
+    listener: std::sync::Mutex<Option<tokio::task::AbortHandle>>,
+}
+
+impl Drop for HomeKit {
+    fn drop(&mut self) {
+        if let Some(l) = self.listener.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            l.abort();
+        }
+    }
+}
+
+/// The remotes' events of a database: (aid, iid) → (remote, button).
+fn button_events(layout: &Layout) -> HashMap<(u64, u64), (String, u32)> {
+    layout
+        .devices
+        .iter()
+        .filter_map(|(_, t)| match &t.kind {
+            Kind::Buttons { events } => Some(events.iter().map(|(iid, n)| ((t.aid, *iid), (t.reference.clone(), *n))).collect::<Vec<_>>()),
+            _ => None,
+        })
+        .flatten()
+        .collect()
+}
+
+/// The presses an event tells: (remote, button, press).
+fn presses_of(event: &Value, buttons: &HashMap<(u64, u64), (String, u32)>) -> Vec<(String, u32, &'static str)> {
+    event["characteristics"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|c| {
+            let (remote, n) = buttons.get(&(c["aid"].as_u64()?, c["iid"].as_u64()?))?;
+            let press = PRESSES.get(c["value"].as_u64()? as usize)?;
+            Some((remote.clone(), *n, *press))
+        })
+        .collect()
+}
+
+/// Listens to the remotes of an accessory on a session of its own, opened again when it fails.
+async fn listen(addr: String, pairing: Pairing, presses: Arc<std::sync::Mutex<HashMap<String, State>>>, sink: Sink) {
+    let mut wait = Duration::from_secs(5);
+    loop {
+        let session = async {
+            let mut conn = Connection::verify(&addr, &pairing).await?;
+            let buttons = button_events(&layout(&conn.get_json("/accessories").await?));
+            if buttons.is_empty() {
+                // No remote: looked at again later (one may be added in its app).
+                return Ok::<bool, HapError>(false);
+            }
+            conn.subscribe(&buttons.keys().copied().collect::<Vec<_>>()).await?;
+            tracing::info!("listening to {} button(s) of the HomeKit accessory at {addr}", buttons.len());
+            loop {
+                let event = match conn.next_event(QUIET).await {
+                    Ok(e) => e,
+                    // Quiet for long: the session is opened again, in case it died silently.
+                    Err(HapError::Unreachable(m)) if m == "timed out" => return Ok(true),
+                    Err(e) => return Err(e),
+                };
+                for (remote, button, press) in presses_of(&event, &buttons) {
+                    let last = json!({"last_button": button, "last_press": press, "last_at": crate::db::now()});
+                    if let Value::Object(o) = last {
+                        presses.lock().unwrap_or_else(|e| e.into_inner()).insert(remote.clone(), o);
+                    }
+                    if !sink.press(&remote, button, press) {
+                        return Ok(true);
+                    }
+                }
+            }
+        };
+        match session.await {
+            Ok(true) => wait = Duration::from_secs(5),
+            Ok(false) => wait = QUIET,
+            Err(e) => {
+                tracing::debug!("HomeKit events at {addr}: {e}");
+                wait = (wait * 2).min(Duration::from_secs(300));
+            }
+        }
+        tokio::time::sleep(wait).await;
+    }
 }
 
 fn from_hap(e: HapError) -> DriverError {
@@ -185,7 +317,7 @@ impl HomeKit {
             return Err("invalid HomeKit accessory address".into());
         }
         let pairing: Pairing = secret.and_then(|s| serde_json::from_str(s).ok()).ok_or("a HomeKit accessory is added by pairing it with its code")?;
-        Ok(Self { addr: host.to_string(), pairing, conn: Mutex::new(None), layout: Mutex::new(None) })
+        Ok(Self { addr: host.to_string(), pairing, conn: Mutex::new(None), layout: Mutex::new(None), presses: Arc::default(), listener: std::sync::Mutex::new(None) })
     }
 
     /// GET on the session, opened (again) when needed.
@@ -264,19 +396,22 @@ impl Driver for HomeKit {
                     let iids = match &t.kind {
                         Kind::Cover { current, target, state, .. } => [Some(*current), Some(*target), *state].into_iter().flatten().collect::<Vec<_>>(),
                         Kind::Switch { on } => vec![*on],
+                        Kind::Buttons { .. } => vec![],
                     };
                     iids.into_iter().map(move |i| format!("{}.{i}", t.aid))
                 })
                 .collect();
-            if ids.is_empty() {
-                return Ok(HashMap::new());
-            }
-            let answer = self.get(&format!("/characteristics?id={}", ids.join(","))).await?;
-            let values: HashMap<(u64, u64), Value> = answer["characteristics"]
-                .as_array()
-                .map(|cs| cs.iter().filter_map(|c| Some(((c["aid"].as_u64()?, c["iid"].as_u64()?), c["value"].clone()))).collect())
-                .unwrap_or_default();
-            Ok(states_of(&l, &values))
+            let values: HashMap<(u64, u64), Value> = if ids.is_empty() {
+                HashMap::new()
+            } else {
+                let answer = self.get(&format!("/characteristics?id={}", ids.join(","))).await?;
+                answer["characteristics"]
+                    .as_array()
+                    .map(|cs| cs.iter().filter_map(|c| Some(((c["aid"].as_u64()?, c["iid"].as_u64()?), c["value"].clone()))).collect())
+                    .unwrap_or_default()
+            };
+            let presses = self.presses.lock().unwrap_or_else(|e| e.into_inner()).clone();
+            Ok(states_of(&l, &values, &presses))
         })
     }
 
@@ -308,6 +443,13 @@ impl Driver for HomeKit {
 
     fn read_every(&self) -> Duration {
         Duration::from_secs(10)
+    }
+
+    fn listen(&self, sink: Sink) {
+        let task = tokio::spawn(listen(self.addr.clone(), self.pairing.clone(), self.presses.clone(), sink));
+        if let Some(previous) = self.listener.lock().unwrap_or_else(|e| e.into_inner()).replace(task.abort_handle()) {
+            previous.abort();
+        }
     }
 }
 
@@ -348,7 +490,7 @@ mod tests {
         assert_eq!(l.devices[0].1.kind, Kind::Cover { current: 9, target: 10, state: Some(11), hold: Some(12) });
 
         let values = HashMap::from([((2, 9), json!(35)), ((2, 10), json!(80)), ((2, 11), json!(1)), ((3, 9), json!(1))]);
-        let states = states_of(&l, &values);
+        let states = states_of(&l, &values, &HashMap::new());
         assert_eq!(states["2.8"]["position"], 35);
         assert_eq!(states["2.8"]["target"], 80);
         assert_eq!(states["2.8"]["moving"], "opening");
@@ -420,7 +562,7 @@ mod tests {
         assert_eq!(s, 400);
 
         let (_, _, devices) = call("GET", "/api/devices", t, None).await;
-        let cover = devices.as_array().unwrap().iter().find(|d| d["source"] == "homekit").unwrap().clone();
+        let cover = devices.as_array().unwrap().iter().find(|d| d["source"] == "homekit" && d["name"] == "Volet salon").unwrap().clone();
         assert_eq!(cover["name"], "Volet salon");
         assert_eq!(cover["traits"], json!(["cover.position@1"]));
         assert_eq!(cover["state"]["position"], 40);
@@ -428,6 +570,34 @@ mod tests {
         assert_eq!(s, 200, "{text}");
         assert_eq!(fake.state.lock().unwrap().position, 75);
         assert_eq!(d["state"]["position"], 75);
+
+        // The remote: its 4 buttons, heard on a session of their own.
+        let remote = devices.as_array().unwrap().iter().find(|d| d["source"] == "homekit" && d["kind"] == "remote").unwrap().clone();
+        assert_eq!((remote["name"].clone(), remote["traits"].clone(), remote["state"]["buttons"].clone()), (json!("Télécommande"), json!(["button@1"]), json!(4)));
+        for _ in 0..50 {
+            if fake.state.lock().unwrap().subscribed.len() == 4 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        assert_eq!(fake.state.lock().unwrap().subscribed.len(), 4, "the 4 buttons are listened to");
+        // Heard and told, and nothing else done: the remote's own app sets what its buttons do.
+        fake.press(1, 2);
+        fake.press(2, 0);
+        let mut remote = remote;
+        for _ in 0..50 {
+            let (_, _, devices) = call("GET", "/api/devices", t, None).await;
+            remote = devices.as_array().unwrap().iter().find(|d| d["id"] == remote["id"]).unwrap().clone();
+            if remote["state"]["last_button"] == 2 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        assert_eq!(fake.state.lock().unwrap().position, 75, "the shutter did not move");
+        assert_eq!((remote["state"]["last_button"].clone(), remote["state"]["last_press"].clone()), (json!(2), json!("single")));
+        let (_, _, events) = call("GET", "/api/events?limit=10", t, None).await;
+        let told: Vec<String> = events.as_array().into_iter().flatten().filter(|e| e["kind"] == "button").filter_map(|e| e["message"].as_str().map(str::to_string)).collect();
+        assert!(told.iter().any(|m| m.contains("Télécommande") && m.contains("button 1, long press")) && told.iter().any(|m| m.contains("button 2, press")), "{events}");
 
         let (s, _, _) = call("DELETE", &format!("/api/sources/{}", source["id"]), t, None).await;
         assert_eq!(s, 204);

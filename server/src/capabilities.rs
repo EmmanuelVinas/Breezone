@@ -68,6 +68,7 @@ impl Capabilities {
             channel: if version.is_prerelease() { "beta" } else { "stable" }.into(),
             protocol: Protocol { current: PROTOCOL, min: PROTOCOL_MIN },
             traits: BTreeMap::from([
+                ("button".into(), vec![1]),
                 ("climate.zone".into(), vec![1]),
                 ("cover.position".into(), vec![1]),
                 ("energy.meter".into(), vec![1]),
@@ -77,6 +78,8 @@ impl Capabilities {
                 ("solar.inverter".into(), vec![1]),
                 ("solar.panel".into(), vec![1]),
                 ("switch.relay".into(), vec![1]),
+                ("ventilation.room".into(), vec![1]),
+                ("ventilation.unit".into(), vec![1]),
             ]),
             features: [
                 ("federation.watch", 1),
@@ -109,9 +112,10 @@ impl Capabilities {
                 ModuleInfo { id: "airzone".into(), version: version.to_string(), provides: vec!["climate.zone@1".into()] },
                 ModuleInfo { id: "shelly".into(), version: version.to_string(), provides: vec!["energy.power@1".into(), "energy.meter@1".into(), "switch.relay@1".into()] },
                 ModuleInfo { id: "trydan".into(), version: version.to_string(), provides: vec!["ev.charger@1".into(), "energy.power@1".into()] },
-                ModuleInfo { id: "homekit".into(), version: version.to_string(), provides: vec!["cover.position@1".into(), "switch.relay@1".into()] },
+                ModuleInfo { id: "homekit".into(), version: version.to_string(), provides: vec!["cover.position@1".into(), "switch.relay@1".into(), "button@1".into()] },
                 ModuleInfo { id: "hue".into(), version: version.to_string(), provides: vec!["light@1".into()] },
                 ModuleInfo { id: "hoymiles".into(), version: version.to_string(), provides: vec!["energy.power@1".into(), "solar.inverter@1".into(), "solar.panel@1".into()] },
+                ModuleInfo { id: "renson".into(), version: version.to_string(), provides: vec!["ventilation.unit@1".into(), "ventilation.room@1".into()] },
             ],
             caps_rev: String::new(),
         };

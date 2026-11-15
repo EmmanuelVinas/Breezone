@@ -153,13 +153,18 @@ pub async fn scan_products(subnet: &str, airzone_port: u16) -> Result<Vec<Produc
         tasks.push(tokio::spawn(async move {
             let _permit = limit.acquire().await.ok()?;
             let host = host.to_string();
-            let (airzone, (shelly, trydan, hue), hoymiles) = tokio::join!(
+            let (airzone, (shelly, trydan, hue, renson), hoymiles) = tokio::join!(
                 probe(&host, airzone_port),
                 async {
                     if is_open(&host, 80).await {
-                        tokio::join!(crate::drivers::shelly::probe(&host), crate::drivers::trydan::probe(&host), crate::drivers::hue::probe(&host))
+                        tokio::join!(
+                            crate::drivers::shelly::probe(&host),
+                            crate::drivers::trydan::probe(&host),
+                            crate::drivers::hue::probe(&host),
+                            crate::drivers::renson::probe(&host)
+                        )
                     } else {
-                        (None, None, None)
+                        (None, None, None, None)
                     }
                 },
                 async {
@@ -236,6 +241,21 @@ pub async fn scan_products(subnet: &str, airzone_port: u16) -> Result<Vec<Produc
                         Some(api) => format!("« {} » · API {api} · appuyez sur son bouton pour l'ajouter", b.name),
                         None => format!("« {} » · appuyez sur son bouton pour l'ajouter", b.name),
                     }),
+                    supported: true,
+                    flags: 0,
+                });
+            }
+            if let Some(r) = renson {
+                found.push(Product {
+                    brand: "renson",
+                    driver: "renson",
+                    note: Some(format!("{} bouches · API locale", r.rooms)),
+                    model: r.model,
+                    host: host.clone(),
+                    port: 80,
+                    mac: None,
+                    device_id: (!r.serial.is_empty()).then_some(r.serial),
+                    firmware: None,
                     supported: true,
                     flags: 0,
                 });

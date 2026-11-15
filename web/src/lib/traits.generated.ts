@@ -1,5 +1,17 @@
 // Generated from server/contracts/traits by `BREEZONE_WRITE_GENERATED=1 cargo test --test generated` (in server/): do not edit.
 
+/** Remote or button (`button@1`): state. */
+export type ButtonState = {
+  /** Buttons */
+  buttons: number
+  /** Last button pressed */
+  last_button: number | null
+  /** Last press */
+  last_press: "single" | "double" | "long" | null
+  /** Time of the last press (s) */
+  last_at: number | null
+}
+
 /** Air conditioning (`climate.zone@1`): state. */
 export type ClimateZoneState = {
   /** On */
@@ -200,5 +212,68 @@ export type SwitchRelaySet = {
   on: boolean
 }
 
+/** Ventilation valve (`ventilation.room@1`): state. */
+export type VentilationRoomState = {
+  /** Air flow (m³/h) */
+  flow: number
+  /** Nominal flow (m³/h) */
+  nominal: number | null
+  /** Ventilation level (%) */
+  level: number | null
+  /** Profile */
+  profile: "eco" | "health" | "intense" | null
+  /** Boosting */
+  boost: boolean
+  /** Boost ends in (s) */
+  boost_remaining: number | null
+  /** Humidity (%) */
+  humidity: number | null
+  /** Temperature (°C) */
+  temperature: number | null
+  /** CO₂ (ppm) */
+  co2: number | null
+  /** VOC (ppm) */
+  voc: number | null
+}
+
+/** Ventilation valve (`ventilation.room@1`): action `boost`. */
+export type VentilationRoomBoost = {
+  minutes: number
+}
+
+/** Ventilation valve (`ventilation.room@1`): action `stop_boost`, without parameters. */
+export type VentilationRoomStopBoost = Record<string, never>
+
+/** Ventilation valve (`ventilation.room@1`): action `set_profile`. */
+export type VentilationRoomSetProfile = {
+  profile: "eco" | "health" | "intense"
+}
+
+/** Ventilation unit (`ventilation.unit@1`): state. */
+export type VentilationUnitState = {
+  /** Air flow (m³/h) */
+  flow: number
+  /** Power (W) */
+  power: number | null
+  /** Air quality index */
+  air_quality_index: number | null
+  /** Main cause */
+  main_pollutant: "humidity" | "co2" | "voc" | "other" | null
+  /** Room most in demand */
+  worst_room: string | null
+  /** Boosting */
+  boost: boolean
+  /** Room measures */
+  sensors: boolean
+}
+
+/** Ventilation unit (`ventilation.unit@1`): action `boost`. */
+export type VentilationUnitBoost = {
+  minutes: number
+}
+
+/** Ventilation unit (`ventilation.unit@1`): action `stop_boost`, without parameters. */
+export type VentilationUnitStopBoost = Record<string, never>
+
 /** Traits described by this version (`trait@version`). */
-export const TRAITS = ["climate.zone@1", "cover.position@1", "energy.meter@1", "ev.charger@1", "light@1", "solar.inverter@1", "solar.panel@1", "energy.power@1", "switch.relay@1"] as const
+export const TRAITS = ["button@1", "climate.zone@1", "cover.position@1", "energy.meter@1", "ev.charger@1", "light@1", "solar.inverter@1", "solar.panel@1", "energy.power@1", "switch.relay@1", "ventilation.room@1", "ventilation.unit@1"] as const

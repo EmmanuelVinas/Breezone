@@ -6,6 +6,20 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Ventilation: the Renson Healthbox 3.0, through its local API (no Renson account), found by the
+  network scan. A « Ventilation » page shows the level and air flow of the house, the room most in
+  demand and why (humidity, CO₂, VOC), and a card per valve with its air flow, profile and history;
+  boost a room (30 min, 1 h, 2 h) or the whole house, change a room's profile. With the API key Renson
+  gives on request (Settings › Modules › the Healthbox), the humidity, CO₂, VOC and temperature of
+  each room are read too; the unit keeps the key, Breezone does not store it. The rooms of the
+  Healthbox can be taken as Breezone rooms. New traits `ventilation.unit@1` and `ventilation.room@1`.
+- HomeKit remotes (the Legrand 4-button remote…): found with the accessory, listened to on a session
+  of their own, with the last press shown and each press noted in Activity (button, single, double
+  or long). Breezone triggers nothing: what a button does stays set in the maker's app, so a press
+  is never acted on twice. New trait `button@1`.
+
 ## [0.11.0-beta.12] - 2026-11-15
 
 ### Added

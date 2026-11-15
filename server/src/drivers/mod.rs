@@ -9,6 +9,7 @@
 pub mod homekit;
 pub mod hoymiles;
 pub mod hue;
+pub mod renson;
 pub mod shelly;
 pub mod trydan;
 
@@ -89,6 +90,44 @@ pub trait Driver: Send + Sync {
     fn activate_scene<'a>(&'a self, id: &'a str) -> DriverFuture<'a, ()> {
         Box::pin(async move { Err(DriverError::Unsupported(format!("scene {id}"))) })
     }
+    /// Gives the hardware a key of its maker that unlocks more of its data (Renson); true once it
+    /// accepts it. The hardware keeps it: Breezone does not.
+    fn unlock<'a>(&'a self, _key: &'a str) -> DriverFuture<'a, bool> {
+        Box::pin(async { Err(DriverError::Unsupported("no key for this module".into())) })
+    }
+    /// Starts listening to what the hardware tells without being asked (the presses of a remote's
+    /// buttons), sent to `sink` until the driver is dropped.
+    fn listen(&self, _sink: Sink) {}
+}
+
+/// A press of a button of a remote (`button@1`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Press {
+    pub source_id: i64,
+    /// The device: the remote.
+    pub reference: String,
+    /// 1, 2…
+    pub button: u32,
+    /// "single" | "double" | "long"
+    pub press: &'static str,
+}
+
+/// Where a driver sends what it hears, for its source.
+#[derive(Debug, Clone)]
+pub struct Sink {
+    source_id: i64,
+    tx: tokio::sync::mpsc::UnboundedSender<Press>,
+}
+
+impl Sink {
+    pub fn new(source_id: i64, tx: tokio::sync::mpsc::UnboundedSender<Press>) -> Self {
+        Self { source_id, tx }
+    }
+
+    /// False once nobody listens any more (the server stops).
+    pub fn press(&self, reference: &str, button: u32, press: &'static str) -> bool {
+        self.tx.send(Press { source_id: self.source_id, reference: reference.to_string(), button, press }).is_ok()
+    }
 }
 
 /// A room of the hardware's own app: its name and the references of the devices in it.
@@ -131,7 +170,7 @@ pub struct DriverInfo {
 }
 
 pub fn available() -> Vec<DriverInfo> {
-    vec![shelly::info(), trydan::info(), hoymiles::info(), homekit::info(), hue::info()]
+    vec![shelly::info(), trydan::info(), hoymiles::info(), homekit::info(), hue::info(), renson::info()]
 }
 
 /// The driver of a source, from its configuration and its secret (decrypted).
@@ -142,6 +181,7 @@ pub fn create(driver: &str, config: &Value, secret: Option<&str>) -> Result<Arc<
         "hoymiles" => Ok(Arc::new(hoymiles::Hoymiles::new(config)?)),
         "homekit" => Ok(Arc::new(homekit::HomeKit::new(config, secret)?)),
         "hue" => Ok(Arc::new(hue::Hue::new(config, secret)?)),
+        "renson" => Ok(Arc::new(renson::Renson::new(config)?)),
         other => Err(format!("unknown driver: {other}")),
     }
 }
@@ -212,6 +252,9 @@ pub struct Runtime {
     goals: RwLock<HashMap<(i64, String), Goal>>,
     /// When each lost source was last looked for on the network.
     searched: RwLock<HashMap<i64, Instant>>,
+    /// The presses of the remotes, sent by the drivers that listen (`Driver::listen`).
+    presses: tokio::sync::mpsc::UnboundedSender<Press>,
+    heard: std::sync::Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<Press>>>,
 }
 
 /// A source unreachable this long (seconds) is looked for on the network by its identity.
@@ -241,7 +284,16 @@ impl Goal {
 impl Runtime {
     /// `key`: decrypts the secrets of the sources (the server key).
     pub fn new(db: Db, key: [u8; 32]) -> Self {
-        Self { db, key, sources: RwLock::new(HashMap::new()), goals: RwLock::new(HashMap::new()), searched: RwLock::new(HashMap::new()) }
+        let (presses, heard) = tokio::sync::mpsc::unbounded_channel();
+        Self {
+            db,
+            key,
+            sources: RwLock::new(HashMap::new()),
+            goals: RwLock::new(HashMap::new()),
+            searched: RwLock::new(HashMap::new()),
+            presses,
+            heard: std::sync::Mutex::new(Some(heard)),
+        }
     }
 
     /// Takes the configured sources into account (at start, and after each change).
@@ -260,7 +312,10 @@ impl Runtime {
                     let config: Value = serde_json::from_str(&source.config).unwrap_or(Value::Null);
                     let secret = source.secret.as_deref().and_then(|s| crate::cloud::decrypt(&self.key, s));
                     let (driver, error) = match create(&source.driver, &config, secret.as_deref()) {
-                        Ok(d) => (Some(d), None),
+                        Ok(d) => {
+                            d.listen(Sink::new(source.id, self.presses.clone()));
+                            (Some(d), None)
+                        }
                         Err(e) => (None, Some(e)),
                     };
                     let status = SourceStatus { state: if error.is_some() { "error" } else { "unknown" }, last_error: error, ..Default::default() };
@@ -363,6 +418,53 @@ impl Runtime {
             }
         }
         self.check_goals(id).await;
+    }
+
+    /// Handles the presses of the remotes as they come (once: the first call takes them).
+    pub fn hear(self: Arc<Self>) {
+        let Some(mut heard) = self.heard.lock().unwrap_or_else(|e| e.into_inner()).take() else { return };
+        tokio::spawn(async move {
+            while let Some(p) = heard.recv().await {
+                self.pressed(p).await;
+            }
+        });
+    }
+
+    /// A button was pressed: its remote shows it and the activity tells it. Breezone does nothing
+    /// else: what a button does is set in the remote's own app (Legrand…), not done twice.
+    async fn pressed(&self, p: Press) {
+        let given = {
+            let mut sources = self.sources.write().await;
+            let Some(r) = sources.get_mut(&p.source_id).filter(|r| r.source.enabled) else { return };
+            let given = r.devices.iter().find(|d| d.reference == p.reference).map(|d| d.name.clone());
+            let state = r.states.entry(p.reference.clone()).or_default();
+            state.insert("last_button".into(), Value::from(p.button));
+            state.insert("last_press".into(), Value::from(p.press));
+            state.insert("last_at".into(), Value::from(db::now()));
+            given
+        };
+        let source_ref = format!("{}/{}", p.source_id, p.reference);
+        let device: Option<(i64, Option<String>)> =
+            match sqlx::query_as("SELECT id, name FROM devices WHERE source_id = ? AND source_ref = ?").bind(p.source_id).bind(&source_ref).fetch_optional(&self.db).await {
+                Ok(d) => d,
+                Err(e) => return tracing::error!("press of {source_ref}: {e}"),
+            };
+        let Some((device_id, name)) = device else { return };
+        let name = name.or(given).unwrap_or_else(|| p.reference.clone());
+        let how = match p.press {
+            "double" => crate::text!("double appui", "double press", "doble pulsación"),
+            "long" => crate::text!("appui long", "long press", "pulsación larga"),
+            _ => crate::text!("appui", "press", "pulsación"),
+        };
+        let message = crate::i18n::Text {
+            fr: format!("« {name} » : bouton {}, {}", p.button, how.fr),
+            en: format!("“{name}”: button {}, {}", p.button, how.en),
+            es: format!("«{name}»: botón {}, {}", p.button, how.es),
+        };
+        let data = serde_json::json!({"device_id": device_id, "button": p.button, "press": p.press});
+        if let Err(e) = db::insert_event(&self.db, "button", "info", None, None, &message, Some(&data)).await {
+            tracing::error!("cannot log the press of {source_ref}: {e}");
+        }
     }
 
     /// Reads every source that is due (see `Driver::read_every`).

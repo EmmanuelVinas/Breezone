@@ -8,6 +8,7 @@ use std::sync::LazyLock;
 
 /// Every trait file, embedded at build time (the tests check that none is forgotten).
 const FILES: &[(&str, &str)] = &[
+    ("button.json", include_str!("../contracts/traits/button.json")),
     ("climate.zone.json", include_str!("../contracts/traits/climate.zone.json")),
     ("cover.position.json", include_str!("../contracts/traits/cover.position.json")),
     ("energy.meter.json", include_str!("../contracts/traits/energy.meter.json")),
@@ -17,6 +18,8 @@ const FILES: &[(&str, &str)] = &[
     ("solar.panel.json", include_str!("../contracts/traits/solar.panel.json")),
     ("energy.power.json", include_str!("../contracts/traits/energy.power.json")),
     ("switch.relay.json", include_str!("../contracts/traits/switch.relay.json")),
+    ("ventilation.room.json", include_str!("../contracts/traits/ventilation.room.json")),
+    ("ventilation.unit.json", include_str!("../contracts/traits/ventilation.unit.json")),
 ];
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

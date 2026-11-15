@@ -969,12 +969,12 @@ const en: Record<string, string> = {
   "HomeKit en local : appairé avec le code de l'accessoire, sans Apple Maison ni compte":
     "Local HomeKit: paired with the accessory's code, without Apple Home or an account",
   "toutes les 10 s": "every 10 s",
-  "position et mouvement des volets et fenêtres, état des prises, interrupteurs et lumières":
-    "position and movement of shutters and windows, state of outlets, switches and lights",
+  "position et mouvement des volets et fenêtres, état des prises, interrupteurs et lumières, appuis sur les boutons des télécommandes":
+    "position and movement of shutters and windows, state of plugs, switches and lights, presses on the buttons of remotes",
   "ouverture et arrêt des volets, marche et arrêt des prises et lumières":
     "opening and stopping shutters, outlets and lights on and off",
-  "Retirer ce module supprime l'appairage de Breezone sur l'accessoire, et rien d'autre : ce que l'application du fabricant a configuré ne change pas.":
-    "Removing this module removes Breezone's pairing from the accessory, and nothing else: what the manufacturer's app set up does not change.",
+  "Ce que font les boutons des télécommandes se règle dans l'application du fabricant (Legrand…) : Breezone montre les appuis, sans rien déclencher de son côté. Retirer ce module supprime l'appairage de Breezone sur l'accessoire, et rien d'autre : ce que l'application du fabricant a configuré ne change pas.":
+    "What the buttons of remotes do is set in the maker's app (Legrand…): Breezone shows the presses, without triggering anything itself. Removing this module removes Breezone's pairing on the accessory, and nothing else: what the maker's app set up does not change.",
   "« {name} » appairé": "“{name}” paired",
   "Module Airzone": "Airzone module",
   "Appairé ailleurs": "Paired elsewhere",
@@ -997,8 +997,8 @@ const en: Record<string, string> = {
     "on and off, brightness, white temperature and color",
   "Les lampes, pièces et scènes restent gérées par l'application Hue : Breezone les lit et les pilote, sans rien y changer.":
     "Lamps, rooms and scenes stay managed by the Hue app: Breezone reads and drives them without changing anything there.",
-  "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan, clés Wi-Fi Hoymiles, ponts Philips Hue et accessoires HomeKit (Legrand, VELUX…).":
-    "Breezone looks on the network for the products it can drive: Airzone WebServers, Shelly (Plus, Pro, Gen3, Gen4), V2C Trydan chargers, Hoymiles Wi-Fi sticks, Philips Hue bridges and HomeKit accessories (Legrand, VELUX…).",
+  "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan, clés Wi-Fi Hoymiles, ponts Philips Hue, VMC Renson Healthbox et accessoires HomeKit (Legrand, VELUX…).":
+    "Breezone looks on the network for the products it can drive: Airzone WebServers, Shelly (Plus, Pro, Gen3, Gen4), V2C Trydan chargers, Hoymiles Wi-Fi sticks, Philips Hue bridges, Renson Healthbox ventilation units and HomeKit accessories (Legrand, VELUX…).",
   "Ajouter « {name} »": "Add “{name}”",
   "Appuyez sur le bouton rond, au centre du pont Hue, puis cliquez sur « Ajouter » dans les 30 secondes. Vos lampes, pièces et scènes restent comme dans l'application Hue.":
     "Press the round button in the middle of the Hue bridge, then click “Add” within 30 seconds. Your lamps, rooms and scenes stay as in the Hue app.",
@@ -1112,6 +1112,84 @@ const en: Record<string, string> = {
   Erreurs: "Errors",
   "Aucune erreur récente.": "No recent errors.",
   "Erreur du serveur : {message}": "Server error: {message}",
+  "{n} m³/h": "{n} m³/h",
+  boost: "boost",
+  "Clé acceptée : les mesures des pièces arrivent":
+    "Key accepted: the room measures are coming",
+  "La Healthbox refuse cette clé (expirée ou fausse ?)":
+    "The Healthbox refuses this key (expired or wrong?)",
+  "Mesures des pièces": "Room measures",
+  "La clé API est active : l'humidité, le CO₂, les COV et la température de chaque pièce sont lus.":
+    "The API key is active: the humidity, CO₂, VOC and temperature of each room are read.",
+  "Sans clé, la Healthbox donne les débits et la qualité de l'air globale. Renson fournit gratuitement, sur demande à son support, une clé API qui ajoute l'humidité, le CO₂, les COV et la température de chaque pièce.":
+    "Without a key, the Healthbox gives the air flows and the overall air quality. Renson gives a free API key on request to its support, which adds the humidity, CO₂, VOC and temperature of each room.",
+  "Clé active": "Key active",
+  "Clé API Renson": "Renson API key",
+  "La clé est donnée à la Healthbox, qui la garde : Breezone ne l'enregistre pas.":
+    "The key is given to the Healthbox, which keeps it: Breezone does not store it.",
+  "API locale de la Healthbox : aucun compte Renson nécessaire":
+    "Local API of the Healthbox: no Renson account needed",
+  "toutes les 30 s": "every 30 s",
+  "débit d'air de la maison et de chaque bouche, profil, boost en cours, qualité de l'air et pièce la plus en demande ; avec la clé API : humidité, CO₂, COV et température de chaque pièce":
+    "air flow of the house and of each valve, profile, current boost, air quality and the room most in demand; with the API key: humidity, CO₂, VOC and temperature of each room",
+  "boost d'une pièce ou de toute la maison, profil de chaque pièce":
+    "boost of a room or of the whole house, profile of each room",
+  "Les bouches, pièces et profils restent réglés dans l'application Renson : Breezone les lit et lance les boosts, sans rien changer d'autre.":
+    "Valves, rooms and profiles stay set in the Renson app: Breezone reads them and starts boosts, without changing anything else.",
+  "Tous les objets ont déjà une pièce": "Every object already has a room",
+  "{placed} objet(s) rangé(s), {created} pièce(s) créée(s)":
+    "{placed} object(s) placed, {created} room(s) created",
+  "Reprendre les pièces Renson": "Take the Renson rooms",
+  Eco: "Eco",
+  Health: "Health",
+  Intense: "Intense",
+  "l'humidité": "humidity",
+  "le CO₂": "CO₂",
+  "les COV": "VOC",
+  "la qualité de l'air": "the air quality",
+  "Air bon": "Good air",
+  "Air moyen": "Fair air",
+  "Air mauvais": "Bad air",
+  "CO₂": "CO₂",
+  COV: "VOC",
+  "Demande de l'air": "Asks for air",
+  "Débit d'air": "Air flow",
+  "Débit des dernières 24 h": "Air flow over the last 24 h",
+  "Profil {p}": "{p} profile",
+  "Boost · {n} min": "Boost · {n} min",
+  Boost: "Boost",
+  "Boost 30 min": "Boost 30 min",
+  "Boost en cours, encore {n} min.": "Boosting, {n} min left.",
+  "La qualité de l'air est mauvaise. La ventilation est active.":
+    "The air quality is bad. The ventilation is active.",
+  "C'est la pièce qui demande le plus d'air, à cause de {cause}.":
+    "This room asks for the most air, because of {cause}.",
+  "La ventilation est active.": "The ventilation is active.",
+  "La ventilation est au repos.": "The ventilation is at rest.",
+  "Pièce Breezone : {name}": "Breezone room: {name}",
+  "{flow} m³/h sur {nominal} m³/h nominaux":
+    "{flow} m³/h of {nominal} m³/h nominal",
+  "Niveau de ventilation": "Ventilation level",
+  "Humidité des dernières 24 h": "Humidity over the last 24 h",
+  "Arrêter le boost": "Stop the boost",
+  "1 h": "1 h",
+  "2 h": "2 h",
+  Profil: "Profile",
+  "{room} demande le plus d'air, à cause de {cause}":
+    "{room} asks for the most air, because of {cause}",
+  "boost en cours": "boosting",
+  "mode automatique": "automatic mode",
+  "Arrêter les boosts": "Stop the boosts",
+  "Boost maison 1 h": "Boost the house 1 h",
+  "API locale": "local API",
+  "Aucune VMC": "No ventilation unit",
+  "Ajoutez votre Renson Healthbox dans Réglages › Modules : Breezone la trouve sur le réseau.":
+    "Add your Renson Healthbox in Settings › Modules: Breezone finds it on the network.",
+  "{n} bouche": "{n} valve",
+  "{n} bouches": "{n} valves",
+  "{n} en boost": "{n} boosting",
+  "{n} boutons": "{n} buttons",
+  "dernier appui : bouton {n}": "last press: button {n}",
 }
 
 export default en

@@ -1,0 +1,24 @@
+{
+  "trait": "ventilation.unit",
+  "version": 1,
+  "label": { "fr": "VMC", "en": "Ventilation unit", "es": "Ventilación" },
+  "state": [
+    { "name": "flow", "type": "number", "unit": "m³/h", "min": 0, "label": { "fr": "Débit d'air", "en": "Air flow", "es": "Caudal de aire" } },
+    { "name": "power", "type": "number", "unit": "W", "min": 0, "optional": true, "label": { "fr": "Puissance", "en": "Power", "es": "Potencia" } },
+    { "name": "air_quality_index", "type": "number", "min": 0, "optional": true, "label": { "fr": "Indice de qualité d'air", "en": "Air quality index", "es": "Índice de calidad del aire" } },
+    { "name": "main_pollutant", "type": "enum", "values": ["humidity", "co2", "voc", "other"], "optional": true, "label": { "fr": "Cause principale", "en": "Main cause", "es": "Causa principal" } },
+    { "name": "worst_room", "type": "string", "optional": true, "label": { "fr": "Pièce la plus en demande", "en": "Room most in demand", "es": "Estancia con más demanda" } },
+    { "name": "boost", "type": "bool", "label": { "fr": "Boost en cours", "en": "Boosting", "es": "Boost activo" } },
+    { "name": "sensors", "type": "bool", "label": { "fr": "Mesures des pièces", "en": "Room measures", "es": "Medidas de las estancias" } }
+  ],
+  "actions": [
+    {
+      "name": "boost",
+      "label": { "fr": "Boost de toute la maison", "en": "Boost the whole house", "es": "Boost de toda la casa" },
+      "params": [
+        { "name": "minutes", "type": "integer", "unit": "min", "min": 5, "max": 480, "label": { "fr": "Durée", "en": "Duration", "es": "Duración" } }
+      ]
+    },
+    { "name": "stop_boost", "label": { "fr": "Arrêter le boost", "en": "Stop the boost", "es": "Detener el boost" }, "params": [] }
+  ]
+}

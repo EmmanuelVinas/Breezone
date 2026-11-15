@@ -207,11 +207,22 @@ pub(crate) mod fake {
         /// Has a screen: shows a new code each time a pairing starts.
         pub screen: bool,
         pub shown: Option<String>,
+        /// The characteristics a session subscribed to (`ev`).
+        pub subscribed: Vec<(u64, u64)>,
     }
 
     pub struct Fake {
         pub port: u16,
         pub state: Arc<Mutex<State>>,
+        /// Sends an event to the sessions that subscribed: `{"characteristics": [...]}`.
+        pub events: tokio::sync::broadcast::Sender<Value>,
+    }
+
+    impl Fake {
+        /// A press of a button of the remote (aid 5): button 1 to 4, 0 single, 1 double, 2 long.
+        pub fn press(&self, button: u64, value: u64) {
+            let _ = self.events.send(json!({"characteristics": [{"aid": 5, "iid": 10 * button + 1, "value": value}]}));
+        }
     }
 
     pub async fn start() -> Fake {
@@ -220,13 +231,15 @@ pub(crate) mod fake {
         let state = Arc::new(Mutex::new(State { position: 40, ..Default::default() }));
         let key = SigningKey::from_bytes(&[42; 32]);
         let st = state.clone();
+        let (events, _) = tokio::sync::broadcast::channel(16);
+        let tx = events.clone();
         tokio::spawn(async move {
             loop {
                 let Ok((socket, _)) = listener.accept().await else { return };
-                tokio::spawn(serve(socket, key.clone(), st.clone()));
+                tokio::spawn(serve(socket, key.clone(), st.clone(), tx.clone()));
             }
         });
-        Fake { port, state }
+        Fake { port, state, events }
     }
 
     async fn read_request(socket: &mut TcpStream, buf: &mut Vec<u8>, keys: &mut Option<([u8; 32], [u8; 32], u64, u64)>) -> Option<(String, String, Vec<u8>)> {
@@ -294,11 +307,18 @@ pub(crate) mod fake {
                 {"iid": 8, "type": "0000008C-0000-1000-8000-0026BB765291", "characteristics": [
                     {"iid": 9, "type": "0000006D-0000-1000-8000-0026BB765291", "value": position, "perms": ["pr", "ev"], "format": "uint8"},
                     {"iid": 10, "type": "0000007C-0000-1000-8000-0026BB765291", "value": position, "perms": ["pr", "pw", "ev"], "format": "uint8"},
-                    {"iid": 11, "type": "00000072-0000-1000-8000-0026BB765291", "value": 2, "perms": ["pr", "ev"], "format": "uint8"}]}]}
+                    {"iid": 11, "type": "00000072-0000-1000-8000-0026BB765291", "value": 2, "perms": ["pr", "ev"], "format": "uint8"}]}]},
+            // A remote with 4 buttons, labelled 1 to 4.
+            {"aid": 5, "services": [
+                {"iid": 1, "type": "3E", "characteristics": [{"iid": 2, "type": "23", "value": "Télécommande", "perms": ["pr"], "format": "string"}]},
+                {"iid": 10, "type": "89", "characteristics": [{"iid": 11, "type": "73", "value": null, "perms": ["pr", "ev"]}, {"iid": 12, "type": "CB", "value": 1}]},
+                {"iid": 20, "type": "89", "characteristics": [{"iid": 21, "type": "73", "value": null, "perms": ["pr", "ev"]}, {"iid": 22, "type": "CB", "value": 2}]},
+                {"iid": 30, "type": "89", "characteristics": [{"iid": 31, "type": "73", "value": null, "perms": ["pr", "ev"]}, {"iid": 32, "type": "CB", "value": 3}]},
+                {"iid": 40, "type": "89", "characteristics": [{"iid": 41, "type": "73", "value": null, "perms": ["pr", "ev"]}, {"iid": 42, "type": "CB", "value": 4}]}]}
         ]})
     }
 
-    async fn serve(mut socket: TcpStream, key: SigningKey, state: Arc<Mutex<State>>) {
+    async fn serve(mut socket: TcpStream, key: SigningKey, state: Arc<Mutex<State>>, events: tokio::sync::broadcast::Sender<Value>) {
         let mut buf = vec![];
         let mut keys = None;
         let mut srp: Option<srp::Server> = None;
@@ -412,9 +432,33 @@ pub(crate) mod fake {
                 }
                 ("PUT", "/characteristics", _) => {
                     let v: Value = serde_json::from_slice(&body).unwrap();
+                    let cs = v["characteristics"].as_array().unwrap();
+                    if cs.iter().all(|c| c["ev"] == true) {
+                        // A subscription: this session only gets events from now on.
+                        let mut rx = events.subscribe();
+                        state.lock().unwrap().subscribed.extend(cs.iter().map(|c| (c["aid"].as_u64().unwrap(), c["iid"].as_u64().unwrap())));
+                        reply(&mut socket, &mut keys, "204 No Content", "application/hap+json", b"").await;
+                        while let Ok(event) = rx.recv().await {
+                            let body = event.to_string();
+                            let mut data = format!("EVENT/1.0 200 OK\r\nContent-Type: application/hap+json\r\nContent-Length: {}\r\n\r\n", body.len()).into_bytes();
+                            data.extend_from_slice(body.as_bytes());
+                            let Some((write, _, count, _)) = keys.as_mut() else { return };
+                            let mut out = vec![];
+                            for chunk in data.chunks(1024) {
+                                let len = (chunk.len() as u16).to_le_bytes();
+                                out.extend_from_slice(&len);
+                                out.extend(seal(write, count.to_le_bytes(), &len, chunk));
+                                *count += 1;
+                            }
+                            if socket.write_all(&out).await.is_err() {
+                                return;
+                            }
+                        }
+                        return;
+                    }
                     {
                         let mut st = state.lock().unwrap();
-                        for c in v["characteristics"].as_array().unwrap() {
+                        for c in cs {
                             st.written.push((c["aid"].as_u64().unwrap(), c["iid"].as_u64().unwrap(), c["value"].clone()));
                             if c["iid"] == 10 {
                                 st.position = c["value"].as_i64().unwrap();

@@ -720,3 +720,81 @@ async fn a_hue_bridge_is_added_with_its_button_and_drives_its_lights() {
     let (s, _) = server.call("POST", &format!("/api/scenes/{}/..%2Fx", source["id"]), t, None).await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
 }
+
+/// A Renson Healthbox 3.0 with two rooms; the boosts asked are kept by room.
+async fn fake_healthbox(boosts: Arc<Mutex<HashMap<String, Value>>>) -> u16 {
+    use axum::extract::Path;
+    use axum::routing::{post, put};
+    let current = json!({
+        "device_type": "HEALTHBOX3", "description": "Healthbox 3.0", "serial": "240205P0173",
+        "room": {
+            "1": {"name": "Toilettes", "profile_name": "eco", "parameter": {"nominal": {"value": 12.0}, "offset": {"value": 0.0}},
+                  "actuator": [{"parameter": {"flow_rate": {"value": 3.0}}}], "sensor": []},
+            "2": {"name": "Salle de bains", "profile_name": "health", "parameter": {"nominal": {"value": 16.0}, "offset": {"value": 0.0}},
+                  "actuator": [{"parameter": {"flow_rate": {"value": 16.0}}}], "sensor": []}
+        },
+        "sensor": [{"type": "global air quality index", "parameter": {"index": {"value": 147.0}, "main_pollutant": {"value": "indoor relative humidity"}, "room": {"value": "Salle de bains"}}}]
+    });
+    let router = Router::new()
+        .route("/v2/api/data/current", get(move || async move { Json(current.clone()) }))
+        .route("/v2/device", get(|| async { Json(json!({"fan": {"flow": 19.0}, "power": 4.0})) }))
+        .route("/v1/global", get(|| async { Json(json!({"firmware version": "2.6.9"})) }))
+        .route("/v2/api/api_key/status", get(|| async { Json(json!({"state": "empty"})) }))
+        .route("/v2/api/api_key", post(|| async { StatusCode::OK }))
+        .route(
+            "/v2/api/boost/{room}",
+            get(|State(b): State<Arc<Mutex<HashMap<String, Value>>>>, Path(room): Path<String>| async move {
+                let b = b.lock().unwrap();
+                let on = b.get(&room).is_some_and(|v| v["enable"] == true);
+                Json(json!({"default_level": 100.0, "default_timeout": 900, "enable": on, "remaining": if on { 1800 } else { 0 }}))
+            })
+            .put(|State(b): State<Arc<Mutex<HashMap<String, Value>>>>, Path(room): Path<String>, Json(body): Json<Value>| async move {
+                b.lock().unwrap().insert(room, body);
+                StatusCode::OK
+            }),
+        )
+        .route("/v2/api/data/current/room/{room}/profile_name", put(|| async { StatusCode::OK }))
+        .with_state(boosts);
+    serve(router).await
+}
+
+#[tokio::test]
+async fn a_healthbox_boosts_a_room_and_the_whole_house() {
+    let boosts = Arc::new(Mutex::new(HashMap::new()));
+    let healthbox = fake_healthbox(boosts.clone()).await;
+    let (server, token) = Server::start().await;
+    let t = Some(token.as_str());
+
+    let (s, source) = server.call("POST", "/api/sources", t, Some(json!({"driver":"renson","name":"VMC","config":{"host": format!("127.0.0.1:{healthbox}")}}))).await;
+    assert_eq!(s, StatusCode::CREATED, "{source}");
+    assert_eq!(source["status"]["state"], "online", "{source}");
+    assert_eq!(source["status"]["model"], "Renson Healthbox 3.0");
+    assert_eq!(source["status"]["firmware"], "2.6.9");
+
+    let (_, devices) = server.call("GET", "/api/devices", t, None).await;
+    let of = |name: &str| devices.as_array().unwrap().iter().find(|d| d["source"] == "renson" && d["name"] == name).unwrap().clone();
+    let (unit, bath) = (of("VMC"), of("Salle de bains"));
+    assert_eq!(unit["state"]["worst_room"], "Salle de bains");
+    assert_eq!(unit["state"]["main_pollutant"], "humidity");
+    assert_eq!((bath["state"]["level"].clone(), bath["state"]["profile"].clone()), (json!(100), json!("health")));
+
+    // A room for 30 min, at the unit's own boost level.
+    let (s, d) = server.call("POST", &format!("/api/devices/{}/actions", bath["id"]), t, Some(json!({"trait":"ventilation.room","action":"boost","params":{"minutes":30}}))).await;
+    assert_eq!(s, StatusCode::OK, "{d}");
+    assert_eq!(boosts.lock().unwrap()["2"], json!({"enable": true, "level": 100.0, "timeout": 1800}));
+    assert_eq!((d["state"]["boost"].clone(), d["state"]["boost_remaining"].clone()), (json!(true), json!(1800)));
+
+    // The whole house, then stopped.
+    let unit_actions = format!("/api/devices/{}/actions", unit["id"]);
+    let (s, _) = server.call("POST", &unit_actions, t, Some(json!({"trait":"ventilation.unit","action":"boost","params":{"minutes":60}}))).await;
+    assert_eq!(s, StatusCode::OK);
+    assert_eq!(boosts.lock().unwrap()["1"]["timeout"], 3600);
+    let (s, _) = server.call("POST", &unit_actions, t, Some(json!({"trait":"ventilation.unit","action":"stop_boost","params":{}}))).await;
+    assert_eq!(s, StatusCode::OK);
+    assert!(boosts.lock().unwrap().values().all(|b| *b == json!({"enable": false})));
+
+    // A key the unit does not accept.
+    let (s, k) = server.call("POST", &format!("/api/sources/{}/key", source["id"]), t, Some(json!({"key": "nope"}))).await;
+    assert_eq!(s, StatusCode::OK, "{k}");
+    assert_eq!(k["accepted"], false);
+}

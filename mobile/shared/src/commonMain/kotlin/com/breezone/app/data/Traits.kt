@@ -6,6 +6,22 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
+enum class ButtonLastPress {
+    @SerialName("single") Single,
+    @SerialName("double") Double,
+    @SerialName("long") Long,
+}
+
+/** Remote or button (`button@1`): state. */
+@Serializable
+data class ButtonState(
+    val buttons: Long = 0,
+    val lastButton: Long? = null,
+    val lastPress: ButtonLastPress? = null,
+    val lastAt: Long? = null,
+)
+
+@Serializable
 enum class ClimateZoneMode {
     @SerialName("stop") Stop,
     @SerialName("cooling") Cooling,
@@ -209,5 +225,73 @@ data class SwitchRelaySet(
     val on: Boolean? = null,
 )
 
+@Serializable
+enum class VentilationRoomProfile {
+    @SerialName("eco") Eco,
+    @SerialName("health") Health,
+    @SerialName("intense") Intense,
+}
+
+/** Ventilation valve (`ventilation.room@1`): state. */
+@Serializable
+data class VentilationRoomState(
+    val flow: Double = 0.0,
+    val nominal: Double? = null,
+    val level: Long? = null,
+    val profile: VentilationRoomProfile? = null,
+    val boost: Boolean = false,
+    val boostRemaining: Long? = null,
+    val humidity: Double? = null,
+    val temperature: Double? = null,
+    val co2: Double? = null,
+    val voc: Double? = null,
+)
+
+/** Ventilation valve (`ventilation.room@1`): action `boost`. */
+@Serializable
+data class VentilationRoomBoost(
+    val minutes: Long? = null,
+)
+
+/** Ventilation valve (`ventilation.room@1`): action `stop_boost`, without parameters. */
+@Serializable
+class VentilationRoomStopBoost
+
+/** Ventilation valve (`ventilation.room@1`): action `set_profile`. */
+@Serializable
+data class VentilationRoomSetProfile(
+    val profile: VentilationRoomProfile? = null,
+)
+
+@Serializable
+enum class VentilationUnitMainPollutant {
+    @SerialName("humidity") Humidity,
+    @SerialName("co2") Co2,
+    @SerialName("voc") Voc,
+    @SerialName("other") Other,
+}
+
+/** Ventilation unit (`ventilation.unit@1`): state. */
+@Serializable
+data class VentilationUnitState(
+    val flow: Double = 0.0,
+    val power: Double? = null,
+    val airQualityIndex: Double? = null,
+    val mainPollutant: VentilationUnitMainPollutant? = null,
+    val worstRoom: String? = null,
+    val boost: Boolean = false,
+    val sensors: Boolean = false,
+)
+
+/** Ventilation unit (`ventilation.unit@1`): action `boost`. */
+@Serializable
+data class VentilationUnitBoost(
+    val minutes: Long? = null,
+)
+
+/** Ventilation unit (`ventilation.unit@1`): action `stop_boost`, without parameters. */
+@Serializable
+class VentilationUnitStopBoost
+
 /** Traits described by this version (`trait@version`). */
-val TRAITS = listOf("climate.zone@1", "cover.position@1", "energy.meter@1", "ev.charger@1", "light@1", "solar.inverter@1", "solar.panel@1", "energy.power@1", "switch.relay@1")
+val TRAITS = listOf("button@1", "climate.zone@1", "cover.position@1", "energy.meter@1", "ev.charger@1", "light@1", "solar.inverter@1", "solar.panel@1", "energy.power@1", "switch.relay@1", "ventilation.room@1", "ventilation.unit@1")

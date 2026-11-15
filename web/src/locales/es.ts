@@ -978,12 +978,12 @@ const es: Record<string, string> = {
   "HomeKit en local : appairé avec le code de l'accessoire, sans Apple Maison ni compte":
     "HomeKit local: emparejado con el código del accesorio, sin Apple Casa ni cuenta",
   "toutes les 10 s": "cada 10 s",
-  "position et mouvement des volets et fenêtres, état des prises, interrupteurs et lumières":
-    "posición y movimiento de persianas y ventanas, estado de enchufes, interruptores y luces",
+  "position et mouvement des volets et fenêtres, état des prises, interrupteurs et lumières, appuis sur les boutons des télécommandes":
+    "posición y movimiento de persianas y ventanas, estado de enchufes, interruptores y luces, pulsaciones de los botones de los mandos",
   "ouverture et arrêt des volets, marche et arrêt des prises et lumières":
     "apertura y parada de persianas, encendido y apagado de enchufes y luces",
-  "Retirer ce module supprime l'appairage de Breezone sur l'accessoire, et rien d'autre : ce que l'application du fabricant a configuré ne change pas.":
-    "Quitar este módulo elimina el emparejamiento de Breezone en el accesorio, y nada más: lo que configuró la aplicación del fabricante no cambia.",
+  "Ce que font les boutons des télécommandes se règle dans l'application du fabricant (Legrand…) : Breezone montre les appuis, sans rien déclencher de son côté. Retirer ce module supprime l'appairage de Breezone sur l'accessoire, et rien d'autre : ce que l'application du fabricant a configuré ne change pas.":
+    "Lo que hacen los botones de los mandos se ajusta en la app del fabricante (Legrand…): Breezone muestra las pulsaciones, sin activar nada por su parte. Quitar este módulo elimina el emparejamiento de Breezone en el accesorio, y nada más: lo configurado en la app del fabricante no cambia.",
   "« {name} » appairé": "«{name}» emparejado",
   "Module Airzone": "Módulo Airzone",
   "Appairé ailleurs": "Emparejado en otro sitio",
@@ -1006,8 +1006,8 @@ const es: Record<string, string> = {
     "encendido y apagado, intensidad, temperatura de blanco y color",
   "Les lampes, pièces et scènes restent gérées par l'application Hue : Breezone les lit et les pilote, sans rien y changer.":
     "Las lámparas, habitaciones y escenas siguen gestionadas por la aplicación Hue: Breezone las lee y controla, sin cambiar nada.",
-  "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan, clés Wi-Fi Hoymiles, ponts Philips Hue et accessoires HomeKit (Legrand, VELUX…).":
-    "Breezone busca en la red los productos que sabe controlar: WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), cargadores V2C Trydan, llaves Wi-Fi Hoymiles, puentes Philips Hue y accesorios HomeKit (Legrand, VELUX…).",
+  "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan, clés Wi-Fi Hoymiles, ponts Philips Hue, VMC Renson Healthbox et accessoires HomeKit (Legrand, VELUX…).":
+    "Breezone busca en la red los productos que sabe controlar: WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), cargadores V2C Trydan, llaves Wi-Fi Hoymiles, puentes Philips Hue, ventilaciones Renson Healthbox y accesorios HomeKit (Legrand, VELUX…).",
   "Ajouter « {name} »": "Añadir «{name}»",
   "Appuyez sur le bouton rond, au centre du pont Hue, puis cliquez sur « Ajouter » dans les 30 secondes. Vos lampes, pièces et scènes restent comme dans l'application Hue.":
     "Pulse el botón redondo en el centro del puente Hue y haga clic en «Añadir» en 30 segundos. Sus lámparas, habitaciones y escenas siguen como en la aplicación Hue.",
@@ -1122,6 +1122,84 @@ const es: Record<string, string> = {
   Erreurs: "Errores",
   "Aucune erreur récente.": "Ningún error reciente.",
   "Erreur du serveur : {message}": "Error del servidor: {message}",
+  "{n} m³/h": "{n} m³/h",
+  boost: "boost",
+  "Clé acceptée : les mesures des pièces arrivent":
+    "Clave aceptada: llegan las medidas de las estancias",
+  "La Healthbox refuse cette clé (expirée ou fausse ?)":
+    "El Healthbox rechaza esta clave (¿caducada o errónea?)",
+  "Mesures des pièces": "Medidas de las estancias",
+  "La clé API est active : l'humidité, le CO₂, les COV et la température de chaque pièce sont lus.":
+    "La clave API está activa: se leen la humedad, el CO₂, los COV y la temperatura de cada estancia.",
+  "Sans clé, la Healthbox donne les débits et la qualité de l'air globale. Renson fournit gratuitement, sur demande à son support, une clé API qui ajoute l'humidité, le CO₂, les COV et la température de chaque pièce.":
+    "Sin clave, el Healthbox da los caudales y la calidad del aire global. Renson da gratis, a petición a su soporte, una clave API que añade la humedad, el CO₂, los COV y la temperatura de cada estancia.",
+  "Clé active": "Clave activa",
+  "Clé API Renson": "Clave API de Renson",
+  "La clé est donnée à la Healthbox, qui la garde : Breezone ne l'enregistre pas.":
+    "La clave se da al Healthbox, que la guarda: Breezone no la almacena.",
+  "API locale de la Healthbox : aucun compte Renson nécessaire":
+    "API local del Healthbox: no hace falta cuenta Renson",
+  "toutes les 30 s": "cada 30 s",
+  "débit d'air de la maison et de chaque bouche, profil, boost en cours, qualité de l'air et pièce la plus en demande ; avec la clé API : humidité, CO₂, COV et température de chaque pièce":
+    "caudal de aire de la casa y de cada boca, perfil, boost en curso, calidad del aire y estancia con más demanda; con la clave API: humedad, CO₂, COV y temperatura de cada estancia",
+  "boost d'une pièce ou de toute la maison, profil de chaque pièce":
+    "boost de una estancia o de toda la casa, perfil de cada estancia",
+  "Les bouches, pièces et profils restent réglés dans l'application Renson : Breezone les lit et lance les boosts, sans rien changer d'autre.":
+    "Las bocas, estancias y perfiles se siguen ajustando en la app Renson: Breezone los lee y lanza los boosts, sin cambiar nada más.",
+  "Tous les objets ont déjà une pièce": "Todos los objetos ya tienen estancia",
+  "{placed} objet(s) rangé(s), {created} pièce(s) créée(s)":
+    "{placed} objeto(s) colocado(s), {created} estancia(s) creada(s)",
+  "Reprendre les pièces Renson": "Tomar las estancias de Renson",
+  Eco: "Eco",
+  Health: "Health",
+  Intense: "Intense",
+  "l'humidité": "la humedad",
+  "le CO₂": "el CO₂",
+  "les COV": "los COV",
+  "la qualité de l'air": "la calidad del aire",
+  "Air bon": "Aire bueno",
+  "Air moyen": "Aire regular",
+  "Air mauvais": "Aire malo",
+  "CO₂": "CO₂",
+  COV: "COV",
+  "Demande de l'air": "Pide aire",
+  "Débit d'air": "Caudal de aire",
+  "Débit des dernières 24 h": "Caudal de las últimas 24 h",
+  "Profil {p}": "Perfil {p}",
+  "Boost · {n} min": "Boost · {n} min",
+  Boost: "Boost",
+  "Boost 30 min": "Boost 30 min",
+  "Boost en cours, encore {n} min.": "Boost en curso, quedan {n} min.",
+  "La qualité de l'air est mauvaise. La ventilation est active.":
+    "La calidad del aire es mala. La ventilación está activa.",
+  "C'est la pièce qui demande le plus d'air, à cause de {cause}.":
+    "Es la estancia que más aire pide, por {cause}.",
+  "La ventilation est active.": "La ventilación está activa.",
+  "La ventilation est au repos.": "La ventilación está en reposo.",
+  "Pièce Breezone : {name}": "Estancia Breezone: {name}",
+  "{flow} m³/h sur {nominal} m³/h nominaux":
+    "{flow} m³/h de {nominal} m³/h nominales",
+  "Niveau de ventilation": "Nivel de ventilación",
+  "Humidité des dernières 24 h": "Humedad de las últimas 24 h",
+  "Arrêter le boost": "Detener el boost",
+  "1 h": "1 h",
+  "2 h": "2 h",
+  Profil: "Perfil",
+  "{room} demande le plus d'air, à cause de {cause}":
+    "{room} pide más aire, por {cause}",
+  "boost en cours": "boost en curso",
+  "mode automatique": "modo automático",
+  "Arrêter les boosts": "Detener los boosts",
+  "Boost maison 1 h": "Boost de la casa 1 h",
+  "API locale": "API local",
+  "Aucune VMC": "Ninguna ventilación",
+  "Ajoutez votre Renson Healthbox dans Réglages › Modules : Breezone la trouve sur le réseau.":
+    "Añada su Renson Healthbox en Ajustes › Módulos: Breezone lo encuentra en la red.",
+  "{n} bouche": "{n} boca",
+  "{n} bouches": "{n} bocas",
+  "{n} en boost": "{n} en boost",
+  "{n} boutons": "{n} botones",
+  "dernier appui : bouton {n}": "última pulsación: botón {n}",
 }
 
 export default es

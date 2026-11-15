@@ -406,3 +406,29 @@ pub async fn take_rooms(State(state): State<AppState>, _admin: AdminUser, Path(i
     }
     Ok(Json(taken))
 }
+
+#[derive(Deserialize)]
+pub struct KeyInput {
+    pub key: String,
+}
+
+#[derive(Serialize)]
+pub struct KeyView {
+    /// The hardware accepts the key: its extra data shows from now on.
+    pub accepted: bool,
+}
+
+/// Gives a module the key of its maker that unlocks more data (the measures of each room of a
+/// Renson Healthbox). The hardware keeps the key; it is not stored nor logged here.
+pub async fn unlock(State(state): State<AppState>, _admin: AdminUser, Path(id): Path<i64>, Json(input): Json<KeyInput>) -> ApiResult<Json<KeyView>> {
+    let key = input.key.trim();
+    if key.is_empty() || key.len() > 200 {
+        return Err(ApiError::bad_request("clé invalide"));
+    }
+    let driver = state.drivers.driver(id).await.ok_or_else(|| ApiError::not_found("source not found"))?;
+    let accepted = driver.unlock(key).await.map_err(driver_error)?;
+    if accepted {
+        state.drivers.poll(id).await;
+    }
+    Ok(Json(KeyView { accepted }))
+}

@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   AirVent,
   Blinds,
+  Fan,
+  KeyRound,
   Lightbulb,
   Home,
   Link2,
@@ -84,6 +86,7 @@ const BY_ADDRESS = [
   { driver: "shelly", label: "Shelly" },
   { driver: "trydan", label: "V2C Trydan" },
   { driver: "hoymiles", label: "Hoymiles (DTU)" },
+  { driver: "renson", label: "Renson Healthbox" },
 ]
 
 /** A light's state in a few words: "allumée · 50 %". */
@@ -188,6 +191,24 @@ function DeviceRow({
     d_light(s),
     isCover(device)
       ? `${coverKind(device)} · ${coverText(coverState(device))}`
+      : null,
+    device.traits.includes("button@1") && typeof s.buttons === "number"
+      ? [
+          t("{n} boutons", { n: s.buttons }),
+          typeof s.last_button === "number" &&
+            t("dernier appui : bouton {n}", { n: s.last_button }),
+        ]
+          .filter(Boolean)
+          .join(" · ")
+      : null,
+    device.kind.startsWith("ventilation.") && typeof s.flow === "number"
+      ? [
+          t("{n} m³/h", { n: Math.round(s.flow) }),
+          typeof s.level === "number" ? `${s.level} %` : null,
+          s.boost === true ? t("boost") : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")
       : null,
     typeof s.status === "string"
       ? (CHARGER_STATUS[s.status] ?? s.status)
@@ -366,6 +387,84 @@ function DeviceRow({
   )
 }
 
+/** The Renson API key: it unlocks the measures of each room, and the unit keeps it. */
+function RensonKey({
+  sourceId,
+  unlocked,
+}: {
+  sourceId: number
+  unlocked: boolean
+}) {
+  const qc = useQueryClient()
+  const [key, setKey] = useState("")
+  const unlock = useMutation({
+    mutationFn: () => api.unlockSource(sourceId, key.trim()),
+    onSuccess: (r) => {
+      if (r.accepted) {
+        toast.success(t("Clé acceptée : les mesures des pièces arrivent"))
+        setKey("")
+        qc.invalidateQueries({ queryKey: ["devices"] })
+      } else
+        toast.error(t("La Healthbox refuse cette clé (expirée ou fausse ?)"))
+    },
+    onError: (e) => toast.error(errorText(e)),
+  })
+  return (
+    <Card className="rounded-3xl">
+      <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
+        <div className="grid gap-1.5">
+          <CardTitle>{t("Mesures des pièces")}</CardTitle>
+          <CardDescription>
+            {unlocked
+              ? t(
+                  "La clé API est active : l'humidité, le CO₂, les COV et la température de chaque pièce sont lus."
+                )
+              : t(
+                  "Sans clé, la Healthbox donne les débits et la qualité de l'air globale. Renson fournit gratuitement, sur demande à son support, une clé API qui ajoute l'humidité, le CO₂, les COV et la température de chaque pièce."
+                )}
+          </CardDescription>
+        </div>
+        {unlocked && <Badge variant="secondary">{t("Clé active")}</Badge>}
+      </CardHeader>
+      {!unlocked && (
+        <CardContent>
+          <form
+            className="flex flex-wrap gap-2"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (key.trim()) unlock.mutate()
+            }}
+          >
+            <Input
+              className="min-w-56 flex-1 font-mono"
+              value={key}
+              maxLength={200}
+              autoComplete="off"
+              spellCheck={false}
+              placeholder={t("Clé API Renson")}
+              aria-label={t("Clé API Renson")}
+              onChange={(e) => setKey(e.target.value)}
+            />
+            <Button type="submit" disabled={!key.trim() || unlock.isPending}>
+              {unlock.isPending ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <KeyRound />
+              )}
+              {t("Activer")}
+            </Button>
+          </form>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {t(
+              "La clé est donnée à la Healthbox, qui la garde : Breezone ne l'enregistre pas."
+            )}
+          </p>
+        </CardContent>
+      )}
+    </Card>
+  )
+}
+
 /** What each driver reads and writes, and how it is reached (Settings › Modules › detail). */
 const DRIVER: Record<
   string,
@@ -423,6 +522,23 @@ const DRIVER: Record<
       "Les lampes, pièces et scènes restent gérées par l'application Hue : Breezone les lit et les pilote, sans rien y changer."
     ),
   },
+  renson: {
+    icon: Fan,
+    tone: "bg-primary/15 text-primary",
+    connection: t(
+      "API locale de la Healthbox : aucun compte Renson nécessaire"
+    ),
+    every: t("toutes les 30 s"),
+    reads: t(
+      "débit d'air de la maison et de chaque bouche, profil, boost en cours, qualité de l'air et pièce la plus en demande ; avec la clé API : humidité, CO₂, COV et température de chaque pièce"
+    ),
+    writes: t(
+      "boost d'une pièce ou de toute la maison, profil de chaque pièce"
+    ),
+    note: t(
+      "Les bouches, pièces et profils restent réglés dans l'application Renson : Breezone les lit et lance les boosts, sans rien changer d'autre."
+    ),
+  },
   homekit: {
     icon: Blinds,
     tone: "bg-primary/15 text-primary",
@@ -431,13 +547,13 @@ const DRIVER: Record<
     ),
     every: t("toutes les 10 s"),
     reads: t(
-      "position et mouvement des volets et fenêtres, état des prises, interrupteurs et lumières"
+      "position et mouvement des volets et fenêtres, état des prises, interrupteurs et lumières, appuis sur les boutons des télécommandes"
     ),
     writes: t(
       "ouverture et arrêt des volets, marche et arrêt des prises et lumières"
     ),
     note: t(
-      "Retirer ce module supprime l'appairage de Breezone sur l'accessoire, et rien d'autre : ce que l'application du fabricant a configuré ne change pas."
+      "Ce que font les boutons des télécommandes se règle dans l'application du fabricant (Legrand…) : Breezone montre les appuis, sans rien déclencher de son côté. Retirer ce module supprime l'appairage de Breezone sur l'accessoire, et rien d'autre : ce que l'application du fabricant a configuré ne change pas."
     ),
   },
   hoymiles: {
@@ -638,8 +754,8 @@ function SourceDetail({
       qc.invalidateQueries({ queryKey: ["rooms"] })
       toast.success(
         r.placed === 0 && r.created.length === 0
-          ? t("Toutes les lumières ont déjà une pièce")
-          : t("{placed} lumière(s) rangée(s), {created} pièce(s) créée(s)", {
+          ? t("Tous les objets ont déjà une pièce")
+          : t("{placed} objet(s) rangé(s), {created} pièce(s) créée(s)", {
               placed: r.placed,
               created: r.created.length,
             })
@@ -737,6 +853,12 @@ function SourceDetail({
         </CardContent>
       </Card>
       {charger && <CurrentOwner charger={charger} />}
+      {source.driver === "renson" && (
+        <RensonKey
+          sourceId={source.id}
+          unlocked={devices.some((x) => x.state?.sensors === true)}
+        />
+      )}
       <Card className="rounded-3xl">
         <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
           <div className="grid gap-1.5">
@@ -749,21 +871,24 @@ function SourceDetail({
                 : t("Nommez chaque appareil et choisissez sa pièce.")}
             </CardDescription>
           </div>
-          {source.driver === "hue" && devices.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={takeRooms.isPending}
-              onClick={() => takeRooms.mutate()}
-            >
-              {takeRooms.isPending ? (
-                <Loader2 className="animate-spin" />
-              ) : (
-                <House />
-              )}
-              {t("Reprendre les pièces Hue")}
-            </Button>
-          )}
+          {(source.driver === "hue" || source.driver === "renson") &&
+            devices.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={takeRooms.isPending}
+                onClick={() => takeRooms.mutate()}
+              >
+                {takeRooms.isPending ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <House />
+                )}
+                {source.driver === "hue"
+                  ? t("Reprendre les pièces Hue")
+                  : t("Reprendre les pièces Renson")}
+              </Button>
+            )}
         </CardHeader>
         <CardContent className="grid gap-2">
           {devices.length === 0 ? (
@@ -996,7 +1121,7 @@ function AddModuleDialog({
           <DialogTitle>{t("Ajouter un module")}</DialogTitle>
           <DialogDescription>
             {t(
-              "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan, clés Wi-Fi Hoymiles, ponts Philips Hue et accessoires HomeKit (Legrand, VELUX…)."
+              "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan, clés Wi-Fi Hoymiles, ponts Philips Hue, VMC Renson Healthbox et accessoires HomeKit (Legrand, VELUX…)."
             )}
           </DialogDescription>
         </DialogHeader>

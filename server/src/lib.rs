@@ -70,6 +70,7 @@ pub async fn init_state(cfg: Config) -> anyhow::Result<AppState> {
     updater.set_beta(db::get_setting(&db, update::CHANNEL_SETTING).await?.as_deref() == Some("beta"));
     let drivers = Arc::new(drivers::Runtime::new(db.clone(), *cloud_key));
     drivers.reload().await?;
+    drivers.clone().hear();
     let state = AppState { db, cfg, hub, auth, cloud_key, updater, drivers };
     bootstrap(&state).await?;
     state.hub.reload_installations().await?;

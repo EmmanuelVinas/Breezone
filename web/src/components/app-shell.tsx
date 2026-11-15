@@ -5,6 +5,7 @@ import {
   CalendarClock,
   LayoutGrid,
   Blinds,
+  Fan,
   Lightbulb,
   Thermometer,
   LogOut,
@@ -44,7 +45,14 @@ type NavItem = {
   end: boolean
   /** Shown only when a module provides it, or to administrators. */
   when?:
-    "climate" | "energy" | "solar" | "charger" | "light" | "cover" | "admin"
+    | "climate"
+    | "energy"
+    | "solar"
+    | "charger"
+    | "light"
+    | "cover"
+    | "ventilation"
+    | "admin"
 }
 
 /** The menu, in sections as in the mockups; a section without an item is not shown. */
@@ -85,6 +93,13 @@ const NAV: { title: string | null; items: NavItem[] }[] = [
         icon: Blinds,
         end: false,
         when: "cover",
+      },
+      {
+        to: "/ventilation",
+        label: t("Ventilation"),
+        icon: Fan,
+        end: false,
+        when: "ventilation",
       },
       {
         to: "/solaire",
@@ -171,6 +186,9 @@ function useModules() {
     solar: !!devices?.some((d) => d.traits.includes("solar.inverter@1")),
     light: !!devices?.some((d) => d.traits.includes("light@1")),
     cover: !!devices?.some((d) => d.traits.includes("cover.position@1")),
+    ventilation: !!devices?.some((d) =>
+      d.traits.includes("ventilation.unit@1")
+    ),
   }
 }
 
@@ -233,6 +251,7 @@ export function AppShell({
     (n.when === "solar" && modules.solar) ||
     (n.when === "light" && modules.light) ||
     (n.when === "cover" && modules.cover) ||
+    (n.when === "ventilation" && modules.ventilation) ||
     (n.when === "charger" && modules.charger) ||
     (n.when === "admin" && user?.role === "admin")
   const sections = NAV.map((s) => ({

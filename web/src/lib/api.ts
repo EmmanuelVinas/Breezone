@@ -949,6 +949,11 @@ export const api = {
       "POST",
       `/api/sources/${sourceId}/rooms`
     ),
+  /** Gives a module its maker's key (Renson): the hardware keeps it, Breezone does not. */
+  unlockSource: (sourceId: number, key: string) =>
+    request<{ accepted: boolean }>("POST", `/api/sources/${sourceId}/key`, {
+      key,
+    }),
   /** The scenes of the modules that have some (Hue). */
   scenes: () => request<SceneView[]>("GET", "/api/scenes"),
   activateScene: (sourceId: number, id: string) =>
