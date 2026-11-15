@@ -15,7 +15,7 @@ const ICONS = [
   "settings", "cloud", "cloud-off", "refresh-cw", "play", "trash-2", "pencil", "log-out", "server",
   "battery-warning", "triangle-alert", "check", "x", "clock", "radar", "user", "eye", "eye-off",
   "circle-check", "wifi-off", "activity", "list-plus", "leaf",
-  "lightbulb", "lightbulb-off", "blinds", "chevron-up", "chevron-down", "square", "palette", "sun", "app-window",
+  "lightbulb", "lightbulb-off", "zap", "plug-zap", "battery-medium", "solar-panel", "blinds", "chevron-up", "chevron-down", "square", "palette", "sun", "app-window",
 ]
 
 const n = (v) => Number(v)

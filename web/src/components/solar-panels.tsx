@@ -350,13 +350,16 @@ function PanelsCurve({
                 fillOpacity={0.12}
                 isAnimationActive={false}
               />
-              {panels.map((p) => (
+              {/* Panels sharing an input of the inverter give the same power: one in two is
+                  dashed, so that a curve on top of another still shows both. */}
+              {panels.map((p, i) => (
                 <Line
                   key={p.id}
                   dataKey={`p${p.id}`}
                   type="monotone"
                   stroke={`var(--color-p${p.id})`}
                   strokeWidth={2}
+                  strokeDasharray={i % 2 === 1 ? "6 5" : undefined}
                   dot={false}
                   connectNulls={false}
                   hide={hidden.has(p.id)}

@@ -18,6 +18,8 @@ data class DeviceView(
     val reference: JsonElement = JsonNull,
     val name: String = "",
     val roomId: Long? = null,
+    /** For an energy measure: "grid" | "solar" | "battery" | "consumption". */
+    val role: String? = null,
     val position: Long = 0,
     val available: Boolean = true,
     val state: JsonObject? = null,
@@ -71,6 +73,10 @@ object TraitIds {
     const val COVER = "cover.position@1"
     const val VENTILATION_UNIT = "ventilation.unit@1"
     const val VENTILATION_ROOM = "ventilation.room@1"
+    const val CHARGER = "ev.charger@1"
+    const val INVERTER = "solar.inverter@1"
+    const val PANEL = "solar.panel@1"
+    const val POWER = "energy.power@1"
 }
 
 /**
@@ -85,4 +91,69 @@ fun ServerState.modulesHere(installation: Installation?): Boolean =
 data class DeviceHistory(
     val bucket: Long = 0,
     val series: Map<String, List<List<Double>>> = emptyMap(),
+)
+
+/** Which roles the home has a measure of (`/api/energy/live`). */
+@Serializable
+data class EnergyRoles(
+    val grid: Boolean = false,
+    val solar: Boolean = false,
+    val battery: Boolean = false,
+    val consumption: Boolean = false,
+) {
+    val any get() = grid || solar || battery || consumption
+}
+
+/** What a consumption measure measures, with its power now (W) or energy (kWh). */
+@Serializable
+data class EnergyConsumer(
+    val name: String,
+    val deviceId: Long? = null,
+    val roomId: Long? = null,
+    val power: Double? = null,
+    val energy: Double? = null,
+)
+
+/** The home now (W): grid drawn (negative: returned), solar, battery charging (negative: discharging), home. */
+@Serializable
+data class EnergyLive(
+    val roles: EnergyRoles = EnergyRoles(),
+    val grid: Double? = null,
+    val solar: Double? = null,
+    val battery: Double? = null,
+    val home: Double? = null,
+    val consumers: List<EnergyConsumer> = emptyList(),
+    val other: Double? = null,
+)
+
+@Serializable
+data class EnergyPoint(
+    val ts: Long,
+    val grid: Double? = null,
+    val solar: Double? = null,
+    val battery: Double? = null,
+    val home: Double? = null,
+)
+
+/** Energy of the home over a day (kWh); null for what it has no measure of. */
+@Serializable
+data class DayEnergy(
+    val day: String = "",
+    val imported: Double? = null,
+    val exported: Double? = null,
+    val production: Double? = null,
+    val charged: Double? = null,
+    val discharged: Double? = null,
+    val consumption: Double? = null,
+    val selfConsumed: Double? = null,
+    val consumers: List<EnergyConsumer> = emptyList(),
+    val other: Double? = null,
+)
+
+@Serializable
+data class EnergyDay(
+    val date: String = "",
+    val bucket: Long = 900,
+    val points: List<EnergyPoint> = emptyList(),
+    val totals: DayEnergy = DayEnergy(),
 )

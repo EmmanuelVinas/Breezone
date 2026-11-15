@@ -494,6 +494,19 @@ function House({
                 .join(" · ")}
             </div>
             {demanding && <div className="mt-1 text-sm">{demanding}</div>}
+            {s.sensors === false && (
+              <p className="mt-2 max-w-md text-xs text-muted-foreground">
+                {t(
+                  "Sans la clé API Renson, la Healthbox ne donne que les débits : l'humidité, le CO₂ et la température de chaque pièce viennent avec la clé."
+                )}{" "}
+                <Link
+                  to="/settings?tab=modules"
+                  className="text-primary underline-offset-4 hover:underline"
+                >
+                  {t("Ajouter la clé")}
+                </Link>
+              </p>
+            )}
           </div>
           {s.boost ? (
             <Button

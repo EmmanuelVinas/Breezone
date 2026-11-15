@@ -199,6 +199,8 @@ class BreezoneApi(
     suspend fun status(): List<Installation> = call(HttpMethod.Get, "/api/status")
     suspend fun devices(): List<DeviceView> = call(HttpMethod.Get, "/api/devices")
     suspend fun rooms(): List<Room> = call(HttpMethod.Get, "/api/rooms")
+    suspend fun energyLive(): EnergyLive = call(HttpMethod.Get, "/api/energy/live")
+    suspend fun energyDay(): EnergyDay = call(HttpMethod.Get, "/api/energy/day")
     suspend fun deviceHistory(deviceId: Long, hours: Int = 24, points: Int = 96): DeviceHistory =
         call(HttpMethod.Get, "/api/devices/$deviceId/history?hours=$hours&points=$points")
     suspend fun scenes(): List<SceneView> = call(HttpMethod.Get, "/api/scenes")

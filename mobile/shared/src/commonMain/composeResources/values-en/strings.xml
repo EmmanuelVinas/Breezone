@@ -435,4 +435,51 @@
         <item quantity="one">%1$d valve</item>
         <item quantity="other">%1$d valves</item>
     </plurals>
+
+    <!-- Modules: energy, solar, charging -->
+    <string name="house_energy">Energy</string>
+    <string name="house_solar">Solar</string>
+    <string name="house_charging">Charging</string>
+    <string name="energy_tile">home measures</string>
+    <string name="energy_tile_solar">%1$s solar</string>
+    <string name="energy_tile_grid">grid %1$s</string>
+    <string name="energy_empty">No energy measure: give the measures a role in Settings › Modules, on the web.</string>
+    <string name="energy_now">Right now</string>
+    <string name="energy_today">Today</string>
+    <string name="energy_solar">Solar</string>
+    <string name="energy_home">Home</string>
+    <string name="energy_solar_share">%1$d % solar</string>
+    <string name="energy_battery">Battery</string>
+    <string name="energy_battery_charging">charging</string>
+    <string name="energy_battery_discharging">discharging</string>
+    <string name="energy_grid">Grid</string>
+    <string name="energy_grid_buys">drawing</string>
+    <string name="energy_grid_sells">returning</string>
+    <string name="energy_produced">Produced</string>
+    <string name="energy_consumed">Used</string>
+    <string name="energy_self">Self-use</string>
+    <string name="energy_imported">Bought</string>
+    <string name="energy_uses">By use, right now</string>
+    <string name="energy_other">Other uses</string>
+    <string name="solar_now">Producing now</string>
+    <string name="solar_today">%1$s today</string>
+    <string name="solar_temperature">Inverter at %1$d °C</string>
+    <string name="charging_empty">No charger: add your V2C Trydan in Settings › Modules, on the web.</string>
+    <string name="charger_available">Available</string>
+    <string name="charger_plugged">Cable plugged in</string>
+    <string name="charger_charging">Charging</string>
+    <string name="charger_fault">Fault</string>
+    <string name="charger_paused">Paused</string>
+    <string name="charger_session">%1$s added · %2$d h %3$d min</string>
+    <string name="charger_goal">Goal: %1$s</string>
+    <string name="charger_pause">Pause the charge</string>
+    <string name="charger_start">Start the charge</string>
+    <string name="charger_power_24h">Power over 24 h</string>
+    <string name="charger_settings">Settings</string>
+    <string name="charger_auto_limit">The charger sets its current itself</string>
+    <string name="charger_auto_limit_hint">From its clamp (dynamic mode)</string>
+    <string name="charger_limit">Maximum current</string>
+    <string name="charger_amps">%1$d A</string>
+    <string name="charger_locked">Locked</string>
+    <string name="ventilation_no_key">Without the Renson API key, the Healthbox only gives the air flows: the humidity, CO₂ and temperature of each room come with the key (Settings › Modules, on the web).</string>
 </resources>

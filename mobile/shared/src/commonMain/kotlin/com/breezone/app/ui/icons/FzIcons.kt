@@ -418,6 +418,47 @@ object FzIcons {
         )
     }
 
+    val Zap: ImageVector by lazy {
+        lucide(
+            "Zap",
+            "M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z",
+        )
+    }
+
+    val PlugZap: ImageVector by lazy {
+        lucide(
+            "PlugZap",
+            "M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4Z",
+            "m2 22 3-3",
+            "M7.5 13.5 10 11",
+            "M10.5 16.5 13 14",
+            "m18 3-4 4h6l-4 4",
+        )
+    }
+
+    val BatteryMedium: ImageVector by lazy {
+        lucide(
+            "BatteryMedium",
+            "M10 14v-4",
+            "M22 14v-4",
+            "M6 14v-4",
+            "M4 6h12a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-8a2 2 0 0 1 2 -2Z",
+        )
+    }
+
+    val SolarPanel: ImageVector by lazy {
+        lucide(
+            "SolarPanel",
+            "M11 2h2",
+            "m14.28 14-4.56 8",
+            "m21 22-1.558-4H4.558",
+            "M3 10v2",
+            "M6.245 15.04A2 2 0 0 1 8 14h12a1 1 0 0 1 .864 1.505l-3.11 5.457A2 2 0 0 1 16 22H4a1 1 0 0 1-.863-1.506z",
+            "M7 2a4 4 0 0 1-4 4",
+            "m8.66 7.66 1.41 1.41",
+        )
+    }
+
     val Blinds: ImageVector by lazy {
         lucide(
             "Blinds",

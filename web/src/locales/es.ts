@@ -1204,6 +1204,9 @@ const es: Record<string, string> = {
     "«{name}» está conectada por otro servidor",
   "Les lumières, volets, énergie et autres modules de cette page sont ceux de ce serveur Breezone. Choisissez une de ses installations pour les voir ; ceux de « {name} » se gèrent sur son propre serveur.":
     "Las luces, persianas, energía y demás módulos de esta página son los de este servidor Breezone. Elija una de sus instalaciones para verlos; los de «{name}» se gestionan en su propio servidor.",
+  "Sans la clé API Renson, la Healthbox ne donne que les débits : l'humidité, le CO₂ et la température de chaque pièce viennent avec la clé.":
+    "Sin la clave API de Renson, el Healthbox solo da los caudales: la humedad, el CO₂ y la temperatura de cada estancia llegan con la clave.",
+  "Ajouter la clé": "Añadir la clave",
 }
 
 export default es

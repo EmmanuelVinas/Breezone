@@ -447,4 +447,51 @@
         <item quantity="many">%1$d bouches</item>
         <item quantity="other">%1$d bouches</item>
     </plurals>
+
+    <!-- Modules: energy, solar, charging -->
+    <string name="house_energy">Énergie</string>
+    <string name="house_solar">Solaire</string>
+    <string name="house_charging">Recharge</string>
+    <string name="energy_tile">mesures de la maison</string>
+    <string name="energy_tile_solar">%1$s solaire</string>
+    <string name="energy_tile_grid">réseau %1$s</string>
+    <string name="energy_empty">Aucune mesure d’énergie : donnez un rôle aux mesures dans Réglages › Modules, sur le web.</string>
+    <string name="energy_now">En ce moment</string>
+    <string name="energy_today">Aujourd’hui</string>
+    <string name="energy_solar">Solaire</string>
+    <string name="energy_home">Maison</string>
+    <string name="energy_solar_share">%1$d % solaire</string>
+    <string name="energy_battery">Batterie</string>
+    <string name="energy_battery_charging">en charge</string>
+    <string name="energy_battery_discharging">se décharge</string>
+    <string name="energy_grid">Réseau</string>
+    <string name="energy_grid_buys">achète</string>
+    <string name="energy_grid_sells">injecte</string>
+    <string name="energy_produced">Produit</string>
+    <string name="energy_consumed">Consommé</string>
+    <string name="energy_self">Autoconso.</string>
+    <string name="energy_imported">Acheté</string>
+    <string name="energy_uses">Par usage, en ce moment</string>
+    <string name="energy_other">Autres usages</string>
+    <string name="solar_now">Production en ce moment</string>
+    <string name="solar_today">%1$s aujourd’hui</string>
+    <string name="solar_temperature">Onduleur à %1$d °C</string>
+    <string name="charging_empty">Aucune borne : ajoutez votre V2C Trydan dans Réglages › Modules, sur le web.</string>
+    <string name="charger_available">Disponible</string>
+    <string name="charger_plugged">Câble branché</string>
+    <string name="charger_charging">En charge</string>
+    <string name="charger_fault">Défaut</string>
+    <string name="charger_paused">En pause</string>
+    <string name="charger_session">%1$s ajoutés · %2$d h %3$d min</string>
+    <string name="charger_goal">Objectif : %1$s</string>
+    <string name="charger_pause">Suspendre la charge</string>
+    <string name="charger_start">Lancer la charge</string>
+    <string name="charger_power_24h">Puissance sur 24 h</string>
+    <string name="charger_settings">Réglages</string>
+    <string name="charger_auto_limit">La borne règle seule son courant</string>
+    <string name="charger_auto_limit_hint">Selon sa pince de mesure (mode dynamique)</string>
+    <string name="charger_limit">Courant maximum</string>
+    <string name="charger_amps">%1$d A</string>
+    <string name="charger_locked">Verrouillée</string>
+    <string name="ventilation_no_key">Sans la clé API Renson, la Healthbox ne donne que les débits : l’humidité, le CO₂ et la température de chaque pièce viennent avec la clé (Réglages › Modules, sur le web).</string>
 </resources>

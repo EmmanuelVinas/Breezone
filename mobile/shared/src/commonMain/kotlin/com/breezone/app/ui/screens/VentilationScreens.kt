@@ -162,6 +162,7 @@ fun VentilationScreen(serverId: String, onBack: () -> Unit, onOpen: (Long) -> Un
                             ).joinToString(" · "),
                         )
                         u.worstRoom?.let { Text(stringResource(Res.string.ventilation_worst, it, causeText(u.mainPollutant)), fontSize = 14.sp) }
+                        if (!u.sensors) Caption(stringResource(Res.string.ventilation_no_key))
                         LevelBar(level ?: 0)
                         if (flow.size > 1) Sparkline(flow, Fz.colors.fan, Modifier.fillMaxWidth().height(56.dp))
                         if (u.boost) {

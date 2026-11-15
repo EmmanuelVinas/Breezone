@@ -6,7 +6,19 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Mobile app: Énergie (the home now: solar, home, battery, grid; today's curve with what was
+  produced, used and self-used; the uses now), Solaire (production now and today, each inverter and
+  its panels) and Recharge (state, power, session and goal, pause and start, current, dynamic mode,
+  lock). The house screen shows their tiles in the order of the web menu.
+
 ### Changed
+
+- Solaire › Production par panneau: one panel in two is dashed, so two panels giving the same power
+  (sharing an input of the inverter) both show instead of one hiding the other.
+- Ventilation (web and app): without the Renson API key, the page says that the room measures come
+  with the key, and where to add it.
 
 - Android: the debug build is « Breezone Debug » (`com.breezone.app.debug`), installed next to the
   store version with its own data.
