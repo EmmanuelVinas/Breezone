@@ -1464,6 +1464,51 @@ const en: Record<string, string> = {
   Présence: "Presence",
   "« {name} »": "“{name}”",
   "Humidité extérieure": "Outdoor humidity",
+  "Pour « et », ajoutez une condition dans Si : la règle part quand le déclencheur et ses conditions sont vrais ensemble.":
+    "For “and”, add a condition under If: the rule starts when the trigger and its conditions are true together.",
+  "{n} min au moins": "{n} min at least",
+  "{min} à {max} A": "{min} to {max} A",
+  "+{kwh} kWh garantis avant {time}": "+{kwh} kWh guaranteed before {time}",
+  "Breezone règle l'intensité selon le surplus, entre un minimum et un maximum. Sous le minimum, la charge est suspendue.":
+    "Breezone sets the current from the surplus, between a minimum and a maximum. Below the minimum, charging is paused.",
+  "Breezone allume l'appareil quand le surplus couvre sa puissance, et l'éteint quand il manque.":
+    "Breezone switches the device on when the surplus covers its power, and off when it falls short.",
+  "Intensité minimale (A)": "Minimum current (A)",
+  "Intensité maximale (A)": "Maximum current (A)",
+  Garantie: "Guarantee",
+  "kWh avant": "kWh before",
+  "Facultatif. Si le soleil ne suffit pas, Breezone charge au maximum depuis le réseau, juste à temps.":
+    "Optional. If the sun is not enough, Breezone charges at the maximum from the grid, just in time.",
+  "Puissance (W)": "Power (W)",
+  "Marche minimale (min)": "Minimum run (min)",
+  "Tolérance réseau (W)": "Grid tolerance (W)",
+  "Ce que l'appareil peut tirer du réseau avant que Breezone ne réduise ou n'arrête.":
+    "What the device may draw from the grid before Breezone cuts back or stops it.",
+  "Pilotage sur surplus solaire": "Solar surplus steering",
+  "Il faut un compteur au tableau (une voie « réseau ») pour connaître le surplus.":
+    "A meter at the panel (a “grid” channel) is needed to know the surplus.",
+  "Par ordre de priorité · {kw} repartent au réseau en ce moment":
+    "In order of priority · {kw} going back to the grid right now",
+  "Par ordre de priorité : le surplus va d'abord au premier appareil.":
+    "In order of priority: the surplus goes to the first device first.",
+  "Ajouter un appareil…": "Add a device…",
+  "Aucun appareil ne suit le surplus. Ajoutez la borne, ou un chauffe-eau sur une prise pilotée.":
+    "No device follows the surplus. Add the charger, or a water heater on a smart plug.",
+  Descendre: "Move down",
+  "Suivre le surplus": "Follow the surplus",
+  Manuel: "Manual",
+  "Vous lancez et arrêtez la charge ; Breezone ne la règle pas.":
+    "You start and stop charging; Breezone does not set it.",
+  "Uniquement le surplus : l'intensité suit le soleil. Peut ne pas charger.":
+    "Surplus only: the current follows the sun. May not charge.",
+  "Solaire + garantie": "Solar + guarantee",
+  "Le surplus, puis le réseau si besoin pour atteindre l'objectif à l'heure.":
+    "The surplus, then the grid if needed to reach the goal in time.",
+  "Mode de charge": "Charging mode",
+  "Les modes solaires demandent un compteur au tableau (une voie « réseau »).":
+    "The solar modes need a meter at the panel (a “grid” channel).",
+  "L'ordre de priorité avec les autres appareils et les intensités se règlent dans Énergie › Pilotage sur surplus solaire.":
+    "The priority among the other devices and the currents are set in Energy › Solar surplus steering.",
 }
 
 export default en

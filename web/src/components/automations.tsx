@@ -1719,8 +1719,8 @@ function AutomationEditor({
                 </div>
               </div>
             ))}
-            {draft.triggers.length < MAX_TRIGGERS && (
-              <div>
+            <div className="flex flex-wrap items-center gap-2">
+              {draft.triggers.length < MAX_TRIGGERS && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -1732,8 +1732,13 @@ function AutomationEditor({
                 >
                   <Plus /> {t("Ajouter un déclencheur (ou)")}
                 </Button>
-              </div>
-            )}
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {t(
+                "Pour « et », ajoutez une condition dans Si : la règle part quand le déclencheur et ses conditions sont vrais ensemble."
+              )}
+            </p>
             {draft.triggers.some(
               (w) =>
                 w.kind === "measure" ||

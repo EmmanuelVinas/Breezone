@@ -97,6 +97,8 @@ export type EvChargerState = {
   limit_min: number | null
   /** Maximum current (A) */
   limit_max: number | null
+  /** Phases */
+  phases: number | null
   /** Current set by the charger */
   auto_limit: boolean | null
   /** Stops at (kWh) */

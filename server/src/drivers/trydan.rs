@@ -153,6 +153,15 @@ pub fn state_of(o: &Map<String, Value>) -> State {
             s.insert(field.into(), json!(i));
         }
     }
+    // To turn a power into a current: 1 or 3 phases.
+    let phases = match int(o, "ChargeMode") {
+        Some(0) => Some(1),
+        Some(1) => Some(3),
+        _ => None,
+    };
+    if let Some(p) = phases {
+        s.insert("phases".into(), json!(p));
+    }
     if let Some(d) = int(o, "Dynamic") {
         s.insert("auto_limit".into(), json!(d == 1));
     }

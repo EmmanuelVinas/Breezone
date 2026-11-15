@@ -12,6 +12,7 @@
     { "name": "limit", "type": "integer", "unit": "A", "optional": true, "label": { "fr": "Intensité de charge", "en": "Charging current", "es": "Intensidad de carga" } },
     { "name": "limit_min", "type": "integer", "history": false, "unit": "A", "optional": true, "label": { "fr": "Intensité minimale", "en": "Minimum current", "es": "Intensidad mínima" } },
     { "name": "limit_max", "type": "integer", "history": false, "unit": "A", "optional": true, "label": { "fr": "Intensité maximale", "en": "Maximum current", "es": "Intensidad máxima" } },
+    { "name": "phases", "type": "integer", "history": false, "optional": true, "label": { "fr": "Phases", "en": "Phases", "es": "Fases" } },
     { "name": "auto_limit", "type": "bool", "history": false, "optional": true, "label": { "fr": "Intensité réglée par la borne", "en": "Current set by the charger", "es": "Intensidad regulada por el cargador" } },
     { "name": "energy_goal", "type": "number", "history": false, "unit": "kWh", "optional": true, "label": { "fr": "Arrêt à", "en": "Stops at", "es": "Se detiene a los" } }
   ],

@@ -6,6 +6,22 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Solar surplus steering (Energy page): what would go back to the grid runs the charger and the
+  plugged loads of the home (water heater, pool pump…) in the order of their priority. The charger's
+  current follows the sun between a minimum and a maximum; a load starts after a minute of surplus,
+  stops after three minutes without (a passing cloud does not stop it), and a relay stays on at
+  least the time set. Each start and stop is in the activity feed.
+- Charging page: a charging mode, Manual, Solar or Solar + guarantee ("+20 kWh before 07:00": when
+  the sun can no longer make it, the charger charges at its maximum from the grid, just in time).
+
+### Changed
+
+- Automations come first on the Schedules page, above the Airzone schedules.
+- Automation editor: a short line says that "and" is a condition (If), next to "Add a trigger (or)".
+- Lights: only the selected light is framed by its colour, while it is lit in colour.
+
 ## [0.11.0-beta.19] - 2026-11-15
 
 ### Added

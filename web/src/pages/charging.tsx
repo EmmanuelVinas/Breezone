@@ -20,6 +20,7 @@ import { duration, relativeTime, time } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { locale, t } from "@/lib/i18n"
 import { PageHeader } from "@/components/app-shell"
+import { ChargingMode } from "@/components/surplus"
 import { PeriodPicker } from "@/components/period-picker"
 import type { HistoryPeriod } from "@/lib/periods"
 import {
@@ -690,6 +691,7 @@ function ChargerCard({
           )}
         </CardContent>
       </Card>
+      <ChargingMode device={device} />
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <PowerCurve device={device} />
         <SettingsCard

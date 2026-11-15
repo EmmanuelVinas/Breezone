@@ -10,6 +10,7 @@ mod hvac;
 mod routines;
 mod schedules;
 mod sources;
+mod surplus;
 mod system;
 mod timers;
 mod weather;
@@ -108,6 +109,9 @@ pub fn router() -> Router<AppState> {
         .route("/api/devices/{id}/actions", post(home::act))
         .route("/api/devices/{id}/history", get(energy::device_history))
         .route("/api/energy/live", get(energy::live))
+        .route("/api/surplus", get(surplus::get))
+        .route("/api/surplus/order", axum::routing::put(surplus::order))
+        .route("/api/surplus/loads/{device_id}", axum::routing::put(surplus::save).delete(surplus::remove))
         .route("/api/energy/day", get(energy::day))
         .route("/api/energy/days", get(energy::days))
         .route("/api/energy/range", get(energy::range))

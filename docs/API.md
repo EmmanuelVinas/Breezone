@@ -322,6 +322,39 @@ plus bas). Une action peut attendre (`delay_minutes`) : elle devient une minuter
 `RoutineInput` : `{name, enabled?, actions:[Action]}` (un `time` est refusé).
 `Routine` ajoute `{id, last_run_at, created_at, updated_at}`.
 
+## Pilotage sur surplus solaire (fonction `surplus@1`)
+
+Ce qui repartirait au réseau fait tourner des appareils de la maison, par ordre de priorité : une
+borne (`ev.charger`, intensité réglée entre un minimum et un maximum) ou une prise pilotée
+(`switch.relay`, chauffe-eau, pompe… allumée quand sa puissance tient dans le surplus). Il faut un
+compteur avec le rôle `grid`. Seuls les appareils des modules de ce serveur peuvent suivre le
+surplus (le surplus est celui de ce site). Le serveur regarde toutes les 10 s.
+
+| Méthode | Chemin | Description |
+|---------|--------|-------------|
+| GET 🔒 | `/api/surplus` | `{meter, export, loads:[Load], candidates:[{device_id, name, kind}]}` |
+| PUT 👑 | `/api/surplus/loads/{device_id}` | `{enabled?, min_amps?, max_amps?, power?, guarantee_kwh?, guarantee_by?, min_on_minutes?, tolerance?}` : ajoute l'appareil (en dernier) ou change ses réglages → la vue |
+| DELETE 👑 | `/api/surplus/loads/{device_id}` | Il ne suit plus le surplus (laissé tel quel) |
+| PUT 👑 | `/api/surplus/order` | `{device_ids}` : les priorités, la première d'abord → la vue |
+
+`meter` : la maison a un compteur réseau (`null` : pas encore regardé) ; `export` : ce qui part au
+réseau (W, négatif : tiré). `Load` : `{device_id, name, kind: "charger"|"relay", position, enabled,
+min_amps, max_amps, power, guarantee_kwh, guarantee_by, min_on_minutes, tolerance, limit_min,
+limit_max, status: {state, amps, power, text} | null}` ; `state` ∈ `solar` (tourne sur le surplus),
+`guarantee` (tourne sur le réseau pour tenir la garantie), `waiting`, `no_car`, `unavailable`,
+`no_meter`.
+
+Régulation :
+- budget = ce qui part au réseau + ce que tirent déjà les appareils pilotés (une prise qui ne mesure
+  rien compte pour sa puissance) ; il est donné aux appareils dans l'ordre ;
+- un appareil démarre après 1 min de surplus suffisant, s'arrête après 3 min de manque (une borne
+  reste à son minimum entre-temps), ne redémarre pas moins de 2 min après un arrêt ; l'intensité
+  d'une borne change au plus toutes les 20 s ; une prise reste allumée `min_on_minutes` au moins ;
+  `tolerance` : ce qu'il peut tirer du réseau avant que Breezone ne réduise ;
+- garantie d'une borne (`guarantee_kwh` avant `guarantee_by`, « HH:MM ») : quand le soleil ne peut
+  plus suffire, elle charge à son maximum depuis le réseau, juste à temps (marge de 15 min) ;
+- chaque démarrage et chaque arrêt est dans le journal (`kind: "automation"`).
+
 ## Automatismes « quand… si… alors… sinon… » (exécutés par Breezone)
 
 Fonction `automations@1`. Une règle : 1 à 3 déclencheurs (un seul suffit), jusqu'à 8 conditions

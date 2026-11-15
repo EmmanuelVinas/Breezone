@@ -1098,7 +1098,60 @@ export type AutomationRun = {
   steps: { what: string; ok: boolean; error: string | null }[]
 }
 
+/** What a load does now on the solar surplus. */
+export type SurplusStatus = {
+  state:
+    "solar" | "guarantee" | "waiting" | "no_car" | "unavailable" | "no_meter"
+  amps: number | null
+  power: number
+  text: string
+}
+
+/** How a load is run on the solar surplus. */
+export type SurplusLoadInput = {
+  enabled: boolean
+  min_amps?: number | null
+  max_amps?: number | null
+  /** A relay: its power when on (W). */
+  power?: number | null
+  guarantee_kwh?: number | null
+  /** "HH:MM". */
+  guarantee_by?: string | null
+  min_on_minutes?: number
+  /** What may be drawn from the grid before cutting back (W). */
+  tolerance?: number
+}
+
+export type SurplusLoad = Required<SurplusLoadInput> & {
+  device_id: number
+  name: string
+  kind: "charger" | "relay"
+  position: number
+  limit_min: number | null
+  limit_max: number | null
+  status: SurplusStatus | null
+}
+
+export type SurplusView = {
+  /** The home has a grid meter (null: not looked at yet). */
+  meter: boolean | null
+  /** What goes back to the grid now (W; negative: drawn from it). */
+  export: number | null
+  /** In order of priority. */
+  loads: SurplusLoad[]
+  candidates: { device_id: number; name: string; kind: "charger" | "relay" }[]
+}
+
 export const api = {
+  surplus: () => request<SurplusView>("GET", "/api/surplus"),
+  saveSurplusLoad: (deviceId: number, input: SurplusLoadInput) =>
+    request<SurplusView>("PUT", `/api/surplus/loads/${deviceId}`, input),
+  removeSurplusLoad: (deviceId: number) =>
+    request<void>("DELETE", `/api/surplus/loads/${deviceId}`),
+  orderSurplus: (deviceIds: number[]) =>
+    request<SurplusView>("PUT", "/api/surplus/order", {
+      device_ids: deviceIds,
+    }),
   traits: () => request<TraitInfo[]>("GET", "/api/traits"),
   automations: () => request<Automation[]>("GET", "/api/automations"),
   createAutomation: (a: AutomationInput) =>

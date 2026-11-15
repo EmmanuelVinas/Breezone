@@ -120,6 +120,7 @@ data class EvChargerState(
     val limit: Long? = null,
     val limitMin: Long? = null,
     val limitMax: Long? = null,
+    val phases: Long? = null,
     val autoLimit: Boolean? = null,
     val energyGoal: Double? = null,
 )

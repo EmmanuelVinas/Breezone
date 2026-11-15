@@ -126,8 +126,9 @@ function LightCard({
   const [draft, setDraft] = useState<number | null>(null)
   const lit = !!s.on && s.reachable !== false && light.available
   const color = glow(s)
-  // A lit light in colour is framed by its colour, selected or not.
-  const tinted = lit && s.mode === "color" && !!s.color
+  // The selected light is framed by its colour while it is lit in colour; the others keep the
+  // plain edge of a card.
+  const tinted = selected && lit && s.mode === "color" && !!s.color
   return (
     <Card
       className={cn(
@@ -139,11 +140,7 @@ function LightCard({
           ? {
               background: `radial-gradient(90% 80% at 0% 0%, color-mix(in oklch, ${color} 16%, transparent), transparent 70%), var(--card)`,
               // The card's edge is a ring: it takes the light's colour.
-              ...(tinted && {
-                ["--tw-ring-color" as string]: selected
-                  ? color
-                  : `color-mix(in oklch, ${color} 60%, transparent)`,
-              }),
+              ...(tinted && { ["--tw-ring-color" as string]: color }),
             }
           : undefined
       }

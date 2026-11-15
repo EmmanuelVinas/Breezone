@@ -37,6 +37,7 @@ import { inverterCounting, isInverter } from "@/lib/solar"
 import { locale, t, tn } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { PageHeader } from "@/components/app-shell"
+import { SurplusCard } from "@/components/surplus"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -1296,6 +1297,7 @@ export function EnergyPage() {
               period={period}
             />
           )}
+          <SurplusCard />
           <p className="mt-6 flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground">
             <Gauge className="size-3.5" />
             {t(

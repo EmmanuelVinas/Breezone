@@ -26,6 +26,7 @@ pub mod mock;
 pub mod rollup;
 pub mod routines;
 pub mod stats;
+pub mod surplus;
 pub mod timers;
 pub mod tls;
 pub mod traits;
@@ -61,6 +62,8 @@ pub struct AppState {
     pub weather: Arc<weather::Weather>,
     /// The automations under way (they may wait).
     pub automations: Arc<automations::Runs>,
+    /// The solar surplus steering (roadmap E6).
+    pub surplus: Arc<surplus::Surplus>,
 }
 
 /// Opens the database, applies migrations, bootstraps accounts/installations from the
@@ -80,7 +83,8 @@ pub async fn init_state(cfg: Config) -> anyhow::Result<AppState> {
     drivers.clone().hear();
     let weather = Arc::new(weather::Weather::new(db.clone(), cfg.timezone));
     let automations = Arc::new(automations::Runs::default());
-    let state = AppState { db, cfg, hub, auth, cloud_key, updater, drivers, weather, automations };
+    let surplus = Arc::new(surplus::Surplus::default());
+    let state = AppState { db, cfg, hub, auth, cloud_key, updater, drivers, weather, automations, surplus };
     bootstrap(&state).await?;
     state.hub.reload_installations().await?;
     Ok(state)
@@ -170,6 +174,7 @@ pub fn spawn_background(state: &AppState) {
     tokio::spawn(airzone_schedules::run_sync(state.clone()));
     tokio::spawn(timers::run_loop(state.hub.clone(), state.db.clone()));
     tokio::spawn(automations::run_loop(state.clone()));
+    tokio::spawn(surplus::run_loop(state.clone()));
     tokio::spawn(state.updater.clone().run_checks());
     tokio::spawn(state.weather.clone().run());
 }

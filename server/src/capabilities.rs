@@ -107,6 +107,8 @@ impl Capabilities {
                 ("automations", 1),
                 // Who is at home: /api/presence.
                 ("presence", 1),
+                // Solar surplus steering: /api/surplus.
+                ("surplus", 1),
             ]
             .into_iter()
             .map(|(k, v)| (k.to_string(), v))

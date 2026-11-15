@@ -783,6 +783,56 @@ pub async fn set_presence(db: &Db, user_id: i64, home: bool) -> sqlx::Result<boo
     Ok(changed > 0)
 }
 
+/// A load run on the solar surplus (see `surplus`).
+#[derive(Debug, Clone, FromRow, Serialize, serde::Deserialize, PartialEq)]
+pub struct SurplusLoadRow {
+    pub device_id: i64,
+    pub position: i64,
+    pub enabled: bool,
+    pub min_amps: Option<i64>,
+    pub max_amps: Option<i64>,
+    pub power: Option<i64>,
+    pub guarantee_kwh: Option<f64>,
+    pub guarantee_by: Option<String>,
+    pub min_on_minutes: i64,
+    pub tolerance: i64,
+}
+
+pub async fn list_surplus_loads(db: &Db) -> sqlx::Result<Vec<SurplusLoadRow>> {
+    sqlx::query_as(
+        "SELECT device_id, position, enabled, min_amps, max_amps, power, guarantee_kwh, guarantee_by, min_on_minutes, tolerance FROM surplus_loads ORDER BY position, device_id",
+    )
+    .fetch_all(db)
+    .await
+}
+
+pub async fn upsert_surplus_load(db: &Db, l: &SurplusLoadRow) -> sqlx::Result<()> {
+    sqlx::query(
+        "INSERT INTO surplus_loads (device_id, position, enabled, min_amps, max_amps, power, guarantee_kwh, guarantee_by, min_on_minutes, tolerance, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (device_id) DO UPDATE SET position = excluded.position, enabled = excluded.enabled, min_amps = excluded.min_amps, max_amps = excluded.max_amps,
+           power = excluded.power, guarantee_kwh = excluded.guarantee_kwh, guarantee_by = excluded.guarantee_by, min_on_minutes = excluded.min_on_minutes, tolerance = excluded.tolerance",
+    )
+    .bind(l.device_id)
+    .bind(l.position)
+    .bind(l.enabled)
+    .bind(l.min_amps)
+    .bind(l.max_amps)
+    .bind(l.power)
+    .bind(l.guarantee_kwh)
+    .bind(&l.guarantee_by)
+    .bind(l.min_on_minutes)
+    .bind(l.tolerance)
+    .bind(now())
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+pub async fn delete_surplus_load(db: &Db, device_id: i64) -> sqlx::Result<bool> {
+    Ok(sqlx::query("DELETE FROM surplus_loads WHERE device_id = ?").bind(device_id).execute(db).await?.rows_affected() > 0)
+}
+
 pub async fn delete_automation(db: &Db, id: i64) -> sqlx::Result<()> {
     sqlx::query("DELETE FROM automations WHERE id = ?").bind(id).execute(db).await?;
     Ok(())

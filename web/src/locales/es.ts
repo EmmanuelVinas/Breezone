@@ -1476,6 +1476,52 @@ const es: Record<string, string> = {
   Présence: "Presencia",
   "« {name} »": "«{name}»",
   "Humidité extérieure": "Humedad exterior",
+  "Pour « et », ajoutez une condition dans Si : la règle part quand le déclencheur et ses conditions sont vrais ensemble.":
+    "Para «y», añada una condición en Si: la regla se activa cuando el disparador y sus condiciones se cumplen a la vez.",
+  "{n} min au moins": "{n} min como mínimo",
+  "{min} à {max} A": "{min} a {max} A",
+  "+{kwh} kWh garantis avant {time}":
+    "+{kwh} kWh garantizados antes de las {time}",
+  "Breezone règle l'intensité selon le surplus, entre un minimum et un maximum. Sous le minimum, la charge est suspendue.":
+    "Breezone regula la intensidad según el excedente, entre un mínimo y un máximo. Por debajo del mínimo, la carga se suspende.",
+  "Breezone allume l'appareil quand le surplus couvre sa puissance, et l'éteint quand il manque.":
+    "Breezone enciende el aparato cuando el excedente cubre su potencia, y lo apaga cuando falta.",
+  "Intensité minimale (A)": "Intensidad mínima (A)",
+  "Intensité maximale (A)": "Intensidad máxima (A)",
+  Garantie: "Garantía",
+  "kWh avant": "kWh antes de las",
+  "Facultatif. Si le soleil ne suffit pas, Breezone charge au maximum depuis le réseau, juste à temps.":
+    "Opcional. Si el sol no basta, Breezone carga al máximo desde la red, justo a tiempo.",
+  "Puissance (W)": "Potencia (W)",
+  "Marche minimale (min)": "Marcha mínima (min)",
+  "Tolérance réseau (W)": "Tolerancia de red (W)",
+  "Ce que l'appareil peut tirer du réseau avant que Breezone ne réduise ou n'arrête.":
+    "Lo que el aparato puede tomar de la red antes de que Breezone reduzca o pare.",
+  "Pilotage sur surplus solaire": "Pilotaje por excedente solar",
+  "Il faut un compteur au tableau (une voie « réseau ») pour connaître le surplus.":
+    "Hace falta un contador en el cuadro (un canal «red») para conocer el excedente.",
+  "Par ordre de priorité · {kw} repartent au réseau en ce moment":
+    "Por orden de prioridad · {kw} vuelven a la red ahora mismo",
+  "Par ordre de priorité : le surplus va d'abord au premier appareil.":
+    "Por orden de prioridad: el excedente va primero al primer aparato.",
+  "Ajouter un appareil…": "Añadir un aparato…",
+  "Aucun appareil ne suit le surplus. Ajoutez la borne, ou un chauffe-eau sur une prise pilotée.":
+    "Ningún aparato sigue el excedente. Añada el cargador, o un termo en un enchufe inteligente.",
+  Descendre: "Bajar",
+  "Suivre le surplus": "Seguir el excedente",
+  Manuel: "Manual",
+  "Vous lancez et arrêtez la charge ; Breezone ne la règle pas.":
+    "Usted inicia y detiene la carga; Breezone no la regula.",
+  "Uniquement le surplus : l'intensité suit le soleil. Peut ne pas charger.":
+    "Solo el excedente: la intensidad sigue al sol. Puede no cargar.",
+  "Solaire + garantie": "Solar + garantía",
+  "Le surplus, puis le réseau si besoin pour atteindre l'objectif à l'heure.":
+    "El excedente y, si hace falta, la red para alcanzar el objetivo a tiempo.",
+  "Mode de charge": "Modo de carga",
+  "Les modes solaires demandent un compteur au tableau (une voie « réseau »).":
+    "Los modos solares necesitan un contador en el cuadro (un canal «red»).",
+  "L'ordre de priorité avec les autres appareils et les intensités se règlent dans Énergie › Pilotage sur surplus solaire.":
+    "La prioridad con los demás aparatos y las intensidades se ajustan en Energía › Pilotaje por excedente solar.",
 }
 
 export default es

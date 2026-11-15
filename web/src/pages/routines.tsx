@@ -593,8 +593,8 @@ export function SchedulesPage() {
         )}
       />
       <div className="grid gap-10">
-        <AirzoneSchedulesSection />
         <AutomationsSection />
+        <AirzoneSchedulesSection />
       </div>
     </>
   )

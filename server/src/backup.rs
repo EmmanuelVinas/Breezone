@@ -41,6 +41,7 @@ const TABLES: &[Table] = &[
     Table { name: "routines", filter: "1", without: &["last_run_at"] },
     Table { name: "timers", filter: "1", without: &[] },
     Table { name: "automations", filter: "1", without: &["last_run_at", "last_reason"] },
+    Table { name: "surplus_loads", filter: "1", without: &[] },
 ];
 
 /// Settings that are configuration (not secrets, not this server's identity).
