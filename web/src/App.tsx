@@ -10,6 +10,7 @@ import { useQuery } from "@tanstack/react-query"
 import { api, isSignedIn, onAuthChange } from "@/lib/api"
 import { useLive } from "@/hooks/use-live"
 import { AppShell } from "@/components/app-shell"
+import { ThisServerOnly } from "@/components/this-server-only"
 import { LoginPage, SetupPage } from "@/pages/auth"
 import { DashboardPage } from "@/pages/dashboard"
 
@@ -74,12 +75,54 @@ function Protected() {
             element={<DashboardPage view="climate" />}
           />
           <Route path="/zones/:inst/:sys/:zone" element={<ZonePage />} />
-          <Route path="/energie" element={<EnergyPage />} />
-          <Route path="/recharge" element={<ChargingPage />} />
-          <Route path="/solaire" element={<SolarPage />} />
-          <Route path="/lumieres" element={<LightsPage />} />
-          <Route path="/volets" element={<ShuttersPage />} />
-          <Route path="/ventilation" element={<VentilationPage />} />
+          <Route
+            path="/energie"
+            element={
+              <ThisServerOnly>
+                <EnergyPage />
+              </ThisServerOnly>
+            }
+          />
+          <Route
+            path="/recharge"
+            element={
+              <ThisServerOnly>
+                <ChargingPage />
+              </ThisServerOnly>
+            }
+          />
+          <Route
+            path="/solaire"
+            element={
+              <ThisServerOnly>
+                <SolarPage />
+              </ThisServerOnly>
+            }
+          />
+          <Route
+            path="/lumieres"
+            element={
+              <ThisServerOnly>
+                <LightsPage />
+              </ThisServerOnly>
+            }
+          />
+          <Route
+            path="/volets"
+            element={
+              <ThisServerOnly>
+                <ShuttersPage />
+              </ThisServerOnly>
+            }
+          />
+          <Route
+            path="/ventilation"
+            element={
+              <ThisServerOnly>
+                <VentilationPage />
+              </ThisServerOnly>
+            }
+          />
           <Route path="/programmations" element={<SchedulesPage />} />
           <Route path="/routines" element={<RoutinesPage />} />
           <Route path="/activity" element={<ActivityPage />} />

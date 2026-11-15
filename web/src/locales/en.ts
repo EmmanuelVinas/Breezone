@@ -1190,6 +1190,10 @@ const en: Record<string, string> = {
   "{n} en boost": "{n} boosting",
   "{n} boutons": "{n} buttons",
   "dernier appui : bouton {n}": "last press: button {n}",
+  "« {name} » est reliée par un autre serveur":
+    "“{name}” is reached through another server",
+  "Les lumières, volets, énergie et autres modules de cette page sont ceux de ce serveur Breezone. Choisissez une de ses installations pour les voir ; ceux de « {name} » se gèrent sur son propre serveur.":
+    "The lights, shutters, energy and other modules of this page are this Breezone server's. Choose one of its installations to see them; those of “{name}” are managed on its own server.",
 }
 
 export default en

@@ -23,7 +23,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 import type { LiveState } from "@/hooks/use-live"
 import { ANDROID_APP_URL, api, currentUser } from "@/lib/api"
 import { cn } from "@/lib/utils"
-import { useSelectedInstallationId } from "@/lib/selected-installation"
+import {
+  useModulesHere,
+  useSelectedInstallationId,
+} from "@/lib/selected-installation"
 import { useTheme } from "@/components/theme-provider"
 import { Brand, BrandMark } from "@/components/brand"
 import { Button } from "@/components/ui/button"
@@ -237,6 +240,7 @@ export function AppShell({
   useProfileLanguage()
   const energy = useEnergy()
   const modules = useModules()
+  const here = useModulesHere()
   // Climatisation as soon as there is an installation (its own or through another server).
   const climate = !!useQuery({
     queryKey: ["status"],
@@ -247,12 +251,13 @@ export function AppShell({
   const shown = (n: NavItem) =>
     n.when === undefined ||
     (n.when === "climate" && climate) ||
-    (n.when === "energy" && energy) ||
-    (n.when === "solar" && modules.solar) ||
-    (n.when === "light" && modules.light) ||
-    (n.when === "cover" && modules.cover) ||
-    (n.when === "ventilation" && modules.ventilation) ||
-    (n.when === "charger" && modules.charger) ||
+    // The modules' pages go with this server's installations, not one of another server.
+    (n.when === "energy" && here && energy) ||
+    (n.when === "solar" && here && modules.solar) ||
+    (n.when === "light" && here && modules.light) ||
+    (n.when === "cover" && here && modules.cover) ||
+    (n.when === "ventilation" && here && modules.ventilation) ||
+    (n.when === "charger" && here && modules.charger) ||
     (n.when === "admin" && user?.role === "admin")
   const sections = NAV.map((s) => ({
     ...s,
