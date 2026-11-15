@@ -10,7 +10,7 @@ All notable changes are documented here. The format follows
 
 ### Added
 
-- Automations “when… if… then…” (Routines page): a rule reads like a sentence and runs on the server.
+- Automations “when… if… then…” (Schedules page, next to the Airzone schedules): a rule reads like a sentence and runs on the server.
   When a measure crosses a threshold for some time (power returned to the grid, solar production,
   home consumption, outdoor temperature, the temperature of a room…), at a fixed time, or at sunrise
   or sunset; if up to three conditions are true (a measure, the state of a device, a period of the

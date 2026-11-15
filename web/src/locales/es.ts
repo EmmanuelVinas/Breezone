@@ -152,8 +152,8 @@ const es: Record<string, string> = {
     "Es una instalación que ya está en este servidor",
   "Ce qu'il voit dans le web et l'application, ce qu'il peut piloter et modifier. Le changement s'applique aussitôt sur ses appareils.":
     "Lo que ve en la web y en la aplicación, lo que puede controlar y modificar. El cambio se aplica de inmediato en sus dispositivos.",
-  "Ce qui se déclenche à heure fixe. Enregistrées dans votre compte Airzone et exécutées par Airzone ; modifiables ici comme dans l'application Airzone.":
-    "Lo que se activa a hora fija. Guardadas en su cuenta de Airzone y ejecutadas por Airzone; modificables aquí como en la aplicación Airzone.",
+  "Ce qui se déclenche tout seul : à heure fixe avec les programmations Airzone, ou quand quelque chose se produit avec les automatismes de Breezone.":
+    "Lo que se activa solo: a una hora fija con las programaciones de Airzone, o cuando ocurre algo con los automatismos de Breezone.",
   "Ce serveur": "Este servidor",
   "Ce serveur le pilote directement (adresse IP).":
     "Este servidor lo controla directamente (dirección IP).",
@@ -1301,8 +1301,8 @@ const es: Record<string, string> = {
     "Cuando ocurre algo, Breezone actúa solo: excedente solar, temperatura, hora, sol.",
   "Aucun automatisme. Exemple : quand l'injection au réseau dépasse 500 W pendant 5 min, si le salon est sous 18 °C de novembre à mars, alors allumer le salon à 21°.":
     "Ningún automatismo. Ejemplo: cuando la inyección a la red supera 500 W durante 5 min, si el salón está por debajo de 18 °C de noviembre a marzo, entonces encender el salón a 21°.",
-  "Ce que vous lancez quand vous voulez : une minuterie (« dans 2 h, éteindre l'étage ») ou une scène de plusieurs actions, et ce qui se déclenche tout seul.":
-    "Lo que lanza cuando quiere: un temporizador («en 2 h, apagar la planta») o una escena de varias acciones, y lo que se activa solo.",
+  "Ce que vous lancez quand vous voulez : une minuterie (« dans 2 h, éteindre l'étage ») ou une scène de plusieurs actions.":
+    "Lo que lanza cuando quiere: un temporizador («en 2 h, apagar la planta») o una escena de varias acciones.",
 }
 
 export default es

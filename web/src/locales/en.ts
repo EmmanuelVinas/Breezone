@@ -149,8 +149,8 @@ const en: Record<string, string> = {
     "It is an installation already on this server",
   "Ce qu'il voit dans le web et l'application, ce qu'il peut piloter et modifier. Le changement s'applique aussitôt sur ses appareils.":
     "What they see in the web UI and the app, what they may drive and change. The change applies at once on their devices.",
-  "Ce qui se déclenche à heure fixe. Enregistrées dans votre compte Airzone et exécutées par Airzone ; modifiables ici comme dans l'application Airzone.":
-    "What starts at a fixed time. Saved in your Airzone account and run by Airzone; editable here as in the Airzone app.",
+  "Ce qui se déclenche tout seul : à heure fixe avec les programmations Airzone, ou quand quelque chose se produit avec les automatismes de Breezone.":
+    "What runs by itself: at a fixed time with the Airzone schedules, or when something happens with Breezone's automations.",
   "Ce serveur": "This server",
   "Ce serveur le pilote directement (adresse IP).":
     "This server drives it directly (IP address).",
@@ -1291,8 +1291,8 @@ const en: Record<string, string> = {
     "When something happens, Breezone acts by itself: solar surplus, temperature, time, sun.",
   "Aucun automatisme. Exemple : quand l'injection au réseau dépasse 500 W pendant 5 min, si le salon est sous 18 °C de novembre à mars, alors allumer le salon à 21°.":
     "No automation. Example: when the grid export is above 500 W for 5 min, if the living room is below 18 °C from November to March, then switch the living room on at 21°.",
-  "Ce que vous lancez quand vous voulez : une minuterie (« dans 2 h, éteindre l'étage ») ou une scène de plusieurs actions, et ce qui se déclenche tout seul.":
-    "What you start whenever you want: a timer (“in 2 h, switch the first floor off”) or a scene of several actions, and what runs by itself.",
+  "Ce que vous lancez quand vous voulez : une minuterie (« dans 2 h, éteindre l'étage ») ou une scène de plusieurs actions.":
+    "What you start whenever you want: a timer (“in 2 h, switch the first floor off”) or a scene of several actions.",
 }
 
 export default en

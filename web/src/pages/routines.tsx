@@ -582,18 +582,19 @@ function BreezoneRoutines({
   )
 }
 
-/** Fixed-time schedules: those of the Airzone app, and Breezone's own. */
+/** What runs by itself: the fixed-time schedules of the Airzone app, and Breezone's automations. */
 export function SchedulesPage() {
   return (
     <>
       <PageHeader
         title={t("Programmations")}
         description={t(
-          "Ce qui se déclenche à heure fixe. Enregistrées dans votre compte Airzone et exécutées par Airzone ; modifiables ici comme dans l'application Airzone."
+          "Ce qui se déclenche tout seul : à heure fixe avec les programmations Airzone, ou quand quelque chose se produit avec les automatismes de Breezone."
         )}
       />
       <div className="grid gap-10">
         <AirzoneSchedulesSection />
+        <AutomationsSection />
       </div>
     </>
   )
@@ -606,7 +607,7 @@ export function RoutinesPage() {
       <PageHeader
         title={t("Routines")}
         description={t(
-          "Ce que vous lancez quand vous voulez : une minuterie (« dans 2 h, éteindre l'étage ») ou une scène de plusieurs actions, et ce qui se déclenche tout seul."
+          "Ce que vous lancez quand vous voulez : une minuterie (« dans 2 h, éteindre l'étage ») ou une scène de plusieurs actions."
         )}
       />
       <div className="grid gap-10">
@@ -620,7 +621,6 @@ export function RoutinesPage() {
             "Aucune scène. Exemple : « Je pars » — tout éteindre sauf la chambre, qui s'éteint après 1 h."
           )}
         />
-        <AutomationsSection />
         <AirzoneRoutinesSection />
       </div>
     </>
