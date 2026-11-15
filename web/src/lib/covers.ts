@@ -6,11 +6,16 @@ export type CoverState = {
   position?: number
   target?: number
   moving?: "opening" | "closing" | "stopped"
+  stoppable?: boolean
 }
 
 export const isCover = (d: DeviceView) => d.traits.includes("cover.position@1")
 
 export const coverState = (d: DeviceView) => (d.state ?? {}) as CoverState
+
+/** Unknown counts as stoppable: only a driver that knows it cannot stop says so (a HomeKit
+ * shutter without « hold position », like Legrand's). */
+export const isStoppable = (d: DeviceView) => coverState(d).stoppable !== false
 
 /** What the device is: its driver says it (a HomeKit shutter, a VELUX window…). */
 export function coverKind(d: DeviceView) {

@@ -69,6 +69,9 @@ private fun DeviceView.isOpen() = available && cover().position > 0
 
 private fun CoverPositionState.moving() = moving == CoverPositionMoving.Opening || moving == CoverPositionMoving.Closing
 
+// Unknown counts as stoppable: only a driver that knows it cannot stop says so.
+private fun CoverPositionState.stoppable() = stoppable != false
+
 @Composable
 private fun coverText(s: CoverPositionState): String = when {
     s.moving == CoverPositionMoving.Opening -> s.target?.let { stringResource(Res.string.shutter_opening_to, it) } ?: stringResource(Res.string.shutter_opening)
@@ -150,13 +153,15 @@ fun ShuttersScreen(serverId: String, onBack: () -> Unit, onOpen: (Long) -> Unit)
 }
 
 @Composable
-private fun CoverButtons(enabled: Boolean, onUp: () -> Unit, onStop: () -> Unit, onDown: () -> Unit) {
+private fun CoverButtons(enabled: Boolean, onUp: () -> Unit, onStop: (() -> Unit)?, onDown: () -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         FilledTonalIconButton(onClick = onUp, enabled = enabled, modifier = Modifier.size(38.dp)) {
             Icon(FzIcons.ChevronUp, stringResource(Res.string.shutter_up), Modifier.size(18.dp))
         }
-        FilledTonalIconButton(onClick = onStop, enabled = enabled, modifier = Modifier.size(38.dp)) {
-            Icon(FzIcons.Square, stringResource(Res.string.shutter_stop), Modifier.size(14.dp))
+        if (onStop != null) {
+            FilledTonalIconButton(onClick = onStop, enabled = enabled, modifier = Modifier.size(38.dp)) {
+                Icon(FzIcons.Square, stringResource(Res.string.shutter_stop), Modifier.size(14.dp))
+            }
         }
         FilledTonalIconButton(onClick = onDown, enabled = enabled, modifier = Modifier.size(38.dp)) {
             Icon(FzIcons.ChevronDown, stringResource(Res.string.shutter_down), Modifier.size(18.dp))
@@ -180,7 +185,7 @@ private fun ShutterRow(d: DeviceView, status: CommandStatus?, onOpen: () -> Unit
             )
         }
         CommandIndicator(status, Modifier.padding(end = 6.dp))
-        CoverButtons(d.available, { hub.setCover(serverId, d, 100) }, { hub.stopCover(serverId, d) }, { hub.setCover(serverId, d, 0) })
+        CoverButtons(d.available, { hub.setCover(serverId, d, 100) }, { hub.stopCover(serverId, d) }.takeIf { d.cover().stoppable() }, { hub.setCover(serverId, d, 0) })
     }
 }
 
@@ -227,10 +232,12 @@ fun ShutterScreen(serverId: String, deviceId: Long, onBack: () -> Unit) {
                             Icon(FzIcons.ChevronUp, null, Modifier.size(18.dp))
                             Text(stringResource(Res.string.shutter_up))
                         }
-                        OutlinedButton(onClick = { hub.stopCover(serverId, d) }, enabled = d.available, modifier = Modifier.weight(1f), shape = Fz.shapes.button) {
-                            Icon(FzIcons.Square, null, Modifier.size(14.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text(stringResource(Res.string.shutter_stop))
+                        if (s.stoppable()) {
+                            OutlinedButton(onClick = { hub.stopCover(serverId, d) }, enabled = d.available, modifier = Modifier.weight(1f), shape = Fz.shapes.button) {
+                                Icon(FzIcons.Square, null, Modifier.size(14.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text(stringResource(Res.string.shutter_stop))
+                            }
                         }
                         OutlinedButton(onClick = { hub.setCover(serverId, d, 0) }, enabled = d.available, modifier = Modifier.weight(1f), shape = Fz.shapes.button) {
                             Icon(FzIcons.ChevronDown, null, Modifier.size(18.dp))

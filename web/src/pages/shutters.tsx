@@ -6,7 +6,14 @@ import { Blinds, ChevronDown, ChevronUp, Square } from "lucide-react"
 import type { DeviceView, Room } from "@/lib/api"
 import { api, currentUser } from "@/lib/api"
 import type { CoverState } from "@/lib/covers"
-import { coverKind, coverState, coverText, isCover, isOpen } from "@/lib/covers"
+import {
+  coverKind,
+  coverState,
+  coverText,
+  isCover,
+  isOpen,
+  isStoppable,
+} from "@/lib/covers"
 import { t, tn } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { PageHeader } from "@/components/app-shell"
@@ -91,19 +98,21 @@ function Controls({
       >
         <ChevronUp /> {labels && t("Ouvrir")}
       </Button>
-      <Button
-        variant="outline"
-        size={size}
-        className={cn(labels && "flex-1")}
-        disabled={disabled}
-        aria-label={t("Stop")}
-        onClick={(e) => {
-          e.stopPropagation()
-          command.mutate([{ id: device.id, action: "stop" }])
-        }}
-      >
-        <Square className="fill-current" /> {labels && t("Stop")}
-      </Button>
+      {isStoppable(device) && (
+        <Button
+          variant="outline"
+          size={size}
+          className={cn(labels && "flex-1")}
+          disabled={disabled}
+          aria-label={t("Stop")}
+          onClick={(e) => {
+            e.stopPropagation()
+            command.mutate([{ id: device.id, action: "stop" }])
+          }}
+        >
+          <Square className="fill-current" /> {labels && t("Stop")}
+        </Button>
+      )}
       <Button
         variant="outline"
         size={size}

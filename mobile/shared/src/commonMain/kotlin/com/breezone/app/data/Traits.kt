@@ -80,6 +80,7 @@ data class CoverPositionState(
     val position: Long = 0,
     val target: Long? = null,
     val moving: CoverPositionMoving? = null,
+    val stoppable: Boolean? = null,
 )
 
 /** Shutter, blind or window (`cover.position@1`): action `set`. */

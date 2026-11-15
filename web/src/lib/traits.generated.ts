@@ -57,6 +57,8 @@ export type CoverPositionState = {
   target: number | null
   /** Moving */
   moving: "opening" | "closing" | "stopped" | null
+  /** Can be stopped on the way */
+  stoppable: boolean | null
 }
 
 /** Shutter, blind or window (`cover.position@1`): action `set`. */

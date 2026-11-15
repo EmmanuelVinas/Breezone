@@ -176,9 +176,12 @@ fn states_of(layout: &Layout, values: &HashMap<(u64, u64), Value>, presses: &Has
         let get = |iid: u64| values.get(&(t.aid, iid)).filter(|v| !v.is_null());
         let mut s = State::new();
         match &t.kind {
-            Kind::Cover { current, target, state, .. } => {
+            Kind::Cover { current, target, state, hold } => {
                 let Some(position) = get(*current).and_then(Value::as_i64) else { continue };
                 s.insert("position".into(), json!(position.clamp(0, 100)));
+                // Without « hold position » nothing stops it on the way (see `act`): the apps hide
+                // the stop button, as Home Assistant does.
+                s.insert("stoppable".into(), json!(hold.is_some()));
                 if let Some(v) = get(*target).and_then(Value::as_i64) {
                     s.insert("target".into(), json!(v.clamp(0, 100)));
                 }
@@ -506,8 +509,21 @@ mod tests {
         assert_eq!(states["2.8"]["position"], 35);
         assert_eq!(states["2.8"]["target"], 80);
         assert_eq!(states["2.8"]["moving"], "opening");
+        assert_eq!(states["2.8"]["stoppable"], true);
         assert_eq!(states["3.8"]["on"], true);
         assert_eq!(short("0000008C-0000-1000-8000-0026BB765291"), "8C");
+    }
+
+    /// Legrand's shutters have no « hold position »: the apps are told so and hide the stop button.
+    #[test]
+    fn a_shutter_without_hold_position_cannot_be_stopped() {
+        let mut db = database();
+        db["accessories"][1]["services"][1]["characteristics"].as_array_mut().unwrap().pop();
+        let l = layout(&db);
+        assert_eq!(l.devices[0].1.kind, Kind::Cover { current: 9, target: 10, state: Some(11), hold: None });
+        let states = states_of(&l, &HashMap::from([((2, 9), json!(100)), ((2, 10), json!(0)), ((2, 11), json!(0))]), &HashMap::new());
+        assert_eq!(states["2.8"]["stoppable"], false);
+        assert_eq!(states["2.8"]["moving"], "closing");
     }
 
     /// Through the API: pairing with the code, a shutter read and driven, the key never shown, and
