@@ -1,6 +1,8 @@
 # Breezone
 
-**Control your Airzone heating and air conditioning locally. No cloud required.**
+**The most common devices of your home in one simple app: air conditioning, lights, shutters,
+energy, solar panels, EV charging and ventilation. Local first, for one home or several, on the web
+and on your phone.**
 
 ![CI](https://github.com/EmmanuelVinas/breezone/actions/workflows/ci.yml/badge.svg)
 ![License: PolyForm Noncommercial](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue)
@@ -8,31 +10,66 @@
 
 🌐 [breezone.cloud](https://breezone.cloud) · 🇫🇷 [Lire en français](README.fr.md)
 
-In 2025, features of the Airzone app that used to be free (routines, some remote features…) became
-part of a paid subscription ([Next.ink, in French](https://next.ink/265416/airzone-withings-quand-des-fonctions-connectees-gratuites-deviennent-payantes/)).
-Your Airzone WebServer, however, has a documented **local API** on your network. Breezone is a small
-self-hosted server that talks to it, with a web UI and an Android / iOS app.
+## Why Breezone
 
-> Breezone is an independent project. It is **not affiliated with, endorsed by or supported by
-> Airzone** (Corporación Empresarial Altra S.L.). "Airzone" is a trademark of its owner, used here only
-> to describe compatibility.
+Breezone is home automation for people who do not want to *do* home automation. You add a device,
+its pages are ready: no YAML, no templates, no dashboard to build, no broker to install.
+
+- **Simple.** Breezone finds your devices on the network; you add one with a button, a code or an
+  address. Each kind of device gets its own page (climate, lights, shutters, energy…), the same on
+  the web and on the phone.
+- **The common devices, not every device.** Breezone supports the integrations found in most homes
+  (France and Europe first), and says no to niche or complicated ones. It will never have as many
+  integrations as Home Assistant: that is not the goal.
+- **Local first.** Devices are driven on your home network, through their local API. A cloud account
+  is only used when it stays simple and occasional (importing your Airzone account, for instance),
+  never to drive what can be driven locally.
+- **Several sites.** Your home, your parents', a holiday home: each site runs its own small Breezone
+  server, and they can be linked **without a VPN** (single-use invitation, signed requests, read-only
+  or control, revocable). The web UI and the app show all of them.
+- **Small.** One image of about 20 MB, a few MB of RAM: it runs on a NAS or a Raspberry Pi.
+
+Breezone started in 2025, when features of the Airzone app that used to be free became part of a
+paid subscription ([Next.ink, in French](https://next.ink/265416/airzone-withings-quand-des-fonctions-connectees-gratuites-deviennent-payantes/))
+while the Airzone WebServer has a documented local API. It now covers much more than air
+conditioning.
+
+## Supported devices
+
+| Kind | Brands and models | How |
+| --- | --- | --- |
+| Air conditioning and heating | **Airzone** (WebServer) | Local API of the WebServer; Airzone account optional (import, schedules) |
+| Lights | **Philips Hue** (bridge): lights, rooms and scenes of the Hue app | Local API of the bridge, added with its button |
+| Shutters, blinds, roof windows | **Legrand** Home + Control (with Netatmo), **VELUX** App Control (KIG 300), and other **HomeKit** accessories | HomeKit, locally, paired with the accessory's code; presses of remotes shown |
+| Plugs, relays, energy meters | **Shelly** Plus, Pro, Gen3 and Gen4 (Pro 3EM, Pro EM, relays, plugs…) | Local RPC API, no Shelly Cloud |
+| Solar panels | **Hoymiles** micro-inverters (Wi-Fi DTU) | Local API of the DTU: production per inverter and per panel |
+| EV charging | **V2C Trydan** | Local API of the charger: start, stop, current, dynamic mode, lock |
+| Ventilation | **Renson Healthbox 3.0** | Local API: air flow per room, boost, profiles; humidity, CO₂ and VOC per room with Renson's API key |
+
+**More are coming**, chosen for how common, how local and how simple to add they are: Matter, IKEA
+DIRIGERA, WiZ, TP-Link Tapo / Kasa, Tuya (local), Somfy TaHoma, Enphase, Linky, OCPP chargers,
+Modbus SunSpec inverters, EZVIZ cameras, garden watering… A common device is missing? Open an issue.
+
+> Breezone is an independent project, **not affiliated with, endorsed by or supported by** any of the
+> manufacturers above. Their names and trademarks (Airzone, Philips Hue, Legrand, Netatmo, VELUX,
+> Shelly, Hoymiles, V2C, Renson, HomeKit…) belong to their owners and are used only to describe
+> compatibility.
 
 ## Features
 
-- **Zones**: on/off, setpoint, mode (heat, cool, fan, dry, auto), fan speed, sleep; groups (floors)
-with group on/off.
-- **Schedules**: the schedules of the  app, created and edited from Breezone, run by Airzone.
+- **A page per kind of device**: climate (zones, setpoint, mode, fan speed, sleep, groups), lights
+  (brightness, white, colours, Hue scenes), shutters (open, close, position), energy (the home now,
+  the day, use by use), solar (each panel), charging, ventilation.
+- **Rooms**: the same rooms for every module; those of the Hue and Renson apps can be taken as they
+  are.
+- **Schedules**: the schedules of the Airzone app, created and edited from Breezone, run by Airzone.
 - **Routines**: scenes started on demand, run by your server (each step can wait, e.g. "switch the
-living room off now, the bedrooms in 2 hours"), and timers ("in 2 hours, switch everything off").
-- **History** (temperature, setpoint, humidity) and a real-time **activity feed**.
-- **Several sites without VPN**: each site runs its own Breezone; a server can share some of its
-installations with another one (single-use invitation, approval, signed requests, read-only or
-control, revocable) — see [Linking two sites](docs/federation.md) (in French).
+  living room off now, the bedrooms in 2 hours"), and timers ("in 2 hours, switch everything off").
+- **History** of every device and a real-time **activity feed**, with the server's errors explained.
+- **Several sites without VPN**: see [Linking two sites](docs/federation.md) (in French).
 - **Users and devices**: administrators and users; each user only sees the installations given to
-them, read-only or with control; sessions revocable per device.
-- **Optional Airzone account import** (read-only): installation names, city, zone groups; WebServers
-are found on the network by their MAC address.
-- **Tiny**: one ~20 MB image, a few MB of RAM — fits on any NAS or Raspberry Pi.
+  them, read-only or with control; sessions revocable per device.
+- **Backup and moving**: export and import of the configuration (without secrets or history).
 
 ## Screenshots
 
@@ -141,8 +178,9 @@ in the `breezone_data` volume; back it up with
 
 ## Mobile app
 
-An Android and iOS app (English, French, Spanish) to drive your installations from your phone: zones,
-modes, routines and  schedules of each installation, live updates, several servers.
+An Android and iOS app (English, French, Spanish) to drive your homes from your phone: the same pages
+as the web (climate, lights, shutters, energy, solar, charging, ventilation), routines and schedules,
+live updates, several servers.
 
 **Android: [Breezone on Google Play](https://play.google.com/store/apps/details?id=com.breezone.app).** iOS: coming soon
 on the App Store; until then, build it yourself from [`mobile/`](mobile).
@@ -155,16 +193,17 @@ yet? « Try the demo » on the first screen opens a simulated home.
 ## How it works
 
 ```
- Airzone WebServers ──(local API :3000, LAN)── Breezone server ──(REST + WebSocket)── mobile app
-                                                Rust · SQLite                         web UI (served by the server)
-                                                 ├─ other Breezone servers (federation, HTTPS)
-                                                 └─ Airzone Cloud (optional: import, schedules)
+ Airzone WebServers  ─┐
+ Hue, Shelly, Trydan  ├─(local APIs, LAN)── Breezone server ──(REST + WebSocket)── mobile app
+ Hoymiles, Renson     │                      Rust · SQLite                         web UI (served by the server)
+ HomeKit accessories ─┘                       ├─ other Breezone servers (federation, HTTPS)
+                                              └─ Airzone Cloud (optional: import, schedules)
 ```
 
 
 | Folder                               | Content                                                                                                                       |
 | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| [`server/`](server)                  | Rust server (axum, sqlx/SQLite): API, Airzone polling, routines, timers, auth, federation, a fake Airzone for demos and tests |
+| [`server/`](server)                  | Rust server (axum, sqlx/SQLite): API, Airzone polling, device drivers (Hue, HomeKit, Shelly, Hoymiles, Trydan, Renson), routines, timers, auth, federation, a fake Airzone for demos and tests |
 | [`web/`](web)                        | Web UI: React 19, Vite, Tailwind 4, shadcn/ui                                                                                 |
 | [`mobile/`](mobile)                  | Compose Multiplatform app (Android and iOS)                                                                                   |
 | [`docs/API.md`](docs/API.md)         | API reference (in French)                                                                                                     |

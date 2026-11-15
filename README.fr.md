@@ -1,37 +1,81 @@
 # Breezone
 
-**Pilotez vos climatisations et chauffages Airzone en local — sans abonnement, sans cloud obligatoire.**
+**Les appareils les plus courants de la maison dans une seule application simple : climatisation,
+lumières, volets, énergie, panneaux solaires, recharge de voiture et ventilation. En local d'abord,
+pour une maison ou plusieurs, sur le web et sur le téléphone.**
 
 🌐 [breezone.cloud](https://breezone.cloud) · 🇬🇧 [Read in English](README.md)
 
-En 2025, des fonctions de l'application Airzone jusque-là gratuites (routines, certaines fonctions à
-distance…) sont passées sous abonnement payant
-([Next.ink](https://next.ink/265416/airzone-withings-quand-des-fonctions-connectees-gratuites-deviennent-payantes/)).
-Votre WebServer Airzone dispose pourtant d'une **API locale** documentée sur votre réseau. Breezone est un
-petit serveur auto-hébergé qui l'utilise, avec une interface web et une application Android / iOS.
+## Pourquoi Breezone
 
-> Breezone est un projet indépendant, **sans lien avec Airzone** (Corporación Empresarial Altra S.L.),
-> ni approuvé ni soutenu par elle. « Airzone » est une marque de son propriétaire, citée uniquement pour
+Breezone, c'est la domotique pour ceux qui ne veulent pas *faire* de domotique. On ajoute un appareil,
+ses pages sont prêtes : pas de YAML, pas de modèles, pas de tableau de bord à construire, pas de broker
+à installer.
+
+- **Simple.** Breezone trouve vos appareils sur le réseau ; on en ajoute un avec un bouton, un code ou
+  une adresse. Chaque type d'appareil a sa page (climatisation, lumières, volets, énergie…), la même
+  sur le web et sur le téléphone.
+- **Les appareils courants, pas tous les appareils.** Breezone prend en charge les intégrations
+  qu'on trouve dans la plupart des maisons (France et Europe d'abord), et dit non à celles qui sont
+  rares ou compliquées à configurer. Il n'aura jamais autant d'intégrations que Home Assistant : ce
+  n'est pas le but.
+- **En local d'abord.** Les appareils sont pilotés sur le réseau de la maison, par leur API locale. Un
+  compte dans le cloud ne sert que s'il reste simple et ponctuel (l'import du compte Airzone, par
+  exemple), jamais pour piloter ce qui peut l'être en local.
+- **Plusieurs sites.** Votre maison, celle de vos parents, une maison de vacances : chaque site a son
+  petit serveur Breezone, et ils se relient **sans VPN** (invitation à usage unique, requêtes signées,
+  lecture ou pilotage, révocable). L'interface web et l'application les montrent tous.
+- **Léger.** Une image d'environ 20 Mo, quelques Mo de RAM : il tourne sur un NAS ou un Raspberry Pi.
+
+Breezone est né en 2025, quand des fonctions de l'application Airzone jusque-là gratuites sont
+passées sous abonnement payant
+([Next.ink](https://next.ink/265416/airzone-withings-quand-des-fonctions-connectees-gratuites-deviennent-payantes/)),
+alors que le WebServer Airzone dispose d'une API locale documentée. Il couvre aujourd'hui bien plus
+que la climatisation.
+
+## Appareils pris en charge
+
+| Type | Marques et modèles | Comment |
+| --- | --- | --- |
+| Climatisation et chauffage | **Airzone** (WebServer) | API locale du WebServer ; compte Airzone facultatif (import, programmations) |
+| Lumières | **Philips Hue** (pont) : lumières, pièces et scènes de l'application Hue | API locale du pont, ajouté avec son bouton |
+| Volets, stores, fenêtres de toit | **Legrand** Home + Control (avec Netatmo), **VELUX** App Control (KIG 300), et les autres accessoires **HomeKit** | HomeKit, en local, appairé avec le code de l'accessoire ; appuis des télécommandes affichés |
+| Prises, relais, compteurs d'énergie | **Shelly** Plus, Pro, Gen3 et Gen4 (Pro 3EM, Pro EM, relais, prises…) | API RPC locale, sans Shelly Cloud |
+| Panneaux solaires | Micro-onduleurs **Hoymiles** (DTU Wi-Fi) | API locale du DTU : production par onduleur et par panneau |
+| Recharge de voiture | **V2C Trydan** | API locale de la borne : marche, arrêt, courant, mode dynamique, verrou |
+| Ventilation | **Renson Healthbox 3.0** | API locale : débit par pièce, boost, profils ; humidité, CO₂ et COV par pièce avec la clé API Renson |
+
+**D'autres arrivent**, choisis pour leur popularité, leur accès local et leur simplicité d'ajout :
+Matter, IKEA DIRIGERA, WiZ, TP-Link Tapo / Kasa, Tuya (en local), Somfy TaHoma, Enphase, Linky, bornes
+OCPP, onduleurs Modbus SunSpec, caméras EZVIZ, arrosage du jardin… Il manque un appareil courant ?
+Ouvrez une issue.
+
+> Breezone est un projet indépendant, **sans lien avec aucun des fabricants ci-dessus**, ni approuvé
+> ni soutenu par eux. Leurs noms et marques (Airzone, Philips Hue, Legrand, Netatmo, VELUX, Shelly,
+> Hoymiles, V2C, Renson, HomeKit…) appartiennent à leurs propriétaires et ne sont cités que pour
 > indiquer la compatibilité.
 
 ## Fonctions
 
-- **Zones** : marche/arrêt, consigne, mode (chaud, froid, ventilation, déshumidification, auto),
-ventilation, veille ; groupes (étages) avec marche/arrêt de groupe.
-- **Programmations** :  créées et modifiées depuis Breezone, exécutées
-par Airzone.
-- **Routines** : scènes lancées à la demande et exécutées par votre serveur (chaque étape peut attendre :
-« éteindre le salon maintenant, les chambres dans 2 h »), et minuteries (« dans 2 h, tout éteindre »).
-- **Historique** (température, consigne, humidité) et **journal d'activité** en temps réel.
-- **Plusieurs sites sans VPN** : chaque site a son serveur Breezone ; un serveur peut partager certaines
-installations avec un autre (invitation à usage unique, acceptation, requêtes signées, lecture ou
-pilotage, révocable) — voir [Relier deux sites](docs/federation.md).
-- **Utilisateurs et appareils** : administrateurs et utilisateurs ; chaque utilisateur ne voit que
-les installations qu'on lui donne, en lecture seule ou avec le pilotage ; sessions révocables par
-appareil.
-- **Import facultatif du compte Airzone** (lecture seule) : noms, ville, groupes de zones ; les WebServers
-sont retrouvés sur le réseau par leur adresse MAC.
-- **Léger** : une image d'environ 20 Mo, quelques Mo de RAM — tient sur n'importe quel NAS ou Raspberry Pi.
+- **Une page par type d'appareil** : climatisation (zones, consigne, mode, ventilation, veille,
+  groupes), lumières (intensité, blanc, couleurs, scènes Hue), volets (ouvrir, fermer, position),
+  énergie (la maison en ce moment, la journée, usage par usage), solaire (chaque panneau), recharge,
+  ventilation.
+- **Pièces** : les mêmes pièces pour tous les modules ; celles des applications Hue et Renson peuvent
+  être reprises telles quelles.
+- **Programmations** : celles de l'application Airzone, créées et modifiées depuis Breezone,
+  exécutées par Airzone.
+- **Routines** : scènes lancées à la demande et exécutées par votre serveur (chaque étape peut
+  attendre : « éteindre le salon maintenant, les chambres dans 2 h »), et minuteries (« dans 2 h, tout
+  éteindre »).
+- **Historique** de chaque appareil et **journal d'activité** en temps réel, avec les erreurs du
+  serveur expliquées.
+- **Plusieurs sites sans VPN** : voir [Relier deux sites](docs/federation.md).
+- **Utilisateurs et appareils** : administrateurs et utilisateurs ; chaque utilisateur ne voit que les
+  installations qu'on lui donne, en lecture seule ou avec le pilotage ; sessions révocables par
+  appareil.
+- **Sauvegarde et déménagement** : export et import de la configuration (sans les secrets ni
+  l'historique).
 
 ## Aperçu
 
@@ -122,9 +166,9 @@ dans [`.env.sample`](.env.sample).
 
 ## Application mobile
 
-Une application Android et iOS (français, anglais, espagnol) pour piloter vos installations depuis le
-téléphone : zones, modes, routines et programmations  de chaque installation, temps réel,
-plusieurs serveurs.
+Une application Android et iOS (français, anglais, espagnol) pour piloter vos maisons depuis le
+téléphone : les mêmes pages que sur le web (climatisation, lumières, volets, énergie, solaire,
+recharge, ventilation), routines et programmations, temps réel, plusieurs serveurs.
 
 **Android : [Breezone sur Google Play](https://play.google.com/store/apps/details?id=com.breezone.app).** iOS : bientôt sur l'App Store ; en
 attendant, compilez-la depuis [`mobile/`](mobile).
