@@ -1,4 +1,5 @@
-import type { LucideIcon } from "lucide-react"
+import { createElement } from "react"
+import type { LucideIcon, LucideProps } from "lucide-react"
 import {
   Armchair,
   Baby,
@@ -87,6 +88,10 @@ export function roomIconName(room: { name: string; icon?: string | null }) {
   return GUESSES.find(([re]) => re.test(room.name))?.[1] ?? "house"
 }
 
-export function roomIcon(room: { name: string; icon?: string | null }) {
-  return ROOM_ICONS[roomIconName(room)]
+/** The icon of a room, as a component declared once (not picked during each render). */
+export function RoomIcon({
+  room,
+  ...props
+}: { room: { name: string; icon?: string | null } } & LucideProps) {
+  return createElement(ROOM_ICONS[roomIconName(room)], props)
 }
