@@ -22,6 +22,7 @@ pub mod hub;
 pub mod i18n;
 pub mod incidents;
 pub mod mock;
+pub mod rollup;
 pub mod routines;
 pub mod stats;
 pub mod timers;

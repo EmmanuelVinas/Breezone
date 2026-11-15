@@ -1403,7 +1403,7 @@ impl Hub {
         let mut ticker = tokio::time::interval(Duration::from_secs(3600));
         loop {
             ticker.tick().await;
-            if let Err(e) = db::purge(&self.db, self.cfg.history_retention_days, self.cfg.events_retention_days).await {
+            if let Err(e) = crate::rollup::purge(&self.db, self.cfg.timezone, self.cfg.history_retention_days, self.cfg.events_retention_days).await {
                 tracing::error!("maintenance failed: {e}");
             }
         }

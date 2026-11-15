@@ -967,6 +967,13 @@ function roleText(
   }
   if (d.role && isInverter(measured))
     return t("Production de {name}", { name: measured!.name })
+  // As the server counts it: a charger is a consumption, unless a meter on its line measures it.
+  if (
+    !d.role &&
+    d.traits.includes("ev.charger@1") &&
+    !devices.some((x) => x.id !== d.id && x.measures.device_id === d.id)
+  )
+    return t("Consommation, comptée d'office")
   if (!d.role) return t("Non affectée")
   if (d.role !== "consumption") return ROLE_LABEL[d.role]
   const target =

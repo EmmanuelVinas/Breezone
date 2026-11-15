@@ -23,14 +23,21 @@ fn is_inverter(d: &DeviceView) -> bool {
     d.traits.iter().any(|t| t == "solar.inverter@1")
 }
 
-/// The role a measure has on the energy page. A solar inverter is a production without being told;
-/// a measure of a solar inverter (a meter on its line) is a production whatever role it was given.
+fn is_charger(d: &DeviceView) -> bool {
+    d.traits.iter().any(|t| t == "ev.charger@1")
+}
+
+/// The role a measure has on the energy page. A solar inverter is a production without being told,
+/// a charger a consumption; a measure of a solar inverter (a meter on its line) is a production whatever role it was given.
 fn effective_role(d: &DeviceView, by_id: &HashMap<i64, &DeviceView>) -> Option<Role> {
     let of_inverter = d.measures.device_id.and_then(|id| by_id.get(&id)).is_some_and(|t| is_inverter(t));
     match d.role.as_deref().and_then(Role::parse) {
         Some(Role::Consumption) if of_inverter => Some(Role::Solar),
         Some(role) => Some(role),
         None if is_inverter(d) => Some(Role::Solar),
+        // A charger is a consumption without being told, unless another measure (a meter on its
+        // line) measures it: it is then counted through that one.
+        None if is_charger(d) && !by_id.values().any(|o| o.id != d.id && o.measures.device_id == Some(d.id)) => Some(Role::Consumption),
         None => None,
     }
 }
@@ -165,17 +172,76 @@ fn default_days() -> u64 {
     30
 }
 
-/// The energy of the home day by day (local days, oldest first, today included).
+/// The energy of the home day by day (local days, oldest first, today included). The days whose
+/// detail is still kept are computed (and kept in `energy_days`); older ones come from what was
+/// kept, so that the page goes back years.
 pub async fn days(State(state): State<AppState>, _user: AuthUser, Query(q): Query<DaysQuery>) -> ApiResult<Json<Vec<DayEnergy>>> {
     let tz = state.cfg.timezone;
-    let n = q.days.clamp(1, 366);
+    let n = q.days.clamp(1, 5 * 366);
     let last = today(tz);
     let first = last - Days::new(n - 1);
-    let days: Vec<String> = (0..n).map(|i| (first + Days::new(i)).format("%Y-%m-%d").to_string()).collect();
+    // The first day whose detail is complete: computed from it on.
+    let detail = crate::rollup::local_day(db::now() - state.cfg.history_retention_days * 86_400, tz) + Days::new(1);
+    let computed_from = first.max(detail);
+    let label = |d: NaiveDate| d.format("%Y-%m-%d").to_string();
+    let kept: HashMap<String, DayEnergy> = if first < computed_from {
+        sqlx::query_as::<_, (String, String)>("SELECT day, data FROM energy_days WHERE day >= ? AND day < ?")
+            .bind(label(first))
+            .bind(label(computed_from))
+            .fetch_all(&state.db)
+            .await?
+            .into_iter()
+            .filter_map(|(day, data)| Some((day, serde_json::from_str(&data).ok()?)))
+            .collect()
+    } else {
+        HashMap::new()
+    };
+    let mut out: Vec<DayEnergy> = (0..(computed_from - first).num_days().max(0) as u64)
+        .map(|i| label(first + Days::new(i)))
+        .map(|day| kept.get(&day).cloned().unwrap_or(DayEnergy { day, ..Default::default() }))
+        .collect();
+    if computed_from <= last {
+        let days: Vec<String> = (0..=(last - computed_from).num_days() as u64).map(|i| label(computed_from + Days::new(i))).collect();
+        let devices = devices_of(&state).await?;
+        let measures = measures(&state, &devices).await?;
+        let spans = spans(&state, &measures, midnight(computed_from, tz), midnight(last + Days::new(1), tz)).await?;
+        let computed = energy::daily(&measures, &spans, tz, &days);
+        // The past days are kept: they stay once their detail is deleted.
+        let today_label = label(last);
+        let mut tx = state.db.begin().await?;
+        for d in computed.iter().filter(|d| d.day != today_label && (d.consumption.is_some() || d.production.is_some() || d.imported.is_some())) {
+            sqlx::query("INSERT INTO energy_days (day, data) VALUES (?, ?) ON CONFLICT (day) DO UPDATE SET data = excluded.data")
+                .bind(&d.day)
+                .bind(serde_json::to_string(d).unwrap_or_default())
+                .execute(&mut *tx)
+                .await?;
+        }
+        tx.commit().await?;
+        out.extend(computed);
+    }
+    Ok(Json(out))
+}
+
+#[derive(Serialize)]
+pub struct RangeView {
+    /// The first local day the home has an energy measure of: the periods offered stop there.
+    pub first_day: Option<String>,
+}
+
+/// How far back the energy of the home goes.
+pub async fn range(State(state): State<AppState>, _user: AuthUser) -> ApiResult<Json<RangeView>> {
+    let tz = state.cfg.timezone;
     let devices = devices_of(&state).await?;
     let measures = measures(&state, &devices).await?;
-    let spans = spans(&state, &measures, midnight(first, tz), midnight(last + Days::new(1), tz)).await?;
-    Ok(Json(energy::daily(&measures, &spans, tz, &days)))
+    let mut first: Option<NaiveDate> =
+        sqlx::query_scalar::<_, Option<String>>("SELECT MIN(day) FROM energy_days").fetch_one(&state.db).await?.and_then(|d| NaiveDate::parse_from_str(&d, "%Y-%m-%d").ok());
+    for m in &measures {
+        if let Some(ts) = crate::rollup::device_oldest(&state.db, m.device_id).await? {
+            let day = crate::rollup::local_day(ts, tz);
+            first = Some(first.map_or(day, |f| f.min(day)));
+        }
+    }
+    Ok(Json(RangeView { first_day: first.map(|d| d.format("%Y-%m-%d").to_string()) }))
 }
 
 #[derive(Deserialize)]
@@ -206,7 +272,12 @@ pub struct HistoryView {
     /// Per field of the state: `[start of the bucket, value]`, the mean over the bucket (the last
     /// value for a counter). Buckets without a reading are left out.
     pub series: BTreeMap<String, Vec<(i64, f64)>>,
+    /// The oldest point of the device: the periods a client offers stop there.
+    pub oldest: Option<i64>,
 }
+
+/// The longest period a curve covers: five years and a bit.
+const LONGEST: i64 = 5 * 366 * 86_400;
 
 /// The history of a device: every number of its state, over the last hours or a given period.
 pub async fn device_history(State(state): State<AppState>, user: AuthUser, Path(id): Path<i64>, Query(q): Query<HistoryQuery>) -> ApiResult<Json<HistoryView>> {
@@ -219,23 +290,33 @@ pub async fn device_history(State(state): State<AppState>, user: AuthUser, Path(
             if until <= from {
                 return Err(ApiError::bad_request("until must come after from"));
             }
-            let span = (until - from).min(31 * 86_400);
+            let span = (until - from).min(LONGEST);
             let bucket = q.bucket.unwrap_or(span / q.points.clamp(6, 500)).clamp(60, span);
             (from, from + span, bucket)
         }
         (None, None) => {
-            let span = q.hours.clamp(1, 24 * 31) * 3600;
+            let span = q.hours.clamp(1, LONGEST / 3600) * 3600;
             let bucket = q.bucket.unwrap_or(span / q.points.clamp(6, 500)).max(60);
             let now = db::now();
-            ((now - span).div_euclid(bucket) * bucket, now + 1, bucket)
+            // Days start at local midnight, as the daily summaries do.
+            let start = if bucket >= 86_400 {
+                crate::rollup::midnight(chrono::DateTime::from_timestamp(now - span, 0).unwrap_or_default().with_timezone(&state.cfg.timezone).date_naive(), state.cfg.timezone)
+            } else {
+                (now - span).div_euclid(bucket) * bucket
+            };
+            (start, now + 1, bucket)
         }
         _ => return Err(ApiError::bad_request("from and until go together")),
     };
-    let samples = db::device_samples(&state.db, &[id], &[], from, until).await?;
+    // The summary that fits the bucket: a curve over years reads days, not every few minutes.
+    let samples = crate::rollup::device_points(&state.db, state.cfg.timezone, id, from, until, crate::rollup::Level::for_bucket(bucket)).await?;
+    let oldest = crate::rollup::device_oldest(&state.db, id).await?;
     // Per field and bucket: (sum, count, last).
     let mut acc: BTreeMap<String, BTreeMap<i64, (f64, u32, f64)>> = BTreeMap::new();
     for s in samples {
-        let b = from + (s.ts - from).div_euclid(bucket) * bucket;
+        // Two hours of slack: a local day lasts 23 or 25 hours when the clocks change.
+        let slack = if bucket >= 86_400 { 7200 } else { 0 };
+        let b = from + (s.ts - from + slack).div_euclid(bucket) * bucket;
         let e = acc.entry(s.field).or_default().entry(b).or_insert((0.0, 0, 0.0));
         e.0 += s.value;
         e.1 += 1;
@@ -249,5 +330,5 @@ pub async fn device_history(State(state): State<AppState>, user: AuthUser, Path(
             (field, points)
         })
         .collect();
-    Ok(Json(HistoryView { bucket, series }))
+    Ok(Json(HistoryView { bucket, series, oldest }))
 }

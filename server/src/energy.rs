@@ -41,7 +41,7 @@ impl Role {
 }
 
 /// What a consumption measure measures, as shown in the breakdown.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, serde::Deserialize)]
 pub struct Consumer {
     pub name: String,
     /// The measured device, or room; neither for a measure that stands for itself.
@@ -243,7 +243,7 @@ pub fn curve(measures: &[Measure], spans: &[Span], from: i64, bucket: i64, count
 }
 
 /// Energy of one consumer over a day (kWh).
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, serde::Deserialize)]
 pub struct ConsumerEnergy {
     #[serde(flatten)]
     pub consumer: Consumer,
@@ -251,7 +251,7 @@ pub struct ConsumerEnergy {
 }
 
 /// Energy of one measure over a day (kWh), as its counters give it.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, serde::Deserialize)]
 pub struct DeviceEnergy {
     pub device_id: i64,
     pub energy_in: f64,
@@ -259,7 +259,7 @@ pub struct DeviceEnergy {
 }
 
 /// Energy of the home over a local day (kWh); `None` for what the home has no measure of.
-#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, serde::Deserialize)]
 pub struct DayEnergy {
     /// "YYYY-MM-DD".
     pub day: String,

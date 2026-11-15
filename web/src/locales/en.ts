@@ -693,7 +693,6 @@ const en: Record<string, string> = {
     "Not on “{name}” yet: {list}. Update it.",
   "« {name} » sait aussi : {list}. Mettez à jour ce serveur pour en profiter.":
     "“{name}” can also do: {list}. Update this server to use it.",
-  "Simple mesure": "Plain measure",
   "Réseau (général)": "Grid (whole home)",
   "Production solaire": "Solar production",
   Batterie: "Battery",
@@ -1197,6 +1196,8 @@ const en: Record<string, string> = {
   "Sans la clé API Renson, la Healthbox ne donne que les débits : l'humidité, le CO₂ et la température de chaque pièce viennent avec la clé.":
     "Without the Renson API key, the Healthbox only gives the air flows: the humidity, CO₂ and temperature of each room come with the key.",
   "Ajouter la clé": "Add the key",
+  "Simple mesure, non comptée": "Plain measure, not counted",
+  "Consommation, comptée d'office": "Consumption, counted by default",
 }
 
 export default en

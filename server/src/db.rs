@@ -689,16 +689,6 @@ pub async fn list_events(db: &Db, limit: i64, before_id: Option<i64>, installati
         .map(|rows| rows.into_iter().map(Event::from).collect())
 }
 
-/// Deletes old history, events and expired sessions.
-pub async fn purge(db: &Db, history_days: i64, events_days: i64) -> sqlx::Result<()> {
-    let t = now();
-    sqlx::query("DELETE FROM readings WHERE ts < ?").bind(t - history_days * 86_400).execute(db).await?;
-    sqlx::query("DELETE FROM device_samples WHERE ts < ?").bind(t - history_days * 86_400).execute(db).await?;
-    sqlx::query("DELETE FROM events WHERE ts < ?").bind(t - events_days * 86_400).execute(db).await?;
-    sqlx::query("DELETE FROM sessions WHERE expires_at < ?").bind(t).execute(db).await?;
-    Ok(())
-}
-
 // ---------------------------------------------------------------------------------------
 // Settings (key/value)
 // ---------------------------------------------------------------------------------------

@@ -98,6 +98,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/energy/live", get(energy::live))
         .route("/api/energy/day", get(energy::day))
         .route("/api/energy/days", get(energy::days))
+        .route("/api/energy/range", get(energy::range))
         .route("/api/drivers", get(sources::drivers))
         .route("/api/sources", get(sources::list).post(sources::create))
         .route("/api/sources/{id}", put(sources::update).delete(sources::delete))

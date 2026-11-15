@@ -66,7 +66,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 const ROLE_LABEL: Record<MeasureRole | "none", string> = {
-  none: t("Simple mesure"),
+  none: t("Simple mesure, non comptée"),
   grid: t("Réseau (général)"),
   solar: t("Production solaire"),
   battery: t("Batterie"),

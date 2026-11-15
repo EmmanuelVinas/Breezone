@@ -6,6 +6,21 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- History goes back years and the database stays small: every hour, the detail of the devices
+  (every few minutes) is summed up per hour (kept about a year) and per local day (kept for good),
+  and the energy of each day is kept once computed. A curve reads the summary that fits its period
+  (`GET /api/devices/{id}/history` up to five years, with `oldest`, the oldest point;
+  `GET /api/energy/days` up to five years; `GET /api/energy/range`, the first day with energy). Old
+  rows are deleted in small batches, so that the cleanup no longer holds the database.
+
+### Fixed
+
+- Énergie › En ce moment: a charger is a consumption of the home without being given a role, even
+  when idle, unless a meter on its line already measures it. A measure left as « Simple mesure »
+  now says it is not counted.
+
 ### Added
 
 - Mobile app: Énergie (the home now: solar, home, battery, grid; today's curve with what was

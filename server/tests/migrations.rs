@@ -27,6 +27,7 @@ const APPLIED: &[(&str, &str)] = &[
     ("0020_device_roles.sql", "d15bb293b5ee824cb1de8cfac0f5957dc5bdd0f905bb15c431962424b9df704f"),
     ("0021_device_samples.sql", "5ab08c8f201231378a1cafa686c9c998fdb38a932a694439e73fa23d18c83fe2"),
     ("0022_source_secrets.sql", "6b3d19191833e0e6acd2f7d7d199bf9d38e716aa0d834e2f9e3c2fd61c311f24"),
+    ("0023_history_rollups.sql", "2ca9523c6c660c77eb9c3e0d1e23e1a863d6dde00e887a4fc9a30bd7957e274e"),
 ];
 
 #[test]

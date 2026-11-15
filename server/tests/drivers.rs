@@ -324,6 +324,10 @@ async fn a_trydan_charges_with_a_maximum_and_stops_once_its_energy_is_added() {
     assert_eq!(charger["traits"], json!(["ev.charger@1", "energy.power@1"]));
     assert_eq!(charger["state"]["status"], "available");
     assert_eq!(charger["state"]["auto_limit"], true);
+    // A charger is a consumption of the home without being given the role, even when idle.
+    let (_, live) = server.call("GET", "/api/energy/live", t, None).await;
+    assert_eq!(live["roles"]["consumption"], true, "{live}");
+    assert_eq!(live["consumers"], json!([{"name": "Trydan", "device_id": null, "room_id": null, "power": 0.0}]), "{live}");
     let actions = format!("/api/devices/{}/actions", charger["id"]);
 
     // Out of range, unknown parameter: nothing is written.
