@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.16] - 2026-11-15
+
 ### Added
 
 - Periods back to five years wherever a curve goes over time: Énergie (« 5 ans », by month),
