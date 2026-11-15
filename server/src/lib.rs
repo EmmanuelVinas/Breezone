@@ -20,6 +20,7 @@ pub mod federation;
 pub mod homekit;
 pub mod hub;
 pub mod i18n;
+pub mod incidents;
 pub mod mock;
 pub mod routines;
 pub mod stats;
@@ -124,6 +125,7 @@ pub fn app(state: AppState) -> Router {
         router.fallback(|| async { Html("<h1>Breezone</h1><p>The server is running, but the web UI is not installed (BREEZONE_WEB_DIR).</p>") })
     };
     with_security_headers(router)
+        .layer(axum::middleware::from_fn(incidents::record))
         .layer(axum::middleware::from_fn(i18n::middleware))
         .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any))
         .layer(TraceLayer::new_for_http())

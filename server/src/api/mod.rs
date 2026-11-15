@@ -117,6 +117,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/system/update/check", post(system::check))
         .route("/api/system/update/channel", put(system::set_channel))
         .route("/api/system/config", get(system::export_config).post(system::import_config))
+        .route("/api/system/incidents", get(system::incidents))
         // Live updates
         .route("/api/ws", get(ws::handler))
         // Unknown API routes must not fall back to the web UI.

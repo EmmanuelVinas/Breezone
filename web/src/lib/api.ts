@@ -383,6 +383,16 @@ export type FeedEvent = {
   data: string | null
 }
 
+/** A request that failed on the server's side, kept in memory for the administrators. */
+export type Incident = {
+  ts: number
+  method: string
+  path: string
+  status: number
+  message: string
+  cause: string | null
+}
+
 export type Session = {
   id: number
   device_name: string
@@ -1160,6 +1170,7 @@ export const api = {
       actions,
     }),
 
+  incidents: () => request<Incident[]>("GET", "/api/system/incidents"),
   events: (limit = 100, before?: number) =>
     request<FeedEvent[]>(
       "GET",

@@ -82,13 +82,15 @@ fn climate_state(z: &ZoneView) -> Value {
 /// Records the zones as devices (new ones only), then lists every device with its state.
 pub(crate) async fn devices_of(state: &AppState) -> ApiResult<Vec<DeviceView>> {
     let mut zones: HashMap<String, ZoneView> = HashMap::new();
+    let mut found = vec![];
     for inst in state.hub.snapshot().await {
         for z in inst.zones {
             let reference = airzone_ref(inst.id, z.system_id, z.zone_id);
-            db::ensure_device(&state.db, "airzone", &reference, Some(inst.id), "climate.zone").await?;
+            found.push((reference.clone(), Some(inst.id), "climate.zone"));
             zones.insert(reference, z);
         }
     }
+    db::ensure_devices(&state.db, "airzone", &found).await?;
     let from_sources: HashMap<String, crate::drivers::SourceDevice> =
         state.drivers.devices().await.into_iter().map(|d| (format!("{}/{}", d.source_id, d.info.reference), d)).collect();
     Ok(db::list_devices(&state.db)

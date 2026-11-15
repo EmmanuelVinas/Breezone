@@ -1116,6 +1116,12 @@ const es: Record<string, string> = {
   "Pièces de « {name} »": "Estancias de «{name}»",
   "Cette installation est reliée par un autre serveur Breezone : ses pièces et leurs objets se règlent sur ce serveur-là. Choisissez une installation de ce serveur dans « Mes installations » pour régler les siennes.":
     "Esta instalación se alcanza a través de otro servidor Breezone: sus estancias y sus objetos se configuran en ese servidor. Elija una instalación de este servidor en «Mis instalaciones» para configurar las suyas.",
+  Climatisation: "Climatización",
+  "Masquer les détails": "Ocultar los detalles",
+  Détails: "Detalles",
+  Erreurs: "Errores",
+  "Aucune erreur récente.": "Ningún error reciente.",
+  "Erreur du serveur : {message}": "Error del servidor: {message}",
 }
 
 export default es

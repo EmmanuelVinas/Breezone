@@ -16,6 +16,9 @@ pub struct ApiError {
     pub details: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
+/// Where the cause of an error waits in `details`, taken out before the body is sent.
+const CAUSE: &str = "\u{0}cause";
+
 impl ApiError {
     pub fn new(status: StatusCode, message: impl Into<Text>) -> Self {
         Self { status, message: message.into(), details: None }
@@ -23,6 +26,11 @@ impl ApiError {
     pub fn with_detail(mut self, key: &str, value: impl serde::Serialize) -> Self {
         let value = serde_json::to_value(value).unwrap_or_default();
         self.details.get_or_insert_with(Default::default).insert(key.to_string(), value);
+        self
+    }
+    /// What went wrong inside, for the administrators' list of errors (never sent to the client).
+    pub fn with_cause(mut self, cause: impl Into<String>) -> Self {
+        self.details.get_or_insert_with(Default::default).insert(CAUSE.into(), serde_json::Value::String(cause.into()));
         self
     }
     pub fn bad_request(message: impl Into<Text>) -> Self {
@@ -53,8 +61,12 @@ pub type ApiResult<T> = Result<T, ApiError>;
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let mut body = self.details.unwrap_or_default();
+        let inner = body.remove(CAUSE).and_then(|c| c.as_str().map(str::to_string));
         body.insert("error".into(), json!(self.message));
-        (self.status, Json(serde_json::Value::Object(body))).into_response()
+        let cause = crate::incidents::Cause { message: self.message.fr.clone(), cause: inner };
+        let mut resp = (self.status, Json(serde_json::Value::Object(body))).into_response();
+        resp.extensions_mut().insert(cause);
+        resp
     }
 }
 
@@ -66,14 +78,14 @@ impl From<sqlx::Error> for ApiError {
             }
         }
         tracing::error!("database error: {e}");
-        ApiError::internal("database error")
+        ApiError::internal("database error").with_cause(e.to_string())
     }
 }
 
 impl From<anyhow::Error> for ApiError {
     fn from(e: anyhow::Error) -> Self {
         tracing::error!("internal error: {e:#}");
-        ApiError::internal(e.to_string())
+        ApiError::internal(e.to_string()).with_cause(format!("{e:#}"))
     }
 }
 

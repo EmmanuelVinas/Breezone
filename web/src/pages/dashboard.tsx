@@ -369,7 +369,15 @@ function EmptyState() {
   )
 }
 
-export function DashboardPage() {
+/**
+ * « Mes installations » (the cards, to choose one) or « Climatisation » (the zones of the one
+ * chosen), as in the mockups.
+ */
+export function DashboardPage({
+  view = "installations",
+}: {
+  view?: "installations" | "climate"
+}) {
   const params = useParams()
   const navigate = useNavigate()
   const status = useQuery({ queryKey: ["status"], queryFn: api.status })
@@ -456,25 +464,29 @@ export function DashboardPage() {
 
   return (
     <>
-      <PageHeader title={t("Mes installations")} />
+      <PageHeader
+        title={view === "climate" ? t("Climatisation") : t("Mes installations")}
+      />
       {installations.length === 0 && remote.length === 0 ? (
         <EmptyState />
       ) : (
         <>
-          <div className="-mx-4 mb-6 flex snap-x [scrollbar-width:none] gap-4 overflow-x-auto px-4 pt-1.5 pb-2.5 md:-mx-1.5 md:px-1.5">
-            {installations.map((i) => (
-              <InstallationTile
-                key={i.id}
-                inst={i}
-                active={i.id === selected?.id}
-              />
-            ))}
-            {remote.map((c) => (
-              <RemoteTile key={c.cloud_id} inst={c} />
-            ))}
-          </div>
+          {view === "installations" && (
+            <div className="-mx-4 mb-6 flex snap-x [scrollbar-width:none] gap-4 overflow-x-auto px-4 pt-1.5 pb-2.5 md:-mx-1.5 md:px-1.5">
+              {installations.map((i) => (
+                <InstallationTile
+                  key={i.id}
+                  inst={i}
+                  active={i.id === selected?.id}
+                />
+              ))}
+              {remote.map((c) => (
+                <RemoteTile key={c.cloud_id} inst={c} />
+              ))}
+            </div>
+          )}
 
-          {selected && (
+          {view === "climate" && selected && (
             <>
               <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
                 <div className="min-w-0">

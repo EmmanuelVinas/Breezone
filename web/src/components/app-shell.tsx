@@ -6,6 +6,7 @@ import {
   LayoutGrid,
   Blinds,
   Lightbulb,
+  Thermometer,
   LogOut,
   Moon,
   PlugZap,
@@ -42,7 +43,8 @@ type NavItem = {
   icon: typeof Zap
   end: boolean
   /** Shown only when a module provides it, or to administrators. */
-  when?: "energy" | "solar" | "charger" | "light" | "cover" | "admin"
+  when?:
+    "climate" | "energy" | "solar" | "charger" | "light" | "cover" | "admin"
 }
 
 /** The menu, in sections as in the mockups; a section without an item is not shown. */
@@ -56,6 +58,13 @@ const NAV: { title: string | null; items: NavItem[] }[] = [
   {
     title: t("Maison"),
     items: [
+      {
+        to: "/climatisation",
+        label: t("Climatisation"),
+        icon: Thermometer,
+        end: false,
+        when: "climate",
+      },
       {
         to: "/energie",
         label: t("Énergie"),
@@ -210,9 +219,16 @@ export function AppShell({
   useProfileLanguage()
   const energy = useEnergy()
   const modules = useModules()
+  // Climatisation as soon as there is an installation (its own or through another server).
+  const climate = !!useQuery({
+    queryKey: ["status"],
+    queryFn: api.status,
+    staleTime: 60_000,
+  }).data?.length
   const location = useLocation()
   const shown = (n: NavItem) =>
     n.when === undefined ||
+    (n.when === "climate" && climate) ||
     (n.when === "energy" && energy) ||
     (n.when === "solar" && modules.solar) ||
     (n.when === "light" && modules.light) ||
@@ -227,10 +243,12 @@ export function AppShell({
   const onModules =
     location.pathname === "/settings" &&
     new URLSearchParams(location.search).get("tab") === "modules"
+  // A zone's page belongs to Climatisation.
   const active = (n: NavItem, isActive: boolean) =>
     n.to.startsWith("/settings")
       ? isActive && (n.to.includes("tab=modules") ? onModules : !onModules)
-      : isActive
+      : isActive ||
+        (n.to === "/climatisation" && location.pathname.startsWith("/zones/"))
   // The bottom bar of a phone: everything but Modules (reached from the settings).
   const nav = sections
     .flatMap((s) => s.items)
@@ -288,13 +306,12 @@ export function AppShell({
                 </NavLink>
               ))}
               {i === 0 && chosen && (
-                <Link
-                  to={`/installations/${chosen.id}`}
-                  className="-mt-1 truncate pr-3 pl-10.5 text-xs text-muted-foreground hover:text-foreground"
+                <span
+                  className="-mt-2 truncate pr-3 pl-10.5 text-[11px] text-muted-foreground"
                   title={t("Installation choisie")}
                 >
                   {chosen.name}
-                </Link>
+                </span>
               )}
             </div>
           ))}

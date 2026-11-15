@@ -89,3 +89,8 @@ pub async fn import_config(State(state): State<AppState>, AdminUser(admin): Admi
     .await;
     Ok(Json(imported))
 }
+
+/// The last errors of the server, the newest first.
+pub async fn incidents(_admin: AdminUser) -> Json<Vec<crate::incidents::Incident>> {
+    Json(crate::incidents::list())
+}

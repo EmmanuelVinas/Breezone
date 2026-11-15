@@ -2,7 +2,7 @@
 
 use crate::i18n::Text;
 use serde::{Deserialize, Serialize};
-use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
+use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
 use sqlx::{FromRow, SqlitePool};
 use std::collections::HashMap;
 use std::path::Path;
@@ -18,7 +18,15 @@ pub async fn connect(path: &Path) -> anyhow::Result<Db> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let options = SqliteConnectOptions::new().filename(path).create_if_missing(true).journal_mode(SqliteJournalMode::Wal).foreign_keys(true).busy_timeout(Duration::from_secs(5));
+    // WAL with NORMAL: a commit no longer waits for the disk (slow on a NAS), and a power cut can
+    // only lose the last commits, never corrupt the base.
+    let options = SqliteConnectOptions::new()
+        .filename(path)
+        .create_if_missing(true)
+        .journal_mode(SqliteJournalMode::Wal)
+        .synchronous(SqliteSynchronous::Normal)
+        .foreign_keys(true)
+        .busy_timeout(Duration::from_secs(10));
     let pool = SqlitePoolOptions::new().max_connections(4).connect_with(options).await?;
     sqlx::migrate!("./migrations").run(&pool).await?;
     Ok(pool)
@@ -1099,13 +1107,21 @@ pub async fn set_node_seen(db: &Db, id: i64, name: Option<&str>, permission: Opt
     if error.is_some() {
         sqlx::query("UPDATE nodes SET last_error = ? WHERE id = ?").bind(error).bind(id).execute(db).await?;
     } else {
-        sqlx::query("UPDATE nodes SET last_seen = ?, last_error = NULL, name = COALESCE(?, name), permission = COALESCE(?, permission) WHERE id = ?")
-            .bind(now())
-            .bind(name)
-            .bind(permission)
-            .bind(id)
-            .execute(db)
-            .await?;
+        // Written at most once a minute when nothing else changes: a node is called every few seconds.
+        let t = now();
+        sqlx::query(
+            "UPDATE nodes SET last_seen = ?, last_error = NULL, name = COALESCE(?, name), permission = COALESCE(?, permission)
+             WHERE id = ? AND (last_seen IS NULL OR last_seen < ? OR last_error IS NOT NULL OR name <> COALESCE(?, name) OR permission <> COALESCE(?, permission))",
+        )
+        .bind(t)
+        .bind(name)
+        .bind(permission)
+        .bind(id)
+        .bind(t - 60)
+        .bind(name)
+        .bind(permission)
+        .execute(db)
+        .await?;
     }
     Ok(())
 }
@@ -1296,7 +1312,7 @@ pub async fn set_device_role(db: &Db, id: i64, role: Option<&str>, device: Optio
 /// Records a device of a source if it is new (its id then stays the same for good).
 pub async fn ensure_source_device(db: &Db, source_id: i64, driver: &str, reference: &str, kind: &str) -> sqlx::Result<()> {
     // The kind may get finer with a new version (a shutter, not just a cover): it follows.
-    sqlx::query("INSERT INTO devices (source, source_ref, source_id, kind, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (source, source_ref) DO UPDATE SET kind = excluded.kind")
+    sqlx::query("INSERT INTO devices (source, source_ref, source_id, kind, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (source, source_ref) DO UPDATE SET kind = excluded.kind WHERE devices.kind <> excluded.kind")
         .bind(driver)
         .bind(format!("{source_id}/{reference}"))
         .bind(source_id)
@@ -1353,16 +1369,26 @@ pub async fn delete_source(db: &Db, id: i64) -> sqlx::Result<bool> {
 }
 
 /// Records a device if it is new (its id then stays the same for good).
-pub async fn ensure_device(db: &Db, source: &str, source_ref: &str, installation_id: Option<i64>, kind: &str) -> sqlx::Result<()> {
-    sqlx::query("INSERT OR IGNORE INTO devices (source, source_ref, installation_id, kind, created_at) VALUES (?, ?, ?, ?, ?)")
-        .bind(source)
-        .bind(source_ref)
-        .bind(installation_id)
-        .bind(kind)
-        .bind(now())
-        .execute(db)
-        .await?;
-    Ok(())
+/// Records the devices not known yet, in one transaction; known ones cost a read only.
+pub async fn ensure_devices(db: &Db, source: &str, devices: &[(String, Option<i64>, &str)]) -> sqlx::Result<()> {
+    let known: std::collections::HashSet<String> =
+        sqlx::query_scalar::<_, String>("SELECT source_ref FROM devices WHERE source = ?").bind(source).fetch_all(db).await?.into_iter().collect();
+    let new: Vec<_> = devices.iter().filter(|(r, _, _)| !known.contains(r)).collect();
+    if new.is_empty() {
+        return Ok(());
+    }
+    let mut tx = db.begin().await?;
+    for (source_ref, installation_id, kind) in new {
+        sqlx::query("INSERT OR IGNORE INTO devices (source, source_ref, installation_id, kind, created_at) VALUES (?, ?, ?, ?, ?)")
+            .bind(source)
+            .bind(source_ref)
+            .bind(installation_id)
+            .bind(kind)
+            .bind(now())
+            .execute(&mut *tx)
+            .await?;
+    }
+    tx.commit().await
 }
 
 pub async fn list_devices(db: &Db) -> sqlx::Result<Vec<Device>> {

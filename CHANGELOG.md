@@ -6,6 +6,24 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Activity: an « Erreurs » tab with the server's own last errors (a request that failed: what was
+  asked, when, and the cause, « database is locked » for instance) and the events in error or
+  warning, each with its details unfolded on demand (`GET /api/system/incidents`).
+- « Climatisation » in the menu, first of « Maison », as in the mockups: the zones of the installation
+  chosen. « Mes installations » only lists the installations now.
+
+### Fixed
+
+- « database is locked » on a NAS when many changes were made at once: the database commits without
+  waiting for the disk (WAL with `synchronous=NORMAL`), reading the devices no longer writes, a node
+  seen again is written at most once a minute, and a write waits up to 10 s for its turn.
+
+### Changed
+
+- The installation chosen, under « Installations » in the menu, is a small label (no link).
+
 ## [0.11.0-beta.11] - 2026-11-14
 
 ### Changed

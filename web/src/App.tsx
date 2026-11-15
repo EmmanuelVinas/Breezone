@@ -66,6 +66,10 @@ function Protected() {
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/installations/:id" element={<DashboardPage />} />
+          <Route
+            path="/climatisation"
+            element={<DashboardPage view="climate" />}
+          />
           <Route path="/zones/:inst/:sys/:zone" element={<ZonePage />} />
           <Route path="/energie" element={<EnergyPage />} />
           <Route path="/recharge" element={<ChargingPage />} />
