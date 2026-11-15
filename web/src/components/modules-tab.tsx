@@ -36,6 +36,10 @@ import { inverterCounting, isInverter } from "@/lib/solar"
 import { relativeTime } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { t } from "@/lib/i18n"
+import {
+  useChosenInstallation,
+  useModulesHere,
+} from "@/lib/selected-installation"
 import { Confirm } from "@/components/confirm"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -1352,10 +1356,13 @@ export function ModulesTab({
   })
   const rooms = useQuery({ queryKey: ["rooms"], queryFn: api.rooms })
   const status = useQuery({ queryKey: ["status"], queryFn: api.status })
+  const here = useModulesHere()
+  const chosen = useChosenInstallation()
 
   if (sources.isLoading) return <Skeleton className="h-48 rounded-3xl" />
   const all = devices.data ?? []
-  const list = sources.data ?? []
+  // The modules are this server's: not those of an installation reached through another one.
+  const list = here ? (sources.data ?? []) : []
   const wanted = params.get("module") ?? initial ?? "airzone"
   const selected = list.find((s) => String(s.id) === wanted)
   const choose = (id: string) =>
@@ -1426,13 +1433,22 @@ export function ModulesTab({
             dotOf(s)
           )
         })}
-        <button
-          type="button"
-          onClick={() => setAdding(true)}
-          className="flex shrink-0 items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium text-primary hover:bg-primary/10 md:w-full"
-        >
-          <Plus className="size-4" /> {t("Ajouter un module")}
-        </button>
+        {here ? (
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="flex shrink-0 items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium text-primary hover:bg-primary/10 md:w-full"
+          >
+            <Plus className="size-4" /> {t("Ajouter un module")}
+          </button>
+        ) : (
+          <p className="min-w-48 px-3 py-2.5 text-xs text-muted-foreground">
+            {t(
+              "Les autres modules de « {name} » se gèrent sur son propre serveur Breezone.",
+              { name: chosen?.name ?? "" }
+            )}
+          </p>
+        )}
       </nav>
       <div className="grid min-w-0 gap-5">
         {selected ? (

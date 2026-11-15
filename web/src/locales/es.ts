@@ -1197,6 +1197,8 @@ const es: Record<string, string> = {
   "{n} en boost": "{n} en boost",
   "{n} boutons": "{n} botones",
   "dernier appui : bouton {n}": "última pulsación: botón {n}",
+  "Les autres modules de « {name} » se gèrent sur son propre serveur Breezone.":
+    "Los demás módulos de «{name}» se gestionan en su propio servidor Breezone.",
   "« {name} » est reliée par un autre serveur":
     "«{name}» está conectada por otro servidor",
   "Les lumières, volets, énergie et autres modules de cette page sont ceux de ce serveur Breezone. Choisissez une de ses installations pour les voir ; ceux de « {name} » se gèrent sur son propre serveur.":
@@ -1473,6 +1475,7 @@ const es: Record<string, string> = {
   "Aucun automatisme ne se déclenche": "Ningún automatismo se activa",
   Présence: "Presencia",
   "« {name} »": "«{name}»",
+  "Humidité extérieure": "Humedad exterior",
 }
 
 export default es

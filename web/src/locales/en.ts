@@ -1187,6 +1187,8 @@ const en: Record<string, string> = {
   "{n} en boost": "{n} boosting",
   "{n} boutons": "{n} buttons",
   "dernier appui : bouton {n}": "last press: button {n}",
+  "Les autres modules de « {name} » se gèrent sur son propre serveur Breezone.":
+    "The other modules of “{name}” are managed on its own Breezone server.",
   "« {name} » est reliée par un autre serveur":
     "“{name}” is reached through another server",
   "Les lumières, volets, énergie et autres modules de cette page sont ceux de ce serveur Breezone. Choisissez une de ses installations pour les voir ; ceux de « {name} » se gèrent sur son propre serveur.":
@@ -1461,6 +1463,7 @@ const en: Record<string, string> = {
   "Aucun automatisme ne se déclenche": "No automation starts",
   Présence: "Presence",
   "« {name} »": "“{name}”",
+  "Humidité extérieure": "Outdoor humidity",
 }
 
 export default en
