@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.12] - 2026-11-15
+
 ### Added
 
 - Activity: an « Erreurs » tab with the server's own last errors (a request that failed: what was
