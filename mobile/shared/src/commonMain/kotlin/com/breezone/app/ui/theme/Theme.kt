@@ -28,6 +28,10 @@ data class FzColors(
     val warning: Color,
     val card: Color,
     val muted: Color,
+    /** A light that is on. */
+    val light: Color,
+    /** Shutters and windows. */
+    val shutter: Color,
 )
 
 private val DarkFz = FzColors(
@@ -39,6 +43,8 @@ private val DarkFz = FzColors(
     warning = Color(0xFFF2C14E),
     card = Color(0xFF151C2B),
     muted = Color(0xFF8A93A6),
+    light = Color(0xFFF5D68A),
+    shutter = Color(0xFFA9BEDF),
 )
 
 private val LightFz = FzColors(
@@ -50,6 +56,8 @@ private val LightFz = FzColors(
     warning = Color(0xFFC98A0E),
     card = Color(0xFFFFFFFF),
     muted = Color(0xFF6B7385),
+    light = Color(0xFFC9971E),
+    shutter = Color(0xFF5F7DA8),
 )
 
 private val DarkScheme = darkColorScheme(

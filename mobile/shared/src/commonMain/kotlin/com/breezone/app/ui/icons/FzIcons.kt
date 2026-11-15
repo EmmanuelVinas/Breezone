@@ -397,4 +397,83 @@ object FzIcons {
             "M2 21a5 5 0 012.911-4.544C7.613 15.212 8.351 15.24 11 13",
         )
     }
+
+    val Lightbulb: ImageVector by lazy {
+        lucide(
+            "Lightbulb",
+            "M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5",
+            "M9 18h6",
+            "M10 22h4",
+        )
+    }
+
+    val Blinds: ImageVector by lazy {
+        lucide(
+            "Blinds",
+            "M3 3h18",
+            "M20 7H8",
+            "M20 11H8",
+            "M10 19h10",
+            "M8 15h12",
+            "M4 3v14",
+            "M2 19a2 2 0 1 0 4 0a2 2 0 1 0 -4 0",
+        )
+    }
+
+    val ChevronUp: ImageVector by lazy {
+        lucide(
+            "ChevronUp",
+            "m18 15-6-6-6 6",
+        )
+    }
+
+    val ChevronDown: ImageVector by lazy {
+        lucide(
+            "ChevronDown",
+            "m6 9 6 6 6-6",
+        )
+    }
+
+    val Square: ImageVector by lazy {
+        lucide(
+            "Square",
+            "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z",
+        )
+    }
+
+    val Palette: ImageVector by lazy {
+        lucide(
+            "Palette",
+            "M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z",
+            "M13 6.5a0.5 0.5 0 1 0 1 0a0.5 0.5 0 1 0 -1 0",
+            "M17 10.5a0.5 0.5 0 1 0 1 0a0.5 0.5 0 1 0 -1 0",
+            "M6 12.5a0.5 0.5 0 1 0 1 0a0.5 0.5 0 1 0 -1 0",
+            "M8 7.5a0.5 0.5 0 1 0 1 0a0.5 0.5 0 1 0 -1 0",
+        )
+    }
+
+    val Sun: ImageVector by lazy {
+        lucide(
+            "Sun",
+            "M8 12a4 4 0 1 0 8 0a4 4 0 1 0 -8 0",
+            "M12 2v2",
+            "M12 20v2",
+            "m4.93 4.93 1.41 1.41",
+            "m17.66 17.66 1.41 1.41",
+            "M2 12h2",
+            "M20 12h2",
+            "m6.34 17.66-1.41 1.41",
+            "m19.07 4.93-1.41 1.41",
+        )
+    }
+
+    val AppWindow: ImageVector by lazy {
+        lucide(
+            "AppWindow",
+            "M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-16a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2Z",
+            "M10 4v4",
+            "M2 8h20",
+            "M6 4v4",
+        )
+    }
 }

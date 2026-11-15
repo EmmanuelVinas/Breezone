@@ -197,6 +197,15 @@ class BreezoneApi(
 
     suspend fun me(): User = call<User>(HttpMethod.Get, "/api/me").also { user = it }
     suspend fun status(): List<Installation> = call(HttpMethod.Get, "/api/status")
+    suspend fun devices(): List<DeviceView> = call(HttpMethod.Get, "/api/devices")
+    suspend fun rooms(): List<Room> = call(HttpMethod.Get, "/api/rooms")
+    suspend fun deviceHistory(deviceId: Long, hours: Int = 24, points: Int = 96): DeviceHistory =
+        call(HttpMethod.Get, "/api/devices/$deviceId/history?hours=$hours&points=$points")
+    suspend fun scenes(): List<SceneView> = call(HttpMethod.Get, "/api/scenes")
+    suspend fun act(deviceId: Long, input: DeviceActionInput): DeviceView =
+        call(HttpMethod.Post, "/api/devices/$deviceId/actions", FzJson.encodeToString(DeviceActionInput.serializer(), input))
+    suspend fun activateScene(sourceId: Long, id: String) =
+        callUnit(HttpMethod.Post, "/api/scenes/$sourceId/${id.encodeURLPathPart()}")
     suspend fun serverUpdate(): ServerUpdate = call(HttpMethod.Get, "/api/system/update")
     suspend fun control(zone: Zone, cmd: ZoneCommand): Zone =
         call(HttpMethod.Patch, zonePath(zone), FzJson.encodeToString(ZoneCommand.serializer(), cmd))

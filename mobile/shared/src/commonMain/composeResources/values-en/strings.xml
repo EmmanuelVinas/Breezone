@@ -12,6 +12,7 @@
     <string name="common_failure">Failed: %1$s</string>
     <string name="common_lower">Lower</string>
     <string name="common_raise">Raise</string>
+    <string name="common_percent">%1$d %</string>
     <string name="common_auto">Auto</string>
 
     <!-- Tabs -->
@@ -345,4 +346,93 @@
     <string name="mode_confirm_title">Switch to %1$s mode?</string>
     <string name="mode_confirm_text">The mode applies to every zone of the system.</string>
     <string name="mode_confirm">Switch</string>
+
+    <!-- Modules: house, lights, shutters, ventilation -->
+    <string name="device_unavailable">Unavailable</string>
+    <string name="house_title">Home</string>
+    <string name="house_climate">Air conditioning</string>
+    <string name="house_lights">Lights</string>
+    <string name="house_shutters">Shutters</string>
+    <string name="house_ventilation">Ventilation</string>
+    <string name="house_other_server">“%1$s” is reached through another Breezone server: its lights, shutters and other modules are managed on that server.</string>
+    <string name="room_none">No room</string>
+    <string name="light_on">On</string>
+    <string name="light_off">Off</string>
+    <string name="light_unreachable">Not responding</string>
+    <string name="light_color">Color</string>
+    <string name="light_warm">Warm white</string>
+    <string name="light_neutral">Neutral white</string>
+    <string name="light_cool">Cool white</string>
+    <string name="light_white">White temperature</string>
+    <string name="light_warm_short">Warm</string>
+    <string name="light_cool_short">Cool</string>
+    <string name="light_kelvin">%1$d K</string>
+    <string name="light_colors">Colors</string>
+    <string name="lights_all_off">All off</string>
+    <string name="lights_empty">No light: add your Philips Hue bridge in Settings › Modules, on the web.</string>
+    <string name="shutter_open">Open</string>
+    <string name="shutter_closed">Closed</string>
+    <string name="shutter_open_at">Open at %1$d %</string>
+    <string name="shutter_opening">Opening…</string>
+    <string name="shutter_opening_to">Opening… %1$d %</string>
+    <string name="shutter_closing">Closing…</string>
+    <string name="shutter_closing_to">Closing… %1$d %</string>
+    <string name="shutter_up">Open</string>
+    <string name="shutter_stop">Stop</string>
+    <string name="shutter_down">Close</string>
+    <string name="shutter_kind_shutter">Rolling shutter</string>
+    <string name="shutter_kind_window">Roof window</string>
+    <string name="shutter_kind_door">Door</string>
+    <string name="shutters_open_all">Open all</string>
+    <string name="shutters_close_all">Close all</string>
+    <string name="shutters_empty">No shutter: pair your Legrand or VELUX gateway in Settings › Modules, on the web.</string>
+    <string name="ventilation_level">Ventilation level</string>
+    <string name="ventilation_level_short">level %1$d %</string>
+    <string name="ventilation_flow">%1$d m³/h</string>
+    <string name="ventilation_flow_of">%1$d m³/h of %2$d m³/h nominal</string>
+    <string name="ventilation_flow_level">flow %1$d %</string>
+    <string name="ventilation_boosting">boosting</string>
+    <string name="ventilation_auto">automatic mode</string>
+    <string name="ventilation_worst">%1$s asks for the most air, because of %2$s</string>
+    <string name="ventilation_cause_humidity">humidity</string>
+    <string name="ventilation_cause_co2">CO₂</string>
+    <string name="ventilation_cause_voc">VOC</string>
+    <string name="ventilation_cause_other">the air quality</string>
+    <string name="ventilation_boost_house">Boost the house 1 h</string>
+    <string name="ventilation_stop_boosts">Stop the boosts</string>
+    <string name="ventilation_stop_boost">Stop the boost</string>
+    <string name="ventilation_rooms">Rooms</string>
+    <string name="ventilation_empty">No ventilation unit: add your Renson Healthbox in Settings › Modules, on the web.</string>
+    <string name="ventilation_asks_air">asks for air (%1$s)</string>
+    <string name="ventilation_humidity_value">humidity %1$d %</string>
+    <string name="ventilation_breezone_room">Breezone room: %1$s</string>
+    <string name="ventilation_boost_left">Boosting, %1$d min left.</string>
+    <string name="ventilation_bad_air">The air quality is bad. The ventilation is active.</string>
+    <string name="ventilation_most_demand">This room asks for the most air, because of %1$s.</string>
+    <string name="ventilation_active">The ventilation is active.</string>
+    <string name="ventilation_rest">The ventilation is at rest.</string>
+    <string name="ventilation_air_flow">Air flow</string>
+    <string name="ventilation_humidity">Humidity</string>
+    <string name="ventilation_co2">CO₂</string>
+    <string name="ventilation_voc">VOC</string>
+    <string name="ventilation_temperature">Temperature</string>
+    <string name="ventilation_boost_30">Boost 30 min</string>
+    <string name="ventilation_1h">1 h</string>
+    <string name="ventilation_2h">2 h</string>
+    <string name="ventilation_profile">Profile</string>
+    <string name="ventilation_profile_eco">Eco</string>
+    <string name="ventilation_profile_health">Health</string>
+    <string name="ventilation_profile_intense">Intense</string>
+    <plurals name="lights_on_of">
+        <item quantity="one">%1$d on of %2$d</item>
+        <item quantity="other">%1$d on of %2$d</item>
+    </plurals>
+    <plurals name="shutters_open_of">
+        <item quantity="one">%1$d open of %2$d</item>
+        <item quantity="other">%1$d open of %2$d</item>
+    </plurals>
+    <plurals name="ventilation_valves">
+        <item quantity="one">%1$d valve</item>
+        <item quantity="other">%1$d valves</item>
+    </plurals>
 </resources>

@@ -13,6 +13,7 @@
     <string name="common_failure">Échec : %1$s</string>
     <string name="common_lower">Baisser</string>
     <string name="common_raise">Monter</string>
+    <string name="common_percent">%1$d %</string>
     <string name="common_auto">Auto</string>
 
     <!-- Tabs -->
@@ -354,4 +355,96 @@
     <string name="mode_confirm_title">Passer en mode %1$s ?</string>
     <string name="mode_confirm_text">Le mode s’applique à toutes les zones du système.</string>
     <string name="mode_confirm">Changer</string>
+
+    <!-- Modules: house, lights, shutters, ventilation -->
+    <string name="device_unavailable">Indisponible</string>
+    <string name="house_title">Maison</string>
+    <string name="house_climate">Climatisation</string>
+    <string name="house_lights">Lumières</string>
+    <string name="house_shutters">Volets</string>
+    <string name="house_ventilation">Ventilation</string>
+    <string name="house_other_server">« %1$s » est reliée par un autre serveur Breezone : ses lumières, volets et autres modules se gèrent sur ce serveur-là.</string>
+    <string name="room_none">Sans pièce</string>
+    <string name="light_on">Allumée</string>
+    <string name="light_off">Éteinte</string>
+    <string name="light_unreachable">Ne répond pas</string>
+    <string name="light_color">Couleur</string>
+    <string name="light_warm">Blanc chaud</string>
+    <string name="light_neutral">Blanc neutre</string>
+    <string name="light_cool">Blanc froid</string>
+    <string name="light_white">Température de blanc</string>
+    <string name="light_warm_short">Chaud</string>
+    <string name="light_cool_short">Froid</string>
+    <string name="light_kelvin">%1$d K</string>
+    <string name="light_colors">Couleurs</string>
+    <string name="lights_all_off">Tout éteindre</string>
+    <string name="lights_empty">Aucune lumière : ajoutez votre pont Philips Hue dans Réglages › Modules, sur le web.</string>
+    <string name="shutter_open">Ouvert</string>
+    <string name="shutter_closed">Fermé</string>
+    <string name="shutter_open_at">Ouvert à %1$d %</string>
+    <string name="shutter_opening">S’ouvre…</string>
+    <string name="shutter_opening_to">S’ouvre… %1$d %</string>
+    <string name="shutter_closing">Se ferme…</string>
+    <string name="shutter_closing_to">Se ferme… %1$d %</string>
+    <string name="shutter_up">Ouvrir</string>
+    <string name="shutter_stop">Stop</string>
+    <string name="shutter_down">Fermer</string>
+    <string name="shutter_kind_shutter">Volet roulant</string>
+    <string name="shutter_kind_window">Fenêtre de toit</string>
+    <string name="shutter_kind_door">Porte</string>
+    <string name="shutters_open_all">Tout ouvrir</string>
+    <string name="shutters_close_all">Tout fermer</string>
+    <string name="shutters_empty">Aucun volet : appairez votre passerelle Legrand ou VELUX dans Réglages › Modules, sur le web.</string>
+    <string name="ventilation_level">Niveau de ventilation</string>
+    <string name="ventilation_level_short">niveau %1$d %</string>
+    <string name="ventilation_flow">%1$d m³/h</string>
+    <string name="ventilation_flow_of">%1$d m³/h sur %2$d m³/h nominaux</string>
+    <string name="ventilation_flow_level">débit %1$d %</string>
+    <string name="ventilation_boosting">boost en cours</string>
+    <string name="ventilation_auto">mode automatique</string>
+    <string name="ventilation_worst">%1$s demande le plus d’air, à cause de %2$s</string>
+    <string name="ventilation_cause_humidity">l’humidité</string>
+    <string name="ventilation_cause_co2">le CO₂</string>
+    <string name="ventilation_cause_voc">les COV</string>
+    <string name="ventilation_cause_other">la qualité de l’air</string>
+    <string name="ventilation_boost_house">Boost maison 1 h</string>
+    <string name="ventilation_stop_boosts">Arrêter les boosts</string>
+    <string name="ventilation_stop_boost">Arrêter le boost</string>
+    <string name="ventilation_rooms">Pièces</string>
+    <string name="ventilation_empty">Aucune VMC : ajoutez votre Renson Healthbox dans Réglages › Modules, sur le web.</string>
+    <string name="ventilation_asks_air">demande de l’air (%1$s)</string>
+    <string name="ventilation_humidity_value">humidité %1$d %</string>
+    <string name="ventilation_breezone_room">Pièce Breezone : %1$s</string>
+    <string name="ventilation_boost_left">Boost en cours, encore %1$d min.</string>
+    <string name="ventilation_bad_air">La qualité de l’air est mauvaise. La ventilation est active.</string>
+    <string name="ventilation_most_demand">C’est la pièce qui demande le plus d’air, à cause de %1$s.</string>
+    <string name="ventilation_active">La ventilation est active.</string>
+    <string name="ventilation_rest">La ventilation est au repos.</string>
+    <string name="ventilation_air_flow">Débit d’air</string>
+    <string name="ventilation_humidity">Humidité</string>
+    <string name="ventilation_co2">CO₂</string>
+    <string name="ventilation_voc">COV</string>
+    <string name="ventilation_temperature">Température</string>
+    <string name="ventilation_boost_30">Boost 30 min</string>
+    <string name="ventilation_1h">1 h</string>
+    <string name="ventilation_2h">2 h</string>
+    <string name="ventilation_profile">Profil</string>
+    <string name="ventilation_profile_eco">Eco</string>
+    <string name="ventilation_profile_health">Health</string>
+    <string name="ventilation_profile_intense">Intense</string>
+    <plurals name="lights_on_of">
+        <item quantity="one">%1$d allumée sur %2$d</item>
+        <item quantity="many">%1$d allumées sur %2$d</item>
+        <item quantity="other">%1$d allumées sur %2$d</item>
+    </plurals>
+    <plurals name="shutters_open_of">
+        <item quantity="one">%1$d ouvert sur %2$d</item>
+        <item quantity="many">%1$d ouverts sur %2$d</item>
+        <item quantity="other">%1$d ouverts sur %2$d</item>
+    </plurals>
+    <plurals name="ventilation_valves">
+        <item quantity="one">%1$d bouche</item>
+        <item quantity="many">%1$d bouches</item>
+        <item quantity="other">%1$d bouches</item>
+    </plurals>
 </resources>

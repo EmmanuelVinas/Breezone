@@ -39,6 +39,16 @@ import com.breezone.app.ui.screens.fzNavigationColors
 import com.breezone.app.ui.screens.HomeScreen
 import com.breezone.app.ui.screens.INSTALLATION_SECTIONS
 import com.breezone.app.ui.screens.InstallationScreen
+import com.breezone.app.ui.screens.HouseScreen
+import com.breezone.app.ui.screens.HouseType
+import com.breezone.app.ui.screens.LightScreen
+import com.breezone.app.ui.screens.LightsScreen
+import com.breezone.app.ui.screens.ShutterScreen
+import com.breezone.app.ui.screens.ShuttersScreen
+import com.breezone.app.ui.screens.VentilationRoomScreen
+import com.breezone.app.ui.screens.VentilationScreen
+import com.breezone.app.ui.screens.types
+import com.breezone.app.data.modulesHere
 import com.breezone.app.ui.screens.SettingsScreen
 import com.breezone.app.ui.screens.ZoneScreen
 import com.breezone.app.ui.theme.BreezoneTheme
@@ -54,6 +64,13 @@ import org.koin.compose.koinInject
 @Serializable object SettingsRoute
 @Serializable data class AddServerRoute(val reauthServerId: String? = null)
 @Serializable data class InstallationRoute(val serverId: String, val installationId: Long)
+@Serializable data class HouseRoute(val serverId: String, val installationId: Long)
+@Serializable data class LightsRoute(val serverId: String)
+@Serializable data class LightRoute(val serverId: String, val deviceId: Long)
+@Serializable data class ShuttersRoute(val serverId: String)
+@Serializable data class ShutterRoute(val serverId: String, val deviceId: Long)
+@Serializable data class VentilationRoute(val serverId: String)
+@Serializable data class VentilationRoomRoute(val serverId: String, val deviceId: Long)
 @Serializable data class ZoneRoute(val serverId: String, val installationId: Long, val systemId: Long, val zoneId: Long)
 
 private data class Tab(val route: Any, val label: StringResource, val icon: ImageVector)
@@ -68,6 +85,7 @@ fun App() {
     BreezoneTheme {
         val hub = koinInject<Hub>()
         val servers by hub.servers.collectAsState()
+        val devices by hub.devices.collectAsState()
         val nav = rememberNavController()
         val snackbar = remember { SnackbarHostState() }
         val backStack by nav.currentBackStackEntryAsState()
@@ -101,7 +119,14 @@ fun App() {
             ) {
                 composable<HomeRoute> {
                     HomeScreen(
-                        onOpenInstallation = { serverId, id -> nav.navigate(InstallationRoute(serverId, id)) },
+                        onOpenInstallation = { serverId, id ->
+                            // The house screen when this server's modules go with the installation;
+                            // otherwise straight to its climate, as before.
+                            val server = servers.firstOrNull { it.account.id == serverId }
+                            val withModules = server != null && server.modulesHere(servers.installation(serverId, id)) &&
+                                devices[serverId]?.types().orEmpty().isNotEmpty()
+                            nav.navigate(if (withModules) HouseRoute(serverId, id) else InstallationRoute(serverId, id))
+                        },
                         onReauth = { nav.navigate(AddServerRoute(it)) },
                         onAddServer = { nav.navigate(AddServerRoute()) },
                     )
@@ -116,6 +141,43 @@ fun App() {
                         onBack = { nav.popBackStack() },
                         onOpenZone = { z -> nav.navigate(ZoneRoute(r.serverId, z.installationId, z.systemId, z.zoneId)) },
                     )
+                }
+                composable<HouseRoute> { entry ->
+                    val r = entry.toRoute<HouseRoute>()
+                    HouseScreen(r.serverId, r.installationId, onBack = { nav.popBackStack() }) { type ->
+                        nav.navigate(
+                            when (type) {
+                                HouseType.Climate -> InstallationRoute(r.serverId, r.installationId)
+                                HouseType.Lights -> LightsRoute(r.serverId)
+                                HouseType.Shutters -> ShuttersRoute(r.serverId)
+                                HouseType.Ventilation -> VentilationRoute(r.serverId)
+                            },
+                        )
+                    }
+                }
+                composable<LightsRoute> { entry ->
+                    val r = entry.toRoute<LightsRoute>()
+                    LightsScreen(r.serverId, onBack = { nav.popBackStack() }) { nav.navigate(LightRoute(r.serverId, it)) }
+                }
+                composable<LightRoute> { entry ->
+                    val r = entry.toRoute<LightRoute>()
+                    LightScreen(r.serverId, r.deviceId, onBack = { nav.popBackStack() })
+                }
+                composable<ShuttersRoute> { entry ->
+                    val r = entry.toRoute<ShuttersRoute>()
+                    ShuttersScreen(r.serverId, onBack = { nav.popBackStack() }) { nav.navigate(ShutterRoute(r.serverId, it)) }
+                }
+                composable<ShutterRoute> { entry ->
+                    val r = entry.toRoute<ShutterRoute>()
+                    ShutterScreen(r.serverId, r.deviceId, onBack = { nav.popBackStack() })
+                }
+                composable<VentilationRoute> { entry ->
+                    val r = entry.toRoute<VentilationRoute>()
+                    VentilationScreen(r.serverId, onBack = { nav.popBackStack() }) { nav.navigate(VentilationRoomRoute(r.serverId, it)) }
+                }
+                composable<VentilationRoomRoute> { entry ->
+                    val r = entry.toRoute<VentilationRoomRoute>()
+                    VentilationRoomScreen(r.serverId, r.deviceId, onBack = { nav.popBackStack() })
                 }
                 composable<ZoneRoute> { entry ->
                     val r = entry.toRoute<ZoneRoute>()

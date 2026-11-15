@@ -143,6 +143,7 @@ class Hub(
         val api = apis.remove(id)
         jobs.remove(id)?.cancel()
         _servers.update { list -> list.filterNot { it.account.id == id } }
+        _devices.update { it - id }
         persist()
         scope.launch { api?.logout() }
     }
@@ -170,6 +171,8 @@ class Hub(
                 val installations = api.status()
                 val remote = runCatching { api.cloud().installations.filter { !it.reachable } }.getOrDefault(emptyList())
                 updateServer(id) { it.copy(user = user, installations = installations, remote = remote, loaded = true, error = null, authRequired = false, update = null) }
+                // What the server's modules provide: the screens of an installation depend on it.
+                scope.launch { refreshDevices(id) }
                 api.live().collect { msg ->
                     attempt = 0
                     handle(id, msg)
@@ -257,6 +260,82 @@ class Hub(
     /** Installation this user can only look at (read-only access, or shared read-only by its node): commands are not sent. */
     private fun readOnly(serverId: String, zones: List<Zone>): Installation? =
         server(serverId)?.installations?.firstOrNull { inst -> !inst.controllable && zones.any { it.installationId == inst.id } }
+
+    private val _devices = MutableStateFlow<Map<String, ServerDevices>>(emptyMap())
+    /** The devices of each server's modules, by server id (read by [refreshDevices]). */
+    val devices: StateFlow<Map<String, ServerDevices>> = _devices.asStateFlow()
+
+    private val _deviceStatus = MutableStateFlow<Map<String, CommandStatus>>(emptyMap())
+    /** Commands sent to devices of modules, by "server/device". */
+    val deviceStatus: StateFlow<Map<String, CommandStatus>> = _deviceStatus.asStateFlow()
+
+    private fun updateDevices(serverId: String, transform: (ServerDevices) -> ServerDevices) {
+        _devices.update { it + (serverId to transform(it[serverId] ?: ServerDevices())) }
+    }
+
+    /** Reads the devices, rooms and scenes of a server; a server without modules gives none. */
+    suspend fun refreshDevices(serverId: String, withScenes: Boolean = false) {
+        val api = apis[serverId] ?: return
+        val devices = runCatching { api.devices() }.getOrNull()
+        val rooms = runCatching { api.rooms() }.getOrNull()
+        val scenes = if (withScenes) runCatching { api.scenes() }.getOrNull() else null
+        updateDevices(serverId) { d ->
+            d.copy(
+                devices = devices ?: d.devices,
+                rooms = rooms ?: d.rooms,
+                scenes = scenes ?: d.scenes,
+                loaded = d.loaded || devices != null,
+            )
+        }
+    }
+
+    /** Reads the devices every [everyMs] while the caller (a screen) is active. */
+    suspend fun followDevices(serverId: String, everyMs: Long = 5_000, withScenes: Boolean = false) {
+        var first = true
+        while (true) {
+            refreshDevices(serverId, withScenes = withScenes && first)
+            first = false
+            delay(everyMs)
+        }
+    }
+
+    /**
+     * Applies an action of a trait to a device of a module: [optimistic] is shown at once, the
+     * answer of the server replaces it; on failure the devices are read again.
+     */
+    fun act(serverId: String, device: DeviceView, trait: String, action: String, params: JsonObject, optimistic: JsonObject? = null) {
+        val api = apis[serverId] ?: return
+        val key = "$serverId/${device.id}"
+        if (optimistic != null) {
+            updateDevices(serverId) { d ->
+                d.copy(devices = d.devices.map { if (it.id == device.id) it.copy(state = JsonObject((it.state ?: JsonObject(emptyMap())) + optimistic)) else it })
+            }
+        }
+        _deviceStatus.update { it + (key to CommandStatus.Pending) }
+        scope.launch {
+            try {
+                val after = api.act(device.id, DeviceActionInput(trait, action, params))
+                updateDevices(serverId) { d -> d.copy(devices = d.devices.map { if (it.id == after.id) after else it }) }
+                _deviceStatus.update { it - key }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _deviceStatus.update { it + (key to CommandStatus.Error) }
+                _messages.tryEmit(getString(Res.string.hub_command_refused, e.message.orEmpty()))
+                refreshDevices(serverId)
+                delay(3_000)
+                _deviceStatus.update { it - key }
+            }
+        }
+    }
+
+    fun activateScene(serverId: String, scene: SceneView) {
+        val api = apis[serverId] ?: return
+        scope.launch {
+            attempt { api.activateScene(scene.sourceId, scene.id) }
+            refreshDevices(serverId)
+        }
+    }
 
     private val _commandStatus = MutableStateFlow<Map<String, CommandStatus>>(emptyMap())
     val commandStatus: StateFlow<Map<String, CommandStatus>> = _commandStatus.asStateFlow()
