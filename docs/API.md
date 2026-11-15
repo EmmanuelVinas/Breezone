@@ -318,50 +318,74 @@ plus bas). Une action peut attendre (`delay_minutes`) : elle devient une minuter
 `RoutineInput` : `{name, enabled?, actions:[Action]}` (un `time` est refusé).
 `Routine` ajoute `{id, last_run_at, created_at, updated_at}`.
 
-## Automatismes « quand… si… alors… » (exécutés par Breezone)
+## Automatismes « quand… si… alors… sinon… » (exécutés par Breezone)
 
-Fonction `automations@1`. Une règle : un déclencheur, 0 à 3 conditions (toutes vraies), 1 à 5 actions.
+Fonction `automations@1`. Une règle : 1 à 3 déclencheurs (un seul suffit), jusqu'à 8 conditions
+(« et » ou « ou », avec des groupes), 1 à 8 étapes « alors » et 0 à 8 étapes « sinon ».
 
 | Méthode | Chemin | Description |
 |---------|--------|-------------|
 | GET 🔒 | `/api/automations` | `[Automation]` (celles dont l'utilisateur voit toutes les installations) |
 | POST 🔒 | `/api/automations` | `AutomationInput` |
-| GET / PUT / DELETE 🔒 | `/api/automations/{id}` | |
-| PUT 🔒 | `/api/automations/{id}/enabled` | `{enabled}` |
-| POST 🔒 | `/api/automations/{id}/run` | Exécute les actions maintenant, sans regarder le déclencheur ni les conditions → `{results}` |
+| GET / PUT / DELETE 🔒 | `/api/automations/{id}` | Modifier ou supprimer arrête une exécution en cours |
+| PUT 🔒 | `/api/automations/{id}/enabled` | `{enabled}` ; désactiver arrête une exécution en cours |
+| POST 🔒 | `/api/automations/{id}/run` | Lance les étapes « alors » maintenant, sans regarder déclencheurs ni conditions → `{results, running}` (`running` : elle attend encore après 10 s ; `409` si elle tourne déjà en mode `single`) |
+| GET 🔒 | `/api/automations/{id}/runs` | Les 20 derniers passages : `[{started_at, finished_at, branch, reason, ended, steps:[{what, ok, error}]}]` |
 
-`AutomationInput` : `{name, enabled?, when: Trigger, conditions?: [Condition], actions: [Step]}`.
+`AutomationInput` : `{name, enabled?, triggers: [Trigger], match?: "all"|"any", conditions?: [Condition], actions: [Step], else?: [Step], mode?: "single"|"restart"}`.
+`when: Trigger` (un seul déclencheur, forme de 0.11.0-beta.18) est encore accepté à la place de `triggers`.
 
 `Trigger` :
 - `{kind:"measure", measure: Measure, op:"above"|"below", value, for_minutes? (0 … 1440)}` ;
+- `{kind:"state", device_id, field, value, for_minutes?}` : un oui/non ou un choix de l'état d'un
+  appareil **devient** `value` (« la borne commence à charger ») ;
 - `{kind:"time", time:"HH:MM", days?:[1 … 7]}` (1 = lundi ; vide : tous les jours) ;
-- `{kind:"sun", event:"sunrise"|"sunset", offset_minutes? (−180 … 180), days?}`.
+- `{kind:"sun", event:"sunrise"|"sunset"|"dawn"|"dusk", offset_minutes? (−180 … 180), days?}`
+  (aube et crépuscule civils : le soleil à 6° sous l'horizon) ;
+- `{kind:"facade", facing}` : le soleil arrive sur une façade orientée à `facing` degrés (0 nord,
+  180 sud) : à plus de 3° de hauteur et à moins de 80° de son orientation.
 
-`Measure` : `{kind:"energy", flow:"export"|"import"|"solar"|"home"}` (W, d'après les mesures d'énergie
-de la maison ; `export` = puissance injectée au réseau) | `{kind:"device", device_id, field}` (un
-nombre de l'état d'un appareil, décrit par son trait) | `{kind:"outdoor"}` (température extérieure, météo).
+`Measure` : `{kind:"energy", flow:"export"|"import"|"solar"|"home"}` (W ; `export` = puissance
+injectée au réseau) | `{kind:"device", device_id, field}` | `{kind:"outdoor"}` |
+`{kind:"weather", field:"precipitation"|"wind"|"rain_next_hour"|"tomorrow_min"|"tomorrow_max"}`
+(mm, km/h, %, °C ; relevé Open-Meteo de moins de 3 h).
 
-`Condition` : `{kind:"measure", measure, op, value}` | `{kind:"state", device_id, field, value}` (un
-booléen ou un choix de l'état d'un appareil) | `{kind:"months", from, to}` (1 … 12 ; `from` > `to` passe
-par le nouvel an : `11` à `3` pour l'hiver) | `{kind:"hours", from:"HH:MM", to:"HH:MM"}` (peut passer
-minuit) | `{kind:"days", days}` | `{kind:"daylight", day}` (le soleil est levé, ou non).
+`Condition` : `{kind:"measure", measure, op, value}` | `{kind:"state", device_id, field, value}` |
+`{kind:"months", from, to}` (1 … 12 ; `from` > `to` passe par le nouvel an) | `{kind:"hours",
+from:"HH:MM", to:"HH:MM"}` | `{kind:"days", days}` | `{kind:"daylight", day}` | `{kind:"facade",
+facing}` | `{kind:"group", match, conditions}` (2 conditions ou plus, un seul niveau). `match` dit
+comment les conditions sont réunies : `all` (et, par défaut) ou `any` (ou) ; une condition qu'on ne
+peut pas lire (appareil injoignable) ne décide que si les autres ne le font pas.
 
-`Step` : `{kind:"device", device_id, trait, action, params}` (comme `POST /api/devices/{id}/actions`,
-vérifié contre le catalogue de traits) | `{kind:"scene", routine_id}`.
+`Step` : `{kind:"device", device_id, trait, action, params}` (comme `POST /api/devices/{id}/actions`) |
+`{kind:"scene", routine_id}` | `{kind:"wait", seconds}` (1 … 86400) | `{kind:"wait_until",
+condition, for_seconds?, timeout_seconds, on_timeout?: "continue"|"stop"}` (attend que la condition
+soit vraie, `for_seconds` d'affilée, au plus `timeout_seconds`) | `{kind:"restore"}` (remet les
+appareils pilotés plus haut dans la même liste comme ils étaient : réglages changés, charge, boost ;
+vient après une action sur un appareil).
 
-`Automation` ajoute `{id, summary:{when, conditions:[…], actions:[…]}` (la règle en phrases, dans la
-langue de la requête)`, status:{value, unit, holds, conditions:[true|false|null], next_at}` (ce que la
-règle voit maintenant ; `next_at` pour une heure ou le soleil)`, last_run_at, last_reason, created_at, updated_at}`.
+`Automation` ajoute `{id, when` (le premier déclencheur)`, summary:{when, triggers, conditions,
+joined, actions, else}` (la règle en phrases, dans la langue de la requête ; `joined` = « et » ou
+« ou »)`, status:{value, unit, holds, conditions:[true|false|null], next_at, running}, last_run_at,
+last_reason, created_at, updated_at}`.
+
+`branch` d'un passage : `then`, `else`, `skipped` (déclenchée, conditions fausses, pas de « sinon » :
+`reason` dit lesquelles et ce qu'elles valaient) ou `busy` (elle tournait déjà). `ended` : `done`,
+`stopped` (une attente a expiré avec `on_timeout: stop`), `cancelled` (recommencée, modifiée ou
+désactivée), `interrupted` (arrêt du serveur) ; `null` tant qu'elle tourne.
 
 Comportement :
-- un déclencheur `measure` exécute la règle **une fois par épisode** : quand la mesure a tenu au-delà
-  du seuil pendant `for_minutes` et que les conditions sont vraies (elles sont réessayées tant que la
-  mesure tient). La règle se réarme quand la mesure est repassée de l'autre côté du seuil avec une
-  marge (10 % et au moins 50 W ; 0,5 °C ; 2 points de %) ;
-- une mesure ou un appareil illisible ne déclenche rien ; au plus une exécution par règle et par minute ;
-- une heure fixe manquée pendant un arrêt de moins de 15 min est rattrapée ;
-- chaque exécution est dans le journal (`kind: "automation"`) avec sa raison
-  (« Injection au réseau : 742 W depuis 5 min »).
+- un déclencheur qui dure (mesure, état, façade) démarre la règle **une fois par épisode** : quand il
+  a tenu `for_minutes` et que les conditions sont vraies (réessayées tant qu'il tient), ou aussitôt
+  avec « sinon » s'il y en a. Il se réarme quand il ne tient plus (une mesure : repassée de l'autre
+  côté du seuil avec une marge : 10 % et au moins 50 W ; 0,5 °C ; 2 points de % ; 5 km/h). Un état ou
+  la façade ne déclenche que sur un changement : déjà vrai au démarrage du serveur, il ne compte pas ;
+- au plus un démarrage par règle et par minute ; une heure fixe manquée pendant un arrêt de moins de
+  15 min est rattrapée ;
+- les étapes s'exécutent en arrière-plan ; redéclenchée pendant qu'elle attend, la règle ignore ce
+  nouveau départ (`single`, noté `busy`) ou recommence (`restart`) ; un arrêt du serveur termine les
+  exécutions en cours ;
+- chaque exécution est dans le journal (`kind: "automation"`) avec sa raison.
 
 Droits : piloter une zone demande le pilotage de son installation et le droit « routines » ; les
 appareils des modules (borne, relais, lumières…) sont réservés aux administrateurs.

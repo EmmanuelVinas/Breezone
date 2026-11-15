@@ -26,6 +26,17 @@ pub struct SunTimes {
 
 /// Sunrise and sunset at `lat`, `lon` on `day` (NOAA's sunrise equation, within a minute or two).
 pub fn sun(day: NaiveDate, lat: f64, lon: f64) -> SunTimes {
+    // The sun's centre 0.833° below the horizon: refraction and its radius.
+    sun_at(day, lat, lon, -0.833)
+}
+
+/// Civil dawn and dusk: the sun 6° below the horizon (`sunrise` is the dawn, `sunset` the dusk).
+pub fn twilight(day: NaiveDate, lat: f64, lon: f64) -> SunTimes {
+    sun_at(day, lat, lon, -6.0)
+}
+
+/// When the sun's centre crosses `altitude` (degrees) on `day`, rising then setting.
+fn sun_at(day: NaiveDate, lat: f64, lon: f64, altitude: f64) -> SunTimes {
     let rad = PI / 180.0;
     // Julian day at noon UTC, then the mean solar noon at this longitude.
     let jd = day.num_days_from_ce() as f64 + 1_721_424.5 + 0.5;
@@ -36,14 +47,32 @@ pub fn sun(day: NaiveDate, lat: f64, lon: f64) -> SunTimes {
     let lambda = (m + c + 180.0 + 102.9372).rem_euclid(360.0);
     let transit = 2_451_545.0 + j_star + 0.0053 * (m * rad).sin() - 0.0069 * (2.0 * lambda * rad).sin();
     let decl = ((lambda * rad).sin() * (23.4397 * rad).sin()).asin();
-    // The sun's centre 0.833° below the horizon: refraction and its radius.
-    let cos_h = ((-0.833 * rad).sin() - (lat * rad).sin() * decl.sin()) / ((lat * rad).cos() * decl.cos());
+    let cos_h = ((altitude * rad).sin() - (lat * rad).sin() * decl.sin()) / ((lat * rad).cos() * decl.cos());
     if !(-1.0..=1.0).contains(&cos_h) {
         return SunTimes { sunrise: None, sunset: None };
     }
     let h = cos_h.acos() / rad / 360.0;
     let ts = |j: f64| ((j - 2_440_587.5) * 86_400.0).round() as i64;
     SunTimes { sunrise: Some(ts(transit - h)), sunset: Some(ts(transit + h)) }
+}
+
+/// Where the sun is at `ts` seen from `lat`, `lon`: (elevation, azimuth) in degrees, the azimuth
+/// from the north, clockwise (90 east, 180 south). Within a degree, enough for a façade.
+pub fn position(ts: i64, lat: f64, lon: f64) -> (f64, f64) {
+    let rad = PI / 180.0;
+    let n = ts as f64 / 86_400.0 + 2_440_587.5 - 2_451_545.0;
+    let mean = (280.460 + 0.985_647_4 * n).rem_euclid(360.0);
+    let g = ((357.528 + 0.985_600_3 * n).rem_euclid(360.0)) * rad;
+    let lambda = (mean + 1.915 * g.sin() + 0.020 * (2.0 * g).sin()) * rad;
+    let eps = (23.439 - 0.000_000_4 * n) * rad;
+    let ra = (eps.cos() * lambda.sin()).atan2(lambda.cos());
+    let decl = (eps.sin() * lambda.sin()).asin();
+    let gmst = (18.697_374_558 + 24.065_709_824_419_08 * n).rem_euclid(24.0);
+    let hour_angle = ((gmst * 15.0 + lon) * rad - ra + PI).rem_euclid(2.0 * PI) - PI;
+    let lat = lat * rad;
+    let elevation = (lat.sin() * decl.sin() + lat.cos() * decl.cos() * hour_angle.cos()).asin();
+    let azimuth = (-hour_angle.sin() * decl.cos()).atan2(decl.sin() * lat.cos() - decl.cos() * lat.sin() * hour_angle.cos());
+    (elevation / rad, (azimuth / rad).rem_euclid(360.0))
 }
 
 /// An hour of the forecast.
@@ -209,6 +238,11 @@ impl Weather {
         Some(report)
     }
 
+    /// The last weather read (`None` before the first one, or without a city).
+    pub async fn report(&self) -> Option<Report> {
+        self.last.read().await.clone()
+    }
+
     /// The last outdoor temperature read.
     pub async fn temperature(&self) -> Option<f64> {
         self.last.read().await.as_ref().and_then(|r| r.temperature)
@@ -276,6 +310,23 @@ mod tests {
         assert!(("17:24".."17:34").contains(&set.as_str()), "{set}");
         // Svalbard in June: no sunset.
         assert_eq!(sun(NaiveDate::from_ymd_opt(2024, 6, 21).unwrap(), 78.2, 15.6), SunTimes { sunrise: None, sunset: None });
+    }
+
+    #[test]
+    fn dawn_dusk_and_where_the_sun_is() {
+        // Toulouse, 15 November: civil dawn about 07:17, dusk about 17:59 (CET).
+        let t = twilight(NaiveDate::from_ymd_opt(2026, 11, 15).unwrap(), 43.6045, 1.444);
+        let (dawn, dusk) = (local(t.sunrise.unwrap()), local(t.sunset.unwrap()));
+        assert!(("07:12".."07:22").contains(&dawn.as_str()), "{dawn}");
+        assert!(("17:54".."18:04").contains(&dusk.as_str()), "{dusk}");
+        // Solar noon there is about 12:39: the sun is south, 27° high (90 − 43.6 − 18.6 of declination).
+        let noon = chrono::NaiveDate::from_ymd_opt(2026, 11, 15).unwrap().and_hms_opt(11, 39, 0).unwrap().and_utc().timestamp();
+        let (elevation, azimuth) = position(noon, 43.6045, 1.444);
+        assert!((elevation - 27.8).abs() < 1.5, "{elevation}");
+        assert!((azimuth - 180.0).abs() < 2.0, "{azimuth}");
+        // At 09:00 it is south-east and low.
+        let (elevation, azimuth) = position(noon - 3 * 3600 - 39 * 60, 43.6045, 1.444);
+        assert!((5.0..20.0).contains(&elevation) && (120.0..150.0).contains(&azimuth), "{elevation} {azimuth}");
     }
 
     #[test]

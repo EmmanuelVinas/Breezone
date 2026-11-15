@@ -1,17 +1,27 @@
 //! Automations (roadmap E15): rules that read like a sentence — *when* something happens, *if* a few
-//! things are true, *then* act — run by this server, with no cloud and no script to write.
+//! things are true, *then* act, *else* act otherwise — run by this server, with no cloud and no
+//! script to write.
 //!
-//! * **When** (one trigger): a measure crossing a threshold for some time (the power returned to
-//!   the grid, the temperature of a room…), a fixed time, sunrise or sunset.
-//! * **If** (up to [`MAX_CONDITIONS`] conditions, all true): a measure, the state of a device, a
-//!   period of the year, hours, days, day or night.
-//! * **Then** (1 to [`MAX_ACTIONS`] actions): an action of a trait of a device (ADR 0013: a zone
-//!   and a charger are driven the same way), or a scene.
+//! * **When** (1 to [`MAX_TRIGGERS`] triggers, any one starts the rule): a measure crossing a
+//!   threshold for some time (the power returned to the grid, the temperature of a room, the
+//!   weather…), a device whose state becomes a value (the charger starts charging), a fixed time,
+//!   sunrise, sunset, dawn or dusk, the sun reaching a façade.
+//! * **If** (up to [`MAX_CONDITIONS`] conditions): all true (*and*) or at least one (*or*), with
+//!   one level of groups to mix them ("A and (B or C)").
+//! * **Then** / **else** (up to [`MAX_ACTIONS`] steps each): an action of a trait of a device (ADR
+//!   0013: a zone and a charger are driven the same way), a scene, wait, wait until something is
+//!   true (at most some time), put back what the rule changed.
 //!
-//! A measure trigger runs its rule once per episode: when the measure has held past the threshold
-//! for the time asked *and* the conditions are true (they are tried again as long as it holds).
-//! It is armed again once the measure has come back past the threshold by a margin, so that a
-//! value hovering around it does not run the rule over and over.
+//! A trigger that holds (a measure past its threshold, a state, the sun on a façade) starts its
+//! rule once per episode: when it has held for the time asked and the conditions are true (they are
+//! tried again as long as it holds), or at once with the *else* actions when the rule has some. It
+//! is armed again once it no longer holds (a measure: back past the threshold by a margin, so that
+//! a value hovering around it does not start the rule over and over). A state or a façade starts
+//! the rule on a change only: one that already holds when the server starts does not.
+//!
+//! The actions run in the background. A rule started again while it still runs is ignored, or
+//! started over (`mode`). A stop of the server ends the runs under way (like Home Assistant): they
+//! are marked as interrupted in the history.
 
 use crate::api::home::{self, ActionInput, DeviceView};
 use crate::db::{self, AutomationRow};
@@ -19,29 +29,48 @@ use crate::energy::Flows;
 use crate::error::{ApiError, ApiResult};
 use crate::hub::{join, ZoneCommand};
 use crate::i18n::Text;
-use crate::routines::ActionResult;
 use crate::traits::{Field, Label};
+use crate::weather::Report;
 use crate::AppState;
 use chrono::{DateTime, Datelike, NaiveDate, NaiveTime, Timelike, Utc};
 use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Mutex;
 use std::time::Duration;
 
-pub const MAX_CONDITIONS: usize = 3;
-pub const MAX_ACTIONS: usize = 5;
-/// Longest time a measure may have to hold (minutes).
+pub const MAX_TRIGGERS: usize = 3;
+/// Conditions of a rule, those of its groups included.
+pub const MAX_CONDITIONS: usize = 8;
+/// Steps of each branch (then, else).
+pub const MAX_ACTIONS: usize = 8;
+/// Longest time a measure or a state may have to hold (minutes).
 const MAX_FOR_MINUTES: i64 = 24 * 60;
-/// Largest shift from sunrise or sunset (minutes).
+/// Longest wait (seconds).
+const MAX_WAIT: i64 = 24 * 3600;
+/// Largest shift from a sun event (minutes).
 const MAX_SUN_OFFSET: i64 = 180;
 /// A fixed time missed while the server was stopped still runs within this time (seconds).
 const CATCH_UP: i64 = 15 * 60;
-/// A rule runs at most once in this time (seconds).
+/// A rule starts at most once in this time (seconds).
 const MIN_GAP: i64 = 60;
+/// How often a wait looks at the home again.
+const POLL: Duration = Duration::from_secs(5);
+/// A weather reading older than this is not used (seconds).
+const WEATHER_MAX_AGE: i64 = 3 * 3600;
+/// The sun is on a façade when it is this high at least (degrees)…
+const FACADE_MIN_ELEVATION: f64 = 3.0;
+/// …and at most this far from the direction the façade faces (degrees).
+const FACADE_HALF_WIDTH: f64 = 80.0;
 const CHECKED: &str = "automations.checked_at";
 /// Who acts, in the activity feed, when a rule runs by itself.
 const ACTOR: &str = "Breezone";
+
+// ---------------------------------------------------------------------------------------
+// Rules
+// ---------------------------------------------------------------------------------------
 
 /// A power of the home (W), from its energy measures (see `energy`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -54,6 +83,22 @@ pub enum Flow {
     Solar,
     /// Used by the home.
     Home,
+}
+
+/// A number of the weather (Open-Meteo, read every 30 minutes).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WeatherField {
+    /// Rain now (mm).
+    Precipitation,
+    /// Wind now (km/h).
+    Wind,
+    /// Chance of rain within the hour (%).
+    RainNextHour,
+    /// Lowest temperature tomorrow (°C): frost.
+    TomorrowMin,
+    /// Highest temperature tomorrow (°C): heat wave.
+    TomorrowMax,
 }
 
 /// A number that can be read now.
@@ -70,6 +115,9 @@ pub enum Measure {
     },
     /// The outdoor temperature (weather).
     Outdoor,
+    Weather {
+        field: WeatherField,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -108,6 +156,10 @@ impl Op {
 pub enum SunEvent {
     Sunrise,
     Sunset,
+    /// Civil dawn: the sun 6° below the horizon, before it rises.
+    Dawn,
+    /// Civil dusk: the sun 6° below the horizon, after it sets.
+    Dusk,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -118,6 +170,15 @@ pub enum Trigger {
         op: Op,
         value: f64,
         /// The measure must hold that long (0: at once).
+        #[serde(default)]
+        for_minutes: i64,
+    },
+    /// A yes/no or a choice of the state of a device becomes `value` ("the charger starts
+    /// charging"), and stays so `for_minutes`.
+    State {
+        device_id: i64,
+        field: String,
+        value: Value,
         #[serde(default)]
         for_minutes: i64,
     },
@@ -136,6 +197,8 @@ pub enum Trigger {
         #[serde(default)]
         days: Vec<u32>,
     },
+    /// The sun reaches a façade facing `facing` (degrees from the north: 180 south).
+    Facade { facing: u32 },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -169,6 +232,73 @@ pub enum Condition {
     Daylight {
         day: bool,
     },
+    /// The sun is on a façade facing `facing` (degrees from the north).
+    Facade {
+        facing: u32,
+    },
+    /// Conditions joined the other way ("A and (B or C)"): one level, no group in a group.
+    Group {
+        #[serde(rename = "match")]
+        joined: Match,
+        conditions: Vec<Condition>,
+    },
+}
+
+/// How conditions are joined: all true (*and*), or at least one (*or*).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Match {
+    #[default]
+    All,
+    Any,
+}
+
+impl Match {
+    pub fn parse(s: &str) -> Option<Match> {
+        match s {
+            "all" => Some(Match::All),
+            "any" => Some(Match::Any),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Match::All => "all",
+            Match::Any => "any",
+        }
+    }
+
+    /// Joins results that may be unknown: an unknown one decides only when the others do not.
+    fn join(self, results: impl IntoIterator<Item = Option<bool>>) -> Option<bool> {
+        let (decisive, mut unknown) = (self == Match::Any, false);
+        for r in results {
+            match r {
+                Some(b) if b == decisive => return Some(decisive),
+                None => unknown = true,
+                _ => {}
+            }
+        }
+        (!unknown).then_some(!decisive)
+    }
+
+    fn word(self) -> Text {
+        match self {
+            Match::All => crate::text!("et", "and", "y"),
+            Match::Any => crate::text!("ou", "or", "o"),
+        }
+    }
+}
+
+/// What a wait does when its time runs out.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OnTimeout {
+    /// Go on with the next steps.
+    #[default]
+    Continue,
+    /// Stop the run there.
+    Stop,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -186,54 +316,129 @@ pub enum Step {
     Scene {
         routine_id: i64,
     },
+    Wait {
+        seconds: i64,
+    },
+    /// Waits until `condition` is true (for `for_seconds` in a row), `timeout_seconds` at most.
+    WaitUntil {
+        condition: Box<Condition>,
+        #[serde(default)]
+        for_seconds: i64,
+        timeout_seconds: i64,
+        #[serde(default)]
+        on_timeout: OnTimeout,
+    },
+    /// Puts back the devices this run drove before, as they were before it.
+    Restore,
+}
+
+/// What a rule does when it is started again while it still runs.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RunMode {
+    /// The new start is ignored.
+    #[default]
+    Single,
+    /// The run under way stops, a new one starts.
+    Restart,
+}
+
+impl RunMode {
+    pub fn parse(s: &str) -> Option<RunMode> {
+        match s {
+            "single" => Some(RunMode::Single),
+            "restart" => Some(RunMode::Restart),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            RunMode::Single => "single",
+            RunMode::Restart => "restart",
+        }
+    }
 }
 
 /// A rule, as stored.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Automation {
-    pub when: Trigger,
+    pub triggers: Vec<Trigger>,
+    /// How the conditions are joined.
+    pub joined: Match,
     pub conditions: Vec<Condition>,
     pub actions: Vec<Step>,
+    /// Run when a trigger starts the rule and the conditions are false.
+    pub otherwise: Vec<Step>,
+    pub mode: RunMode,
+}
+
+/// One trigger (0.11.0-beta.18) or several.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum Triggers {
+    Many(Vec<Trigger>),
+    One(Trigger),
 }
 
 impl Automation {
     /// `None` for a row this version cannot read (written by a newer one): it is left alone.
     pub fn of(row: &AutomationRow) -> Option<Automation> {
+        let triggers = match serde_json::from_str(&row.trigger_def).ok()? {
+            Triggers::Many(t) => t,
+            Triggers::One(t) => vec![t],
+        };
         Some(Automation {
-            when: serde_json::from_str(&row.trigger_def).ok()?,
+            triggers,
+            joined: Match::parse(&row.condition_match)?,
             conditions: serde_json::from_str(&row.conditions).ok()?,
             actions: serde_json::from_str(&row.actions).ok()?,
+            otherwise: serde_json::from_str(&row.else_actions).ok()?,
+            mode: RunMode::parse(&row.run_mode)?,
         })
     }
 
-    fn measures(&self) -> impl Iterator<Item = &Measure> {
-        let when = match &self.when {
-            Trigger::Measure { measure, .. } => Some(measure),
+    /// Every condition, those of the groups and of the waits included.
+    fn leaves(&self) -> Vec<&Condition> {
+        let waits = self.actions.iter().chain(&self.otherwise).filter_map(|s| match s {
+            Step::WaitUntil { condition, .. } => Some(condition.as_ref()),
             _ => None,
-        };
-        when.into_iter().chain(self.conditions.iter().filter_map(|c| match c {
-            Condition::Measure { measure, .. } => Some(measure),
-            _ => None,
-        }))
+        });
+        self.conditions
+            .iter()
+            .chain(waits)
+            .flat_map(|c| match c {
+                Condition::Group { conditions, .. } => conditions.iter().collect::<Vec<_>>(),
+                other => vec![other],
+            })
+            .collect()
+    }
+
+    fn steps(&self) -> impl Iterator<Item = &Step> {
+        self.actions.iter().chain(&self.otherwise)
+    }
+
+    /// The conditions are true now (`None`: cannot be told).
+    fn met(&self, ctx: &Context) -> Option<bool> {
+        self.joined.join(self.conditions.iter().map(|c| c.met(ctx)))
     }
 
     /// The devices the rule reads.
     pub fn read_devices(&self) -> Vec<i64> {
-        let measured = self.measures().filter_map(|m| match m {
-            Measure::Device { device_id, .. } => Some(*device_id),
+        let triggers = self.triggers.iter().filter_map(|t| match t {
+            Trigger::Measure { measure: Measure::Device { device_id, .. }, .. } | Trigger::State { device_id, .. } => Some(*device_id),
             _ => None,
         });
-        let states = self.conditions.iter().filter_map(|c| match c {
-            Condition::State { device_id, .. } => Some(*device_id),
+        let conditions = self.leaves().into_iter().filter_map(|c| match c {
+            Condition::Measure { measure: Measure::Device { device_id, .. }, .. } | Condition::State { device_id, .. } => Some(*device_id),
             _ => None,
         });
-        measured.chain(states).collect()
+        triggers.chain(conditions).collect()
     }
 
     /// The devices the rule drives.
     pub fn driven_devices(&self) -> Vec<i64> {
-        self.actions
-            .iter()
+        self.steps()
             .filter_map(|s| match s {
                 Step::Device { device_id, .. } => Some(*device_id),
                 _ => None,
@@ -242,8 +447,7 @@ impl Automation {
     }
 
     pub fn scenes(&self) -> Vec<i64> {
-        self.actions
-            .iter()
+        self.steps()
             .filter_map(|s| match s {
                 Step::Scene { routine_id } => Some(*routine_id),
                 _ => None,
@@ -257,10 +461,22 @@ pub struct AutomationInput {
     pub name: String,
     #[serde(default = "yes")]
     pub enabled: bool,
-    pub when: Trigger,
+    /// One trigger (as before `triggers`)…
+    #[serde(default)]
+    pub when: Option<Trigger>,
+    /// …or several: any one starts the rule.
+    #[serde(default)]
+    pub triggers: Vec<Trigger>,
+    /// "all" (default) or "any".
+    #[serde(default, rename = "match")]
+    pub joined: Match,
     #[serde(default)]
     pub conditions: Vec<Condition>,
     pub actions: Vec<Step>,
+    #[serde(default, rename = "else")]
+    pub otherwise: Vec<Step>,
+    #[serde(default)]
+    pub mode: RunMode,
 }
 
 fn yes() -> bool {
@@ -279,6 +495,7 @@ pub struct Context {
     pub devices: Vec<DeviceView>,
     pub flows: Flows,
     pub outdoor: Option<f64>,
+    pub weather: Option<Report>,
     /// Latitude and longitude of the home, for the sun.
     pub coords: Option<(f64, f64)>,
     /// Scenes, by id.
@@ -295,6 +512,7 @@ impl Context {
             flows,
             devices,
             outdoor: state.weather.temperature().await,
+            weather: state.weather.report().await,
             coords: state.weather.coordinates().await,
             scenes: db::list_routines(&state.db).await?.into_iter().map(|r| (r.id, r.name)).collect(),
         })
@@ -312,6 +530,11 @@ impl Context {
         })
     }
 
+    /// A value of the state of a device that answers.
+    fn state_of(&self, device_id: i64, field: &str) -> Option<&Value> {
+        self.device(device_id).filter(|d| d.available)?.state.get(field).filter(|v| !v.is_null())
+    }
+
     fn read(&self, m: &Measure) -> Option<f64> {
         match m {
             Measure::Energy { flow } => match flow {
@@ -320,8 +543,20 @@ impl Context {
                 Flow::Solar => self.flows.solar,
                 Flow::Home => self.flows.home,
             },
-            Measure::Device { device_id, field } => self.device(*device_id).filter(|d| d.available)?.state.get(field)?.as_f64(),
+            Measure::Device { device_id, field } => self.state_of(*device_id, field)?.as_f64(),
             Measure::Outdoor => self.outdoor,
+            Measure::Weather { field } => {
+                let w = self.weather.as_ref().filter(|w| self.now - w.read_at < WEATHER_MAX_AGE)?;
+                match field {
+                    WeatherField::Precipitation => w.precipitation,
+                    WeatherField::Wind => w.wind,
+                    WeatherField::RainNextHour => {
+                        w.hours.iter().filter(|h| h.ts > self.now - 3600 && h.ts <= self.now + 3600).filter_map(|h| h.precipitation_probability).reduce(f64::max)
+                    }
+                    WeatherField::TomorrowMin => w.tomorrow_min,
+                    WeatherField::TomorrowMax => w.tomorrow_max,
+                }
+            }
         }
     }
 
@@ -330,6 +565,15 @@ impl Context {
             Measure::Energy { .. } => Some("W".into()),
             Measure::Device { device_id, field } => self.field(*device_id, field)?.unit.clone(),
             Measure::Outdoor => Some("°C".into()),
+            Measure::Weather { field } => Some(
+                match field {
+                    WeatherField::Precipitation => "mm",
+                    WeatherField::Wind => "km/h",
+                    WeatherField::RainNextHour => "%",
+                    WeatherField::TomorrowMin | WeatherField::TomorrowMax => "°C",
+                }
+                .into(),
+            ),
         }
     }
 
@@ -340,6 +584,14 @@ impl Context {
     fn sun(&self, day: NaiveDate) -> Option<crate::weather::SunTimes> {
         self.coords.map(|(lat, lon)| crate::weather::sun(day, lat, lon))
     }
+
+    /// The sun is on a façade facing `facing` now.
+    fn on_facade(&self, facing: u32) -> Option<bool> {
+        let (lat, lon) = self.coords?;
+        let (elevation, azimuth) = crate::weather::position(self.now, lat, lon);
+        let off = (azimuth - facing as f64).rem_euclid(360.0);
+        Some(elevation >= FACADE_MIN_ELEVATION && off.min(360.0 - off) <= FACADE_HALF_WIDTH)
+    }
 }
 
 /// How far back past its threshold a measure must come before its rule is armed again.
@@ -348,6 +600,9 @@ fn margin(unit: Option<&str>, threshold: f64) -> f64 {
         Some("W") => (threshold.abs() * 0.1).max(50.0),
         Some("°C") => 0.5,
         Some("%") => 2.0,
+        Some("km/h") => 5.0,
+        // Rain: "it rains" (above 0) is over when it stops.
+        Some("mm") => 0.0,
         _ => (threshold.abs() * 0.02).max(f64::EPSILON),
     }
 }
@@ -360,20 +615,31 @@ fn on_day(days: &[u32], at: DateTime<Tz>) -> bool {
     days.is_empty() || days.contains(&at.weekday().number_from_monday())
 }
 
+/// What a trigger sees now.
+enum Look {
+    /// A time or sun trigger: it happened since the last look.
+    Event(bool),
+    /// A trigger that holds for a while; `released` when it is over, `edge` when it must be seen
+    /// changing (a state, the sun on a façade), `for_minutes` it must hold.
+    Holds { holds: bool, released: bool, edge: bool, for_minutes: i64 },
+}
+
 impl Trigger {
     /// When a time or sun trigger happens on a local day, if it does.
     fn occurrence(&self, day: NaiveDate, ctx: &Context) -> Option<i64> {
         let (ts, days) = match self {
-            Trigger::Measure { .. } => return None,
             Trigger::Time { time, days } => (day.and_time(time_of(time)?).and_local_timezone(ctx.tz).earliest()?.timestamp(), days),
             Trigger::Sun { event, offset_minutes, days } => {
-                let sun = ctx.sun(day)?;
+                let (lat, lon) = ctx.coords?;
                 let at = match event {
-                    SunEvent::Sunrise => sun.sunrise,
-                    SunEvent::Sunset => sun.sunset,
+                    SunEvent::Sunrise => crate::weather::sun(day, lat, lon).sunrise,
+                    SunEvent::Sunset => crate::weather::sun(day, lat, lon).sunset,
+                    SunEvent::Dawn => crate::weather::twilight(day, lat, lon).sunrise,
+                    SunEvent::Dusk => crate::weather::twilight(day, lat, lon).sunset,
                 }?;
                 (at + offset_minutes * 60, days)
             }
+            _ => return None,
         };
         on_day(days, ctx.local(ts)).then_some(ts)
     }
@@ -389,6 +655,26 @@ impl Trigger {
         let today = ctx.local(ctx.now).date_naive();
         (0..8).filter_map(|d| self.occurrence(today + chrono::Days::new(d), ctx)).find(|ts| *ts > ctx.now)
     }
+
+    /// `None`: cannot be told now (a device that does not answer).
+    fn look(&self, ctx: &Context, since: i64) -> Option<Look> {
+        Some(match self {
+            Trigger::Measure { measure, op, value, for_minutes } => {
+                let v = ctx.read(measure)?;
+                let margin = margin(ctx.unit(measure).as_deref(), *value);
+                Look::Holds { holds: op.holds(v, *value), released: op.released(v, *value, margin), edge: false, for_minutes: *for_minutes }
+            }
+            Trigger::State { device_id, field, value, for_minutes } => {
+                let holds = ctx.state_of(*device_id, field)? == value;
+                Look::Holds { holds, released: !holds, edge: true, for_minutes: *for_minutes }
+            }
+            Trigger::Facade { facing } => {
+                let holds = ctx.on_facade(*facing)?;
+                Look::Holds { holds, released: !holds, edge: true, for_minutes: 0 }
+            }
+            Trigger::Time { .. } | Trigger::Sun { .. } => Look::Event(self.due(ctx, since, ctx.now).is_some()),
+        })
+    }
 }
 
 impl Condition {
@@ -397,7 +683,7 @@ impl Condition {
         let now = ctx.local(ctx.now);
         match self {
             Condition::Measure { measure, op, value } => ctx.read(measure).map(|v| op.holds(v, *value)),
-            Condition::State { device_id, field, value } => ctx.device(*device_id).filter(|d| d.available)?.state.get(field).map(|v| v == value),
+            Condition::State { device_id, field, value } => ctx.state_of(*device_id, field).map(|v| v == value),
             Condition::Months { from, to } => {
                 let m = now.month();
                 Some(if from <= to { (*from..=*to).contains(&m) } else { m >= *from || m <= *to })
@@ -411,6 +697,8 @@ impl Condition {
                 let sun = ctx.sun(now.date_naive())?;
                 Some((ctx.now >= sun.sunrise? && ctx.now < sun.sunset?) == *day)
             }
+            Condition::Facade { facing } => ctx.on_facade(*facing),
+            Condition::Group { joined, conditions } => joined.join(conditions.iter().map(|c| c.met(ctx))),
         }
     }
 }
@@ -447,6 +735,15 @@ fn yes_no(b: bool) -> Text {
     }
 }
 
+/// "45 s", "10 min", "2 h", "1 h 30".
+fn duration(seconds: i64) -> String {
+    if seconds < 60 {
+        format!("{seconds} s")
+    } else {
+        crate::timers::human_delay(seconds / 60)
+    }
+}
+
 const MONTHS: [(&str, &str, &str); 12] = [
     ("janvier", "January", "enero"),
     ("février", "February", "febrero"),
@@ -465,6 +762,18 @@ const MONTHS: [(&str, &str, &str); 12] = [
 const DAYS: [(&str, &str, &str); 7] =
     [("lun", "Mon", "lun"), ("mar", "Tue", "mar"), ("mer", "Wed", "mié"), ("jeu", "Thu", "jue"), ("ven", "Fri", "vie"), ("sam", "Sat", "sáb"), ("dim", "Sun", "dom")];
 
+/// The eight directions a façade faces, from the north.
+const FACINGS: [(&str, &str, &str); 8] = [
+    ("nord", "north", "norte"),
+    ("nord-est", "north-east", "noreste"),
+    ("est", "east", "este"),
+    ("sud-est", "south-east", "sureste"),
+    ("sud", "south", "sur"),
+    ("sud-ouest", "south-west", "suroeste"),
+    ("ouest", "west", "oeste"),
+    ("nord-ouest", "north-west", "noroeste"),
+];
+
 fn named(table: &[(&str, &str, &str)], n: u32) -> Text {
     let (fr, en, es) = table.get((n as usize).wrapping_sub(1)).copied().unwrap_or(("?", "?", "?"));
     Text { fr: fr.into(), en: en.into(), es: es.into() }
@@ -474,6 +783,10 @@ fn day_list(days: &[u32]) -> Text {
     let mut sorted = days.to_vec();
     sorted.sort_unstable();
     join(&sorted.iter().map(|d| named(&DAYS, *d)).collect::<Vec<_>>(), ", ")
+}
+
+fn facing(degrees: u32) -> Text {
+    named(&FACINGS, ((degrees as f64 / 45.0).round() as u32) % 8 + 1)
 }
 
 impl Context {
@@ -495,6 +808,13 @@ impl Context {
             Measure::Energy { flow: Flow::Solar } => crate::text!("Production solaire", "Solar production", "Producción solar"),
             Measure::Energy { flow: Flow::Home } => crate::text!("Consommation de la maison", "Home consumption", "Consumo de la casa"),
             Measure::Outdoor => crate::text!("Température extérieure", "Outdoor temperature", "Temperatura exterior"),
+            Measure::Weather { field } => match field {
+                WeatherField::Precipitation => crate::text!("Pluie", "Rain", "Lluvia"),
+                WeatherField::Wind => crate::text!("Vent", "Wind", "Viento"),
+                WeatherField::RainNextHour => crate::text!("Risque de pluie dans l'heure", "Chance of rain within the hour", "Probabilidad de lluvia en la próxima hora"),
+                WeatherField::TomorrowMin => crate::text!("Minimale de demain", "Tomorrow's low", "Mínima de mañana"),
+                WeatherField::TomorrowMax => crate::text!("Maximale de demain", "Tomorrow's high", "Máxima de mañana"),
+            },
             Measure::Device { device_id, field } => {
                 let (name, field) = (self.device_name(*device_id), self.field_label(*device_id, field));
                 crate::text!("{0} · {1}", "{0} · {1}", "{0} · {1}", name.arg(), field.arg())
@@ -508,6 +828,17 @@ impl Context {
         crate::text!("{0} {1} {2}", "{0} {1} {2}", "{0} {1} {2}", name.arg(), op.sign(), threshold)
     }
 
+    /// "Borne · État : charging".
+    fn state_text(&self, device_id: i64, field: &str, value: &Value) -> Text {
+        let (name, field) = (self.device_name(device_id), self.field_label(device_id, field));
+        let value = match value {
+            Value::Bool(b) => yes_no(*b),
+            Value::String(s) => Text::plain(s.clone()),
+            other => Text::plain(other.to_string()),
+        };
+        crate::text!("{0} · {1} : {2}", "{0} · {1}: {2}", "{0} · {1}: {2}", name.arg(), field.arg(), value.arg())
+    }
+
     pub fn describe_trigger(&self, t: &Trigger) -> Text {
         let with_days = |text: Text, days: &[u32]| {
             if days.is_empty() || days.len() == 7 {
@@ -516,43 +847,54 @@ impl Context {
             let days = day_list(days);
             crate::text!("{0} ({1})", "{0} ({1})", "{0} ({1})", text.arg(), days.arg())
         };
+        let lasting = |text: Text, minutes: i64| {
+            if minutes > 0 {
+                crate::text!("{0} pendant {1} min", "{0} for {1} min", "{0} durante {1} min", text.arg(), minutes)
+            } else {
+                text
+            }
+        };
         match t {
-            Trigger::Measure { measure, op, value, for_minutes } => {
-                let c = self.comparison(measure, *op, *value);
-                if *for_minutes > 0 {
-                    crate::text!("{0} pendant {1} min", "{0} for {1} min", "{0} durante {1} min", c.arg(), for_minutes)
-                } else {
-                    c
-                }
+            Trigger::Measure { measure, op, value, for_minutes } => lasting(self.comparison(measure, *op, *value), *for_minutes),
+            Trigger::State { device_id, field, value, for_minutes } => {
+                let state = self.state_text(*device_id, field, value);
+                lasting(crate::text!("{0} devient vrai", "{0} becomes true", "{0} pasa a ser cierto", state.arg()), *for_minutes)
             }
             Trigger::Time { time, days } => with_days(crate::text!("à {0}", "at {0}", "a las {0}", time), days),
             Trigger::Sun { event, offset_minutes, days } => {
+                // "au lever du soleil", "30 min avant le lever du soleil"; "al amanecer", "antes del amanecer".
+                let (at, of) = match event {
+                    SunEvent::Sunrise => (crate::text!("au lever du soleil", "at sunrise", "al amanecer"), crate::text!("le lever du soleil", "sunrise", "del amanecer")),
+                    SunEvent::Sunset => (crate::text!("au coucher du soleil", "at sunset", "al atardecer"), crate::text!("le coucher du soleil", "sunset", "del atardecer")),
+                    SunEvent::Dawn => (crate::text!("à l'aube", "at dawn", "al alba"), crate::text!("l'aube", "dawn", "del alba")),
+                    SunEvent::Dusk => (crate::text!("au crépuscule", "at dusk", "al anochecer"), crate::text!("le crépuscule", "dusk", "del anochecer")),
+                };
                 let n = offset_minutes.abs();
-                let text = match (event, offset_minutes.signum()) {
-                    (SunEvent::Sunrise, 0) => crate::text!("au lever du soleil", "at sunrise", "al amanecer"),
-                    (SunEvent::Sunset, 0) => crate::text!("au coucher du soleil", "at sunset", "al atardecer"),
-                    (SunEvent::Sunrise, -1) => crate::text!("{0} min avant le lever du soleil", "{0} min before sunrise", "{0} min antes del amanecer", n),
-                    (SunEvent::Sunrise, _) => crate::text!("{0} min après le lever du soleil", "{0} min after sunrise", "{0} min después del amanecer", n),
-                    (SunEvent::Sunset, -1) => crate::text!("{0} min avant le coucher du soleil", "{0} min before sunset", "{0} min antes del atardecer", n),
-                    (SunEvent::Sunset, _) => crate::text!("{0} min après le coucher du soleil", "{0} min after sunset", "{0} min después del atardecer", n),
+                let text = match offset_minutes.signum() {
+                    0 => at,
+                    -1 => crate::text!("{0} min avant {1}", "{0} min before {1}", "{0} min antes {1}", n, of.arg()),
+                    _ => crate::text!("{0} min après {1}", "{0} min after {1}", "{0} min después {1}", n, of.arg()),
                 };
                 with_days(text, days)
             }
+            Trigger::Facade { facing: f } => {
+                let f = facing(*f);
+                crate::text!("quand le soleil arrive sur la façade {0}", "when the sun reaches the {0} façade", "cuando el sol llega a la fachada {0}", f.arg())
+            }
         }
+    }
+
+    /// The triggers, joined by "ou".
+    pub fn describe_triggers(&self, triggers: &[Trigger]) -> Text {
+        let parts: Vec<Text> = triggers.iter().map(|t| self.describe_trigger(t)).collect();
+        let word = Match::Any.word();
+        Text::build(|l| parts.iter().map(|p| p.get(l)).collect::<Vec<_>>().join(&format!(" {} ", word.get(l))))
     }
 
     pub fn describe_condition(&self, c: &Condition) -> Text {
         match c {
             Condition::Measure { measure, op, value } => self.comparison(measure, *op, *value),
-            Condition::State { device_id, field, value } => {
-                let (name, field) = (self.device_name(*device_id), self.field_label(*device_id, field));
-                let value = match value {
-                    Value::Bool(b) => yes_no(*b),
-                    Value::String(s) => Text::plain(s.clone()),
-                    other => Text::plain(other.to_string()),
-                };
-                crate::text!("{0} · {1} : {2}", "{0} · {1}: {2}", "{0} · {1}: {2}", name.arg(), field.arg(), value.arg())
-            }
+            Condition::State { device_id, field, value } => self.state_text(*device_id, field, value),
             Condition::Months { from, to } if from == to => {
                 let m = named(&MONTHS, *from);
                 crate::text!("en {0}", "in {0}", "en {0}", m.arg())
@@ -565,7 +907,22 @@ impl Context {
             Condition::Days { days } => day_list(days),
             Condition::Daylight { day: true } => crate::text!("de jour", "during the day", "de día"),
             Condition::Daylight { day: false } => crate::text!("de nuit", "at night", "de noche"),
+            Condition::Facade { facing: f } => {
+                let f = facing(*f);
+                crate::text!("le soleil est sur la façade {0}", "the sun is on the {0} façade", "el sol da en la fachada {0}", f.arg())
+            }
+            Condition::Group { joined, conditions } => {
+                let inner = self.describe_conditions(*joined, conditions);
+                crate::text!("({0})", "({0})", "({0})", inner.arg())
+            }
         }
+    }
+
+    /// "A et B", "A ou B ou C".
+    pub fn describe_conditions(&self, joined: Match, conditions: &[Condition]) -> Text {
+        let word = joined.word();
+        let parts: Vec<Text> = conditions.iter().map(|c| self.describe_condition(c)).collect();
+        Text::build(|l| parts.iter().map(|p| p.get(l)).collect::<Vec<_>>().join(&format!(" {} ", word.get(l))))
     }
 
     pub fn describe_step(&self, s: &Step) -> Text {
@@ -579,6 +936,23 @@ impl Context {
                 let what = self.describe_action(*device_id, trait_name, action, params);
                 crate::text!("{0} : {1}", "{0}: {1}", "{0}: {1}", name.arg(), what.arg())
             }
+            Step::Wait { seconds } => crate::text!("attendre {0}", "wait {0}", "esperar {0}", duration(*seconds)),
+            Step::WaitUntil { condition, for_seconds, timeout_seconds, on_timeout } => {
+                let what = self.describe_condition(condition);
+                let what = if *for_seconds > 0 { crate::text!("{0} pendant {1}", "{0} for {1}", "{0} durante {1}", what.arg(), duration(*for_seconds)) } else { what };
+                let max = duration(*timeout_seconds);
+                match on_timeout {
+                    OnTimeout::Continue => crate::text!("attendre que {0} (au plus {1})", "wait until {0} ({1} at most)", "esperar a que {0} (como máximo {1})", what.arg(), max),
+                    OnTimeout::Stop => crate::text!(
+                        "attendre que {0} (au plus {1}, sinon s'arrêter)",
+                        "wait until {0} ({1} at most, else stop)",
+                        "esperar a que {0} (como máximo {1}; si no, parar)",
+                        what.arg(),
+                        max
+                    ),
+                }
+            }
+            Step::Restore => crate::text!("remettre comme avant", "put back as before", "dejar como antes"),
         }
     }
 
@@ -615,7 +989,7 @@ impl Context {
         crate::text!("{0} ({1})", "{0} ({1})", "{0} ({1})", name.arg(), given.arg())
     }
 
-    /// What was true when the rule ran: "Injection au réseau : 742 W depuis 5 min".
+    /// What was true when a trigger started the rule: "Injection au réseau : 742 W depuis 5 min".
     fn reason(&self, t: &Trigger) -> Text {
         match t {
             Trigger::Measure { measure, for_minutes, .. } => {
@@ -627,8 +1001,35 @@ impl Context {
                     crate::text!("{0} : {1}", "{0}: {1}", "{0}: {1}", name.arg(), value)
                 }
             }
+            Trigger::State { device_id, field, value, .. } => self.state_text(*device_id, field, value),
             other => self.describe_trigger(other),
         }
+    }
+
+    /// The conditions that are not true now, with what they read: "Salon · Température < 18 °C
+    /// (19,1 °C)".
+    fn why_not(&self, rule: &Automation) -> Text {
+        let parts: Vec<Text> = rule
+            .conditions
+            .iter()
+            .filter_map(|c| {
+                let met = c.met(self);
+                if met == Some(true) {
+                    return None;
+                }
+                let text = self.describe_condition(c);
+                Some(match (met, c) {
+                    (None, _) => crate::text!("{0} : inconnu", "{0}: unknown", "{0}: desconocido", text.arg()),
+                    (_, Condition::Measure { measure, .. }) => match self.read(measure) {
+                        Some(v) => crate::text!("{0} ({1})", "{0} ({1})", "{0} ({1})", text.arg(), amount(v, self.unit(measure).as_deref())),
+                        None => text,
+                    },
+                    _ => text,
+                })
+            })
+            .collect();
+        let list = join(&parts, ", ");
+        crate::text!("conditions non remplies : {0}", "conditions not met: {0}", "condiciones no cumplidas: {0}", list.arg())
     }
 }
 
@@ -636,26 +1037,35 @@ impl Context {
 // Views and validation
 // ---------------------------------------------------------------------------------------
 
-/// The rule as a sentence: "Quand {when}, si {conditions}, alors {actions}".
+/// The rule as a sentence: "Quand {when}, si {conditions}, alors {actions}, sinon {else}".
 #[derive(Debug, Clone, Serialize)]
 pub struct Summary {
+    /// The triggers, joined by "ou".
     pub when: Text,
+    pub triggers: Vec<Text>,
+    /// One per condition (a group in brackets), to be joined by `joined`.
     pub conditions: Vec<Text>,
+    /// "et" or "ou", in the language of the request.
+    pub joined: Text,
     pub actions: Vec<Text>,
+    #[serde(rename = "else")]
+    pub otherwise: Vec<Text>,
 }
 
 /// What the rule sees now.
 #[derive(Debug, Clone, Serialize)]
 pub struct Status {
-    /// The measure of the trigger, now.
+    /// The measure of the first measure trigger, now.
     pub value: Option<f64>,
     pub unit: Option<String>,
-    /// The measure is past its threshold.
+    /// That measure is past its threshold.
     pub holds: Option<bool>,
     /// Each condition: true, false, or unknown.
     pub conditions: Vec<Option<bool>>,
     /// Next run of a time or sun trigger.
     pub next_at: Option<i64>,
+    /// A run is under way (it waits).
+    pub running: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -663,9 +1073,16 @@ pub struct AutomationView {
     pub id: i64,
     pub name: String,
     pub enabled: bool,
+    /// The first trigger (for the clients of 0.11.0-beta.18).
     pub when: Trigger,
+    pub triggers: Vec<Trigger>,
+    #[serde(rename = "match")]
+    pub joined: Match,
     pub conditions: Vec<Condition>,
     pub actions: Vec<Step>,
+    #[serde(rename = "else")]
+    pub otherwise: Vec<Step>,
+    pub mode: RunMode,
     pub summary: Summary,
     pub status: Status,
     pub last_run_at: Option<i64>,
@@ -674,27 +1091,45 @@ pub struct AutomationView {
     pub updated_at: i64,
 }
 
-pub fn view(row: &AutomationRow, rule: Automation, ctx: &Context) -> AutomationView {
-    let (value, unit, holds) = match &rule.when {
-        Trigger::Measure { measure, op, value, .. } => {
+pub fn view(row: &AutomationRow, rule: Automation, ctx: &Context, running: bool) -> AutomationView {
+    let measured = rule.triggers.iter().find_map(|t| match t {
+        Trigger::Measure { measure, op, value, .. } => Some((measure, op, value)),
+        _ => None,
+    });
+    let (value, unit, holds) = match measured {
+        Some((measure, op, threshold)) => {
             let read = ctx.read(measure);
-            (read, ctx.unit(measure), read.map(|v| op.holds(v, *value)))
+            (read, ctx.unit(measure), read.map(|v| op.holds(v, *threshold)))
         }
-        _ => (None, None, None),
+        None => (None, None, None),
     };
     AutomationView {
         id: row.id,
         name: row.name.clone(),
         enabled: row.enabled,
         summary: Summary {
-            when: ctx.describe_trigger(&rule.when),
+            when: ctx.describe_triggers(&rule.triggers),
+            triggers: rule.triggers.iter().map(|t| ctx.describe_trigger(t)).collect(),
             conditions: rule.conditions.iter().map(|c| ctx.describe_condition(c)).collect(),
+            joined: rule.joined.word(),
             actions: rule.actions.iter().map(|s| ctx.describe_step(s)).collect(),
+            otherwise: rule.otherwise.iter().map(|s| ctx.describe_step(s)).collect(),
         },
-        status: Status { value, unit, holds, conditions: rule.conditions.iter().map(|c| c.met(ctx)).collect(), next_at: rule.when.next_at(ctx) },
-        when: rule.when,
+        status: Status {
+            value,
+            unit,
+            holds,
+            conditions: rule.conditions.iter().map(|c| c.met(ctx)).collect(),
+            next_at: rule.triggers.iter().filter_map(|t| t.next_at(ctx)).min(),
+            running,
+        },
+        when: rule.triggers[0].clone(),
+        triggers: rule.triggers,
+        joined: rule.joined,
         conditions: rule.conditions,
         actions: rule.actions,
+        otherwise: rule.otherwise,
+        mode: rule.mode,
         last_run_at: row.last_run_at,
         last_reason: row.last_reason.as_deref().map(Text::load),
         created_at: row.created_at,
@@ -720,6 +1155,22 @@ fn check_time(s: &str) -> ApiResult<()> {
     time_of(s).map(|_| ()).ok_or_else(|| ApiError::bad_request(crate::text!("heure attendue : HH:MM", "time expected: HH:MM", "hora esperada: HH:MM")))
 }
 
+fn check_lasting(minutes: i64) -> ApiResult<()> {
+    if (0..=MAX_FOR_MINUTES).contains(&minutes) {
+        Ok(())
+    } else {
+        Err(ApiError::bad_request(crate::text!("durée entre 0 minute et 24 heures", "duration between 0 minutes and 24 hours", "duración entre 0 minutos y 24 horas")))
+    }
+}
+
+fn check_facing(facing: u32) -> ApiResult<()> {
+    if facing < 360 {
+        Ok(())
+    } else {
+        Err(ApiError::bad_request(crate::text!("orientation de 0 à 359°", "facing from 0 to 359°", "orientación de 0 a 359°")))
+    }
+}
+
 impl Context {
     fn known(&self, device_id: i64) -> ApiResult<&DeviceView> {
         self.device(device_id).ok_or_else(|| ApiError::bad_request(crate::text!("appareil introuvable", "unknown device", "dispositivo desconocido")))
@@ -743,17 +1194,34 @@ impl Context {
         Ok(())
     }
 
+    fn check_state(&self, device_id: i64, field: &str, value: &Value) -> ApiResult<()> {
+        self.known(device_id)?;
+        let ok = self.field(device_id, field).is_some_and(|f| match f.kind.as_str() {
+            "bool" => value.is_boolean(),
+            "enum" => value.as_str().is_some_and(|v| f.values.iter().any(|x| x == v)),
+            _ => false,
+        });
+        if ok {
+            Ok(())
+        } else {
+            Err(ApiError::bad_request(crate::text!(
+                "« {0} » n'est pas un état de cet appareil",
+                "“{0}” is not a state of this device",
+                "«{0}» no es un estado de este dispositivo",
+                field
+            )))
+        }
+    }
+
     fn check_trigger(&self, t: &Trigger) -> ApiResult<()> {
         match t {
             Trigger::Measure { measure, value, for_minutes, .. } => {
-                if !(0..=MAX_FOR_MINUTES).contains(for_minutes) {
-                    return Err(ApiError::bad_request(crate::text!(
-                        "durée entre 0 minute et 24 heures",
-                        "duration between 0 minutes and 24 hours",
-                        "duración entre 0 minutos y 24 horas"
-                    )));
-                }
+                check_lasting(*for_minutes)?;
                 self.check_measure(measure, *value)
+            }
+            Trigger::State { device_id, field, value, for_minutes } => {
+                check_lasting(*for_minutes)?;
+                self.check_state(*device_id, field, value)
             }
             Trigger::Time { time, days } => {
                 check_time(time)?;
@@ -765,30 +1233,14 @@ impl Context {
                 }
                 check_days(days)
             }
+            Trigger::Facade { facing } => check_facing(*facing),
         }
     }
 
     fn check_condition(&self, c: &Condition) -> ApiResult<()> {
         match c {
             Condition::Measure { measure, value, .. } => self.check_measure(measure, *value),
-            Condition::State { device_id, field, value } => {
-                self.known(*device_id)?;
-                let ok = self.field(*device_id, field).is_some_and(|f| match f.kind.as_str() {
-                    "bool" => value.is_boolean(),
-                    "enum" => value.as_str().is_some_and(|v| f.values.iter().any(|x| x == v)),
-                    _ => false,
-                });
-                if ok {
-                    Ok(())
-                } else {
-                    Err(ApiError::bad_request(crate::text!(
-                        "« {0} » n'est pas un état de cet appareil",
-                        "“{0}” is not a state of this device",
-                        "«{0}» no es un estado de este dispositivo",
-                        field
-                    )))
-                }
-            }
+            Condition::State { device_id, field, value } => self.check_state(*device_id, field, value),
             Condition::Months { from, to } => {
                 if (1..=12).contains(from) && (1..=12).contains(to) {
                     Ok(())
@@ -807,6 +1259,28 @@ impl Context {
                 check_days(days)
             }
             Condition::Daylight { .. } => Ok(()),
+            Condition::Facade { facing } => check_facing(*facing),
+            Condition::Group { conditions, .. } => {
+                if conditions.len() < 2 {
+                    return Err(ApiError::bad_request(crate::text!(
+                        "un groupe réunit au moins deux conditions",
+                        "a group joins at least two conditions",
+                        "un grupo reúne al menos dos condiciones"
+                    )));
+                }
+                if conditions.iter().any(|c| matches!(c, Condition::Group { .. })) {
+                    return Err(ApiError::bad_request(crate::text!("pas de groupe dans un groupe", "no group within a group", "ningún grupo dentro de un grupo")));
+                }
+                conditions.iter().try_for_each(|c| self.check_condition(c))
+            }
+        }
+    }
+
+    fn check_wait(seconds: i64, min: i64) -> ApiResult<()> {
+        if (min..=MAX_WAIT).contains(&seconds) {
+            Ok(())
+        } else {
+            Err(ApiError::bad_request(crate::text!("attente de 24 heures au plus", "a wait of 24 hours at most", "espera de 24 horas como máximo")))
         }
     }
 
@@ -827,7 +1301,31 @@ impl Context {
                 }
                 Ok(())
             }
+            Step::Wait { seconds } => Self::check_wait(*seconds, 1),
+            Step::WaitUntil { condition, for_seconds, timeout_seconds, .. } => {
+                Self::check_wait(*timeout_seconds, 1)?;
+                Self::check_wait(*for_seconds, 0)?;
+                self.check_condition(condition)
+            }
+            Step::Restore => Ok(()),
         }
+    }
+
+    fn check_branch(&self, steps: &[Step], required: bool) -> ApiResult<()> {
+        if steps.len() > MAX_ACTIONS || (required && steps.is_empty()) {
+            return Err(ApiError::bad_request(crate::text!("de 1 à {0} actions", "1 to {0} actions", "de 1 a {0} acciones", MAX_ACTIONS)));
+        }
+        for (i, s) in steps.iter().enumerate() {
+            self.check_step(s)?;
+            if *s == Step::Restore && !steps[..i].iter().any(|p| matches!(p, Step::Device { .. })) {
+                return Err(ApiError::bad_request(crate::text!(
+                    "« remettre comme avant » vient après une action sur un appareil",
+                    "“put back as before” comes after an action on a device",
+                    "«dejar como antes» va después de una acción sobre un dispositivo"
+                )));
+            }
+        }
+        Ok(())
     }
 }
 
@@ -837,39 +1335,73 @@ pub fn validate(input: AutomationInput, ctx: &Context) -> ApiResult<(String, Aut
     if name.is_empty() || name.chars().count() > 80 {
         return Err(ApiError::bad_request("name must be 1-80 characters"));
     }
-    if input.conditions.len() > MAX_CONDITIONS {
+    let triggers: Vec<Trigger> = input.when.into_iter().chain(input.triggers).collect();
+    if triggers.is_empty() || triggers.len() > MAX_TRIGGERS {
+        return Err(ApiError::bad_request(crate::text!("de 1 à {0} déclencheurs", "1 to {0} triggers", "de 1 a {0} disparadores", MAX_TRIGGERS)));
+    }
+    let leaves: usize = input.conditions.iter().map(|c| if let Condition::Group { conditions, .. } = c { conditions.len() } else { 1 }).sum();
+    if leaves > MAX_CONDITIONS {
         return Err(ApiError::bad_request(crate::text!("{0} conditions au plus", "{0} conditions at most", "{0} condiciones como máximo", MAX_CONDITIONS)));
     }
-    if input.actions.is_empty() || input.actions.len() > MAX_ACTIONS {
-        return Err(ApiError::bad_request(crate::text!("de 1 à {0} actions", "1 to {0} actions", "de 1 a {0} acciones", MAX_ACTIONS)));
-    }
-    ctx.check_trigger(&input.when)?;
+    triggers.iter().try_for_each(|t| ctx.check_trigger(t))?;
     input.conditions.iter().try_for_each(|c| ctx.check_condition(c))?;
-    input.actions.iter().try_for_each(|s| ctx.check_step(s))?;
-    Ok((name, Automation { when: input.when, conditions: input.conditions, actions: input.actions }))
+    ctx.check_branch(&input.actions, true)?;
+    ctx.check_branch(&input.otherwise, false)?;
+    Ok((name, Automation { triggers, joined: input.joined, conditions: input.conditions, actions: input.actions, otherwise: input.otherwise, mode: input.mode }))
 }
 
 // ---------------------------------------------------------------------------------------
-// Engine
+// Engine: which rules start
 // ---------------------------------------------------------------------------------------
 
-/// What is remembered of a measure trigger between two looks.
+/// What is remembered of a trigger that holds, between two looks.
 #[derive(Debug, Clone, Copy)]
 struct Watch {
     /// The rule it was for (an edited rule starts again).
     updated_at: i64,
-    /// Since when the measure is past its threshold.
+    /// Since when it holds.
     since: Option<i64>,
-    /// The rule ran for this episode.
+    /// The rule started for this episode.
     fired: bool,
+    /// Seen at least once (a state or a façade must be seen changing).
+    seen: bool,
+    /// The history already tells why the rule did not start in this episode.
+    skipped: bool,
 }
 
-/// Decides which rules run. Kept in memory: after a restart, a measure already past its threshold
-/// counts as a new episode.
+/// Which actions run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Branch {
+    Then,
+    Else,
+    /// A trigger started the rule, but its conditions were false and it has no "else".
+    Skipped,
+}
+
+impl Branch {
+    fn as_str(self) -> &'static str {
+        match self {
+            Branch::Then => "then",
+            Branch::Else => "else",
+            Branch::Skipped => "skipped",
+        }
+    }
+}
+
+/// A rule a trigger started.
+#[derive(Debug, Clone)]
+pub struct Due {
+    pub id: i64,
+    pub branch: Branch,
+    pub reason: Text,
+}
+
+/// Decides which rules start. Kept in memory: after a restart, a measure already past its
+/// threshold counts as a new episode.
 #[derive(Debug)]
 pub struct Engine {
-    watches: HashMap<i64, Watch>,
-    /// When the rules were last looked at (time and sun triggers run once between two looks).
+    watches: HashMap<(i64, usize), Watch>,
+    /// When the rules were last looked at (time and sun triggers start once between two looks).
     checked: i64,
 }
 
@@ -878,84 +1410,260 @@ impl Engine {
         Self { watches: HashMap::new(), checked }
     }
 
-    /// The rules to run now, each with what made it run.
-    pub fn due(&mut self, rules: &[(AutomationRow, Automation)], ctx: &Context) -> Vec<(i64, Text)> {
+    /// The rules to start now, each with its branch and what started it.
+    pub fn due(&mut self, rules: &[(AutomationRow, Automation)], ctx: &Context) -> Vec<Due> {
         let mut out = vec![];
-        self.watches.retain(|id, _| rules.iter().any(|(row, _)| row.id == *id && row.enabled));
+        self.watches.retain(|(id, _), _| rules.iter().any(|(row, _)| row.id == *id && row.enabled));
         for (row, rule) in rules.iter().filter(|(row, _)| row.enabled) {
-            let recent = row.last_run_at.is_some_and(|t| ctx.now - t < MIN_GAP);
-            let conditions = || rule.conditions.iter().all(|c| c.met(ctx) == Some(true));
-            match &rule.when {
-                Trigger::Measure { measure, op, value, for_minutes } => {
-                    let w = self.watches.entry(row.id).or_insert(Watch { updated_at: row.updated_at, since: None, fired: false });
-                    if w.updated_at != row.updated_at {
-                        *w = Watch { updated_at: row.updated_at, since: None, fired: false };
-                    }
-                    // A measure that cannot be read changes nothing.
-                    let Some(v) = ctx.read(measure) else { continue };
-                    if w.fired {
-                        if op.released(v, *value, margin(ctx.unit(measure).as_deref(), *value)) {
-                            w.fired = false;
-                            w.since = None;
-                        }
-                        continue;
-                    }
-                    if !op.holds(v, *value) {
-                        w.since = None;
-                        continue;
-                    }
-                    let since = *w.since.get_or_insert(ctx.now);
-                    if ctx.now - since >= for_minutes * 60 && !recent && conditions() {
-                        w.fired = true;
-                        out.push((row.id, ctx.reason(&rule.when)));
-                    }
+            // The triggers that start the rule now: (index, holds for a while).
+            let mut started: Vec<(usize, bool)> = vec![];
+            for (i, t) in rule.triggers.iter().enumerate() {
+                let fresh = Watch { updated_at: row.updated_at, since: None, fired: false, seen: false, skipped: false };
+                let w = self.watches.entry((row.id, i)).or_insert(fresh);
+                if w.updated_at != row.updated_at {
+                    *w = fresh;
                 }
-                when => {
-                    if when.due(ctx, self.checked, ctx.now).is_some() && !recent && conditions() {
-                        out.push((row.id, ctx.reason(when)));
+                // What cannot be read changes nothing.
+                match t.look(ctx, self.checked) {
+                    None => {}
+                    Some(Look::Event(happened)) => {
+                        if happened {
+                            started.push((i, false));
+                        }
+                    }
+                    Some(Look::Holds { holds, released, edge, for_minutes }) => {
+                        if !w.seen {
+                            w.seen = true;
+                            // Already so when first seen: not a change.
+                            w.fired = edge && holds;
+                        }
+                        if w.fired {
+                            if released {
+                                *w = Watch { seen: true, ..fresh };
+                            }
+                            continue;
+                        }
+                        if !holds {
+                            w.since = None;
+                            w.skipped = false;
+                            continue;
+                        }
+                        let since = *w.since.get_or_insert(ctx.now);
+                        if ctx.now - since >= for_minutes * 60 {
+                            started.push((i, true));
+                        }
                     }
                 }
             }
+            let Some(&(first, _)) = started.first() else { continue };
+            if row.last_run_at.is_some_and(|t| ctx.now - t < MIN_GAP) {
+                continue;
+            }
+            let reason = ctx.reason(&rule.triggers[first]);
+            let branch = match rule.met(ctx) {
+                Some(true) => Branch::Then,
+                Some(false) if !rule.otherwise.is_empty() => Branch::Else,
+                // A trigger that holds tries the conditions again while it holds: the history
+                // tells once why the rule did not start.
+                met => {
+                    let holding: Vec<usize> = started.iter().filter(|(_, h)| *h).map(|(i, _)| *i).collect();
+                    let told = !holding.is_empty() && holding.iter().all(|i| self.watches.get(&(row.id, *i)).is_some_and(|w| w.skipped));
+                    for i in &holding {
+                        if let Some(w) = self.watches.get_mut(&(row.id, *i)) {
+                            w.skipped = true;
+                        }
+                    }
+                    let waits = met.is_none() && !holding.is_empty();
+                    if !told && !waits {
+                        let why = ctx.why_not(rule);
+                        out.push(Due { id: row.id, branch: Branch::Skipped, reason: crate::text!("{0} — {1}", "{0} — {1}", "{0} — {1}", reason.arg(), why.arg()) });
+                    }
+                    continue;
+                }
+            };
+            for (i, holding) in &started {
+                if *holding {
+                    if let Some(w) = self.watches.get_mut(&(row.id, *i)) {
+                        w.fired = true;
+                    }
+                }
+            }
+            out.push(Due { id: row.id, branch, reason });
         }
         self.checked = ctx.now;
         out
     }
 }
 
-async fn run_step(state: &AppState, ctx: &Context, step: &Step, actor: &str) -> ApiResult<()> {
-    match step {
-        Step::Device { device_id, trait_name, action, params } => {
-            let device = db::device_by_id(&state.db, *device_id).await?.ok_or_else(|| ApiError::not_found("device not found"))?;
-            let view = ctx.device(*device_id).ok_or_else(|| ApiError::not_found("device not found"))?;
-            let input = ActionInput { trait_name: trait_name.clone(), action: action.clone(), params: params.clone() };
-            home::check_action(view, &input)?;
-            home::apply(state, &device, view, &input, actor).await
+// ---------------------------------------------------------------------------------------
+// Runs
+// ---------------------------------------------------------------------------------------
+
+fn text_json(t: &Text) -> Value {
+    json!({ "fr": t.fr, "en": t.en, "es": t.es })
+}
+
+fn text_of(v: &Value) -> Text {
+    Text::load(&v.to_string())
+}
+
+/// A step done, as the history keeps it.
+#[derive(Debug, Clone, Serialize)]
+pub struct StepDone {
+    pub what: Text,
+    pub ok: bool,
+    pub error: Option<Text>,
+}
+
+impl StepDone {
+    fn stored(&self) -> Value {
+        json!({ "what": text_json(&self.what), "ok": self.ok, "error": self.error.as_ref().map(text_json) })
+    }
+
+    fn load(v: &Value) -> StepDone {
+        StepDone { what: text_of(&v["what"]), ok: v["ok"].as_bool().unwrap_or(false), error: v.get("error").filter(|e| !e.is_null()).map(text_of) }
+    }
+}
+
+/// A run in the history.
+#[derive(Debug, Clone, Serialize)]
+pub struct RunView {
+    pub started_at: i64,
+    pub finished_at: Option<i64>,
+    /// "then" | "else" | "skipped" | "busy"
+    pub branch: String,
+    pub reason: Text,
+    /// "done" | "stopped" | "cancelled" | "interrupted"; `None` while it runs.
+    pub ended: Option<String>,
+    pub steps: Vec<StepDone>,
+}
+
+impl RunView {
+    pub fn of(r: db::AutomationRun) -> RunView {
+        let steps: Vec<Value> = serde_json::from_str(&r.steps).unwrap_or_default();
+        RunView {
+            started_at: r.started_at,
+            finished_at: r.finished_at,
+            branch: r.branch,
+            reason: Text::load(&r.reason),
+            ended: r.ended,
+            steps: steps.iter().map(StepDone::load).collect(),
         }
-        Step::Scene { routine_id } => {
-            let row = db::routine_by_id(&state.db, *routine_id).await?.ok_or_else(|| ApiError::not_found("routine not found"))?;
-            let results = crate::routines::run_routine(&state.hub, &state.db, &row, actor).await?;
-            match results.iter().filter(|r| !r.ok).count() {
-                0 => Ok(()),
-                failed => Err(ApiError::bad_gateway(crate::text!("{0} action(s) en échec", "{0} action(s) failed", "{0} acción(es) con fallo", failed))),
+    }
+}
+
+/// The runs under way, by rule.
+#[derive(Default)]
+pub struct Runs {
+    running: Mutex<HashMap<i64, (u64, tokio::task::AbortHandle, i64)>>,
+    next: AtomicU64,
+}
+
+impl Runs {
+    pub fn is_running(&self, id: i64) -> bool {
+        self.running.lock().unwrap_or_else(|e| e.into_inner()).contains_key(&id)
+    }
+
+    /// Ends the run of a rule (changed, switched off, deleted); its history says it was cancelled.
+    pub async fn cancel(&self, db: &db::Db, id: i64) {
+        let taken = self.running.lock().unwrap_or_else(|e| e.into_inner()).remove(&id);
+        if let Some((_, handle, run_id)) = taken {
+            handle.abort();
+            if let Err(e) = db::finish_automation_run_ended(db, run_id, "cancelled").await {
+                tracing::error!("automation {id}: {e}");
             }
         }
     }
 }
 
-/// Runs the actions of a rule, one after the other, and tells the activity feed why.
-pub async fn run(state: &AppState, row: &AutomationRow, rule: &Automation, ctx: &Context, reason: Text, actor: &str) -> Vec<ActionResult> {
-    let who = format!("{actor} · automatisme « {} »", row.name);
-    let mut results = Vec::with_capacity(rule.actions.len());
-    for step in &rule.actions {
-        let r = run_step(state, ctx, step, &who).await;
-        results.push(ActionResult { ok: r.is_ok(), error: r.err().map(|e| e.message) });
+/// Starts the actions of a branch in the background. `None` when the rule already runs and is set
+/// to ignore a new start (the history tells it).
+pub async fn start(
+    state: &AppState,
+    row: &AutomationRow,
+    rule: &Automation,
+    branch: Branch,
+    ctx: Context,
+    reason: Text,
+    actor: &str,
+) -> Option<tokio::task::JoinHandle<Vec<StepDone>>> {
+    let runs = state.automations.clone();
+    if runs.is_running(row.id) {
+        match rule.mode {
+            RunMode::Single => {
+                let busy = crate::text!("{0} — déjà en cours", "{0} — already running", "{0} — ya en curso", reason.arg());
+                if let Err(e) = db::insert_automation_run(&state.db, row.id, "busy", &busy.store(), true).await {
+                    tracing::error!("automation {}: {e}", row.id);
+                }
+                return None;
+            }
+            RunMode::Restart => {
+                let old = runs.running.lock().unwrap_or_else(|e| e.into_inner()).remove(&row.id);
+                if let Some((_, handle, run_id)) = old {
+                    handle.abort();
+                    if let Err(e) = db::finish_automation_run_ended(&state.db, run_id, "cancelled").await {
+                        tracing::error!("automation {}: {e}", row.id);
+                    }
+                }
+            }
+        }
     }
+    let run_id = match db::insert_automation_run(&state.db, row.id, branch.as_str(), &reason.store(), false).await {
+        Ok(id) => id,
+        Err(e) => {
+            tracing::error!("automation {}: {e}", row.id);
+            return None;
+        }
+    };
     if let Err(e) = db::set_automation_run(&state.db, row.id, db::now(), &reason.store()).await {
         tracing::error!("automation {}: {e}", row.id);
     }
-    let failed = results.iter().filter(|r| !r.ok).count();
-    let (level, message) = if failed == 0 {
-        ("info", crate::text!("Automatisme « {0} » : {1}", "Automation “{0}”: {1}", "Automatismo «{0}»: {1}", row.name, reason.arg()))
+    let steps = if branch == Branch::Else { rule.otherwise.clone() } else { rule.actions.clone() };
+    let generation = runs.next.fetch_add(1, Ordering::Relaxed);
+    let (state2, row2, actor2) = (state.clone(), row.clone(), actor.to_string());
+    // Registered before it starts, so that a run that ends at once removes itself.
+    let mut running = runs.running.lock().unwrap_or_else(|e| e.into_inner());
+    let task = tokio::spawn(async move {
+        let (done, ended) = execute(&state2, &row2, run_id, &steps, ctx, &actor2).await;
+        let stored = Value::Array(done.iter().map(StepDone::stored).collect()).to_string();
+        if let Err(e) = db::finish_automation_run(&state2.db, run_id, ended, &stored).await {
+            tracing::error!("automation {}: {e}", row2.id);
+        }
+        {
+            let mut running = state2.automations.running.lock().unwrap_or_else(|e| e.into_inner());
+            if running.get(&row2.id).is_some_and(|(g, _, _)| *g == generation) {
+                running.remove(&row2.id);
+            }
+        }
+        log_run(&state2, &row2, branch, &reason, &done, ended, &actor2).await;
+        state2.hub.routines_changed();
+        done
+    });
+    running.insert(row.id, (generation, task.abort_handle(), run_id));
+    drop(running);
+    state.hub.routines_changed();
+    Some(task)
+}
+
+async fn log_run(state: &AppState, row: &AutomationRow, branch: Branch, reason: &Text, done: &[StepDone], ended: &str, actor: &str) {
+    let failed = done.iter().filter(|s| !s.ok).count();
+    let what = match branch {
+        Branch::Else => crate::text!("{0} (sinon)", "{0} (else)", "{0} (si no)", reason.arg()),
+        _ => reason.clone(),
+    };
+    let (level, message) = if failed == 0 && ended == "done" {
+        ("info", crate::text!("Automatisme « {0} » : {1}", "Automation “{0}”: {1}", "Automatismo «{0}»: {1}", row.name, what.arg()))
+    } else if failed == 0 {
+        (
+            "info",
+            crate::text!(
+                "Automatisme « {0} » : {1} — arrêté après une attente",
+                "Automation “{0}”: {1} — stopped after a wait",
+                "Automatismo «{0}»: {1} — detenido tras una espera",
+                row.name,
+                what.arg()
+            ),
+        )
     } else {
         (
             "warn",
@@ -964,18 +1672,158 @@ pub async fn run(state: &AppState, row: &AutomationRow, rule: &Automation, ctx: 
                 "Automation “{0}”: {1} — {2} failure(s) out of {3}",
                 "Automatismo «{0}»: {1} — {2} fallo(s) de {3}",
                 row.name,
-                reason.arg(),
+                what.arg(),
                 failed,
-                results.len()
+                done.len()
             ),
         )
     };
-    state.hub.log("automation", level, None, Some(actor), message, Some(json!({ "automation_id": row.id, "results": results }))).await;
-    state.hub.routines_changed();
-    results
+    let data = json!({ "automation_id": row.id, "results": done });
+    state.hub.log("automation", level, None, Some(actor), message, Some(data)).await;
 }
 
-/// Looks at the rules once: runs those that are due.
+/// A device a run drove, and its state before.
+struct Touched {
+    device_id: i64,
+    trait_name: String,
+    /// The last action on it, and every setting the run changed.
+    action: String,
+    keys: Vec<String>,
+    before: Map<String, Value>,
+}
+
+/// The action that puts back `before` after `action` set `keys` (`None`: nothing to put back).
+fn undo(trait_name: &str, action: &str, keys: &[String], before: &Map<String, Value>) -> Option<(String, Map<String, Value>)> {
+    let get = |k: &str| before.get(k).filter(|v| !v.is_null());
+    match (trait_name, action) {
+        ("ev.charger", "start" | "stop") => Some((if get("status").and_then(Value::as_str) == Some("charging") { "start" } else { "stop" }.into(), Map::new())),
+        ("ev.charger", "set_auto_limit") => Some(("set_auto_limit".into(), Map::from_iter([("on".into(), get("auto_limit")?.clone())]))),
+        (_, "boost") => (get("boost").and_then(Value::as_bool) == Some(false)).then(|| ("stop_boost".into(), Map::new())),
+        (_, "stop" | "stop_boost") => None,
+        _ => {
+            let params: Map<String, Value> = keys.iter().filter_map(|k| Some((k.clone(), get(k)?.clone()))).collect();
+            (!params.is_empty()).then(|| (action.to_string(), params))
+        }
+    }
+}
+
+async fn apply(state: &AppState, ctx: &Context, device_id: i64, input: &ActionInput, actor: &str) -> ApiResult<()> {
+    let device = db::device_by_id(&state.db, device_id).await?.ok_or_else(|| ApiError::not_found("device not found"))?;
+    let view = ctx.device(device_id).ok_or_else(|| ApiError::not_found("device not found"))?;
+    home::check_action(view, input)?;
+    home::apply(state, &device, view, input, actor).await
+}
+
+fn done(what: Text, r: ApiResult<()>) -> StepDone {
+    StepDone { what, ok: r.is_ok(), error: r.err().map(|e| e.message) }
+}
+
+/// Runs the steps one after the other. Returns what was done and how it ended.
+async fn execute(state: &AppState, row: &AutomationRow, run_id: i64, steps: &[Step], mut ctx: Context, actor: &str) -> (Vec<StepDone>, &'static str) {
+    let who = format!("{actor} · automatisme « {} »", row.name);
+    let mut out: Vec<StepDone> = vec![];
+    let mut touched: Vec<Touched> = vec![];
+    let reload = |ctx: Context| async move { Context::load(state).await.unwrap_or(ctx) };
+    for step in steps {
+        let what = ctx.describe_step(step);
+        match step {
+            Step::Device { device_id, trait_name, action, params } => {
+                let keys: Vec<String> = params.keys().cloned().collect();
+                match touched.iter_mut().find(|t| t.device_id == *device_id && t.trait_name == *trait_name) {
+                    Some(t) => {
+                        t.action = action.clone();
+                        for k in keys {
+                            if !t.keys.contains(&k) {
+                                t.keys.push(k);
+                            }
+                        }
+                    }
+                    None => touched.push(Touched {
+                        device_id: *device_id,
+                        trait_name: trait_name.clone(),
+                        action: action.clone(),
+                        keys,
+                        before: ctx.device(*device_id).and_then(|d| d.state.as_object().cloned()).unwrap_or_default(),
+                    }),
+                }
+                let input = ActionInput { trait_name: trait_name.clone(), action: action.clone(), params: params.clone() };
+                out.push(done(what, apply(state, &ctx, *device_id, &input, &who).await));
+            }
+            Step::Scene { routine_id } => {
+                let r = async {
+                    let row = db::routine_by_id(&state.db, *routine_id).await?.ok_or_else(|| ApiError::not_found("routine not found"))?;
+                    let results = crate::routines::run_routine(&state.hub, &state.db, &row, &who).await?;
+                    match results.iter().filter(|r| !r.ok).count() {
+                        0 => Ok(()),
+                        failed => Err(ApiError::bad_gateway(crate::text!("{0} action(s) en échec", "{0} action(s) failed", "{0} acción(es) con fallo", failed))),
+                    }
+                }
+                .await;
+                out.push(done(what, r));
+            }
+            Step::Wait { seconds } => {
+                tokio::time::sleep(Duration::from_secs(*seconds as u64)).await;
+                ctx = reload(ctx).await;
+                out.push(done(what, Ok(())));
+            }
+            Step::WaitUntil { condition, for_seconds, timeout_seconds, on_timeout } => {
+                let started = tokio::time::Instant::now();
+                let deadline = started + Duration::from_secs(*timeout_seconds as u64);
+                let mut since: Option<tokio::time::Instant> = None;
+                let reached = loop {
+                    ctx = reload(ctx).await;
+                    let now = tokio::time::Instant::now();
+                    if condition.met(&ctx) == Some(true) {
+                        let held = *since.get_or_insert(now);
+                        if now.duration_since(held).as_secs() as i64 >= *for_seconds {
+                            break true;
+                        }
+                    } else {
+                        since = None;
+                    }
+                    if now >= deadline {
+                        break false;
+                    }
+                    tokio::time::sleep(POLL.min(deadline.saturating_duration_since(now)).max(Duration::from_millis(100))).await;
+                };
+                if reached {
+                    out.push(done(what, Ok(())));
+                } else {
+                    let late = crate::text!("{0} — temps écoulé", "{0} — time is up", "{0} — tiempo agotado", what.arg());
+                    out.push(StepDone { what: late, ok: true, error: None });
+                    if *on_timeout == OnTimeout::Stop {
+                        save_steps(state, run_id, &out).await;
+                        return (out, "stopped");
+                    }
+                }
+            }
+            Step::Restore => {
+                out.push(done(what, Ok(())));
+                ctx = reload(ctx).await;
+                for t in touched.drain(..).rev() {
+                    let Some((action, params)) = undo(&t.trait_name, &t.action, &t.keys, &t.before) else { continue };
+                    let name = ctx.device_name(t.device_id);
+                    let how = ctx.describe_action(t.device_id, &t.trait_name, &action, &params);
+                    let what = crate::text!("remettre {0} : {1}", "put back {0}: {1}", "dejar {0}: {1}", name.arg(), how.arg());
+                    let input = ActionInput { trait_name: t.trait_name.clone(), action, params };
+                    out.push(done(what, apply(state, &ctx, t.device_id, &input, &who).await));
+                }
+            }
+        }
+        save_steps(state, run_id, &out).await;
+    }
+    (out, "done")
+}
+
+/// Keeps the steps done so far, so that the history shows a run that waits.
+async fn save_steps(state: &AppState, run_id: i64, done: &[StepDone]) {
+    let stored = Value::Array(done.iter().map(StepDone::stored).collect()).to_string();
+    if let Err(e) = db::set_automation_run_steps(&state.db, run_id, &stored).await {
+        tracing::error!("automation run {run_id}: {e}");
+    }
+}
+
+/// Looks at the rules once: starts those that are due.
 pub async fn tick(state: &AppState, engine: &mut Engine) {
     let rows = match db::list_automations(&state.db).await {
         Ok(rows) => rows,
@@ -991,14 +1839,23 @@ pub async fn tick(state: &AppState, engine: &mut Engine) {
         Err(e) => return tracing::error!("automations: {}", e.message.en),
     };
     let rules: Vec<(AutomationRow, Automation)> = rows.into_iter().filter_map(|row| Automation::of(&row).map(|rule| (row, rule))).collect();
-    for (id, reason) in engine.due(&rules, &ctx) {
-        if let Some((row, rule)) = rules.iter().find(|(row, _)| row.id == id) {
-            run(state, row, rule, &ctx, reason, ACTOR).await;
+    for due in engine.due(&rules, &ctx) {
+        let Some((row, rule)) = rules.iter().find(|(row, _)| row.id == due.id) else { continue };
+        if due.branch == Branch::Skipped {
+            if let Err(e) = db::insert_automation_run(&state.db, row.id, "skipped", &due.reason.store(), true).await {
+                tracing::error!("automation {}: {e}", row.id);
+            }
+            state.hub.routines_changed();
+            continue;
         }
+        start(state, row, rule, due.branch, ctx.clone(), due.reason, ACTOR).await;
     }
 }
 
 pub async fn run_loop(state: AppState) {
+    if let Err(e) = db::interrupt_automation_runs(&state.db).await {
+        tracing::error!("automations: {e}");
+    }
     let now = db::now();
     // A fixed time missed during a short stop still runs.
     let kept = db::get_setting(&state.db, CHECKED).await.ok().flatten().and_then(|v| v.parse::<i64>().ok());
@@ -1044,7 +1901,7 @@ mod tests {
             measures: Default::default(),
             position: 0,
             available: true,
-            state: json!({"on": false, "room_temp": temp, "mode": "heating"}),
+            state: json!({"on": false, "room_temp": temp, "mode": "heating", "setpoint": 19.0}),
         }
     }
 
@@ -1056,7 +1913,7 @@ mod tests {
             source_id: Some(3),
             installation_id: None,
             reference: json!("charger"),
-            state: json!({"status": status}),
+            state: json!({"status": status, "boost": false}),
             ..zone(id, "Borne", 0.0)
         }
     }
@@ -1068,6 +1925,7 @@ mod tests {
             devices: vec![zone(1, "Salon", salon), charger(2, "plugged")],
             flows: Flows { grid: Some(grid), solar: Some(3000.0), battery: None, home: Some(3000.0 + grid) },
             outdoor: Some(6.0),
+            weather: None,
             // Toulouse.
             coords: Some((43.6045, 1.444)),
             scenes: HashMap::from([(7, "Je pars".to_string())]),
@@ -1080,8 +1938,11 @@ mod tests {
             name: "Surplus".into(),
             enabled: true,
             trigger_def: String::new(),
+            condition_match: "all".into(),
             conditions: String::new(),
             actions: String::new(),
+            else_actions: "[]".into(),
+            run_mode: "single".into(),
             last_run_at,
             last_reason: None,
             created_at: 0,
@@ -1089,10 +1950,14 @@ mod tests {
         }
     }
 
+    fn input(v: Value) -> AutomationInput {
+        serde_json::from_value(v).unwrap()
+    }
+
     /// The rule of the request: returning more than 500 W for 5 min, the living room below 18 °C
     /// in winter → heat the living room and charge the car.
     fn surplus() -> Automation {
-        serde_json::from_value::<AutomationInput>(json!({
+        let i = input(json!({
             "name": "Surplus",
             "when": {"kind": "measure", "measure": {"kind": "energy", "flow": "export"}, "op": "above", "value": 500, "for_minutes": 5},
             "conditions": [
@@ -1103,22 +1968,26 @@ mod tests {
                 {"kind": "device", "device_id": 1, "trait": "climate.zone", "action": "set", "params": {"on": true, "setpoint": 21}},
                 {"kind": "device", "device_id": 2, "trait": "ev.charger", "action": "start", "params": {"limit": 16}}
             ]
-        }))
-        .map(|i| validate(i, &ctx(0, 0.0, 17.0)).unwrap().1)
-        .unwrap()
+        }));
+        validate(i, &ctx(0, 0.0, 17.0)).unwrap().1
+    }
+
+    /// The rules started (then or else), not those the history tells did not start.
+    fn started(engine: &mut Engine, rules: &[(AutomationRow, Automation)], c: &Context) -> Vec<Due> {
+        engine.due(rules, c).into_iter().filter(|d| d.branch != Branch::Skipped).collect()
     }
 
     #[test]
     fn the_surplus_rule_reads_like_a_sentence() {
         let c = ctx(at(2026, 11, 15, 12, 0), -742.0, 17.2);
         let rule = surplus();
-        assert_eq!(c.describe_trigger(&rule.when).fr, "Injection au réseau > 500 W pendant 5 min");
+        assert_eq!(c.describe_trigger(&rule.triggers[0]).fr, "Injection au réseau > 500 W pendant 5 min");
         assert_eq!(c.describe_condition(&rule.conditions[0]).fr, "Salon · Température < 18 °C");
         assert_eq!(c.describe_condition(&rule.conditions[1]).fr, "de novembre à mars");
         assert_eq!(c.describe_step(&rule.actions[0]).fr, "Salon : allumée, consigne 21°");
         assert_eq!(c.describe_step(&rule.actions[1]).en, "Borne: Start charging (Maximum current 16 A)");
-        assert_eq!(c.reason(&rule.when).fr, "Injection au réseau : 742 W depuis 5 min");
-        let v = view(&row(1, None), rule, &c);
+        assert_eq!(c.reason(&rule.triggers[0]).fr, "Injection au réseau : 742 W depuis 5 min");
+        let v = view(&row(1, None), rule, &c, false);
         assert_eq!((v.status.value, v.status.holds, v.status.conditions.clone()), (Some(742.0), Some(true), vec![Some(true), Some(true)]));
     }
 
@@ -1127,7 +1996,7 @@ mod tests {
         let rules = vec![(row(1, None), surplus())];
         let t0 = at(2026, 11, 15, 12, 0);
         let mut engine = Engine::new(t0);
-        let mut look = |secs: i64, grid: f64, salon: f64| engine.due(&rules, &ctx(t0 + secs, grid, salon)).len();
+        let mut look = |secs: i64, grid: f64, salon: f64| started(&mut engine, &rules, &ctx(t0 + secs, grid, salon)).len();
         assert_eq!(look(0, -800.0, 17.0), 0, "must hold 5 min");
         assert_eq!(look(120, -300.0, 17.0), 0, "a cloud: the count starts again");
         assert_eq!(look(180, -800.0, 17.0), 0);
@@ -1147,19 +2016,37 @@ mod tests {
         let t0 = at(2026, 11, 15, 12, 0);
         let mut engine = Engine::new(t0);
         assert!(engine.due(&rules, &ctx(t0, -800.0, 19.0)).is_empty());
-        assert!(engine.due(&rules, &ctx(t0 + 600, -800.0, 19.0)).is_empty(), "warm enough");
-        assert_eq!(engine.due(&rules, &ctx(t0 + 900, -800.0, 17.5)).len(), 1, "the room got cold");
+        let skipped = engine.due(&rules, &ctx(t0 + 600, -800.0, 19.0));
+        assert_eq!(skipped.len(), 1, "the history tells why");
+        assert_eq!(skipped[0].branch, Branch::Skipped);
+        assert_eq!(skipped[0].reason.fr, "Injection au réseau : 800 W depuis 5 min — conditions non remplies : Salon · Température < 18 °C (19 °C)");
+        assert!(engine.due(&rules, &ctx(t0 + 700, -800.0, 19.0)).is_empty(), "told once per episode");
+        let due = engine.due(&rules, &ctx(t0 + 900, -800.0, 17.5));
+        assert_eq!((due.len(), due[0].branch), (1, Branch::Then), "the room got cold");
         // In July, never.
         let july = at(2026, 7, 15, 12, 0);
         let mut engine = Engine::new(july);
-        assert!(engine.due(&rules, &ctx(july, -800.0, 17.0)).is_empty());
-        assert!(engine.due(&rules, &ctx(july + 600, -800.0, 17.0)).is_empty());
-        // A zone that does not answer: the rule waits.
+        assert!(started(&mut engine, &rules, &ctx(july, -800.0, 17.0)).is_empty());
+        assert!(started(&mut engine, &rules, &ctx(july + 600, -800.0, 17.0)).is_empty());
+        // A zone that does not answer: the rule waits, without a word.
         let mut engine = Engine::new(t0);
         let mut blind = ctx(t0 + 600, -800.0, 17.0);
         blind.devices[0].available = false;
         assert!(engine.due(&rules, &ctx(t0, -800.0, 17.0)).is_empty());
         assert!(engine.due(&rules, &blind).is_empty());
+    }
+
+    #[test]
+    fn else_runs_when_the_conditions_are_false() {
+        let mut rule = surplus();
+        rule.otherwise = vec![Step::Device { device_id: 2, trait_name: "ev.charger".into(), action: "start".into(), params: Map::new() }];
+        let rules = vec![(row(1, None), rule)];
+        let t0 = at(2026, 11, 15, 12, 0);
+        let mut engine = Engine::new(t0);
+        assert!(engine.due(&rules, &ctx(t0, -800.0, 19.0)).is_empty());
+        let due = engine.due(&rules, &ctx(t0 + 600, -800.0, 19.0));
+        assert_eq!((due.len(), due[0].branch), (1, Branch::Else), "warm enough: charge the car instead");
+        assert!(engine.due(&rules, &ctx(t0 + 900, -800.0, 17.0)).is_empty(), "the episode is decided");
     }
 
     #[test]
@@ -1170,6 +2057,42 @@ mod tests {
         assert!(engine.due(&rules, &ctx(t0, -800.0, 17.0)).is_empty());
         assert!(engine.due(&rules, &ctx(t0 + 600, -800.0, 17.0)).is_empty());
         assert_eq!(engine.due(&rules, &ctx(t0 + 660, -800.0, 17.0)).len(), 1);
+    }
+
+    #[test]
+    fn several_triggers_and_a_change_of_state() {
+        let t0 = at(2026, 11, 15, 12, 0);
+        let c = |secs: i64, status: &str| {
+            let mut c = ctx(t0 + secs, 0.0, 20.0);
+            c.devices[1] = charger(2, status);
+            c
+        };
+        let rule = validate(
+            input(json!({
+                "name": "Charge",
+                "triggers": [
+                    {"kind": "state", "device_id": 2, "field": "status", "value": "charging"},
+                    {"kind": "time", "time": "12:30"}
+                ],
+                "actions": [{"kind": "scene", "routine_id": 7}]
+            })),
+            &c(0, "plugged"),
+        )
+        .unwrap()
+        .1;
+        assert_eq!(c(0, "plugged").describe_triggers(&rule.triggers).fr, "Borne · État : charging devient vrai ou à 12:30");
+        let rules = vec![(row(1, None), rule)];
+        let mut engine = Engine::new(t0);
+        assert_eq!(started(&mut engine, &rules, &c(0, "plugged")).len(), 0);
+        assert_eq!(started(&mut engine, &rules, &c(60, "charging")).len(), 1, "the charge starts");
+        assert_eq!(started(&mut engine, &rules, &c(120, "charging")).len(), 0, "once");
+        assert_eq!(started(&mut engine, &rules, &c(1800, "charging")).len(), 1, "12:30, the other trigger");
+
+        // Already charging when the server starts: not a change.
+        let mut engine = Engine::new(t0);
+        assert_eq!(started(&mut engine, &rules, &c(0, "charging")).len(), 0);
+        assert_eq!(started(&mut engine, &rules, &c(60, "plugged")).len(), 0);
+        assert_eq!(started(&mut engine, &rules, &c(120, "charging")).len(), 1);
     }
 
     #[test]
@@ -1186,11 +2109,16 @@ mod tests {
         // Around midnight.
         let late = Trigger::Time { time: "23:59".into(), days: vec![] };
         assert_eq!(late.due(&c(at(2026, 11, 16, 0, 1)), at(2026, 11, 15, 23, 58), at(2026, 11, 16, 0, 1)), Some(at(2026, 11, 15, 23, 59)));
-        // Toulouse, 15 November: the sun sets about 17:29.
-        let dusk = Trigger::Sun { event: SunEvent::Sunset, offset_minutes: -30, days: vec![] };
-        let ts = dusk.next_at(&c(at(2026, 11, 15, 12, 0))).unwrap();
+        // Toulouse, 15 November: the sun sets about 17:29, dusk about 17:59.
+        let before_sunset = Trigger::Sun { event: SunEvent::Sunset, offset_minutes: -30, days: vec![] };
+        let ts = before_sunset.next_at(&c(at(2026, 11, 15, 12, 0))).unwrap();
         assert!((at(2026, 11, 15, 16, 54)..at(2026, 11, 15, 17, 4)).contains(&ts), "{ts}");
-        assert_eq!(c(0).describe_trigger(&dusk).fr, "30 min avant le coucher du soleil");
+        let dusk = Trigger::Sun { event: SunEvent::Dusk, offset_minutes: 0, days: vec![] };
+        let ts = dusk.next_at(&c(at(2026, 11, 15, 12, 0))).unwrap();
+        assert!((at(2026, 11, 15, 17, 54)..at(2026, 11, 15, 18, 4)).contains(&ts), "{ts}");
+        assert_eq!(c(0).describe_trigger(&before_sunset).fr, "30 min avant le coucher du soleil");
+        assert_eq!(c(0).describe_trigger(&dusk).fr, "au crépuscule");
+        assert_eq!(c(0).describe_trigger(&before_sunset).es, "30 min antes del atardecer");
         assert_eq!(c(0).describe_trigger(&weekdays).fr, "à 07:30 (lun, mar, mer, jeu, ven)");
         assert_eq!(Condition::Daylight { day: true }.met(&c(at(2026, 11, 15, 12, 0))), Some(true));
         assert_eq!(Condition::Daylight { day: true }.met(&c(at(2026, 11, 15, 22, 0))), Some(false));
@@ -1198,12 +2126,105 @@ mod tests {
         assert_eq!((night.met(&c(at(2026, 11, 15, 23, 0))), night.met(&c(at(2026, 11, 15, 5, 59))), night.met(&c(at(2026, 11, 15, 6, 0)))), (Some(true), Some(true), Some(false)));
         let plugged = Condition::State { device_id: 2, field: "status".into(), value: json!("plugged") };
         assert_eq!(plugged.met(&c(0)), Some(true));
+        // The south façade at noon, the north never in November; the east one in the morning only.
+        let (south, north, east) = (Condition::Facade { facing: 180 }, Condition::Facade { facing: 0 }, Condition::Facade { facing: 90 });
+        let noon = c(at(2026, 11, 15, 12, 40));
+        assert_eq!((south.met(&noon), north.met(&noon), east.met(&noon)), (Some(true), Some(false), Some(false)));
+        assert_eq!(east.met(&c(at(2026, 11, 15, 9, 30))), Some(true));
+        assert_eq!(c(0).describe_condition(&south).fr, "le soleil est sur la façade sud");
+    }
+
+    #[test]
+    fn the_weather_is_a_measure() {
+        let mut c = ctx(at(2026, 11, 15, 12, 0), 0.0, 20.0);
+        let rain = Measure::Weather { field: WeatherField::RainNextHour };
+        assert_eq!(c.read(&rain), None, "no weather yet");
+        let hour = |ts: i64, p: f64| crate::weather::Hour { ts, temperature: None, code: None, precipitation_probability: Some(p) };
+        c.weather = Some(Report {
+            place: "Toulouse".into(),
+            temperature: Some(6.0),
+            apparent: None,
+            code: None,
+            precipitation: Some(0.0),
+            wind: Some(42.0),
+            today_min: None,
+            today_max: None,
+            tomorrow_min: Some(-2.0),
+            tomorrow_max: Some(9.0),
+            tomorrow_code: None,
+            hours: vec![hour(c.now - 1800, 10.0), hour(c.now + 1800, 80.0), hour(c.now + 7200, 100.0)],
+            read_at: c.now - 600,
+        });
+        assert_eq!(c.read(&rain), Some(80.0), "the hour under way and the next one");
+        assert_eq!(c.read(&Measure::Weather { field: WeatherField::TomorrowMin }), Some(-2.0));
+        let frost = Condition::Measure { measure: Measure::Weather { field: WeatherField::TomorrowMin }, op: Op::Below, value: 0.0 };
+        assert_eq!(frost.met(&c), Some(true));
+        assert_eq!(c.describe_condition(&frost).fr, "Minimale de demain < 0 °C");
+        c.now += WEATHER_MAX_AGE;
+        assert_eq!(c.read(&rain), None, "too old");
+    }
+
+    #[test]
+    fn what_is_put_back() {
+        let before = |v: Value| v.as_object().unwrap().clone();
+        let keys = |k: &[&str]| k.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let zone = before(json!({"on": false, "setpoint": 19.0, "mode": "heating"}));
+        assert_eq!(undo("climate.zone", "set", &keys(&["on", "setpoint"]), &zone), Some(("set".into(), before(json!({"on": false, "setpoint": 19.0})))));
+        let plugged = before(json!({"status": "plugged"}));
+        assert_eq!(undo("ev.charger", "start", &[], &plugged), Some(("stop".into(), Map::new())));
+        assert_eq!(undo("ev.charger", "stop", &[], &before(json!({"status": "charging"}))), Some(("start".into(), Map::new())));
+        assert_eq!(undo("ventilation.room", "boost", &keys(&["minutes"]), &before(json!({"boost": false}))), Some(("stop_boost".into(), Map::new())));
+        assert_eq!(undo("ventilation.room", "boost", &keys(&["minutes"]), &before(json!({"boost": true}))), None, "it was already boosting");
+        assert_eq!(undo("cover.position", "stop", &[], &before(json!({"position": 40}))), None);
+        assert_eq!(undo("cover.position", "set", &keys(&["position"]), &before(json!({"position": 40}))), Some(("set".into(), before(json!({"position": 40})))));
+    }
+
+    #[test]
+    fn conditions_joined_by_or_and_in_groups() {
+        let c = ctx(at(2026, 7, 15, 12, 0), -800.0, 17.0);
+        let rule = |v: Value| {
+            let mut i = json!({
+                "name": "Test",
+                "when": {"kind": "time", "time": "07:30"},
+                "actions": [{"kind": "scene", "routine_id": 7}]
+            });
+            i.as_object_mut().unwrap().extend(v.as_object().unwrap().clone());
+            validate(input(i), &c).map(|(_, r)| r)
+        };
+        let cold = json!({"kind": "measure", "measure": {"kind": "device", "device_id": 1, "field": "room_temp"}, "op": "below", "value": 18});
+        let winter = json!({"kind": "months", "from": 11, "to": 3});
+        let freezing = json!({"kind": "measure", "measure": {"kind": "outdoor"}, "op": "below", "value": 5});
+
+        // In July at 17 °C: cold, not winter.
+        let all = rule(json!({"conditions": [cold, winter]})).unwrap();
+        assert_eq!(all.met(&c), Some(false));
+        let any = rule(json!({"match": "any", "conditions": [cold, winter]})).unwrap();
+        assert_eq!(any.met(&c), Some(true));
+
+        // Cold and (winter or freezing outside): outside is 6 °C, so no.
+        let grouped = rule(json!({"conditions": [cold, {"kind": "group", "match": "any", "conditions": [winter, freezing]}]})).unwrap();
+        assert_eq!(grouped.met(&c), Some(false));
+        assert_eq!(c.describe_conditions(grouped.joined, &grouped.conditions).fr, "Salon · Température < 18 °C et (de novembre à mars ou Température extérieure < 5 °C)");
+        let mut freezing_day = c.clone();
+        freezing_day.outdoor = Some(2.0);
+        assert_eq!(grouped.met(&freezing_day), Some(true));
+        assert!(grouped.read_devices().contains(&1), "a group's devices are read too");
+
+        // An unknown value decides only when the others do not.
+        let mut blind = c.clone();
+        blind.devices[0].available = false;
+        assert_eq!(any.met(&blind), None, "winter is false, the room unknown");
+        assert_eq!(all.met(&blind), Some(false), "winter is false: false whatever the room");
+
+        assert!(rule(json!({"conditions": [{"kind": "group", "match": "any", "conditions": [winter]}]})).is_err(), "a group of one");
+        let nested = json!({"kind": "group", "match": "all", "conditions": [cold, winter]});
+        assert!(rule(json!({"conditions": [{"kind": "group", "match": "any", "conditions": [nested, freezing]}]})).is_err(), "a group in a group");
     }
 
     #[test]
     fn what_cannot_run_is_refused() {
         let c = ctx(0, 0.0, 20.0);
-        let input = |patch: fn(&mut Value)| {
+        let check = |patch: fn(&mut Value)| {
             let mut v = json!({
                 "name": "Test",
                 "when": {"kind": "time", "time": "07:30"},
@@ -1212,21 +2233,46 @@ mod tests {
             patch(&mut v);
             serde_json::from_value::<AutomationInput>(v).map_err(|e| e.to_string()).and_then(|i| validate(i, &c).map_err(|e| e.message.en))
         };
-        assert!(input(|_| {}).is_ok());
-        assert!(input(|v| v["name"] = json!(" ")).is_err());
-        assert!(input(|v| v["when"]["time"] = json!("25:00")).is_err());
-        assert!(input(|v| v["when"]["days"] = json!([0])).is_err());
-        assert!(input(|v| v["actions"] = json!([])).is_err());
-        assert!(input(|v| v["actions"][0]["routine_id"] = json!(8)).is_err(), "unknown scene");
+        assert!(check(|_| {}).is_ok());
+        assert!(check(|v| v["name"] = json!(" ")).is_err());
+        assert!(check(|v| v["when"]["time"] = json!("25:00")).is_err());
+        assert!(check(|v| v["when"]["days"] = json!([0])).is_err());
+        assert!(check(|v| v["actions"] = json!([])).is_err());
+        assert!(check(|v| v["actions"][0]["routine_id"] = json!(8)).is_err(), "unknown scene");
         assert!(
-            input(|v| v["when"] = json!({"kind": "measure", "measure": {"kind": "device", "device_id": 1, "field": "mode"}, "op": "above", "value": 1})).is_err(),
+            check(|v| v["when"] = json!({"kind": "measure", "measure": {"kind": "device", "device_id": 1, "field": "mode"}, "op": "above", "value": 1})).is_err(),
             "not a number"
         );
-        assert!(input(|v| v["when"] = json!({"kind": "measure", "measure": {"kind": "device", "device_id": 9, "field": "room_temp"}, "op": "above", "value": 1})).is_err());
-        assert!(input(|v| v["conditions"] = json!([{"kind": "state", "device_id": 2, "field": "status", "value": "flying"}])).is_err());
-        assert!(input(|v| v["conditions"] = json!([{"kind": "months", "from": 0, "to": 3}])).is_err());
-        assert!(input(|v| v["actions"] = json!([{"kind": "device", "device_id": 2, "trait": "ev.charger", "action": "start", "params": {"limit": 99}}])).is_err());
-        assert!(input(|v| v["actions"] = json!([{"kind": "device", "device_id": 1, "trait": "climate.zone", "action": "set", "params": {}}])).is_err(), "changes nothing");
-        assert!(input(|v| v["actions"] = json!([{"kind": "device", "device_id": 1, "trait": "ev.charger", "action": "start"}])).is_err(), "a zone is not a charger");
+        assert!(check(|v| v["when"] = json!({"kind": "measure", "measure": {"kind": "device", "device_id": 9, "field": "room_temp"}, "op": "above", "value": 1})).is_err());
+        assert!(check(|v| v["conditions"] = json!([{"kind": "state", "device_id": 2, "field": "status", "value": "flying"}])).is_err());
+        assert!(check(|v| v["conditions"] = json!([{"kind": "months", "from": 0, "to": 3}])).is_err());
+        assert!(check(|v| v["actions"] = json!([{"kind": "device", "device_id": 2, "trait": "ev.charger", "action": "start", "params": {"limit": 99}}])).is_err());
+        assert!(check(|v| v["actions"] = json!([{"kind": "device", "device_id": 1, "trait": "climate.zone", "action": "set", "params": {}}])).is_err(), "changes nothing");
+        assert!(check(|v| v["actions"] = json!([{"kind": "device", "device_id": 1, "trait": "ev.charger", "action": "start"}])).is_err(), "a zone is not a charger");
+        // Several triggers, waits and a restore.
+        assert!(check(|v| v["triggers"] = json!([{"kind": "time", "time": "08:00"}, {"kind": "time", "time": "09:00"}, {"kind": "time", "time": "10:00"}])).is_err(), "4 triggers");
+        assert!(check(|v| v["actions"] = json!([{"kind": "restore"}])).is_err(), "nothing to put back");
+        assert!(check(|v| v["actions"] = json!([{"kind": "wait", "seconds": 0}])).is_err());
+        assert!(check(|v| v["actions"] = json!([
+            {"kind": "device", "device_id": 1, "trait": "climate.zone", "action": "set", "params": {"on": false}},
+            {"kind": "wait_until", "condition": {"kind": "state", "device_id": 2, "field": "status", "value": "available"}, "timeout_seconds": 3600},
+            {"kind": "restore"}
+        ]))
+        .is_ok());
+        assert!(check(|v| v["else"] = json!([{"kind": "wait", "seconds": 90000}])).is_err(), "a wait of more than a day");
+    }
+
+    #[test]
+    fn waits_read_like_a_sentence() {
+        let c = ctx(0, 0.0, 20.0);
+        let until = Step::WaitUntil {
+            condition: Box::new(Condition::Measure { measure: Measure::Energy { flow: Flow::Import }, op: Op::Above, value: 200.0 }),
+            for_seconds: 600,
+            timeout_seconds: 8 * 3600,
+            on_timeout: OnTimeout::Continue,
+        };
+        assert_eq!(c.describe_step(&until).fr, "attendre que Soutirage du réseau > 200 W pendant 10 min (au plus 8 h)");
+        assert_eq!(c.describe_step(&Step::Wait { seconds: 5400 }).fr, "attendre 1 h 30");
+        assert_eq!(c.describe_step(&Step::Restore).fr, "remettre comme avant");
     }
 }

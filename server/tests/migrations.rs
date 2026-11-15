@@ -33,6 +33,8 @@ const APPLIED: &[(&str, &str)] = &[
     ("0026_installation_place.sql", "43720e691176822cb6f0b77f524015b9d701fb0957fc703f5b45b20f1e4b2e03"),
     ("0027_room_icons.sql", "2b8579f3e153fce3b0e1bfe6bacace45e68ab5d5f5108653460a4411ce091c77"),
     ("0028_automations.sql", "e1c4434c8920921179ea115dbf96dcb778e8f37bef2796d3d45f78e31faadf86"),
+    ("0029_automation_match.sql", "64a22929763d3214ab0862660807ca53e0474d623cd8287f580a81221180cc41"),
+    ("0030_automation_runs.sql", "bd7b8a6e203f8e0ad8142710b97ecf1bc1c1c1713822b1f77193c0c82dd8aac5"),
 ];
 
 #[test]

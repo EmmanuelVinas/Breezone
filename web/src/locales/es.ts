@@ -1240,7 +1240,6 @@ const es: Record<string, string> = {
   "en dessous de": "por debajo de",
   "Une mesure passe un seuil": "Una medida cruza un umbral",
   "À heure fixe": "A una hora fija",
-  "Lever ou coucher du soleil": "Amanecer o atardecer",
   "pendant {n} min": "durante {n} min",
   "tout de suite": "enseguida",
   "Lever du soleil": "Amanecer",
@@ -1259,7 +1258,6 @@ const es: Record<string, string> = {
   "{label} : inchangé": "{label}: sin cambios",
   "{label} : oui": "{label}: sí",
   "{label} : non": "{label}: no",
-  "Scène « {name} »": "Escena «{name}»",
   "Appareil indisponible": "Dispositivo no disponible",
   "Automatisme modifié": "Automatismo modificado",
   "Automatisme créé": "Automatismo creado",
@@ -1275,16 +1273,10 @@ const es: Record<string, string> = {
     "Una regla se lee como una frase: cuando ocurre algo, si se cumplen ciertas cosas, entonces Breezone actúa. Todo ocurre en su servidor.",
   "ex. Surplus solaire : chauffer le salon":
     "p. ej. Excedente solar: calentar el salón",
-  "Ce qui déclenche la règle.": "Lo que activa la regla.",
-  "La règle agit une fois, puis attend que la mesure soit repassée nettement de l'autre côté du seuil avant de pouvoir agir de nouveau.":
-    "La regla actúa una vez y luego espera a que la medida vuelva claramente al otro lado del umbral antes de poder actuar de nuevo.",
   Si: "Si",
-  "Facultatif : toutes les conditions doivent être vraies.":
-    "Opcional: todas las condiciones deben cumplirse.",
   "Ajouter une condition…": "Añadir una condición…",
   Alors: "Entonces",
   "Ce que Breezone fait, dans l'ordre.": "Lo que hace Breezone, en orden.",
-  "Ajouter une action": "Añadir una acción",
   "Cette règle pilote une zone de climatisation : vérifiez qu'une programmation Airzone ne fait pas le contraire au même moment.":
     "Esta regla controla una zona de climatización: compruebe que ninguna programación de Airzone haga lo contrario al mismo tiempo.",
   "Activer « {name} »": "Activar «{name}»",
@@ -1299,10 +1291,137 @@ const es: Record<string, string> = {
     "Este automatismo ya no se activará.",
   "Quand quelque chose se produit, Breezone agit tout seul : surplus solaire, température, heure, soleil.":
     "Cuando ocurre algo, Breezone actúa solo: excedente solar, temperatura, hora, sol.",
-  "Aucun automatisme. Exemple : quand l'injection au réseau dépasse 500 W pendant 5 min, si le salon est sous 18 °C de novembre à mars, alors allumer le salon à 21°.":
-    "Ningún automatismo. Ejemplo: cuando la inyección a la red supera 500 W durante 5 min, si el salón está por debajo de 18 °C de noviembre a marzo, entonces encender el salón a 21°.",
   "Ce que vous lancez quand vous voulez : une minuterie (« dans 2 h, éteindre l'étage ») ou une scène de plusieurs actions.":
     "Lo que lanza cuando quiere: un temporizador («en 2 h, apagar la planta») o una escena de varias acciones.",
+  Fenêtres: "Ventanas",
+  Portes: "Puertas",
+  "Ventilation des pièces": "Ventilación de las habitaciones",
+  "Prises et relais": "Enchufes y relés",
+  Télécommandes: "Mandos",
+  Autres: "Otros",
+  Nord: "Norte",
+  "Nord-est": "Noreste",
+  Est: "Este",
+  "Sud-est": "Sureste",
+  Sud: "Sur",
+  "Sud-ouest": "Suroeste",
+  Ouest: "Oeste",
+  "Nord-ouest": "Noroeste",
+  Aube: "Alba",
+  Crépuscule: "Anochecer",
+  "Risque de pluie dans l'heure": "Probabilidad de lluvia en la próxima hora",
+  Vent: "Viento",
+  "Minimale de demain": "Mínima de mañana",
+  "Maximale de demain": "Máxima de mañana",
+  "Un appareil change d'état": "Un dispositivo cambia de estado",
+  "Le soleil (lever, coucher…)": "El sol (amanecer, atardecer…)",
+  "Le soleil arrive sur une façade": "El sol llega a una fachada",
+  "façade {name}": "fachada {name}",
+  "Le soleil sur une façade": "El sol en una fachada",
+  "le soleil est sur la": "el sol da en la",
+  "Toutes (et)": "Todas (y)",
+  "Au moins une (ou)": "Al menos una (o)",
+  ou: "o",
+  "Un groupe « {word} » (2 conditions ou plus)":
+    "Un grupo «{word}» (2 condiciones o más)",
+  "Groupe : ": "Grupo: ",
+  "Ajouter au groupe…": "Añadir al grupo…",
+  Attendre: "Esperar",
+  "Attendre que": "Esperar a que",
+  "au plus {d}": "como máximo {d}",
+  "puis continuer": "después continuar",
+  "sinon s'arrêter": "si no, parar",
+  "Remettre comme avant les appareils pilotés plus haut dans cette liste":
+    "Dejar como estaban los dispositivos controlados más arriba en esta lista",
+  "Agir sur un appareil": "Actuar sobre un dispositivo",
+  "Lancer une scène": "Lanzar una escena",
+  "Attendre que…": "Esperar a que…",
+  "Remettre comme avant": "Dejar como antes",
+  "Ajouter une action…": "Añadir una acción…",
+  "Ce qui déclenche la règle ; un seul suffit.":
+    "Lo que activa la regla; basta con uno.",
+  "Ajouter un déclencheur (ou)": "Añadir un disparador (o)",
+  "Une mesure, un état ou le soleil sur une façade déclenche une fois, puis attend que ce ne soit plus vrai avant de pouvoir déclencher de nouveau.":
+    "Una medida, un estado o el sol en una fachada activa la regla una vez y luego espera a que deje de cumplirse antes de poder activarla de nuevo.",
+  "Facultatif : ce qui doit être vrai à ce moment.":
+    "Opcional: lo que debe cumplirse en ese momento.",
+  Sinon: "Si no",
+  "Ce que Breezone fait quand les conditions sont fausses.":
+    "Lo que hace Breezone cuando las condiciones no se cumplen.",
+  "Retirer « Sinon »": "Quitar «Si no»",
+  "Ajouter « Sinon »": "Añadir «Si no»",
+  "Si la règle se redéclenche pendant qu'elle attend":
+    "Si la regla se vuelve a activar mientras espera",
+  "Ignorer le nouveau déclenchement": "Ignorar la nueva activación",
+  "Tout recommencer": "Volver a empezar",
+  "Surplus solaire : charger la voiture": "Excedente solar: cargar el coche",
+  "Quand plus de 500 W repartent au réseau pendant 5 min, lancer la charge, puis l'arrêter quand la maison tire plus de 200 W du réseau pendant 10 min.":
+    "Cuando más de 500 W vuelven a la red durante 5 min, iniciar la carga y detenerla cuando la casa consume más de 200 W de la red durante 10 min.",
+  "Surplus solaire : chauffer une pièce en hiver":
+    "Excedente solar: calentar una habitación en invierno",
+  "Quand plus de 500 W repartent au réseau, si la pièce est sous 18 °C de novembre à mars, chauffer à 21°, puis remettre comme avant quand le surplus s'arrête.":
+    "Cuando más de 500 W vuelven a la red, si la habitación está por debajo de 18 °C de noviembre a marzo, calentar a 21° y dejarla como antes cuando acaba el excedente.",
+  "Surplus solaire : chauffer le salon": "Excedente solar: calentar el salón",
+  "Fermer les volets au coucher du soleil": "Cerrar las persianas al atardecer",
+  "Chaque soir, au coucher du soleil, fermer les volets (à ajuster).":
+    "Cada tarde, al atardecer, cerrar las persianas (a ajustar).",
+  "Fermer les volets le soir": "Cerrar las persianas por la tarde",
+  "Ouvrir les volets le matin, pas avant 7 h":
+    "Abrir las persianas por la mañana, no antes de las 7",
+  "Au lever du soleil ou à 7 h, au plus tard des deux : ouvrir les volets.":
+    "Al amanecer o a las 7, lo que ocurra más tarde: abrir las persianas.",
+  "Ouvrir les volets le matin": "Abrir las persianas por la mañana",
+  "Protéger de la chaleur": "Proteger del calor",
+  "Quand le soleil arrive sur la façade sud et qu'il fait plus de 26 °C dehors, fermer les volets à 20 %.":
+    "Cuando el sol llega a la fachada sur y hace más de 26 °C fuera, cerrar las persianas al 20 %.",
+  "Fenêtre ouverte : couper la clim, puis la remettre":
+    "Ventana abierta: apagar la climatización y luego restablecerla",
+  "Quand la fenêtre est ouverte depuis 2 min, éteindre la zone ; quand elle se referme, la remettre comme avant.":
+    "Cuando la ventana lleva 2 min abierta, apagar la zona; cuando se cierra, dejarla como antes.",
+  "Fenêtre ouverte : couper la clim":
+    "Ventana abierta: apagar la climatización",
+  "Pluie annoncée : fermer les fenêtres de toit":
+    "Lluvia prevista: cerrar las ventanas de tejado",
+  "Quand le risque de pluie dans l'heure dépasse 70 %, fermer les fenêtres.":
+    "Cuando la probabilidad de lluvia en la próxima hora supera el 70 %, cerrar las ventanas.",
+  "Pluie annoncée : fermer les fenêtres":
+    "Lluvia prevista: cerrar las ventanas",
+  "Allumer une lumière au crépuscule": "Encender una luz al anochecer",
+  "Chaque soir au crépuscule, allumer la lumière choisie.":
+    "Cada tarde al anochecer, encender la luz elegida.",
+  "Lumière au crépuscule": "Luz al anochecer",
+  "Salle de bains humide : boost de la VMC":
+    "Baño húmedo: refuerzo de la ventilación",
+  "Quand l'humidité de la pièce dépasse 75 % pendant 2 min, lancer un boost de 30 min.":
+    "Cuando la humedad de la habitación supera el 75 % durante 2 min, lanzar un refuerzo de 30 min.",
+  "Boost VMC à la douche": "Refuerzo de ventilación en la ducha",
+  "Gel annoncé : garder la maison hors gel":
+    "Helada prevista: proteger la casa de la helada",
+  "À 22 h, si la minimale de demain est sous 0 °C, chauffer les zones à 16°.":
+    "A las 22 h, si la mínima de mañana está por debajo de 0 °C, calentar las zonas a 16°.",
+  "Gel annoncé": "Helada prevista",
+  Recettes: "Recetas",
+  "Des règles toutes prêtes, faites avec vos appareils : choisissez-en une, ajustez 2 ou 3 valeurs, enregistrez.":
+    "Reglas listas, hechas con sus dispositivos: elija una, ajuste 2 o 3 valores y guarde.",
+  "Aucune recette ne correspond encore à vos appareils (borne, volets, lumières, VMC, mesure d'énergie).":
+    "Ninguna receta corresponde aún a sus dispositivos (cargador, persianas, luces, ventilación, medidor de energía).",
+  Exécuté: "Ejecutado",
+  "Pas déclenché": "No activado",
+  "Déjà en cours": "Ya en curso",
+  "arrêté : attente écoulée": "detenido: espera agotada",
+  recommencé: "reiniciado",
+  "interrompu par un arrêt du serveur":
+    "interrumpido por una parada del servidor",
+  "Rien encore : l'historique garde les 20 derniers passages.":
+    "Nada todavía: el historial guarda las 20 últimas ejecuciones.",
+  "En cours": "En curso",
+  "« {name} » a démarré ; elle continue en attendant.":
+    "«{name}» ha empezado; continúa mientras espera.",
+  Dupliquer: "Duplicar",
+  "{name} (copie)": "{name} (copia)",
+  "Aucun automatisme. Partez d'une recette, ou par exemple : quand l'injection au réseau dépasse 500 W pendant 5 min, si le salon est sous 18 °C de novembre à mars, alors allumer le salon à 21°.":
+    "Ningún automatismo. Parta de una receta o, por ejemplo: cuando la inyección a la red supera 500 W durante 5 min, si el salón está por debajo de 18 °C de noviembre a marzo, entonces encender el salón a 21°.",
+  Météo: "Tiempo",
 }
 
 export default es

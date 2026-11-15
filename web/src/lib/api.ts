@@ -923,8 +923,19 @@ export type AutomationMeasure =
   | { kind: "energy"; flow: "export" | "import" | "solar" | "home" }
   | { kind: "device"; device_id: number; field: string }
   | { kind: "outdoor" }
+  | {
+      kind: "weather"
+      field:
+        | "precipitation"
+        | "wind"
+        | "rain_next_hour"
+        | "tomorrow_min"
+        | "tomorrow_max"
+    }
 
 export type AutomationOp = "above" | "below"
+
+export type SunEvent = "sunrise" | "sunset" | "dawn" | "dusk"
 
 /** Days: 1 (Monday) to 7 (Sunday); empty: every day. */
 export type AutomationTrigger =
@@ -935,13 +946,20 @@ export type AutomationTrigger =
       value: number
       for_minutes: number
     }
-  | { kind: "time"; time: string; days: number[] }
   | {
-      kind: "sun"
-      event: "sunrise" | "sunset"
-      offset_minutes: number
-      days: number[]
+      kind: "state"
+      device_id: number
+      field: string
+      value: boolean | string
+      for_minutes: number
     }
+  | { kind: "time"; time: string; days: number[] }
+  | { kind: "sun"; event: SunEvent; offset_minutes: number; days: number[] }
+  /** The sun reaches a façade facing `facing` (degrees from the north). */
+  | { kind: "facade"; facing: number }
+
+/** All true ("et") or at least one ("ou"). */
+export type AutomationMatch = "all" | "any"
 
 export type AutomationCondition =
   | {
@@ -955,6 +973,13 @@ export type AutomationCondition =
   | { kind: "hours"; from: string; to: string }
   | { kind: "days"; days: number[] }
   | { kind: "daylight"; day: boolean }
+  | { kind: "facade"; facing: number }
+  /** One level only: no group in a group. */
+  | {
+      kind: "group"
+      match: AutomationMatch
+      conditions: AutomationCondition[]
+    }
 
 export type AutomationStep =
   | {
@@ -965,30 +990,66 @@ export type AutomationStep =
       params: Record<string, unknown>
     }
   | { kind: "scene"; routine_id: number }
+  | { kind: "wait"; seconds: number }
+  | {
+      kind: "wait_until"
+      condition: AutomationCondition
+      for_seconds: number
+      timeout_seconds: number
+      on_timeout: "continue" | "stop"
+    }
+  /** Puts back the devices driven before, as they were. */
+  | { kind: "restore" }
 
 export type AutomationInput = {
   name: string
   enabled: boolean
-  when: AutomationTrigger
+  /** Any one starts the rule. */
+  triggers: AutomationTrigger[]
+  match: AutomationMatch
   conditions: AutomationCondition[]
   actions: AutomationStep[]
+  /** Run when a trigger starts the rule and the conditions are false. */
+  else: AutomationStep[]
+  /** Started again while it waits: ignored, or started over. */
+  mode: "single" | "restart"
 }
 
-/** A rule "quand… si… alors…", with its sentence and what it sees now. */
+/** A rule "quand… si… alors… sinon…", with its sentence and what it sees now. */
 export type Automation = AutomationInput & {
   id: number
-  summary: { when: string; conditions: string[]; actions: string[] }
+  summary: {
+    when: string
+    triggers: string[]
+    conditions: string[]
+    /** "et" or "ou". */
+    joined: string
+    actions: string[]
+    else: string[]
+  }
   status: {
     value: number | null
     unit: string | null
     holds: boolean | null
     conditions: (boolean | null)[]
     next_at: number | null
+    running: boolean
   }
   last_run_at: number | null
   last_reason: string | null
   created_at: number
   updated_at: number
+}
+
+/** A run of an automation, or a time it did not run (and why). */
+export type AutomationRun = {
+  started_at: number
+  finished_at: number | null
+  branch: "then" | "else" | "skipped" | "busy"
+  reason: string
+  /** null while it runs. */
+  ended: "done" | "stopped" | "cancelled" | "interrupted" | null
+  steps: { what: string; ok: boolean; error: string | null }[]
 }
 
 export const api = {
@@ -1003,7 +1064,12 @@ export const api = {
   deleteAutomation: (id: number) =>
     request<void>("DELETE", `/api/automations/${id}`),
   runAutomation: (id: number) =>
-    request<{ results: ActionResult[] }>("POST", `/api/automations/${id}/run`),
+    request<{ results: ActionResult[]; running: boolean }>(
+      "POST",
+      `/api/automations/${id}/run`
+    ),
+  automationRuns: (id: number) =>
+    request<AutomationRun[]>("GET", `/api/automations/${id}/runs`),
   devices: () => request<DeviceView[]>("GET", "/api/devices"),
   /** The history of a device over a period (timestamps), `bucket` seconds per point. */
   deviceHistoryBetween: (

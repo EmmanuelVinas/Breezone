@@ -111,7 +111,7 @@ private fun Hub.stopBoost(serverId: String, d: DeviceView, trait: String) =
     act(serverId, d, trait, "stop_boost", JsonObject(emptyMap()), optimistic = buildJsonObject { put("boost", false) })
 
 @Composable
-private fun LevelBar(level: Int, color: Color = Fz.colors.fan) {
+private fun LevelBar(level: Int, color: Color = Fz.colors.air) {
     Box(Modifier.fillMaxWidth().height(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)) {
         Box(Modifier.fillMaxHeight().fillMaxWidth(level.coerceIn(0, 100) / 100f).clip(CircleShape).background(color))
     }
@@ -167,7 +167,7 @@ fun VentilationScreen(serverId: String, onBack: () -> Unit, onOpen: (Long) -> Un
                         u.worstRoom?.let { Text(stringResource(Res.string.ventilation_worst, it, causeText(u.mainPollutant)), fontSize = 14.sp) }
                         if (!u.sensors) Caption(stringResource(Res.string.ventilation_no_key))
                         LevelBar(level ?: 0)
-                        if (flow.size > 1) Sparkline(flow, Fz.colors.fan, Modifier.fillMaxWidth().height(56.dp))
+                        if (flow.size > 1) Sparkline(flow, Fz.colors.air, Modifier.fillMaxWidth().height(56.dp))
                         if (u.boost) {
                             OutlinedButton(onClick = { hub.stopBoost(serverId, unit, "ventilation.unit") }, enabled = unit.available, shape = Fz.shapes.button) {
                                 Icon(FzIcons.Square, null, Modifier.size(14.dp))
@@ -197,7 +197,7 @@ fun VentilationScreen(serverId: String, onBack: () -> Unit, onOpen: (Long) -> Un
 private fun ValveRow(d: DeviceView, demanding: Boolean, cause: String, onClick: () -> Unit) {
     val s = d.valve()
     val q = s.quality()
-    val color = q?.color() ?: if (demanding) Fz.colors.warning else Fz.colors.fan
+    val color = q?.color() ?: if (demanding) Fz.colors.warning else Fz.colors.air
     val line = listOfNotNull(
         when {
             s.boost -> stringResource(Res.string.ventilation_boosting)
@@ -268,7 +268,7 @@ fun VentilationRoomScreen(serverId: String, deviceId: Long, onBack: () -> Unit) 
             item(key = "flow", contentType = "measure") {
                 SectionCard {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(FzIcons.Fan, null, Modifier.size(18.dp), tint = Fz.colors.fan)
+                        Icon(FzIcons.Fan, null, Modifier.size(18.dp), tint = Fz.colors.air)
                         Spacer(Modifier.width(8.dp))
                         Text(stringResource(Res.string.ventilation_air_flow), fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
                         Text(s.level?.let { stringResource(Res.string.common_percent, it.toInt()) } ?: "–", fontWeight = FontWeight.SemiBold)
@@ -277,7 +277,7 @@ fun VentilationRoomScreen(serverId: String, deviceId: Long, onBack: () -> Unit) 
                         if (s.nominal != null) stringResource(Res.string.ventilation_flow_of, s.flow.toInt(), s.nominal.toInt())
                         else stringResource(Res.string.ventilation_flow, s.flow.toInt()),
                     )
-                    history?.series?.get("flow")?.takeIf { it.size > 1 }?.let { Sparkline(it, Fz.colors.fan, Modifier.fillMaxWidth().height(72.dp)) }
+                    history?.series?.get("flow")?.takeIf { it.size > 1 }?.let { Sparkline(it, Fz.colors.air, Modifier.fillMaxWidth().height(72.dp)) }
                 }
             }
             if (s.humidity != null) {

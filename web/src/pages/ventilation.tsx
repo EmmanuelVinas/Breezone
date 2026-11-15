@@ -132,7 +132,7 @@ function Bar({ value, className }: { value: number; className?: string }) {
     <div className="h-2 overflow-hidden rounded-full bg-muted">
       <div
         className={cn(
-          "h-full rounded-full bg-fan transition-[width]",
+          "h-full rounded-full bg-air transition-[width]",
           className
         )}
         style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
@@ -198,7 +198,7 @@ function RoomCard({
           <div className="flex min-w-0 items-center gap-2">
             <span
               className={cn(
-                "grid size-8 shrink-0 place-items-center rounded-xl bg-fan/15 text-fan",
+                "grid size-8 shrink-0 place-items-center rounded-xl bg-air/15 text-air",
                 q && QUALITY[q].tile
               )}
             >
@@ -235,7 +235,7 @@ function RoomCard({
         <Measures s={s} />
         <Sparkline
           points={flow}
-          className="h-10 text-fan"
+          className="h-10 text-air"
           label={t("Débit des dernières 24 h")}
         />
         <div className="flex items-center justify-between gap-2">
@@ -348,7 +348,7 @@ function Detail({
         <div className="grid gap-1.5 rounded-2xl bg-muted/50 p-3">
           <div className="flex justify-between text-sm">
             <span className="flex items-center gap-1.5 font-medium">
-              <Fan className="size-4 text-fan" /> {t("Débit d'air")}
+              <Fan className="size-4 text-air" /> {t("Débit d'air")}
             </span>
             <b className="tabular">
               {typeof s.level === "number" ? `${s.level} %` : "–"}
@@ -364,7 +364,7 @@ function Detail({
           </span>
           <Sparkline
             points={history?.flow ?? []}
-            className="h-16 text-fan"
+            className="h-16 text-air"
             label={curve}
           />
         </div>
@@ -487,7 +487,7 @@ function House({
       })
     : null
   return (
-    <Card className="rounded-3xl bg-[radial-gradient(80%_90%_at_0%_0%,color-mix(in_oklch,var(--fan)_16%,transparent),transparent_70%)]">
+    <Card className="rounded-3xl bg-[radial-gradient(80%_90%_at_0%_0%,color-mix(in_oklch,var(--air)_16%,transparent),transparent_70%)]">
       <CardContent className="grid gap-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -560,7 +560,7 @@ function House({
         </div>
         <Sparkline
           points={flow}
-          className="h-20 text-fan"
+          className="h-20 text-air"
           label={t("Débit des dernières 24 h")}
         />
       </CardContent>
@@ -609,7 +609,7 @@ export function VentilationPage() {
       ) : !unit ? (
         <Card className="rounded-3xl">
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-            <span className="grid size-12 place-items-center rounded-2xl bg-fan/15 text-fan">
+            <span className="grid size-12 place-items-center rounded-2xl bg-air/15 text-air">
               <Fan className="size-6" />
             </span>
             <div className="font-heading text-lg font-semibold">

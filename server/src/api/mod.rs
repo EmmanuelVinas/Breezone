@@ -87,6 +87,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/automations/{id}", get(automations::get).put(automations::update).delete(automations::delete))
         .route("/api/automations/{id}/enabled", put(automations::set_enabled))
         .route("/api/automations/{id}/run", post(automations::run))
+        .route("/api/automations/{id}/runs", get(automations::runs))
         // Timers and Airzone routines
         .route("/api/timers", get(timers::list).post(timers::create))
         .route("/api/timers/{id}", axum::routing::delete(timers::cancel))

@@ -6,6 +6,30 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Automations go further, without becoming a programming language:
+  - several triggers (any one starts the rule); a device that changes state (the charger starts
+    charging); dawn and dusk; the sun reaching a façade; the weather (rain within the hour, rain,
+    wind, tomorrow's low and high);
+  - conditions joined by "and" or "or", with groups ("A and (B or C)"); the sun on a façade;
+  - "wait", "wait until… (at most…)", and "put back as before" (settings, charge, boost);
+  - an "else" branch, run when the conditions are false;
+  - runs in the background, with what to do when the rule starts again while it waits (ignore or
+    start over);
+  - the history of each rule: its last 20 runs, and why it did not run ("conditions not met: living
+    room 19.1 °C");
+  - ready-made recipes built with your devices (solar surplus to the car or a room, shutters at
+    sunset and sunrise, heat protection, window open, rain coming, light at dusk, ventilation boost,
+    frost coming), and "duplicate".
+- Lights: a coloured light that is on is framed by its colour.
+
+### Changed
+
+- The ventilation is shown in a pale sky blue instead of violet (web and app).
+- Automation editor: the thresholds follow the measure chosen (no more "500 °C"), and the lists of
+  devices are grouped by type with an icon.
+
 ## [0.11.0-beta.18] - 2026-11-15
 
 ### Added

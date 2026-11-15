@@ -1230,7 +1230,6 @@ const en: Record<string, string> = {
   "en dessous de": "below",
   "Une mesure passe un seuil": "A measure crosses a threshold",
   "À heure fixe": "At a fixed time",
-  "Lever ou coucher du soleil": "Sunrise or sunset",
   "pendant {n} min": "for {n} min",
   "tout de suite": "at once",
   "Lever du soleil": "Sunrise",
@@ -1249,7 +1248,6 @@ const en: Record<string, string> = {
   "{label} : inchangé": "{label}: unchanged",
   "{label} : oui": "{label}: yes",
   "{label} : non": "{label}: no",
-  "Scène « {name} »": "Scene “{name}”",
   "Appareil indisponible": "Device unavailable",
   "Automatisme modifié": "Automation changed",
   "Automatisme créé": "Automation created",
@@ -1265,16 +1263,10 @@ const en: Record<string, string> = {
     "A rule reads like a sentence: when something happens, if some things are true, then Breezone acts. Everything runs on your server.",
   "ex. Surplus solaire : chauffer le salon":
     "e.g. Solar surplus: heat the living room",
-  "Ce qui déclenche la règle.": "What starts the rule.",
-  "La règle agit une fois, puis attend que la mesure soit repassée nettement de l'autre côté du seuil avant de pouvoir agir de nouveau.":
-    "The rule acts once, then waits for the measure to come clearly back across the threshold before it can act again.",
   Si: "If",
-  "Facultatif : toutes les conditions doivent être vraies.":
-    "Optional: every condition must be true.",
   "Ajouter une condition…": "Add a condition…",
   Alors: "Then",
   "Ce que Breezone fait, dans l'ordre.": "What Breezone does, in order.",
-  "Ajouter une action": "Add an action",
   "Cette règle pilote une zone de climatisation : vérifiez qu'une programmation Airzone ne fait pas le contraire au même moment.":
     "This rule drives an air conditioning zone: check that no Airzone schedule does the opposite at the same time.",
   "Activer « {name} »": "Switch “{name}” on",
@@ -1289,10 +1281,135 @@ const en: Record<string, string> = {
     "This automation will no longer run.",
   "Quand quelque chose se produit, Breezone agit tout seul : surplus solaire, température, heure, soleil.":
     "When something happens, Breezone acts by itself: solar surplus, temperature, time, sun.",
-  "Aucun automatisme. Exemple : quand l'injection au réseau dépasse 500 W pendant 5 min, si le salon est sous 18 °C de novembre à mars, alors allumer le salon à 21°.":
-    "No automation. Example: when the grid export is above 500 W for 5 min, if the living room is below 18 °C from November to March, then switch the living room on at 21°.",
   "Ce que vous lancez quand vous voulez : une minuterie (« dans 2 h, éteindre l'étage ») ou une scène de plusieurs actions.":
     "What you start whenever you want: a timer (“in 2 h, switch the first floor off”) or a scene of several actions.",
+  Fenêtres: "Windows",
+  Portes: "Doors",
+  "Ventilation des pièces": "Room ventilation",
+  "Prises et relais": "Plugs and relays",
+  Télécommandes: "Remotes",
+  Autres: "Others",
+  Nord: "North",
+  "Nord-est": "North-east",
+  Est: "East",
+  "Sud-est": "South-east",
+  Sud: "South",
+  "Sud-ouest": "South-west",
+  Ouest: "West",
+  "Nord-ouest": "North-west",
+  Aube: "Dawn",
+  Crépuscule: "Dusk",
+  "Risque de pluie dans l'heure": "Chance of rain within the hour",
+  Vent: "Wind",
+  "Minimale de demain": "Tomorrow's low",
+  "Maximale de demain": "Tomorrow's high",
+  "Un appareil change d'état": "A device changes state",
+  "Le soleil (lever, coucher…)": "The sun (sunrise, sunset…)",
+  "Le soleil arrive sur une façade": "The sun reaches a façade",
+  "façade {name}": "{name} façade",
+  "Le soleil sur une façade": "The sun on a façade",
+  "le soleil est sur la": "the sun is on the",
+  "Toutes (et)": "All (and)",
+  "Au moins une (ou)": "At least one (or)",
+  ou: "or",
+  "Un groupe « {word} » (2 conditions ou plus)":
+    "A group “{word}” (2 conditions or more)",
+  "Groupe : ": "Group: ",
+  "Ajouter au groupe…": "Add to the group…",
+  Attendre: "Wait",
+  "Attendre que": "Wait until",
+  "au plus {d}": "{d} at most",
+  "puis continuer": "then go on",
+  "sinon s'arrêter": "else stop",
+  "Remettre comme avant les appareils pilotés plus haut dans cette liste":
+    "Put back the devices driven above in this list as they were",
+  "Agir sur un appareil": "Act on a device",
+  "Lancer une scène": "Start a scene",
+  "Attendre que…": "Wait until…",
+  "Remettre comme avant": "Put back as before",
+  "Ajouter une action…": "Add an action…",
+  "Ce qui déclenche la règle ; un seul suffit.":
+    "What starts the rule; any one is enough.",
+  "Ajouter un déclencheur (ou)": "Add a trigger (or)",
+  "Une mesure, un état ou le soleil sur une façade déclenche une fois, puis attend que ce ne soit plus vrai avant de pouvoir déclencher de nouveau.":
+    "A measure, a state or the sun on a façade starts the rule once, then waits until it is no longer true before it can start it again.",
+  "Facultatif : ce qui doit être vrai à ce moment.":
+    "Optional: what must be true at that time.",
+  Sinon: "Else",
+  "Ce que Breezone fait quand les conditions sont fausses.":
+    "What Breezone does when the conditions are false.",
+  "Retirer « Sinon »": "Remove “Else”",
+  "Ajouter « Sinon »": "Add “Else”",
+  "Si la règle se redéclenche pendant qu'elle attend":
+    "If the rule starts again while it waits",
+  "Ignorer le nouveau déclenchement": "Ignore the new start",
+  "Tout recommencer": "Start over",
+  "Surplus solaire : charger la voiture": "Solar surplus: charge the car",
+  "Quand plus de 500 W repartent au réseau pendant 5 min, lancer la charge, puis l'arrêter quand la maison tire plus de 200 W du réseau pendant 10 min.":
+    "When more than 500 W go back to the grid for 5 min, start charging, then stop when the home draws more than 200 W from the grid for 10 min.",
+  "Surplus solaire : chauffer une pièce en hiver":
+    "Solar surplus: heat a room in winter",
+  "Quand plus de 500 W repartent au réseau, si la pièce est sous 18 °C de novembre à mars, chauffer à 21°, puis remettre comme avant quand le surplus s'arrête.":
+    "When more than 500 W go back to the grid, if the room is below 18 °C from November to March, heat to 21°, then put it back as before when the surplus ends.",
+  "Surplus solaire : chauffer le salon": "Solar surplus: heat the living room",
+  "Fermer les volets au coucher du soleil": "Close the shutters at sunset",
+  "Chaque soir, au coucher du soleil, fermer les volets (à ajuster).":
+    "Every evening at sunset, close the shutters (to adjust).",
+  "Fermer les volets le soir": "Close the shutters in the evening",
+  "Ouvrir les volets le matin, pas avant 7 h":
+    "Open the shutters in the morning, not before 7",
+  "Au lever du soleil ou à 7 h, au plus tard des deux : ouvrir les volets.":
+    "At sunrise or at 7, whichever is later: open the shutters.",
+  "Ouvrir les volets le matin": "Open the shutters in the morning",
+  "Protéger de la chaleur": "Keep the heat out",
+  "Quand le soleil arrive sur la façade sud et qu'il fait plus de 26 °C dehors, fermer les volets à 20 %.":
+    "When the sun reaches the south façade and it is above 26 °C outside, close the shutters to 20 %.",
+  "Fenêtre ouverte : couper la clim, puis la remettre":
+    "Window open: switch the air conditioning off, then back",
+  "Quand la fenêtre est ouverte depuis 2 min, éteindre la zone ; quand elle se referme, la remettre comme avant.":
+    "When the window has been open for 2 min, switch the zone off; when it closes, put it back as before.",
+  "Fenêtre ouverte : couper la clim":
+    "Window open: switch the air conditioning off",
+  "Pluie annoncée : fermer les fenêtres de toit":
+    "Rain coming: close the roof windows",
+  "Quand le risque de pluie dans l'heure dépasse 70 %, fermer les fenêtres.":
+    "When the chance of rain within the hour is above 70 %, close the windows.",
+  "Pluie annoncée : fermer les fenêtres": "Rain coming: close the windows",
+  "Allumer une lumière au crépuscule": "Switch a light on at dusk",
+  "Chaque soir au crépuscule, allumer la lumière choisie.":
+    "Every evening at dusk, switch the chosen light on.",
+  "Lumière au crépuscule": "Light at dusk",
+  "Salle de bains humide : boost de la VMC":
+    "Humid bathroom: ventilation boost",
+  "Quand l'humidité de la pièce dépasse 75 % pendant 2 min, lancer un boost de 30 min.":
+    "When the room's humidity is above 75 % for 2 min, start a 30 min boost.",
+  "Boost VMC à la douche": "Ventilation boost at shower time",
+  "Gel annoncé : garder la maison hors gel":
+    "Frost coming: keep the home frost-free",
+  "À 22 h, si la minimale de demain est sous 0 °C, chauffer les zones à 16°.":
+    "At 10 pm, if tomorrow's low is below 0 °C, heat the zones to 16°.",
+  "Gel annoncé": "Frost coming",
+  Recettes: "Recipes",
+  "Des règles toutes prêtes, faites avec vos appareils : choisissez-en une, ajustez 2 ou 3 valeurs, enregistrez.":
+    "Ready-made rules, built with your devices: pick one, adjust 2 or 3 values, save.",
+  "Aucune recette ne correspond encore à vos appareils (borne, volets, lumières, VMC, mesure d'énergie).":
+    "No recipe fits your devices yet (charger, shutters, lights, ventilation, energy meter).",
+  Exécuté: "Ran",
+  "Pas déclenché": "Did not run",
+  "Déjà en cours": "Already running",
+  "arrêté : attente écoulée": "stopped: the wait ran out",
+  recommencé: "started over",
+  "interrompu par un arrêt du serveur": "cut short by a server stop",
+  "Rien encore : l'historique garde les 20 derniers passages.":
+    "Nothing yet: the history keeps the last 20 runs.",
+  "En cours": "Running",
+  "« {name} » a démarré ; elle continue en attendant.":
+    "“{name}” started; it goes on while it waits.",
+  Dupliquer: "Duplicate",
+  "{name} (copie)": "{name} (copy)",
+  "Aucun automatisme. Partez d'une recette, ou par exemple : quand l'injection au réseau dépasse 500 W pendant 5 min, si le salon est sous 18 °C de novembre à mars, alors allumer le salon à 21°.":
+    "No automation. Start from a recipe, or for example: when the grid export is above 500 W for 5 min, if the living room is below 18 °C from November to March, then switch the living room on at 21°.",
+  Météo: "Weather",
 }
 
 export default en

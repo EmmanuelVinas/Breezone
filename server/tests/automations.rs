@@ -3,9 +3,21 @@
 use breezone_server::automations::{self, Engine};
 use breezone_server::config::Config;
 use breezone_server::mock::{self, MockState};
+use chrono::Datelike;
 use reqwest::{Method, StatusCode};
 use serde_json::{json, Value};
 use std::sync::{Arc, Mutex};
+
+/// Waits for the runs of a rule (in the background) to end.
+async fn settle(state: &breezone_server::AppState, id: i64) {
+    for _ in 0..100 {
+        if !state.automations.is_running(id) {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    panic!("automation {id} still runs");
+}
 
 async fn serve(router: axum::Router) -> u16 {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -61,6 +73,7 @@ async fn a_rule_drives_a_zone_when_its_measure_crosses_the_threshold() {
     assert_eq!(s, StatusCode::CREATED, "{created}");
     let rule_id = created["id"].as_i64().unwrap();
     assert_eq!(created["summary"]["conditions"], json!(["de janvier à décembre"]));
+    assert_eq!((&created["match"], &created["summary"]["joined"]), (&json!("all"), &json!("et")));
     assert_eq!(created["summary"]["actions"][0], format!("{} : éteinte", third["name"].as_str().unwrap()));
     assert_eq!((&created["status"]["holds"], &created["status"]["conditions"]), (&json!(true), &json!([true])));
 
@@ -72,6 +85,7 @@ async fn a_rule_drives_a_zone_when_its_measure_crosses_the_threshold() {
     assert!(is_on(3));
     call(Method::PUT, &format!("/api/automations/{rule_id}/enabled"), Some(json!({"enabled": true}))).await;
     automations::tick(&state, &mut engine).await;
+    settle(&state, rule_id).await;
     assert!(!is_on(3), "the rule ran");
     assert!(is_on(1), "other zones untouched");
 
@@ -93,6 +107,99 @@ async fn a_rule_drives_a_zone_when_its_measure_crosses_the_threshold() {
     assert_eq!((s, &run["results"][0]["ok"]), (StatusCode::OK, &json!(true)));
     assert!(!is_on(3));
 
+    // Wait until zone 1 is off, then put zone 4 back as it was.
+    let (s, back) = call(
+        Method::POST,
+        "/api/automations",
+        Some(json!({
+            "name": "Fenêtre",
+            "when": {"kind": "time", "time": "03:00"},
+            "actions": [
+                {"kind": "device", "device_id": device(4)["id"], "trait": "climate.zone", "action": "set", "params": {"on": false}},
+                {"kind": "wait_until", "condition": {"kind": "state", "device_id": first["id"], "field": "on", "value": false}, "timeout_seconds": 60},
+                {"kind": "restore"}
+            ]
+        })),
+    )
+    .await;
+    assert_eq!(s, StatusCode::CREATED, "{back}");
+    let back_id = back["id"].as_i64().unwrap();
+    assert_eq!(back["summary"]["actions"][2], "remettre comme avant");
+    for z in [4, 5] {
+        call(Method::PATCH, &format!("/api/installations/{id}/zones/1/{z}"), Some(json!({"on": true}))).await;
+    }
+    assert!(is_on(4));
+    let switch_off = {
+        let (http, base, token) = (http.clone(), base.clone(), token.clone());
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            http.patch(format!("{base}/api/installations/{id}/zones/1/1")).bearer_auth(&token).json(&json!({"on": false})).send().await.unwrap();
+        })
+    };
+    let (s, run) = call(Method::POST, &format!("/api/automations/{back_id}/run"), None).await;
+    switch_off.await.unwrap();
+    assert_eq!((s, &run["running"]), (StatusCode::OK, &json!(false)), "{run}");
+    assert_eq!(run["results"].as_array().unwrap().len(), 4, "off, wait, put back: {run}");
+    assert!(is_on(4), "put back as before");
+    let (_, runs) = call(Method::GET, &format!("/api/automations/{back_id}/runs"), None).await;
+    assert_eq!((&runs[0]["branch"], &runs[0]["ended"]), (&json!("then"), &json!("done")), "{runs}");
+    assert!(runs[0]["steps"][3]["what"].as_str().unwrap().starts_with("remettre "), "{runs}");
+
+    // "Else": the conditions are false when the time comes.
+    let paris = chrono::Utc::now().with_timezone(&chrono_tz::Europe::Paris);
+    let minute_ago = (paris - chrono::Duration::minutes(1)).format("%H:%M").to_string();
+    let other_month = paris.month() % 12 + 1;
+    let (s, otherwise) = call(
+        Method::POST,
+        "/api/automations",
+        Some(json!({
+            "name": "Sinon",
+            "triggers": [{"kind": "time", "time": minute_ago}],
+            "conditions": [{"kind": "months", "from": other_month, "to": other_month}],
+            "actions": [{"kind": "scene", "routine_id": 0}],
+            "else": [{"kind": "device", "device_id": device(5)["id"], "trait": "climate.zone", "action": "set", "params": {"on": false}}]
+        })),
+    )
+    .await;
+    assert_eq!(s, StatusCode::BAD_REQUEST, "unknown scene: {otherwise}");
+    let (s, otherwise) = call(
+        Method::POST,
+        "/api/automations",
+        Some(json!({
+            "name": "Sinon",
+            "triggers": [{"kind": "time", "time": minute_ago}],
+            "conditions": [{"kind": "months", "from": other_month, "to": other_month}],
+            "actions": [{"kind": "device", "device_id": device(5)["id"], "trait": "climate.zone", "action": "set", "params": {"setpoint": 25}}],
+            "else": [{"kind": "device", "device_id": device(5)["id"], "trait": "climate.zone", "action": "set", "params": {"on": false}}]
+        })),
+    )
+    .await;
+    assert_eq!(s, StatusCode::CREATED, "{otherwise}");
+    let otherwise_id = otherwise["id"].as_i64().unwrap();
+    assert!(is_on(5));
+    let mut engine = Engine::new(breezone_server::db::now() - 120);
+    automations::tick(&state, &mut engine).await;
+    settle(&state, otherwise_id).await;
+    assert!(!is_on(5), "the else actions ran");
+    let (_, runs) = call(Method::GET, &format!("/api/automations/{otherwise_id}/runs"), None).await;
+    assert_eq!(runs[0]["branch"], "else", "{runs}");
+
+    // Switched off while it waits: the run ends, and the history says so.
+    let (_, waiting) =
+        call(Method::POST, "/api/automations", Some(json!({"name": "Attente", "when": {"kind": "time", "time": "03:00"}, "actions": [{"kind": "wait", "seconds": 600}]}))).await;
+    let waiting_id = waiting["id"].as_i64().unwrap();
+    let row = breezone_server::db::automation_by_id(&state.db, waiting_id).await.unwrap().unwrap();
+    let waits = automations::Automation::of(&row).unwrap();
+    let ctx = automations::Context::load(&state).await.unwrap();
+    automations::start(&state, &row, &waits, automations::Branch::Then, ctx, breezone_server::i18n::Text::plain("test"), "test").await.unwrap();
+    assert!(state.automations.is_running(waiting_id));
+    let (_, listed) = call(Method::GET, &format!("/api/automations/{waiting_id}"), None).await;
+    assert_eq!(listed["status"]["running"], true);
+    call(Method::PUT, &format!("/api/automations/{waiting_id}/enabled"), Some(json!({"enabled": false}))).await;
+    assert!(!state.automations.is_running(waiting_id));
+    let (_, runs) = call(Method::GET, &format!("/api/automations/{waiting_id}/runs"), None).await;
+    assert_eq!(runs[0]["ended"], "cancelled", "{runs}");
+
     // A user without access to the installation does not see the rule.
     let (s, _) = call(Method::POST, "/api/users", Some(json!({"username":"lea","password":"motdepasse2","role":"user"}))).await;
     assert_eq!(s, StatusCode::CREATED);
@@ -100,12 +207,13 @@ async fn a_rule_drives_a_zone_when_its_measure_crosses_the_threshold() {
         http.post(format!("{base}/api/auth/login")).json(&json!({"username":"lea","password":"motdepasse2","device_name":"test"})).send().await.unwrap().json().await.unwrap();
     let lea = v["access_token"].as_str().unwrap().to_string();
     let seen: Value = http.get(format!("{base}/api/automations")).bearer_auth(&lea).send().await.unwrap().json().await.unwrap();
-    assert_eq!(seen, json!([]));
+    let ids: Vec<i64> = seen.as_array().unwrap().iter().map(|a| a["id"].as_i64().unwrap()).collect();
+    assert!(![rule_id, back_id, otherwise_id].iter().any(|id| ids.contains(id)), "the rules of the installation are hidden: {ids:?}");
     let s = http.post(format!("{base}/api/automations")).bearer_auth(&lea).json(&rule).send().await.unwrap().status();
     assert_eq!(s, StatusCode::NOT_FOUND, "the installation is not revealed");
 
     let (s, _) = call(Method::DELETE, &format!("/api/automations/{rule_id}"), None).await;
     assert_eq!(s, StatusCode::NO_CONTENT);
     let (_, list) = call(Method::GET, "/api/automations", None).await;
-    assert_eq!(list, json!([]));
+    assert!(list.as_array().unwrap().iter().all(|a| a["id"] != rule_id), "deleted");
 }

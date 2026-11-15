@@ -2,8 +2,8 @@
 
 use crate::access::Access;
 use crate::auth::AuthUser;
-use crate::automations::{self, Automation, AutomationInput, AutomationView, Context};
-use crate::db::{self, AutomationRow};
+use crate::automations::{self, Automation, AutomationInput, AutomationView, Branch, Context, RunView};
+use crate::db::{self, AutomationFields, AutomationRow};
 use crate::error::{ApiError, ApiResult};
 use crate::routines;
 use crate::AppState;
@@ -75,11 +75,25 @@ async fn view_of(state: &AppState, id: i64) -> ApiResult<AutomationView> {
     let missing = || ApiError::not_found("automation not found");
     let row = db::automation_by_id(&state.db, id).await?.ok_or_else(missing)?;
     let rule = Automation::of(&row).ok_or_else(missing)?;
-    Ok(automations::view(&row, rule, &Context::load(state).await?))
+    Ok(automations::view(&row, rule, &Context::load(state).await?, state.automations.is_running(id)))
 }
 
-fn stored(rule: &Automation) -> (String, String, String) {
-    (json!(rule.when).to_string(), json!(rule.conditions).to_string(), json!(rule.actions).to_string())
+/// The rule as stored, as JSON: (triggers, conditions, actions, else).
+fn stored(rule: &Automation) -> [String; 4] {
+    [json!(rule.triggers).to_string(), json!(rule.conditions).to_string(), json!(rule.actions).to_string(), json!(rule.otherwise).to_string()]
+}
+
+fn fields<'a>(name: &'a str, enabled: bool, rule: &Automation, json: &'a [String; 4]) -> AutomationFields<'a> {
+    AutomationFields {
+        name,
+        enabled,
+        trigger: &json[0],
+        joined: rule.joined.as_str(),
+        conditions: &json[1],
+        actions: &json[2],
+        else_actions: &json[3],
+        run_mode: rule.mode.as_str(),
+    }
 }
 
 pub async fn list(State(state): State<AppState>, user: AuthUser) -> ApiResult<Json<Vec<AutomationView>>> {
@@ -93,7 +107,8 @@ pub async fn list(State(state): State<AppState>, user: AuthUser) -> ApiResult<Js
     for row in rows {
         let Some(rule) = Automation::of(&row) else { continue };
         if sees(&state, &access, &rule, &ctx).await? {
-            out.push(automations::view(&row, rule, &ctx));
+            let running = state.automations.is_running(row.id);
+            out.push(automations::view(&row, rule, &ctx, running));
         }
     }
     Ok(Json(out))
@@ -103,7 +118,15 @@ pub async fn get(State(state): State<AppState>, user: AuthUser, Path(id): Path<i
     let access = Access::of(&state.db, &user).await?;
     let ctx = Context::load(&state).await?;
     let (row, rule) = load(&state, &access, &ctx, id).await?;
-    Ok(Json(automations::view(&row, rule, &ctx)))
+    Ok(Json(automations::view(&row, rule, &ctx, state.automations.is_running(id))))
+}
+
+/// The last runs of a rule, those that did not happen included.
+pub async fn runs(State(state): State<AppState>, user: AuthUser, Path(id): Path<i64>) -> ApiResult<Json<Vec<RunView>>> {
+    let access = Access::of(&state.db, &user).await?;
+    let ctx = Context::load(&state).await?;
+    load(&state, &access, &ctx, id).await?;
+    Ok(Json(db::automation_runs(&state.db, id).await?.into_iter().map(RunView::of).collect()))
 }
 
 pub async fn create(State(state): State<AppState>, user: AuthUser, Json(input): Json<AutomationInput>) -> ApiResult<(StatusCode, Json<AutomationView>)> {
@@ -112,14 +135,14 @@ pub async fn create(State(state): State<AppState>, user: AuthUser, Json(input): 
     let enabled = input.enabled;
     let (name, rule) = automations::validate(input, &ctx)?;
     check_edit(&state, &access, &rule, &ctx).await?;
-    let (when, conditions, actions) = stored(&rule);
-    let row = db::insert_automation(&state.db, &name, enabled, &when, &conditions, &actions).await?;
+    let json = stored(&rule);
+    let row = db::insert_automation(&state.db, &fields(&name, enabled, &rule, &json)).await?;
     state
         .hub
         .log("automation", "info", None, Some(&user.username), crate::text!("Automatisme « {0} » créé", "Automation “{0}” created", "Automatismo «{0}» creado", name), None)
         .await;
     state.hub.routines_changed();
-    Ok((StatusCode::CREATED, Json(automations::view(&row, rule, &ctx))))
+    Ok((StatusCode::CREATED, Json(automations::view(&row, rule, &ctx, false))))
 }
 
 pub async fn update(State(state): State<AppState>, user: AuthUser, Path(id): Path<i64>, Json(input): Json<AutomationInput>) -> ApiResult<Json<AutomationView>> {
@@ -130,8 +153,10 @@ pub async fn update(State(state): State<AppState>, user: AuthUser, Path(id): Pat
     let enabled = input.enabled;
     let (name, rule) = automations::validate(input, &ctx)?;
     check_edit(&state, &access, &rule, &ctx).await?;
-    let (when, conditions, actions) = stored(&rule);
-    db::update_automation(&state.db, id, &name, enabled, &when, &conditions, &actions).await?;
+    let json = stored(&rule);
+    db::update_automation(&state.db, id, &fields(&name, enabled, &rule, &json)).await?;
+    // A run under way follows the rule as it was: it ends.
+    state.automations.cancel(&state.db, id).await;
     state
         .hub
         .log("automation", "info", None, Some(&user.username), crate::text!("Automatisme « {0} » modifié", "Automation “{0}” changed", "Automatismo «{0}» modificado", name), None)
@@ -151,6 +176,9 @@ pub async fn set_enabled(State(state): State<AppState>, user: AuthUser, Path(id)
     let (row, rule) = load(&state, &access, &ctx, id).await?;
     check_edit(&state, &access, &rule, &ctx).await?;
     db::set_automation_enabled(&state.db, id, input.enabled).await?;
+    if !input.enabled {
+        state.automations.cancel(&state.db, id).await;
+    }
     let message = if input.enabled {
         crate::text!("Automatisme « {0} » activé", "Automation “{0}” switched on", "Automatismo «{0}» activado", row.name)
     } else {
@@ -166,6 +194,7 @@ pub async fn delete(State(state): State<AppState>, user: AuthUser, Path(id): Pat
     let ctx = Context::load(&state).await?;
     let (row, rule) = load(&state, &access, &ctx, id).await?;
     check_edit(&state, &access, &rule, &ctx).await?;
+    state.automations.cancel(&state.db, id).await;
     db::delete_automation(&state.db, id).await?;
     state
         .hub
@@ -189,6 +218,12 @@ pub async fn run(State(state): State<AppState>, user: AuthUser, Path(id): Path<i
     let (row, rule) = load(&state, &access, &ctx, id).await?;
     check_control(&state, &access, &rule, &ctx).await?;
     let reason = crate::text!("lancé à la main", "run by hand", "lanzado a mano");
-    let results = automations::run(&state, &row, &rule, &ctx, reason, &user.username).await;
-    Ok(Json(json!({ "results": results })))
+    let Some(task) = automations::start(&state, &row, &rule, Branch::Then, ctx, reason, &user.username).await else {
+        return Err(ApiError::conflict(crate::text!("déjà en cours", "already running", "ya en curso")));
+    };
+    // A rule that waits goes on in the background: its history tells how it ends.
+    match tokio::time::timeout(std::time::Duration::from_secs(10), task).await {
+        Ok(Ok(done)) => Ok(Json(json!({ "results": done, "running": false }))),
+        _ => Ok(Json(json!({ "results": [], "running": true }))),
+    }
 }

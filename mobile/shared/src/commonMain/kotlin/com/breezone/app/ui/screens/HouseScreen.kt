@@ -95,7 +95,7 @@ fun HouseScreen(serverId: String, installationId: Long, onBack: () -> Unit, onOp
                 }
                 HouseType.Ventilation -> {
                     val level = ventilationLevel(devices.withTrait(TraitIds.VENTILATION_ROOM).mapNotNull { it.stateAs(VentilationRoomState.serializer()) })
-                    add(Tile(type, FzIcons.Fan, stringResource(Res.string.house_ventilation), level?.let { stringResource(Res.string.ventilation_level_short, it) } ?: "–", Fz.colors.fan))
+                    add(Tile(type, FzIcons.Fan, stringResource(Res.string.house_ventilation), level?.let { stringResource(Res.string.ventilation_level_short, it) } ?: "–", Fz.colors.air))
                 }
                 HouseType.Energy -> {
                     val solar = devices.modules.filter { it.role == "solar" }.sumOf { it.stateAs(EnergyPowerState.serializer())?.power ?: 0.0 }

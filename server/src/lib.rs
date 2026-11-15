@@ -59,6 +59,8 @@ pub struct AppState {
     pub drivers: Arc<drivers::Runtime>,
     /// The sun and the weather of the home (roadmap F9).
     pub weather: Arc<weather::Weather>,
+    /// The automations under way (they may wait).
+    pub automations: Arc<automations::Runs>,
 }
 
 /// Opens the database, applies migrations, bootstraps accounts/installations from the
@@ -77,7 +79,8 @@ pub async fn init_state(cfg: Config) -> anyhow::Result<AppState> {
     drivers.reload().await?;
     drivers.clone().hear();
     let weather = Arc::new(weather::Weather::new(db.clone(), cfg.timezone));
-    let state = AppState { db, cfg, hub, auth, cloud_key, updater, drivers, weather };
+    let automations = Arc::new(automations::Runs::default());
+    let state = AppState { db, cfg, hub, auth, cloud_key, updater, drivers, weather, automations };
     bootstrap(&state).await?;
     state.hub.reload_installations().await?;
     Ok(state)

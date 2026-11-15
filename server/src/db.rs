@@ -584,6 +584,8 @@ pub struct AutomationRow {
     pub enabled: bool,
     /// JSON, see `automations::Trigger`.
     pub trigger_def: String,
+    /// "all" or "any": how the conditions are joined.
+    pub condition_match: String,
     pub conditions: String,
     pub actions: String,
     pub last_run_at: Option<i64>,
@@ -591,6 +593,10 @@ pub struct AutomationRow {
     pub last_reason: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
+    /// JSON: the actions run when the conditions are false.
+    pub else_actions: String,
+    /// "single" | "restart".
+    pub run_mode: String,
 }
 
 pub async fn list_automations(db: &Db) -> sqlx::Result<Vec<AutomationRow>> {
@@ -601,27 +607,46 @@ pub async fn automation_by_id(db: &Db, id: i64) -> sqlx::Result<Option<Automatio
     sqlx::query_as("SELECT * FROM automations WHERE id = ?").bind(id).fetch_optional(db).await
 }
 
-pub async fn insert_automation(db: &Db, name: &str, enabled: bool, trigger: &str, conditions: &str, actions: &str) -> sqlx::Result<AutomationRow> {
+/// What is written of an automation (JSON as described in `automations`).
+pub struct AutomationFields<'a> {
+    pub name: &'a str,
+    pub enabled: bool,
+    pub trigger: &'a str,
+    /// "all" or "any".
+    pub joined: &'a str,
+    pub conditions: &'a str,
+    pub actions: &'a str,
+    pub else_actions: &'a str,
+    pub run_mode: &'a str,
+}
+
+pub async fn insert_automation(db: &Db, f: &AutomationFields<'_>) -> sqlx::Result<AutomationRow> {
     let t = now();
-    sqlx::query_as("INSERT INTO automations (name, enabled, trigger_def, conditions, actions, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *")
-        .bind(name)
-        .bind(enabled)
-        .bind(trigger)
-        .bind(conditions)
-        .bind(actions)
+    sqlx::query_as("INSERT INTO automations (name, enabled, trigger_def, condition_match, conditions, actions, else_actions, run_mode, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *")
+        .bind(f.name)
+        .bind(f.enabled)
+        .bind(f.trigger)
+        .bind(f.joined)
+        .bind(f.conditions)
+        .bind(f.actions)
+        .bind(f.else_actions)
+        .bind(f.run_mode)
         .bind(t)
         .bind(t)
         .fetch_one(db)
         .await
 }
 
-pub async fn update_automation(db: &Db, id: i64, name: &str, enabled: bool, trigger: &str, conditions: &str, actions: &str) -> sqlx::Result<()> {
-    sqlx::query("UPDATE automations SET name = ?, enabled = ?, trigger_def = ?, conditions = ?, actions = ?, updated_at = ? WHERE id = ?")
-        .bind(name)
-        .bind(enabled)
-        .bind(trigger)
-        .bind(conditions)
-        .bind(actions)
+pub async fn update_automation(db: &Db, id: i64, f: &AutomationFields<'_>) -> sqlx::Result<()> {
+    sqlx::query("UPDATE automations SET name = ?, enabled = ?, trigger_def = ?, condition_match = ?, conditions = ?, actions = ?, else_actions = ?, run_mode = ?, updated_at = ? WHERE id = ?")
+        .bind(f.name)
+        .bind(f.enabled)
+        .bind(f.trigger)
+        .bind(f.joined)
+        .bind(f.conditions)
+        .bind(f.actions)
+        .bind(f.else_actions)
+        .bind(f.run_mode)
         .bind(now())
         .bind(id)
         .execute(db)
@@ -637,6 +662,71 @@ pub async fn set_automation_enabled(db: &Db, id: i64, enabled: bool) -> sqlx::Re
 pub async fn set_automation_run(db: &Db, id: i64, ts: i64, reason: &str) -> sqlx::Result<()> {
     sqlx::query("UPDATE automations SET last_run_at = ?, last_reason = ? WHERE id = ?").bind(ts).bind(reason).bind(id).execute(db).await?;
     Ok(())
+}
+
+/// A run of an automation, or a time it did not run.
+#[derive(Debug, Clone, FromRow)]
+pub struct AutomationRun {
+    pub id: i64,
+    pub automation_id: i64,
+    pub started_at: i64,
+    pub finished_at: Option<i64>,
+    pub branch: String,
+    /// `Text::store`.
+    pub reason: String,
+    pub ended: Option<String>,
+    /// JSON list of the steps done.
+    pub steps: String,
+}
+
+/// Runs kept per automation.
+const RUNS_KEPT: i64 = 20;
+
+/// Records a run (`finished`: at once, for one that did not happen) and forgets the oldest.
+pub async fn insert_automation_run(db: &Db, automation_id: i64, branch: &str, reason: &str, finished: bool) -> sqlx::Result<i64> {
+    let t = now();
+    let id: i64 = sqlx::query_scalar("INSERT INTO automation_runs (automation_id, started_at, finished_at, branch, reason, ended) VALUES (?, ?, ?, ?, ?, ?) RETURNING id")
+        .bind(automation_id)
+        .bind(t)
+        .bind(finished.then_some(t))
+        .bind(branch)
+        .bind(reason)
+        .bind(finished.then_some("done"))
+        .fetch_one(db)
+        .await?;
+    sqlx::query("DELETE FROM automation_runs WHERE automation_id = ? AND id NOT IN (SELECT id FROM automation_runs WHERE automation_id = ? ORDER BY id DESC LIMIT ?)")
+        .bind(automation_id)
+        .bind(automation_id)
+        .bind(RUNS_KEPT)
+        .execute(db)
+        .await?;
+    Ok(id)
+}
+
+pub async fn finish_automation_run(db: &Db, id: i64, ended: &str, steps: &str) -> sqlx::Result<()> {
+    sqlx::query("UPDATE automation_runs SET finished_at = ?, ended = ?, steps = ? WHERE id = ?").bind(now()).bind(ended).bind(steps).bind(id).execute(db).await?;
+    Ok(())
+}
+
+/// Ends a run that is cut short (started again), keeping the steps it did.
+pub async fn finish_automation_run_ended(db: &Db, id: i64, ended: &str) -> sqlx::Result<()> {
+    sqlx::query("UPDATE automation_runs SET finished_at = ?, ended = ? WHERE id = ?").bind(now()).bind(ended).bind(id).execute(db).await?;
+    Ok(())
+}
+
+pub async fn set_automation_run_steps(db: &Db, id: i64, steps: &str) -> sqlx::Result<()> {
+    sqlx::query("UPDATE automation_runs SET steps = ? WHERE id = ?").bind(steps).bind(id).execute(db).await?;
+    Ok(())
+}
+
+/// Runs cut short by a stop of the server.
+pub async fn interrupt_automation_runs(db: &Db) -> sqlx::Result<()> {
+    sqlx::query("UPDATE automation_runs SET finished_at = started_at, ended = 'interrupted' WHERE finished_at IS NULL").execute(db).await?;
+    Ok(())
+}
+
+pub async fn automation_runs(db: &Db, automation_id: i64) -> sqlx::Result<Vec<AutomationRun>> {
+    sqlx::query_as("SELECT * FROM automation_runs WHERE automation_id = ? ORDER BY id DESC").bind(automation_id).fetch_all(db).await
 }
 
 pub async fn delete_automation(db: &Db, id: i64) -> sqlx::Result<()> {
