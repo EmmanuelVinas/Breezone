@@ -6,6 +6,31 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.14] - 2026-11-15
+
+### Added
+
+- Mobile app: the house screen of the mockups. Opening an installation whose server has modules
+  shows its types (Climatisation, Lumières, Volets, Ventilation) with what each does now; without
+  modules, it opens the climate as before. New screens:
+  - Lumières: the Hue scenes, « Tout éteindre », the lights by room with their switch and
+    brightness; the detail of a light with its big brightness bar, white temperature and colors;
+  - Volets: « Tout ouvrir », « Tout fermer », the shutters by room with ▲ ■ ▼; the detail of a
+    shutter with its window and its position bar to drag;
+  - Ventilation: the level and flow of the house, the room most in demand and why, the boost of the
+    house; a valve with its flow and humidity over 24 h, its boost (30 min, 1 h, 2 h) and profile.
+  The pages of modules follow the installation chosen, as on the web: an installation reached
+  through another Breezone server does not show this server's modules.
+
+### Fixed
+
+- The menu follows the installation chosen: with an installation reached through another Breezone
+  server, the pages of this server's modules (Énergie, Lumières, Volets, Ventilation, Solaire,
+  Recharge) are hidden, and opening one says they are this server's, instead of showing them as if
+  they were that installation's.
+- Adding a module: one spinner while the network is searched, on « Rechercher » (the line below no
+  longer has its own).
+
 ## [0.11.0-beta.13] - 2026-11-15
 
 ### Added
