@@ -40,6 +40,7 @@ const TABLES: &[Table] = &[
     Table { name: "devices", filter: "installation_id IS NULL OR installation_id IN (SELECT id FROM installations WHERE node_id IS NULL)", without: &[] },
     Table { name: "routines", filter: "1", without: &["last_run_at"] },
     Table { name: "timers", filter: "1", without: &[] },
+    Table { name: "automations", filter: "1", without: &["last_run_at", "last_reason"] },
 ];
 
 /// Settings that are configuration (not secrets, not this server's identity).

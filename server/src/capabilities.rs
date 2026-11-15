@@ -103,6 +103,8 @@ impl Capabilities {
                 // Device history and the energy of the home: /api/devices/{id}/history, /api/energy/*.
                 ("devices.history", 1),
                 ("energy", 1),
+                // Rules "quand… si… alors…" run by this server: /api/automations.
+                ("automations", 1),
             ]
             .into_iter()
             .map(|(k, v)| (k.to_string(), v))

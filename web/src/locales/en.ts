@@ -149,8 +149,6 @@ const en: Record<string, string> = {
     "It is an installation already on this server",
   "Ce qu'il voit dans le web et l'application, ce qu'il peut piloter et modifier. Le changement s'applique aussitôt sur ses appareils.":
     "What they see in the web UI and the app, what they may drive and change. The change applies at once on their devices.",
-  "Ce que vous lancez quand vous voulez : une minuterie (« dans 2 h, éteindre l'étage ») ou une scène de plusieurs actions.":
-    "What you start whenever you want: a timer (“in 2 h, switch the upstairs off”) or a scene of several actions.",
   "Ce qui se déclenche à heure fixe. Enregistrées dans votre compte Airzone et exécutées par Airzone ; modifiables ici comme dans l'application Airzone.":
     "What starts at a fixed time. Saved in your Airzone account and run by Airzone; editable here as in the Airzone app.",
   "Ce serveur": "This server",
@@ -1223,6 +1221,78 @@ const en: Record<string, string> = {
     "For the weather and the sun. Add the county or region if several cities have the same name. Empty: the one of the Airzone account.",
   "Icône de « {name} »": "Icon of “{name}”",
   "Deviner d'après le nom": "Guess from the name",
+  "Injection au réseau": "Grid export",
+  "Soutirage du réseau": "Grid import",
+  "Consommation de la maison": "Home consumption",
+  "Température extérieure": "Outdoor temperature",
+  "Mesure indisponible": "Measure unavailable",
+  "au-dessus de": "above",
+  "en dessous de": "below",
+  "Une mesure passe un seuil": "A measure crosses a threshold",
+  "À heure fixe": "At a fixed time",
+  "Lever ou coucher du soleil": "Sunrise or sunset",
+  "pendant {n} min": "for {n} min",
+  "tout de suite": "at once",
+  "Lever du soleil": "Sunrise",
+  "Coucher du soleil": "Sunset",
+  "à ce moment": "at that time",
+  "{n} min avant": "{n} min before",
+  "{n} min après": "{n} min after",
+  "Aucun jour choisi : tous les jours.": "No day chosen: every day.",
+  Oui: "Yes",
+  de: "from",
+  à: "to",
+  entre: "between",
+  et: "and",
+  "Il fait jour": "It is daytime",
+  "Il fait nuit": "It is night",
+  "{label} : inchangé": "{label}: unchanged",
+  "{label} : oui": "{label}: yes",
+  "{label} : non": "{label}: no",
+  "Scène « {name} »": "Scene “{name}”",
+  "Appareil indisponible": "Device unavailable",
+  "Automatisme modifié": "Automation changed",
+  "Automatisme créé": "Automation created",
+  "Une mesure": "A measure",
+  "L'état d'un appareil": "The state of a device",
+  "Une période de l'année": "A period of the year",
+  "Une plage horaire": "A time range",
+  "Des jours de la semaine": "Days of the week",
+  "Le jour ou la nuit": "Day or night",
+  "Modifier l'automatisme": "Edit the automation",
+  "Nouvel automatisme": "New automation",
+  "Une règle se lit comme une phrase : quand quelque chose se produit, si certaines choses sont vraies, alors Breezone agit. Tout se passe sur votre serveur.":
+    "A rule reads like a sentence: when something happens, if some things are true, then Breezone acts. Everything runs on your server.",
+  "ex. Surplus solaire : chauffer le salon":
+    "e.g. Solar surplus: heat the living room",
+  "Ce qui déclenche la règle.": "What starts the rule.",
+  "La règle agit une fois, puis attend que la mesure soit repassée nettement de l'autre côté du seuil avant de pouvoir agir de nouveau.":
+    "The rule acts once, then waits for the measure to come clearly back across the threshold before it can act again.",
+  Si: "If",
+  "Facultatif : toutes les conditions doivent être vraies.":
+    "Optional: every condition must be true.",
+  "Ajouter une condition…": "Add a condition…",
+  Alors: "Then",
+  "Ce que Breezone fait, dans l'ordre.": "What Breezone does, in order.",
+  "Ajouter une action": "Add an action",
+  "Cette règle pilote une zone de climatisation : vérifiez qu'une programmation Airzone ne fait pas le contraire au même moment.":
+    "This rule drives an air conditioning zone: check that no Airzone schedule does the opposite at the same time.",
+  "Activer « {name} »": "Switch “{name}” on",
+  "maintenant : {value}": "now: {value}",
+  "pas maintenant": "not now",
+  inconnu: "unknown",
+  "Dernier : {when}": "Last: {when}",
+  "Jamais déclenché": "Never run",
+  "Prochain : {when}": "Next: {when}",
+  Essayer: "Try",
+  "Cet automatisme ne se déclenchera plus.":
+    "This automation will no longer run.",
+  "Quand quelque chose se produit, Breezone agit tout seul : surplus solaire, température, heure, soleil.":
+    "When something happens, Breezone acts by itself: solar surplus, temperature, time, sun.",
+  "Aucun automatisme. Exemple : quand l'injection au réseau dépasse 500 W pendant 5 min, si le salon est sous 18 °C de novembre à mars, alors allumer le salon à 21°.":
+    "No automation. Example: when the grid export is above 500 W for 5 min, if the living room is below 18 °C from November to March, then switch the living room on at 21°.",
+  "Ce que vous lancez quand vous voulez : une minuterie (« dans 2 h, éteindre l'étage ») ou une scène de plusieurs actions, et ce qui se déclenche tout seul.":
+    "What you start whenever you want: a timer (“in 2 h, switch the first floor off”) or a scene of several actions, and what runs by itself.",
 }
 
 export default en

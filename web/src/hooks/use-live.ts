@@ -85,6 +85,7 @@ export function useLive(enabled: boolean): LiveState {
             break
           case "routines_changed":
             qc.invalidateQueries({ queryKey: ["routines"] })
+            qc.invalidateQueries({ queryKey: ["automations"] })
             break
         }
       }

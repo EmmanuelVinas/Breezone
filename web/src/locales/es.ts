@@ -152,8 +152,6 @@ const es: Record<string, string> = {
     "Es una instalación que ya está en este servidor",
   "Ce qu'il voit dans le web et l'application, ce qu'il peut piloter et modifier. Le changement s'applique aussitôt sur ses appareils.":
     "Lo que ve en la web y en la aplicación, lo que puede controlar y modificar. El cambio se aplica de inmediato en sus dispositivos.",
-  "Ce que vous lancez quand vous voulez : une minuterie (« dans 2 h, éteindre l'étage ») ou une scène de plusieurs actions.":
-    "Lo que lanza cuando quiere: un temporizador («dentro de 2 h, apagar la planta») o una escena de varias acciones.",
   "Ce qui se déclenche à heure fixe. Enregistrées dans votre compte Airzone et exécutées par Airzone ; modifiables ici comme dans l'application Airzone.":
     "Lo que se activa a hora fija. Guardadas en su cuenta de Airzone y ejecutadas por Airzone; modificables aquí como en la aplicación Airzone.",
   "Ce serveur": "Este servidor",
@@ -1233,6 +1231,78 @@ const es: Record<string, string> = {
     "Para el tiempo y el sol. Añada la provincia o la región si varias ciudades tienen el mismo nombre. Vacío: la de la cuenta Airzone.",
   "Icône de « {name} »": "Icono de «{name}»",
   "Deviner d'après le nom": "Adivinar por el nombre",
+  "Injection au réseau": "Inyección a la red",
+  "Soutirage du réseau": "Consumo de la red",
+  "Consommation de la maison": "Consumo de la casa",
+  "Température extérieure": "Temperatura exterior",
+  "Mesure indisponible": "Medida no disponible",
+  "au-dessus de": "por encima de",
+  "en dessous de": "por debajo de",
+  "Une mesure passe un seuil": "Una medida cruza un umbral",
+  "À heure fixe": "A una hora fija",
+  "Lever ou coucher du soleil": "Amanecer o atardecer",
+  "pendant {n} min": "durante {n} min",
+  "tout de suite": "enseguida",
+  "Lever du soleil": "Amanecer",
+  "Coucher du soleil": "Atardecer",
+  "à ce moment": "en ese momento",
+  "{n} min avant": "{n} min antes",
+  "{n} min après": "{n} min después",
+  "Aucun jour choisi : tous les jours.": "Ningún día elegido: todos los días.",
+  Oui: "Sí",
+  de: "de",
+  à: "a",
+  entre: "entre",
+  et: "y",
+  "Il fait jour": "Es de día",
+  "Il fait nuit": "Es de noche",
+  "{label} : inchangé": "{label}: sin cambios",
+  "{label} : oui": "{label}: sí",
+  "{label} : non": "{label}: no",
+  "Scène « {name} »": "Escena «{name}»",
+  "Appareil indisponible": "Dispositivo no disponible",
+  "Automatisme modifié": "Automatismo modificado",
+  "Automatisme créé": "Automatismo creado",
+  "Une mesure": "Una medida",
+  "L'état d'un appareil": "El estado de un dispositivo",
+  "Une période de l'année": "Un periodo del año",
+  "Une plage horaire": "Una franja horaria",
+  "Des jours de la semaine": "Días de la semana",
+  "Le jour ou la nuit": "El día o la noche",
+  "Modifier l'automatisme": "Modificar el automatismo",
+  "Nouvel automatisme": "Nuevo automatismo",
+  "Une règle se lit comme une phrase : quand quelque chose se produit, si certaines choses sont vraies, alors Breezone agit. Tout se passe sur votre serveur.":
+    "Una regla se lee como una frase: cuando ocurre algo, si se cumplen ciertas cosas, entonces Breezone actúa. Todo ocurre en su servidor.",
+  "ex. Surplus solaire : chauffer le salon":
+    "p. ej. Excedente solar: calentar el salón",
+  "Ce qui déclenche la règle.": "Lo que activa la regla.",
+  "La règle agit une fois, puis attend que la mesure soit repassée nettement de l'autre côté du seuil avant de pouvoir agir de nouveau.":
+    "La regla actúa una vez y luego espera a que la medida vuelva claramente al otro lado del umbral antes de poder actuar de nuevo.",
+  Si: "Si",
+  "Facultatif : toutes les conditions doivent être vraies.":
+    "Opcional: todas las condiciones deben cumplirse.",
+  "Ajouter une condition…": "Añadir una condición…",
+  Alors: "Entonces",
+  "Ce que Breezone fait, dans l'ordre.": "Lo que hace Breezone, en orden.",
+  "Ajouter une action": "Añadir una acción",
+  "Cette règle pilote une zone de climatisation : vérifiez qu'une programmation Airzone ne fait pas le contraire au même moment.":
+    "Esta regla controla una zona de climatización: compruebe que ninguna programación de Airzone haga lo contrario al mismo tiempo.",
+  "Activer « {name} »": "Activar «{name}»",
+  "maintenant : {value}": "ahora: {value}",
+  "pas maintenant": "ahora no",
+  inconnu: "desconocido",
+  "Dernier : {when}": "Último: {when}",
+  "Jamais déclenché": "Nunca activado",
+  "Prochain : {when}": "Próximo: {when}",
+  Essayer: "Probar",
+  "Cet automatisme ne se déclenchera plus.":
+    "Este automatismo ya no se activará.",
+  "Quand quelque chose se produit, Breezone agit tout seul : surplus solaire, température, heure, soleil.":
+    "Cuando ocurre algo, Breezone actúa solo: excedente solar, temperatura, hora, sol.",
+  "Aucun automatisme. Exemple : quand l'injection au réseau dépasse 500 W pendant 5 min, si le salon est sous 18 °C de novembre à mars, alors allumer le salon à 21°.":
+    "Ningún automatismo. Ejemplo: cuando la inyección a la red supera 500 W durante 5 min, si el salón está por debajo de 18 °C de noviembre a marzo, entonces encender el salón a 21°.",
+  "Ce que vous lancez quand vous voulez : une minuterie (« dans 2 h, éteindre l'étage ») ou une scène de plusieurs actions, et ce qui se déclenche tout seul.":
+    "Lo que lanza cuando quiere: un temporizador («en 2 h, apagar la planta») o una escena de varias acciones, y lo que se activa solo.",
 }
 
 export default es

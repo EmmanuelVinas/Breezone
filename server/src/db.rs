@@ -574,6 +574,77 @@ pub async fn delete_routine(db: &Db, id: i64) -> sqlx::Result<()> {
 }
 
 // ---------------------------------------------------------------------------------------
+// Automations
+// ---------------------------------------------------------------------------------------
+
+#[derive(Debug, Clone, FromRow)]
+pub struct AutomationRow {
+    pub id: i64,
+    pub name: String,
+    pub enabled: bool,
+    /// JSON, see `automations::Trigger`.
+    pub trigger_def: String,
+    pub conditions: String,
+    pub actions: String,
+    pub last_run_at: Option<i64>,
+    /// What was true at the last run (`Text::store`).
+    pub last_reason: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+pub async fn list_automations(db: &Db) -> sqlx::Result<Vec<AutomationRow>> {
+    sqlx::query_as("SELECT * FROM automations ORDER BY name, id").fetch_all(db).await
+}
+
+pub async fn automation_by_id(db: &Db, id: i64) -> sqlx::Result<Option<AutomationRow>> {
+    sqlx::query_as("SELECT * FROM automations WHERE id = ?").bind(id).fetch_optional(db).await
+}
+
+pub async fn insert_automation(db: &Db, name: &str, enabled: bool, trigger: &str, conditions: &str, actions: &str) -> sqlx::Result<AutomationRow> {
+    let t = now();
+    sqlx::query_as("INSERT INTO automations (name, enabled, trigger_def, conditions, actions, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *")
+        .bind(name)
+        .bind(enabled)
+        .bind(trigger)
+        .bind(conditions)
+        .bind(actions)
+        .bind(t)
+        .bind(t)
+        .fetch_one(db)
+        .await
+}
+
+pub async fn update_automation(db: &Db, id: i64, name: &str, enabled: bool, trigger: &str, conditions: &str, actions: &str) -> sqlx::Result<()> {
+    sqlx::query("UPDATE automations SET name = ?, enabled = ?, trigger_def = ?, conditions = ?, actions = ?, updated_at = ? WHERE id = ?")
+        .bind(name)
+        .bind(enabled)
+        .bind(trigger)
+        .bind(conditions)
+        .bind(actions)
+        .bind(now())
+        .bind(id)
+        .execute(db)
+        .await?;
+    Ok(())
+}
+
+pub async fn set_automation_enabled(db: &Db, id: i64, enabled: bool) -> sqlx::Result<()> {
+    sqlx::query("UPDATE automations SET enabled = ?, updated_at = ? WHERE id = ?").bind(enabled).bind(now()).bind(id).execute(db).await?;
+    Ok(())
+}
+
+pub async fn set_automation_run(db: &Db, id: i64, ts: i64, reason: &str) -> sqlx::Result<()> {
+    sqlx::query("UPDATE automations SET last_run_at = ?, last_reason = ? WHERE id = ?").bind(ts).bind(reason).bind(id).execute(db).await?;
+    Ok(())
+}
+
+pub async fn delete_automation(db: &Db, id: i64) -> sqlx::Result<()> {
+    sqlx::query("DELETE FROM automations WHERE id = ?").bind(id).execute(db).await?;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------------------
 // Events (activity feed)
 // ---------------------------------------------------------------------------------------
 

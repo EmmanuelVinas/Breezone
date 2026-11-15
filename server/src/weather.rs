@@ -209,6 +209,17 @@ impl Weather {
         Some(report)
     }
 
+    /// The last outdoor temperature read.
+    pub async fn temperature(&self) -> Option<f64> {
+        self.last.read().await.as_ref().and_then(|r| r.temperature)
+    }
+
+    /// Where the home is (latitude, longitude), when its city is known.
+    pub async fn coordinates(&self) -> Option<(f64, f64)> {
+        let (place, country) = self.place().await.ok()??;
+        self.coords(&place, country.as_deref()).await
+    }
+
     /// The weather (the last one read) and the sun of today.
     pub async fn view(&self) -> View {
         let weather = self.last.read().await.clone();

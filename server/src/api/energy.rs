@@ -99,10 +99,15 @@ pub struct LiveView {
 /// The home now, from the last reading of its measures (every few seconds).
 pub async fn live(State(state): State<AppState>, _user: AuthUser) -> ApiResult<Json<LiveView>> {
     let devices = devices_of(&state).await?;
-    let measures = measures(&state, &devices).await?;
+    Ok(Json(live_of(&state, &devices).await?))
+}
+
+/// The home now, from the last reading of these devices.
+pub(crate) async fn live_of(state: &AppState, devices: &[DeviceView]) -> ApiResult<LiveView> {
+    let measures = measures(state, devices).await?;
     let power: HashMap<i64, f64> = devices.iter().filter(|d| d.available).filter_map(|d| Some((d.id, d.state.get("power")?.as_f64()?))).collect();
     let live = energy::live(&measures, |id| power.get(&id).copied());
-    Ok(Json(LiveView { roles: roles(&measures), live }))
+    Ok(LiveView { roles: roles(&measures), live })
 }
 
 /// Midnight of a local day, as a timestamp.

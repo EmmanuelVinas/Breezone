@@ -1,10 +1,11 @@
 //! HTTP API. See `docs/API.md` for the reference.
 
 mod account;
+mod automations;
 mod cloud;
-mod energy;
+pub(crate) mod energy;
 mod federation;
-mod home;
+pub(crate) mod home;
 mod hvac;
 mod routines;
 mod schedules;
@@ -81,6 +82,11 @@ pub fn router() -> Router<AppState> {
         .route("/api/routines", get(routines::list).post(routines::create))
         .route("/api/routines/{id}", get(routines::get).put(routines::update).delete(routines::delete))
         .route("/api/routines/{id}/run", post(routines::run))
+        // Automations ("quand… alors…")
+        .route("/api/automations", get(automations::list).post(automations::create))
+        .route("/api/automations/{id}", get(automations::get).put(automations::update).delete(automations::delete))
+        .route("/api/automations/{id}/enabled", put(automations::set_enabled))
+        .route("/api/automations/{id}/run", post(automations::run))
         // Timers and Airzone routines
         .route("/api/timers", get(timers::list).post(timers::create))
         .route("/api/timers/{id}", axum::routing::delete(timers::cancel))

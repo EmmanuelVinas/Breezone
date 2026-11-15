@@ -6,6 +6,17 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Automations “when… if… then…” (Routines page): a rule reads like a sentence and runs on the server.
+  When a measure crosses a threshold for some time (power returned to the grid, solar production,
+  home consumption, outdoor temperature, the temperature of a room…), at a fixed time, or at sunrise
+  or sunset; if up to three conditions are true (a measure, the state of a device, a period of the
+  year, hours, days, day or night); then up to five actions on any device (a zone, a charger, a
+  relay, a light, a shutter…) or a scene. Example: when more than 500 W go back to the grid for
+  5 min, if the living room is below 18 °C from November to March, heat the living room and charge
+  the car. Each run is in the activity feed with its reason.
+
 ## [0.11.0-beta.17] - 2026-11-15
 
 ### Added

@@ -21,7 +21,7 @@ pub async fn traits(_user: AuthUser) -> Json<&'static [Trait]> {
     Json(crate::traits::catalog())
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct DeviceView {
     pub id: i64,
     /// Main trait ("climate.zone").
@@ -310,7 +310,7 @@ pub async fn delete_room(State(state): State<AppState>, _admin: AdminUser, Path(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct ActionInput {
     #[serde(rename = "trait")]
     pub trait_name: String,
@@ -359,6 +359,41 @@ fn check_params(action: &crate::traits::Action, params: &serde_json::Map<String,
     Ok(())
 }
 
+/// The action of a trait the device has, its parameters checked against the catalog.
+pub(crate) fn check_action(view: &DeviceView, input: &ActionInput) -> ApiResult<()> {
+    let version = view.traits.iter().find_map(|t| t.split_once('@').filter(|(n, _)| *n == input.trait_name).and_then(|(_, v)| v.parse::<u32>().ok()));
+    let action = version.and_then(|v| crate::traits::get(&input.trait_name, v)).and_then(|t| t.action(&input.action)).ok_or_else(|| {
+        ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, format!("{}.{} is not an action of this device", input.trait_name, input.action)).with_detail("code", "unsupported")
+    })?;
+    check_params(action, &input.params)
+}
+
+/// Applies a checked action to a device, whatever its source. The rights of `actor` were checked
+/// by the caller.
+pub(crate) async fn apply(state: &AppState, device: &db::Device, view: &DeviceView, input: &ActionInput, actor: &str) -> ApiResult<()> {
+    match (device.source.as_str(), device.installation_id) {
+        ("airzone", Some(inst)) => {
+            let (system_id, zone_id) = (view.reference["system_id"].as_i64(), view.reference["zone_id"].as_i64());
+            let (Some(system_id), Some(zone_id)) = (system_id, zone_id) else {
+                return Err(ApiError::not_found("zone not found"));
+            };
+            let cmd = crate::hub::ZoneCommand::from_value_strict(Value::Object(input.params.clone()))?;
+            state.hub.control(inst, system_id, zone_id, &cmd, actor).await?;
+            Ok(())
+        }
+        (_, None) => {
+            let source_id = device.source_id.ok_or_else(|| ApiError::not_found("device not found"))?;
+            let reference = view.reference.as_str().unwrap_or_default().to_string();
+            state.drivers.act(source_id, &reference, &input.trait_name, &input.action, &input.params).await.map_err(|e| match e {
+                crate::drivers::DriverError::Unreachable(m) => ApiError::bad_gateway(m),
+                crate::drivers::DriverError::Unsupported(m) => ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, m).with_detail("code", "unsupported"),
+                crate::drivers::DriverError::Invalid(m) => ApiError::bad_request(m),
+            })
+        }
+        _ => Err(ApiError::not_found("device not found")),
+    }
+}
+
 /// Applies an action of one of the device's traits, whatever its source: the same route drives an
 /// Airzone zone (`climate.zone.set`) and a Shelly relay (`switch.relay.set`).
 pub async fn act(State(state): State<AppState>, user: AuthUser, Path(id): Path<i64>, Json(input): Json<ActionInput>) -> ApiResult<Json<DeviceView>> {
@@ -368,35 +403,13 @@ pub async fn act(State(state): State<AppState>, user: AuthUser, Path(id): Path<i
         access.view(i)?;
     }
     let view = devices_of(&state).await?.into_iter().find(|d| d.id == id).ok_or_else(|| ApiError::not_found("device not found"))?;
-    let version = view.traits.iter().find_map(|t| t.split_once('@').filter(|(n, _)| *n == input.trait_name).and_then(|(_, v)| v.parse::<u32>().ok()));
-    let action = version.and_then(|v| crate::traits::get(&input.trait_name, v)).and_then(|t| t.action(&input.action)).ok_or_else(|| {
-        ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, format!("{}.{} is not an action of this device", input.trait_name, input.action)).with_detail("code", "unsupported")
-    })?;
-    check_params(action, &input.params)?;
-    match (device.source.as_str(), device.installation_id) {
-        ("airzone", Some(inst)) => {
-            access.control(inst)?;
-            let (system_id, zone_id) = (view.reference["system_id"].as_i64(), view.reference["zone_id"].as_i64());
-            let (Some(system_id), Some(zone_id)) = (system_id, zone_id) else {
-                return Err(ApiError::not_found("zone not found"));
-            };
-            let cmd = crate::hub::ZoneCommand::from_value_strict(Value::Object(input.params))?;
-            state.hub.control(inst, system_id, zone_id, &cmd, &user.username).await?;
-        }
-        (_, None) => {
-            // Devices of other sources: administrators, until rights per type of device.
-            if !access.is_admin() {
-                return Err(ApiError::forbidden("administrators only"));
-            }
-            let source_id = device.source_id.ok_or_else(|| ApiError::not_found("device not found"))?;
-            let reference = view.reference.as_str().unwrap_or_default().to_string();
-            state.drivers.act(source_id, &reference, &input.trait_name, &input.action, &input.params).await.map_err(|e| match e {
-                crate::drivers::DriverError::Unreachable(m) => ApiError::bad_gateway(m),
-                crate::drivers::DriverError::Unsupported(m) => ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, m).with_detail("code", "unsupported"),
-                crate::drivers::DriverError::Invalid(m) => ApiError::bad_request(m),
-            })?;
-        }
-        _ => return Err(ApiError::not_found("device not found")),
+    check_action(&view, &input)?;
+    match device.installation_id {
+        Some(inst) => access.control(inst)?,
+        // Devices of other sources: administrators, until rights per type of device.
+        None if !access.is_admin() => return Err(ApiError::forbidden("administrators only")),
+        None => {}
     }
+    apply(&state, &device, &view, &input, &user.username).await?;
     devices_of(&state).await?.into_iter().find(|d| d.id == id).map(Json).ok_or_else(|| ApiError::not_found("device not found"))
 }

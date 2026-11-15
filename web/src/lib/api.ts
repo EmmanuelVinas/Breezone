@@ -384,7 +384,7 @@ export type DayStats = {
 export type FeedEvent = {
   id: number
   ts: number
-  kind: "connection" | "command" | "routine" | "system" | "auth"
+  kind: "connection" | "command" | "routine" | "automation" | "system" | "auth"
   level: "info" | "warn" | "error"
   installation_id: number | null
   actor: string | null
@@ -892,7 +892,118 @@ export type DeviceHistory = {
   oldest?: number | null
 }
 
+/** A label of the catalog of traits, in every language. */
+export type TraitLabel = { fr: string; en: string; es: string }
+
+/** A value of the state of a trait, or a parameter of one of its actions. */
+export type TraitField = {
+  name: string
+  type: "bool" | "integer" | "number" | "string" | "enum"
+  unit?: string
+  values?: string[]
+  min?: number
+  max?: number
+  optional?: boolean
+  /** False for a setting or a fixed value of the hardware (not a measure). */
+  history?: boolean
+  label: TraitLabel
+}
+
+/** A trait of the catalog (`GET /api/traits`): what a kind of device holds and accepts. */
+export type TraitInfo = {
+  trait: string
+  version: number
+  label: TraitLabel
+  state: TraitField[]
+  actions: { name: string; label: TraitLabel; params: TraitField[] }[]
+}
+
+/** A number an automation can read now. */
+export type AutomationMeasure =
+  | { kind: "energy"; flow: "export" | "import" | "solar" | "home" }
+  | { kind: "device"; device_id: number; field: string }
+  | { kind: "outdoor" }
+
+export type AutomationOp = "above" | "below"
+
+/** Days: 1 (Monday) to 7 (Sunday); empty: every day. */
+export type AutomationTrigger =
+  | {
+      kind: "measure"
+      measure: AutomationMeasure
+      op: AutomationOp
+      value: number
+      for_minutes: number
+    }
+  | { kind: "time"; time: string; days: number[] }
+  | {
+      kind: "sun"
+      event: "sunrise" | "sunset"
+      offset_minutes: number
+      days: number[]
+    }
+
+export type AutomationCondition =
+  | {
+      kind: "measure"
+      measure: AutomationMeasure
+      op: AutomationOp
+      value: number
+    }
+  | { kind: "state"; device_id: number; field: string; value: boolean | string }
+  | { kind: "months"; from: number; to: number }
+  | { kind: "hours"; from: string; to: string }
+  | { kind: "days"; days: number[] }
+  | { kind: "daylight"; day: boolean }
+
+export type AutomationStep =
+  | {
+      kind: "device"
+      device_id: number
+      trait: string
+      action: string
+      params: Record<string, unknown>
+    }
+  | { kind: "scene"; routine_id: number }
+
+export type AutomationInput = {
+  name: string
+  enabled: boolean
+  when: AutomationTrigger
+  conditions: AutomationCondition[]
+  actions: AutomationStep[]
+}
+
+/** A rule "quand… si… alors…", with its sentence and what it sees now. */
+export type Automation = AutomationInput & {
+  id: number
+  summary: { when: string; conditions: string[]; actions: string[] }
+  status: {
+    value: number | null
+    unit: string | null
+    holds: boolean | null
+    conditions: (boolean | null)[]
+    next_at: number | null
+  }
+  last_run_at: number | null
+  last_reason: string | null
+  created_at: number
+  updated_at: number
+}
+
 export const api = {
+  traits: () => request<TraitInfo[]>("GET", "/api/traits"),
+  automations: () => request<Automation[]>("GET", "/api/automations"),
+  createAutomation: (a: AutomationInput) =>
+    request<Automation>("POST", "/api/automations", a),
+  updateAutomation: (id: number, a: AutomationInput) =>
+    request<Automation>("PUT", `/api/automations/${id}`, a),
+  enableAutomation: (id: number, enabled: boolean) =>
+    request<Automation>("PUT", `/api/automations/${id}/enabled`, { enabled }),
+  deleteAutomation: (id: number) =>
+    request<void>("DELETE", `/api/automations/${id}`),
+  runAutomation: (id: number) =>
+    request<{ results: ActionResult[] }>("POST", `/api/automations/${id}/run`),
   devices: () => request<DeviceView[]>("GET", "/api/devices"),
   /** The history of a device over a period (timestamps), `bucket` seconds per point. */
   deviceHistoryBetween: (

@@ -318,6 +318,54 @@ plus bas). Une action peut attendre (`delay_minutes`) : elle devient une minuter
 `RoutineInput` : `{name, enabled?, actions:[Action]}` (un `time` est refusé).
 `Routine` ajoute `{id, last_run_at, created_at, updated_at}`.
 
+## Automatismes « quand… si… alors… » (exécutés par Breezone)
+
+Fonction `automations@1`. Une règle : un déclencheur, 0 à 3 conditions (toutes vraies), 1 à 5 actions.
+
+| Méthode | Chemin | Description |
+|---------|--------|-------------|
+| GET 🔒 | `/api/automations` | `[Automation]` (celles dont l'utilisateur voit toutes les installations) |
+| POST 🔒 | `/api/automations` | `AutomationInput` |
+| GET / PUT / DELETE 🔒 | `/api/automations/{id}` | |
+| PUT 🔒 | `/api/automations/{id}/enabled` | `{enabled}` |
+| POST 🔒 | `/api/automations/{id}/run` | Exécute les actions maintenant, sans regarder le déclencheur ni les conditions → `{results}` |
+
+`AutomationInput` : `{name, enabled?, when: Trigger, conditions?: [Condition], actions: [Step]}`.
+
+`Trigger` :
+- `{kind:"measure", measure: Measure, op:"above"|"below", value, for_minutes? (0 … 1440)}` ;
+- `{kind:"time", time:"HH:MM", days?:[1 … 7]}` (1 = lundi ; vide : tous les jours) ;
+- `{kind:"sun", event:"sunrise"|"sunset", offset_minutes? (−180 … 180), days?}`.
+
+`Measure` : `{kind:"energy", flow:"export"|"import"|"solar"|"home"}` (W, d'après les mesures d'énergie
+de la maison ; `export` = puissance injectée au réseau) | `{kind:"device", device_id, field}` (un
+nombre de l'état d'un appareil, décrit par son trait) | `{kind:"outdoor"}` (température extérieure, météo).
+
+`Condition` : `{kind:"measure", measure, op, value}` | `{kind:"state", device_id, field, value}` (un
+booléen ou un choix de l'état d'un appareil) | `{kind:"months", from, to}` (1 … 12 ; `from` > `to` passe
+par le nouvel an : `11` à `3` pour l'hiver) | `{kind:"hours", from:"HH:MM", to:"HH:MM"}` (peut passer
+minuit) | `{kind:"days", days}` | `{kind:"daylight", day}` (le soleil est levé, ou non).
+
+`Step` : `{kind:"device", device_id, trait, action, params}` (comme `POST /api/devices/{id}/actions`,
+vérifié contre le catalogue de traits) | `{kind:"scene", routine_id}`.
+
+`Automation` ajoute `{id, summary:{when, conditions:[…], actions:[…]}` (la règle en phrases, dans la
+langue de la requête)`, status:{value, unit, holds, conditions:[true|false|null], next_at}` (ce que la
+règle voit maintenant ; `next_at` pour une heure ou le soleil)`, last_run_at, last_reason, created_at, updated_at}`.
+
+Comportement :
+- un déclencheur `measure` exécute la règle **une fois par épisode** : quand la mesure a tenu au-delà
+  du seuil pendant `for_minutes` et que les conditions sont vraies (elles sont réessayées tant que la
+  mesure tient). La règle se réarme quand la mesure est repassée de l'autre côté du seuil avec une
+  marge (10 % et au moins 50 W ; 0,5 °C ; 2 points de %) ;
+- une mesure ou un appareil illisible ne déclenche rien ; au plus une exécution par règle et par minute ;
+- une heure fixe manquée pendant un arrêt de moins de 15 min est rattrapée ;
+- chaque exécution est dans le journal (`kind: "automation"`) avec sa raison
+  (« Injection au réseau : 742 W depuis 5 min »).
+
+Droits : piloter une zone demande le pilotage de son installation et le droit « routines » ; les
+appareils des modules (borne, relais, lumières…) sont réservés aux administrateurs.
+
 ## Compte Airzone (import, lecture seule)
 
 | Méthode | Chemin | Description |
@@ -459,7 +507,7 @@ Le binaire répond à `breezone-server --version` (« Breezone x.y.z ») sans d�
 ## Journal
 
 `GET 🔒 /api/events?limit=100&before=<id>&installation_id=` → `[{id, ts, kind, level, installation_id, actor, message, data}]`
-avec `kind` ∈ `connection | command | routine | system | auth` et `level` ∈ `info | warn | error`.
+avec `kind` ∈ `connection | command | routine | automation | system | auth` et `level` ∈ `info | warn | error`.
 
 ## Temps réel (WebSocket)
 
@@ -474,7 +522,7 @@ Messages reçus :
 | `installation` | `{installation}` — à chaque changement |
 | `installation_removed` | `{id}` |
 | `event` | `{event}` — nouvelle entrée du journal |
-| `routines_changed` | — |
+| `routines_changed` | — (scènes, minuteries ou automatismes ont changé) |
 | `error` | `{error}` puis fermeture (non authentifié, appareil révoqué) |
 
 Le serveur envoie un ping toutes les 25 s ; le client peut envoyer le texte `ping` (réponse `pong`).

@@ -15,6 +15,7 @@ import { PageHeader } from "@/components/app-shell"
 import { useChosenInstallations } from "@/lib/selected-installation"
 import { AirzoneSchedulesSection } from "@/components/airzone-schedules"
 import { AirzoneRoutinesSection, TimersSection } from "@/components/timers"
+import { AutomationsSection } from "@/components/automations"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -605,7 +606,7 @@ export function RoutinesPage() {
       <PageHeader
         title={t("Routines")}
         description={t(
-          "Ce que vous lancez quand vous voulez : une minuterie (« dans 2 h, éteindre l'étage ») ou une scène de plusieurs actions."
+          "Ce que vous lancez quand vous voulez : une minuterie (« dans 2 h, éteindre l'étage ») ou une scène de plusieurs actions, et ce qui se déclenche tout seul."
         )}
       />
       <div className="grid gap-10">
@@ -619,6 +620,7 @@ export function RoutinesPage() {
             "Aucune scène. Exemple : « Je pars » — tout éteindre sauf la chambre, qui s'éteint après 1 h."
           )}
         />
+        <AutomationsSection />
         <AirzoneRoutinesSection />
       </div>
     </>
