@@ -208,7 +208,7 @@ fun LightScreen(serverId: String, deviceId: Long, onBack: () -> Unit) {
             item(key = "main", contentType = "main") {
                 SectionCard {
                     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        if (s.brightness != null) BrightnessBar(if (s.on) s.brightness.toInt() else 0, glow, enabled = d.available) { v ->
+                        if (s.brightness != null) BrightnessBar(s.brightness.toInt(), s.on, glow, enabled = d.available) { v ->
                             set(buildJsonObject { put("on", true); put("brightness", v) })
                         }
                         Button(
@@ -278,9 +278,10 @@ fun LightScreen(serverId: String, deviceId: Long, onBack: () -> Unit) {
 
 /** The big brightness bar: filled with the light's color; drag or tap to set it. */
 @Composable
-private fun BrightnessBar(value: Int, color: Color, enabled: Boolean, onSet: (Int) -> Unit) {
+private fun BrightnessBar(value: Int, on: Boolean, color: Color, enabled: Boolean, onSet: (Int) -> Unit) {
     var draft by remember { mutableStateOf<Int?>(null) }
-    val shown = draft ?: value
+    val lit = on || draft != null
+    val shown = if (lit) draft ?: value else 0
     fun at(y: Float, height: Int) = ((1f - y / height) * 100).toInt().coerceIn(1, 100)
     Box(
         Modifier
@@ -303,7 +304,11 @@ private fun BrightnessBar(value: Int, color: Color, enabled: Boolean, onSet: (In
     ) {
         Box(Modifier.fillMaxWidth().fillMaxHeight(shown / 100f).background(Brush.verticalGradient(listOf(color, color.copy(alpha = 0.8f)))))
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(stringResource(Res.string.common_percent, shown), fontSize = 32.sp, fontWeight = FontWeight.Bold, color = if (shown > 45) Color.Black.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onSurface)
+            if (lit) {
+                Text(stringResource(Res.string.common_percent, shown), fontSize = 32.sp, fontWeight = FontWeight.Bold, color = if (shown > 45) Color.Black.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onSurface)
+            } else {
+                Icon(FzIcons.LightbulbOff, stringResource(Res.string.light_off), Modifier.size(40.dp), tint = Fz.colors.muted)
+            }
         }
     }
 }

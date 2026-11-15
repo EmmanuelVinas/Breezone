@@ -2,7 +2,7 @@ import { useState } from "react"
 import { Link } from "react-router"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { Lightbulb, Loader2, Power, Sparkles } from "lucide-react"
+import { Lightbulb, LightbulbOff, Loader2, Power, Sparkles } from "lucide-react"
 import type { DeviceView, Room, SceneView } from "@/lib/api"
 import { api, currentUser } from "@/lib/api"
 import { t, tn } from "@/lib/i18n"
@@ -278,7 +278,14 @@ function Detail({
                   lit && level > 45 ? "text-neutral-800" : "text-foreground"
                 )}
               >
-                {lit ? `${level} %` : t("Éteinte")}
+                {lit ? (
+                  `${level} %`
+                ) : (
+                  <LightbulbOff
+                    className="size-10 text-muted-foreground"
+                    aria-label={t("Éteinte")}
+                  />
+                )}
               </div>
             </Level>
           </div>
