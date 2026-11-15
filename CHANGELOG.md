@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.20] - 2026-11-15
+
 ### Added
 
 - Solar surplus steering (Energy page): what would go back to the grid runs the charger and the
