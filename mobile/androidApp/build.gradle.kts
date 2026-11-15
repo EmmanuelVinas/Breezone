@@ -56,6 +56,11 @@ android {
         }
     }
     buildTypes {
+        // Installed next to the store version: its own package, name and data (sessions, servers).
+        getByName("debug") {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
         getByName("release") {
             // R8: shrinks, optimizes and obfuscates the DEX (Play Console "DEX optimization").
             // The mapping file ships inside the AAB, so Play deobfuscates crash stack traces.

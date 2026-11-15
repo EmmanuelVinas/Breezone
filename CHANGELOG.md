@@ -6,6 +6,11 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Android: the debug build is « Breezone Debug » (`com.breezone.app.debug`), installed next to the
+  store version with its own data.
+
 ## [0.11.0-beta.14] - 2026-11-15
 
 ### Added
