@@ -166,7 +166,15 @@ pub async fn create(hub: &Hub, db: &Db, input: &TimerInput, actor: &str) -> ApiR
     let run_at = db::now() + input.delay_minutes * 60;
     let row = db::insert_timer(db, &label.store(), run_at, &json!(input.target).to_string(), &json!(input.command).to_string(), actor).await?;
     let delay = human_delay(input.delay_minutes);
-    hub.log("routine", "info", None, Some(actor), crate::text!("Minuterie dans {0} : {1}", "Timer in {0}: {1}", "Temporizador en {0}: {1}", delay, label.arg()), None).await;
+    hub.log(
+        "routine",
+        "info",
+        input.target.installation_id(),
+        Some(actor),
+        crate::text!("Minuterie dans {0} : {1}", "Timer in {0}: {1}", "Temporizador en {0}: {1}", delay, label.arg()),
+        None,
+    )
+    .await;
     hub.routines_changed();
     view(row).ok_or_else(|| ApiError::internal("timer not stored"))
 }
@@ -175,7 +183,8 @@ pub async fn cancel(hub: &Hub, db: &Db, id: i64, actor: &str) -> ApiResult<()> {
     let row = db::timer_by_id(db, id).await?.ok_or_else(|| ApiError::not_found("minuterie introuvable"))?;
     db::delete_timer(db, id).await?;
     let label = Text::load(&row.label);
-    hub.log("routine", "info", None, Some(actor), crate::text!("Minuterie annulée : {0}", "Timer cancelled: {0}", "Temporizador cancelado: {0}", label.arg()), None).await;
+    let installation = serde_json::from_str::<Target>(&row.target).ok().and_then(|t| t.installation_id());
+    hub.log("routine", "info", installation, Some(actor), crate::text!("Minuterie annulée : {0}", "Timer cancelled: {0}", "Temporizador cancelado: {0}", label.arg()), None).await;
     hub.routines_changed();
     Ok(())
 }
@@ -257,7 +266,7 @@ pub async fn run_due(state: &AppState) {
                 ),
             )
         };
-        hub.log("routine", level, None, Some(&actor), message, Some(json!({ "results": results }))).await;
+        hub.log("routine", level, t.target.installation_id(), Some(&actor), message, Some(json!({ "results": results }))).await;
     }
     hub.routines_changed();
 }

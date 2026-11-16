@@ -16,6 +16,7 @@ import type { LucideIcon } from "lucide-react"
 import type { FeedEvent, Incident } from "@/lib/api"
 import { api, currentUser } from "@/lib/api"
 import { dateTime, installationAddress, relativeTime } from "@/lib/format"
+import { useChosenInstallations } from "@/lib/selected-installation"
 import { cn } from "@/lib/utils"
 import { PageHeader } from "@/components/app-shell"
 import { ConnectionDot } from "@/components/connection-badge"
@@ -89,7 +90,9 @@ export function ActivityPage() {
   const qc = useQueryClient()
   const [filter, setFilter] = useState<string>("all")
   const [loadingMore, setLoadingMore] = useState(false)
-  const status = useQuery({ queryKey: ["status"], queryFn: api.status })
+  // The installation chosen: its state and its events, with those of no installation (the
+  // server, security, presence…).
+  const { installations, ids } = useChosenInstallations()
   const events = useQuery({
     queryKey: ["events"],
     queryFn: () => api.events(150),
@@ -103,7 +106,10 @@ export function ActivityPage() {
     enabled: admin,
     refetchInterval: 30_000,
   })
-  const list = (events.data ?? []).filter((e) =>
+  const mine = (events.data ?? []).filter(
+    (e) => e.installation_id === null || ids.has(e.installation_id)
+  )
+  const list = mine.filter((e) =>
     filter === "errors"
       ? e.level !== "info"
       : filter === "all" || e.kind === filter
@@ -115,7 +121,7 @@ export function ActivityPage() {
   ].sort((a, b) => b.ts - a.ts)
   const errorCount =
     (incidents.data?.length ?? 0) +
-    (events.data ?? []).filter((e) => e.level === "error").length
+    mine.filter((e) => e.level === "error").length
 
   const loadMore = async () => {
     const last = events.data?.[events.data.length - 1]
@@ -140,7 +146,7 @@ export function ActivityPage() {
       />
 
       <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {(status.data ?? []).map((i) => (
+        {installations.map((i) => (
           <Card key={i.id} className="rounded-3xl">
             <CardContent className="flex items-start gap-3">
               <ConnectionDot state={i.connection.state} className="mt-1.5" />
@@ -242,7 +248,7 @@ export function ActivityPage() {
                       key={x.event!.id}
                       e={x.event!}
                       name={
-                        status.data?.find(
+                        installations.find(
                           (i) => i.id === x.event!.installation_id
                         )?.name
                       }
@@ -262,7 +268,7 @@ export function ActivityPage() {
                   key={e.id}
                   e={e}
                   name={
-                    status.data?.find((i) => i.id === e.installation_id)?.name
+                    installations.find((i) => i.id === e.installation_id)?.name
                   }
                 />
               ))}

@@ -58,12 +58,26 @@ pub enum RoutineAction {
 }
 
 impl RoutineAction {
+    fn installation_id(&self) -> Option<i64> {
+        match self {
+            RoutineAction::Zone(z) => Some(z.installation_id),
+            RoutineAction::Device(_) => None,
+        }
+    }
+
     pub fn delay_minutes(&self) -> Option<i64> {
         match self {
             RoutineAction::Device(d) => d.delay_minutes,
             RoutineAction::Zone(z) => z.delay_minutes,
         }
     }
+}
+
+/// The installation a routine acts on, when it acts on one only (its zones): its events go with it
+/// in the activity feed. `None` for a routine across installations or with devices of the modules.
+pub fn installation_of(actions: &[RoutineAction]) -> Option<i64> {
+    let first = actions.first()?.installation_id()?;
+    actions.iter().all(|a| a.installation_id() == Some(first)).then_some(first)
 }
 
 /// What an action needs the right to drive: an installation, or the devices of the modules
@@ -197,6 +211,7 @@ pub async fn run_actions(hub: &Hub, actions: &[Action], actor: &str) -> Vec<Acti
 pub async fn run_routine(state: &AppState, row: &RoutineRow, actor: &str) -> ApiResult<Vec<ActionResult>> {
     let (hub, db) = (&state.hub, &state.db);
     let all: Vec<RoutineAction> = serde_json::from_str(&row.actions).map_err(|e| ApiError::internal(e.to_string()))?;
+    let installation = installation_of(&all);
     let (delayed, now): (Vec<RoutineAction>, Vec<RoutineAction>) = all.into_iter().partition(|a| a.delay_minutes().unwrap_or(0) > 0);
     let who = format!("{actor} · routine « {} »", row.name);
     let mut results = Vec::with_capacity(now.len());
@@ -253,7 +268,7 @@ pub async fn run_routine(state: &AppState, row: &RoutineRow, actor: &str) -> Api
             ),
         )
     };
-    hub.log("routine", level, None, Some(actor), message, Some(json!({ "routine_id": row.id, "results": results }))).await;
+    hub.log("routine", level, installation, Some(actor), message, Some(json!({ "routine_id": row.id, "results": results }))).await;
     hub.routines_changed();
     Ok(results)
 }
@@ -289,6 +304,17 @@ mod tests {
         assert!(matches!(&actions[1], RoutineAction::Device(d) if d.device_id == 7 && d.trait_name == "light" && d.delay_minutes == Some(30)));
         // Written back, a zone keeps its shape.
         assert_eq!(serde_json::to_value(&actions[0]).unwrap(), json!({"installation_id":1,"system_id":1,"zone_id":2,"on":false}));
+    }
+
+    #[test]
+    fn a_routine_goes_with_its_installation_in_the_feed() {
+        let other =
+            RoutineAction::Zone(Action { installation_id: 2, system_id: 1, zone_id: 1, command: ZoneCommand { on: Some(true), ..Default::default() }, delay_minutes: None });
+        let device = RoutineAction::Device(DeviceAction { device_id: 7, trait_name: "light".into(), action: "set".into(), params: Map::new(), delay_minutes: None });
+        assert_eq!(installation_of(&[zone(None), zone(Some(30))]), Some(1));
+        assert_eq!(installation_of(&[zone(None), other]), None, "across installations");
+        assert_eq!(installation_of(&[zone(None), device]), None, "with a device of a module");
+        assert_eq!(installation_of(&[]), None);
     }
 
     #[test]

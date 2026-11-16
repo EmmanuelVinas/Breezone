@@ -33,7 +33,17 @@ pub async fn create(State(state): State<AppState>, user: AuthUser, Json(input): 
     Access::of(&state.db, &user).await?.edit_routine(&scopes.of(&input.actions))?;
     routines::check_devices(&state, &input.actions).await?;
     let row = db::insert_routine(&state.db, &name, input.enabled, 0, None, &actions).await?;
-    state.hub.log("routine", "info", None, Some(&user.username), crate::text!("Routine « {0} » créée", "Routine “{0}” created", "Rutina «{0}» creada", name), None).await;
+    state
+        .hub
+        .log(
+            "routine",
+            "info",
+            routines::installation_of(&input.actions),
+            Some(&user.username),
+            crate::text!("Routine « {0} » créée", "Routine “{0}” created", "Rutina «{0}» creada", name),
+            None,
+        )
+        .await;
     state.hub.routines_changed();
     Ok((StatusCode::CREATED, Json(routines::to_view(&row))))
 }
@@ -47,7 +57,17 @@ pub async fn update(State(state): State<AppState>, user: AuthUser, Path(id): Pat
     access.edit_routine(&scopes.of(&input.actions))?;
     routines::check_devices(&state, &input.actions).await?;
     db::update_routine(&state.db, id, &name, input.enabled, 0, None, &actions).await?;
-    state.hub.log("routine", "info", None, Some(&user.username), crate::text!("Routine « {0} » modifiée", "Routine “{0}” changed", "Rutina «{0}» modificada", name), None).await;
+    state
+        .hub
+        .log(
+            "routine",
+            "info",
+            routines::installation_of(&input.actions),
+            Some(&user.username),
+            crate::text!("Routine « {0} » modifiée", "Routine “{0}” changed", "Rutina «{0}» modificada", name),
+            None,
+        )
+        .await;
     state.hub.routines_changed();
     let row = db::routine_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("routine not found"))?;
     Ok(Json(routines::to_view(&row)))
@@ -58,9 +78,10 @@ pub async fn delete(State(state): State<AppState>, user: AuthUser, Path(id): Pat
     let scopes = DeviceScopes::load(&state.db).await?;
     Access::of(&state.db, &user).await?.edit_routine(&scopes.of(&routines::to_view(&row).actions))?;
     db::delete_routine(&state.db, id).await?;
+    let installation = routines::installation_of(&routines::to_view(&row).actions);
     state
         .hub
-        .log("routine", "info", None, Some(&user.username), crate::text!("Routine « {0} » supprimée", "Routine “{0}” deleted", "Rutina «{0}» eliminada", row.name), None)
+        .log("routine", "info", installation, Some(&user.username), crate::text!("Routine « {0} » supprimée", "Routine “{0}” deleted", "Rutina «{0}» eliminada", row.name), None)
         .await;
     state.hub.routines_changed();
     Ok(StatusCode::NO_CONTENT)
