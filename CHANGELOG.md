@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.21] - 2026-11-16
+
 ### Added
 
 - App, Lights: a switch per room turns all its lights on or off.
@@ -17,6 +19,16 @@ All notable changes are documented here. The format follows
   Steps of "Then" still under way stop. Shown in the app.
 - Automation recipes "Solar surplus: heat a room" and "Solar surplus: cool a room": they follow the
   mode of the air conditioning instead of setting it.
+- Scenes drive every module, not only the Airzone zones: a light, a shutter, a relay, the charger…
+  with the same actions as the automations ("+ Device" in the scene editor on the web). A delayed
+  action on a device becomes a timer. The app runs these scenes and keeps their device actions when
+  it changes their zones. Devices of the modules stay for administrators.
+- Each device says whether the signed-in user may drive it (`can_control` in `/api/devices`): the
+  web and the app grey out the controls of a device they may not drive, instead of failing.
+- Automations written by a newer version (then the server went back) are named to administrators
+  (`GET /api/automations/unreadable`), on the web and in the app, and can be deleted. They were
+  hidden without a word.
+- The app is complete in Spanish (135 texts were shown in French).
 
 ### Changed
 
@@ -26,6 +38,15 @@ All notable changes are documented here. The format follows
   (`online`).
 - Automations, "put back as before" leaves a device someone changed in the meantime as it is, and
   the history says so.
+- The stored secrets (Airzone Cloud password, Hue keys, HomeKit pairings, this server's
+  federation key) are encrypted with a key of their own, `data.key` in the data directory, to keep
+  with the database. Changing `BREEZONE_JWT_SECRET` to sign everyone out no longer makes them
+  unreadable. An existing server writes the key it had into `data.key` at its first start (nothing
+  is encrypted again, an older version still reads them); a damaged `data.key` stops the server
+  instead of being replaced.
+- The main views of the API are described in `server/contracts/views.json`, checked against the
+  real answers of the server; the web types are generated from it and the app's models are tested
+  with it.
 
 ### Fixed
 
@@ -37,6 +58,10 @@ All notable changes are documented here. The format follows
 - App, House: a paused charger, which still says it is charging at 0 W, shows as paused.
 - Automations: the values of a state are in words ("Vehicle plugged in", not "plugged"), and the
   number fields of an action show their name in full.
+- A paused charger shows the same state everywhere: the app's Charging screen said "Charging" and
+  the web's Modules tab ignored the pause.
+- Numbers on the Modules tab and the solar surplus follow the language of the app, not the browser's.
+- A failed read of the holiday pause no longer lets the automations start.
 
 ## [0.11.0-beta.20] - 2026-11-15
 
