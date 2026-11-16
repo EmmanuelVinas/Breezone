@@ -6,6 +6,18 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.25] - 2026-11-16
+
+### Added
+
+- Overview of an installation (menu « Vue d'ensemble »), as a dashboard of blocks: energy figures
+  (solar, home, battery, grid), the solar surplus, a card per room or per type of device with its
+  switches, a single device, a chart of a measure over 24 h or 7 days, the weather, the scenes.
+  Without any set, it is composed from the rooms and devices, by room or by type. « Modifier »
+  arranges it: blocks dragged into place (or with the keyboard), a quarter, half or full row,
+  settings, added or removed. Each user saves their own; an administrator of the installation saves
+  the one everyone sees, and a user can go back to it. The defaults go with the configuration backup.
+
 ## [0.11.0-beta.24] - 2026-11-16
 
 ### Changed

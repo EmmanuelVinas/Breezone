@@ -3,6 +3,7 @@
 mod account;
 mod automations;
 mod cloud;
+mod dashboard;
 pub(crate) mod energy;
 mod federation;
 pub(crate) mod home;
@@ -49,6 +50,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/installations/test", post(hvac::test_installation))
         .route("/api/installations/{id}", get(hvac::get_installation).put(hvac::update_installation).delete(hvac::delete_installation))
         .route("/api/installations/{id}/refresh", post(hvac::refresh_installation))
+        .route("/api/installations/{id}/dashboard", get(dashboard::get).put(dashboard::save_mine).delete(dashboard::delete_mine))
+        .route("/api/installations/{id}/dashboard/default", put(dashboard::save_default).delete(dashboard::delete_default))
         .route("/api/installations/{id}/cloud", put(hvac::link_cloud))
         .route("/api/installations/{id}/zones/{system_id}/{zone_id}", patch(hvac::control_zone))
         .route("/api/installations/{id}/zones/{system_id}/{zone_id}/meta", put(hvac::update_zone_meta))

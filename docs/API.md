@@ -312,6 +312,27 @@ Les vues principales (`Installation`, `Zone`, `DeviceView`, `Room`…) sont déc
 contre ce contrat, et en écrit les types web (`web/src/lib/api.generated.ts`) et un exemple de
 chaque vue que les modèles de l'appli doivent savoir lire (`BREEZONE_WRITE_GENERATED=1`).
 
+## Vue d'ensemble (tableau de bord)
+
+La vue d'ensemble d'une installation est une liste de blocs. Un administrateur de l'installation
+fixe celle que tout le monde voit ; chaque utilisateur peut s'en faire une, pour lui seul. Sans
+l'une ni l'autre, les clients en composent une à partir des pièces et des appareils.
+
+| Méthode | Chemin | Description |
+|---------|--------|-------------|
+| GET 🔒 | `/api/installations/{id}/dashboard` | `{layout, source, has_default, can_set_default}` : `source` ∈ `mine` (la sienne) \| `installation` (celle de l'installation) \| `generated` (`layout` nul) |
+| PUT 🔒 | `/api/installations/{id}/dashboard` | Enregistre la sienne (`Layout`) |
+| DELETE 🔒 | `/api/installations/{id}/dashboard` | Supprime la sienne : retour à celle de l'installation |
+| PUT 🔒 | `/api/installations/{id}/dashboard/default` | Celle de l'installation (administrateur de l'installation) ; la sienne est alors effacée |
+| DELETE 🔒 | `/api/installations/{id}/dashboard/default` | Supprime celle de l'installation |
+
+`Layout` : `{version: 1, blocks: [{id, type, size, config}]}`, au plus 60 blocs. `size` ∈
+`quarter | half | full` (part d'une ligne sur un grand écran). `type` et `config` :
+`energy` `{flow: solar|home|battery|grid}` · `surplus` · `group` `{room_id}` (une pièce, `null` :
+sans pièce) ou `{type}` (un type d'appareil), avec `hidden` (appareils masqués) · `device`
+`{device_id}` · `chart` `{device_id, field, hours: 24|168}` · `weather` · `scenes`
+`{routine_ids?}` (aucune : toutes). Un client ignore un type qu'il ne connaît pas.
+
 ## Routines (scènes, exécutées par Breezone)
 
 Lancées à la demande seulement ; les programmations à heure fixe sont celles d'Airzone (voir

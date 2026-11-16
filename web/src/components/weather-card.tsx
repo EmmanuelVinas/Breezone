@@ -11,7 +11,7 @@ const deg = (v: number | null | undefined) =>
   v === null || v === undefined ? "–" : `${Math.round(v)}°`
 
 /** The weather of the installation chosen: now, today, the sun and the next hours (none without a city). */
-export function WeatherCard() {
+export function WeatherCard({ className = "mb-6" }: { className?: string }) {
   const chosen = useChosenInstallation()
   const view = useQuery({
     queryKey: ["weather", chosen?.id ?? null],
@@ -23,7 +23,9 @@ export function WeatherCard() {
   const now = weatherLook(w.code)
   const Icon = now.icon
   return (
-    <Card className="mb-6 rounded-3xl bg-[radial-gradient(80%_120%_at_0%_0%,color-mix(in_oklch,var(--cool)_14%,transparent),transparent_70%)]">
+    <Card
+      className={`${className} rounded-3xl bg-[radial-gradient(80%_120%_at_0%_0%,color-mix(in_oklch,var(--cool)_14%,transparent),transparent_70%)]`}
+    >
       <CardContent className="flex flex-wrap items-center gap-x-8 gap-y-4">
         <div className="flex items-center gap-4">
           <Icon className="size-12 text-cool" aria-hidden />

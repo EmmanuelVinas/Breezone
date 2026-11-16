@@ -971,6 +971,27 @@ export type AutomationInput = {
 }
 
 /** A rule "quand… si… alors… sinon…", with its sentence and what it sees now. */
+/** The share of a row a block of the overview takes on a wide screen. */
+export type DashboardSize = "quarter" | "half" | "full"
+
+/** A block of the overview: what it shows is set by its type and `config`. */
+export type DashboardBlock = {
+  id: string
+  type: string
+  size: DashboardSize
+  config: Record<string, unknown>
+}
+
+export type DashboardLayout = { version: 1; blocks: DashboardBlock[] }
+
+/** The overview of an installation: the user's own, the installation's, or none yet. */
+export type DashboardView = {
+  layout: DashboardLayout | null
+  source: "mine" | "installation" | "generated"
+  has_default: boolean
+  can_set_default: boolean
+}
+
 /** A rule written by a newer version: it does not run on this server. */
 export type UnreadableAutomation = {
   id: number
@@ -1093,6 +1114,31 @@ export const api = {
       device_ids: deviceIds,
     }),
   traits: () => request<TraitInfo[]>("GET", "/api/traits"),
+  dashboard: (installationId: number) =>
+    request<DashboardView>(
+      "GET",
+      `/api/installations/${installationId}/dashboard`
+    ),
+  /** The user's own overview of the installation. */
+  saveDashboard: (installationId: number, layout: DashboardLayout) =>
+    request<DashboardView>(
+      "PUT",
+      `/api/installations/${installationId}/dashboard`,
+      layout
+    ),
+  /** Back to the installation's overview. */
+  resetDashboard: (installationId: number) =>
+    request<DashboardView>(
+      "DELETE",
+      `/api/installations/${installationId}/dashboard`
+    ),
+  /** The overview everyone sees (administrators of the installation). */
+  saveDefaultDashboard: (installationId: number, layout: DashboardLayout) =>
+    request<DashboardView>(
+      "PUT",
+      `/api/installations/${installationId}/dashboard/default`,
+      layout
+    ),
   automations: () => request<Automation[]>("GET", "/api/automations"),
   /** Rules this server version cannot read (administrators). */
   unreadableAutomations: () =>

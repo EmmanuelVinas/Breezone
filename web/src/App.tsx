@@ -13,6 +13,7 @@ import { AppShell } from "@/components/app-shell"
 import { ThisServerOnly } from "@/components/this-server-only"
 import { LoginPage, SetupPage } from "@/pages/auth"
 import { DashboardPage } from "@/pages/dashboard"
+import { OverviewPage } from "@/pages/overview"
 
 // Secondary pages are loaded on demand (the charts library is heavy).
 const ZonePage = lazy(() =>
@@ -70,6 +71,7 @@ function Protected() {
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/installations/:id" element={<DashboardPage />} />
+          <Route path="/maison" element={<OverviewPage />} />
           <Route
             path="/climatisation"
             element={<DashboardPage view="climate" />}

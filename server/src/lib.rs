@@ -13,6 +13,7 @@ pub mod capabilities;
 pub mod cloud;
 pub mod config;
 pub mod crypto;
+pub mod dashboard;
 pub mod db;
 pub mod devices;
 pub mod discovery;

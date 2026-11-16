@@ -3,6 +3,7 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router"
 import {
   Activity,
   CalendarClock,
+  House,
   LayoutGrid,
   Blinds,
   Fan,
@@ -69,6 +70,7 @@ const NAV: { title: string | null; items: NavItem[] }[] = [
   {
     title: t("Maison"),
     items: [
+      { to: "/maison", label: t("Vue d'ensemble"), icon: House, end: false },
       {
         to: "/climatisation",
         label: t("Climatisation"),
