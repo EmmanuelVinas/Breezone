@@ -6,6 +6,19 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Activity shows the installation chosen only: its state, its events, and those of no installation
+  (the server, security, presence…). Timers and scenes now say which installation they act on (a
+  scene across installations or with devices of the modules stays shown everywhere).
+
+### Fixed
+
+- HomeKit: an accessory that closes the connection says why. Closed when Breezone shows its key, or
+  refused then: the accessory no longer knows Breezone's pairing ("remove this module, then pair it
+  again"); closed before: it may be restarting or have too many connections open. It said only
+  "Connection reset by peer".
+
 ## [0.11.0-beta.21] - 2026-11-16
 
 ### Added

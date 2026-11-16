@@ -251,7 +251,11 @@ impl Connection {
         let mut conn = Self::connect(addr).await?;
         let secret = StaticSecret::from(crate::auth::random_bytes::<32>());
         let public = PublicKey::from(&secret);
-        let m2 = conn.tlv("/pair-verify", &[(tlv::STATE, &[1]), (tlv::PUBLIC_KEY, public.as_bytes())]).await?;
+        let m2 = conn.tlv("/pair-verify", &[(tlv::STATE, &[1]), (tlv::PUBLIC_KEY, public.as_bytes())]).await.map_err(|e| match e {
+            // Nothing of Breezone's pairing was shown yet: the accessory is busy or restarting.
+            HapError::Unreachable(m) => HapError::Unreachable(format!("{m}, before the session was set up (the accessory may be restarting, or have too many connections open)")),
+            other => other,
+        })?;
         let their: [u8; 32] = tlv::get(&m2, tlv::PUBLIC_KEY).and_then(|k| k.try_into().ok()).ok_or_else(|| HapError::Protocol("pair-verify: no public key".into()))?;
         let shared = secret.diffie_hellman(&PublicKey::from(their));
         let key = hkdf("Pair-Verify-Encrypt-Salt", shared.as_bytes(), "Pair-Verify-Encrypt-Info");
@@ -275,7 +279,13 @@ impl Connection {
         info.extend_from_slice(&their);
         let mine = tlv::encode(&[(tlv::IDENTIFIER, pairing.controller_id.as_bytes()), (tlv::SIGNATURE, &me.sign(&info).to_bytes())]);
         let sealed = seal(&key, label("PV-Msg03"), &[], &mine);
-        conn.tlv("/pair-verify", &[(tlv::STATE, &[3]), (tlv::ENCRYPTED_DATA, &sealed)]).await?;
+        // Breezone's key was shown: a refusal, or a connection closed now, means the accessory does
+        // not know it any more (some, like Legrand's, close the connection instead of answering).
+        conn.tlv("/pair-verify", &[(tlv::STATE, &[3]), (tlv::ENCRYPTED_DATA, &sealed)]).await.map_err(|e| match e {
+            HapError::Accessory(2) => HapError::Forgotten,
+            HapError::Unreachable(m) if m.contains("reset") || m.contains("closed") || m.contains("roken pipe") => HapError::Forgotten,
+            other => other,
+        })?;
 
         conn.keys = Some(Keys {
             write: hkdf("Control-Salt", shared.as_bytes(), "Control-Write-Encryption-Key"),

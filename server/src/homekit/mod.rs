@@ -33,6 +33,9 @@ pub enum HapError {
     Protocol(String),
     /// An error code of the accessory (HAP, table 5-5).
     Accessory(u8),
+    /// The accessory no longer knows Breezone's pairing (removed, or the accessory was reset): it
+    /// refuses Breezone's key, or closes the connection when it is shown.
+    Forgotten,
 }
 
 impl HapError {
@@ -62,6 +65,11 @@ impl HapError {
                 "The accessory is busy with another pairing. Try again in a moment.",
                 "El accesorio está ocupado con otro emparejamiento. Inténtelo de nuevo en un momento."
             ),
+            HapError::Forgotten => crate::text!(
+                "L'accessoire ne reconnaît plus Breezone (appairage retiré, ou accessoire réinitialisé) : retirez ce module, puis appairez-le de nouveau avec son code.",
+                "The accessory no longer knows Breezone (pairing removed, or accessory reset): remove this module, then pair it again with its code.",
+                "El accesorio ya no reconoce Breezone (emparejamiento eliminado o accesorio restablecido): quite este módulo y vuelva a emparejarlo con su código."
+            ),
             HapError::Accessory(code) => crate::text!("L'accessoire refuse (erreur {0}).", "The accessory refuses (error {0}).", "El accesorio rechaza (error {0}).", code),
             HapError::Unreachable(e) => crate::text!("Accessoire injoignable : {0}", "Accessory unreachable: {0}", "Accesorio inaccesible: {0}", e),
             HapError::Protocol(e) => {
@@ -77,6 +85,7 @@ impl std::fmt::Display for HapError {
             HapError::Unreachable(e) => write!(f, "unreachable: {e}"),
             HapError::Protocol(e) => write!(f, "{e}"),
             HapError::Accessory(code) => write!(f, "the accessory refuses (error {code})"),
+            HapError::Forgotten => write!(f, "the accessory no longer knows Breezone's pairing: remove this module, then pair it again with its code"),
         }
     }
 }
@@ -515,7 +524,7 @@ mod tests {
         // A pairing that is not the accessory's is refused.
         let mut other = pairing.clone();
         other.controller_id = "someone-else".into();
-        assert!(Connection::verify(&addr, &other).await.is_err());
+        assert_eq!(Connection::verify(&addr, &other).await.err(), Some(HapError::Forgotten));
 
         // Breezone removes its own pairing, and only it.
         remove_own_pairing(&addr, &pairing).await.unwrap();
