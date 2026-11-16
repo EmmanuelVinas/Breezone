@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.22] - 2026-11-16
+
 ### Changed
 
 - Activity shows the installation chosen only: its state, its events, and those of no installation
