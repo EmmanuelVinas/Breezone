@@ -6,6 +6,12 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Modules, « Rechercher »: it says what the network announces of the device. Announced at the same
+  address but refusing connections: restart it; announced as not paired (it was reset): pair it
+  again. It said "not found on the network" whenever the module did not answer.
+
 ## [0.11.0-beta.22] - 2026-11-16
 
 ### Changed

@@ -259,16 +259,16 @@ pub async fn refresh(State(state): State<AppState>, _admin: AdminUser, Path(id):
 pub struct LocateView {
     #[serde(flatten)]
     pub source: SourceView,
-    /// Found at another address, now used.
-    pub moved: bool,
+    #[serde(flatten)]
+    pub located: crate::drivers::Located,
 }
 
 /// Looks for the source's hardware on the network by its identity (« Rechercher »), and follows it
 /// if its address changed.
 pub async fn locate(State(state): State<AppState>, _admin: AdminUser, Path(id): Path<i64>) -> ApiResult<Json<LocateView>> {
     db::source_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("source not found"))?;
-    let moved = state.drivers.locate(id, state.cfg.scan_subnet.as_deref(), state.cfg.scan_port).await.map_err(ApiError::bad_request)?;
-    Ok(Json(LocateView { source: polled(&state, id).await?, moved }))
+    let located = state.drivers.locate(id, state.cfg.scan_subnet.as_deref(), state.cfg.scan_port).await.map_err(ApiError::bad_request)?;
+    Ok(Json(LocateView { source: polled(&state, id).await?, located }))
 }
 
 #[derive(Deserialize, Default)]

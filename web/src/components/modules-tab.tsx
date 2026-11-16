@@ -728,6 +728,20 @@ function SourceDetail({
         toast.success(
           t("« {name} » répond à la même adresse", { name: s.name })
         )
+      else if (s.seen?.paired === false)
+        toast.error(
+          t(
+            "« {name} » s'annonce comme non appairé : il a été réinitialisé. Retirez ce module, puis appairez-le de nouveau avec son code.",
+            { name: s.name }
+          )
+        )
+      else if (s.seen)
+        toast.error(
+          t(
+            "« {name} » s'annonce bien à {host} mais refuse les connexions : redémarrez-le (coupure de courant), puis réessayez.",
+            { name: s.name, host: s.seen.host }
+          )
+        )
       else
         toast.error(t("« {name} » introuvable sur le réseau", { name: s.name }))
     },

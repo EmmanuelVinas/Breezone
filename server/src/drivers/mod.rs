@@ -245,6 +245,24 @@ pub struct SourceDevice {
     pub online: bool,
 }
 
+/// What « Rechercher » found of a source's hardware.
+#[derive(Debug, Clone, Serialize)]
+pub struct Located {
+    /// The source knows its hardware's identity (else it cannot be looked for).
+    pub identified: bool,
+    /// What the network announces of it (`None`: not announced).
+    pub seen: Option<Seen>,
+    /// Found at another address, now used.
+    pub moved: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Seen {
+    pub host: String,
+    /// HomeKit: still paired with a controller (`false`: reset, it waits for a new pairing).
+    pub paired: Option<bool>,
+}
+
 /// Seconds a source stays online after its last successful reading, at least.
 const MISSED_READINGS_GRACE: i64 = 60;
 
@@ -552,12 +570,20 @@ impl Runtime {
         }
     }
 
-    /// Looks for one source on the network now (« Rechercher »): `true` if it moved.
-    pub async fn locate(&self, id: i64, configured: Option<&str>, airzone_port: u16) -> Result<bool, String> {
+    /// Looks for one source on the network now (« Rechercher »): what the network announces of its
+    /// hardware, and whether the source followed it to another address.
+    pub async fn locate(&self, id: i64, configured: Option<&str>, airzone_port: u16) -> Result<Located, String> {
         let subnet = crate::discovery::global_subnet(&self.db, configured).await.ok_or_else(|| "no network to scan: set it in Settings".to_string())?;
         let products = crate::discovery::scan_products(&subnet, airzone_port).await?;
         self.searched.write().await.insert(id, Instant::now());
-        Ok(!self.relocate(&products, &[id]).await.is_empty())
+        let identity = self.sources.read().await.get(&id).and_then(|r| Some((config_identity(&r.source)?, r.source.driver.clone())));
+        let seen = identity.as_ref().and_then(|(identity, driver)| {
+            let p = products.iter().find(|p| p.driver == driver.as_str() && p.device_id.as_deref() == Some(identity.as_str()))?;
+            // A HomeKit accessory that can be added again is no longer paired with anyone.
+            Some(Seen { host: p.host.clone(), paired: (p.driver == "homekit").then_some(!p.supported) })
+        });
+        let moved = !self.relocate(&products, &[id]).await.is_empty();
+        Ok(Located { identified: identity.is_some(), seen, moved })
     }
 
     /// Gives the sources in `ids` the new address of their hardware, when the network has it

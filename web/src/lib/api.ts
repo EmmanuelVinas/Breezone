@@ -1234,10 +1234,15 @@ export const api = {
     request<void>("POST", "/api/homekit/pair/cancel", { host }),
   /** Looks for the source's hardware on the network, and follows it if its address changed. */
   locateSource: (id: number) =>
-    request<SourceView & { moved: boolean }>(
-      "POST",
-      `/api/sources/${id}/locate`
-    ),
+    request<
+      SourceView & {
+        /** The source knows its hardware's identity (else it cannot be looked for). */
+        identified: boolean
+        /** What the network announces of it (null: not announced). */
+        seen: { host: string; paired: boolean | null } | null
+        moved: boolean
+      }
+    >("POST", `/api/sources/${id}/locate`),
   refreshSource: (id: number) =>
     request<SourceView>("POST", `/api/sources/${id}/refresh`),
   scanProducts: (subnet?: string) =>

@@ -967,6 +967,10 @@ const en: Record<string, string> = {
   "« {name} » retrouvé à {host}": "“{name}” found again at {host}",
   "« {name} » répond à la même adresse": "“{name}” answers at the same address",
   "« {name} » introuvable sur le réseau": "“{name}” not found on the network",
+  "« {name} » s'annonce comme non appairé : il a été réinitialisé. Retirez ce module, puis appairez-le de nouveau avec son code.":
+    "“{name}” announces it is not paired: it was reset. Remove this module, then pair it again with its code.",
+  "« {name} » s'annonce bien à {host} mais refuse les connexions : redémarrez-le (coupure de courant), puis réessayez.":
+    "“{name}” announces itself at {host} but refuses connections: restart it (unplug it), then try again.",
   "HomeKit en local : appairé avec le code de l'accessoire, sans Apple Maison ni compte":
     "Local HomeKit: paired with the accessory's code, without Apple Home or an account",
   "toutes les 10 s": "every 10 s",

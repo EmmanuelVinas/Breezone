@@ -975,6 +975,10 @@ const es: Record<string, string> = {
   "« {name} » répond à la même adresse":
     "«{name}» responde en la misma dirección",
   "« {name} » introuvable sur le réseau": "«{name}» no encontrado en la red",
+  "« {name} » s'annonce comme non appairé : il a été réinitialisé. Retirez ce module, puis appairez-le de nouveau avec son code.":
+    "«{name}» se anuncia como no emparejado: se ha restablecido. Quite este módulo y vuelva a emparejarlo con su código.",
+  "« {name} » s'annonce bien à {host} mais refuse les connexions : redémarrez-le (coupure de courant), puis réessayez.":
+    "«{name}» se anuncia en {host} pero rechaza las conexiones: reinícielo (desenchúfelo) y vuelva a intentarlo.",
   "HomeKit en local : appairé avec le code de l'accessoire, sans Apple Maison ni compte":
     "HomeKit local: emparejado con el código del accesorio, sin Apple Casa ni cuenta",
   "toutes les 10 s": "cada 10 s",
