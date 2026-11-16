@@ -10,9 +10,11 @@
     { "name": "boost", "type": "bool", "label": { "fr": "Boost en cours", "en": "Boosting", "es": "Boost activo" } },
     { "name": "boost_remaining", "type": "integer", "history": false, "unit": "s", "min": 0, "optional": true, "label": { "fr": "Fin du boost dans", "en": "Boost ends in", "es": "El boost termina en" } },
     { "name": "humidity", "type": "number", "unit": "%", "min": 0, "max": 100, "optional": true, "label": { "fr": "Humidité", "en": "Humidity", "es": "Humedad" } },
-    { "name": "temperature", "type": "number", "unit": "°C", "optional": true, "label": { "fr": "Température", "en": "Temperature", "es": "Temperatura" } },
+    { "name": "temperature", "type": "number", "unit": "°C", "optional": true, "label": { "fr": "Température à la VMC (air extrait)", "en": "Temperature at the unit (extract air)", "es": "Temperatura en la VMC (aire extraído)" } },
     { "name": "co2", "type": "number", "unit": "ppm", "min": 0, "optional": true, "label": { "fr": "CO₂", "en": "CO₂", "es": "CO₂" } },
-    { "name": "voc", "type": "number", "unit": "ppm", "min": 0, "optional": true, "label": { "fr": "COV", "en": "VOC", "es": "COV" } }
+    { "name": "voc", "type": "number", "unit": "ppm", "min": 0, "optional": true, "label": { "fr": "COV", "en": "VOC", "es": "COV" } },
+    { "name": "air_quality_index", "type": "number", "min": 0, "optional": true, "label": { "fr": "Indice de qualité d'air", "en": "Air quality index", "es": "Índice de calidad del aire" } },
+    { "name": "main_pollutant", "type": "enum", "values": ["humidity", "co2", "voc", "other"], "value_labels": { "humidity": { "fr": "Humidité", "en": "Humidity", "es": "Humedad" }, "co2": { "fr": "CO₂", "en": "CO₂", "es": "CO₂" }, "voc": { "fr": "COV", "en": "VOC", "es": "COV" }, "other": { "fr": "Autre", "en": "Other", "es": "Otro" } }, "optional": true, "label": { "fr": "Cause principale", "en": "Main cause", "es": "Causa principal" } }
   ],
   "actions": [
     {

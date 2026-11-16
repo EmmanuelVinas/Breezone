@@ -100,14 +100,27 @@ fn pollutant(name: &str) -> &'static str {
 fn measures(room: &Value, s: &mut State) {
     for sensor in room["sensor"].as_array().into_iter().flatten() {
         let kind = sensor["type"].as_str().unwrap_or_default();
-        let (field, param) = match kind {
-            k if k.contains("relative humidity") => ("humidity", "humidity"),
-            k if k.contains("temperature") => ("temperature", "temperature"),
-            k if k.contains("CO2") => ("co2", "concentration"),
-            k if k.contains("volatile organic") => ("voc", "concentration"),
+        // The unit's own judgement of the room (its app colours it: up to 40 good, then medium,
+        // above 100 bad), and what drives it.
+        if kind.contains("air quality index") {
+            if let Some(i) = num(&sensor["parameter"]["index"]["value"]) {
+                s.entry("air_quality_index").or_insert(json!(i));
+            }
+            if let Some(m) = sensor["parameter"]["main_pollutant"]["value"].as_str().filter(|m| !m.is_empty()) {
+                s.entry("main_pollutant").or_insert(json!(pollutant(m)));
+            }
+            continue;
+        }
+        // Renson's documentation names the parameter to read for each sensor (the VOC sensor also
+        // gives its raw values: baseline, raw, filtered…).
+        let (field, params): (&str, &[&str]) = match kind {
+            k if k.contains("relative humidity") => ("humidity", &["humidity"]),
+            k if k.contains("temperature") => ("temperature", &["temperature"]),
+            k if k.contains("CO2") => ("co2", &["concentration"]),
+            k if k.contains("volatile organic") => ("voc", &["voc_calc_embedded", "concentration"]),
             _ => continue,
         };
-        if let Some(v) = num(&sensor["parameter"][param]["value"]) {
+        if let Some(v) = params.iter().find_map(|p| num(&sensor["parameter"][*p]["value"])) {
             s.entry(field).or_insert(json!(v));
         }
     }
@@ -303,6 +316,22 @@ impl Driver for Renson {
         Duration::from_secs(30)
     }
 
+    /// The unit's answers as they are (each sensor's raw values, each room's own air quality
+    /// index), without the address of the home: a diagnostic is meant to be shared.
+    fn diagnostic(&self) -> DriverFuture<'_, Value> {
+        Box::pin(async move {
+            let mut current = self.get("/v2/api/data/current").await?;
+            if let Some(p) = current["global"]["parameter"].as_object_mut() {
+                for private in ["street", "postal code", "city", "country", "device name"] {
+                    p.remove(private);
+                }
+            }
+            let device = self.get("/v2/device").await.unwrap_or(Value::Null);
+            let key = self.get("/v2/api/api_key/status").await.unwrap_or(Value::Null);
+            Ok(json!({ "current": current, "device": device, "api_key_status": key }))
+        })
+    }
+
     /// Each room of the unit, as named in the Renson app.
     fn rooms(&self) -> DriverFuture<'_, Vec<HardwareRoom>> {
         Box::pin(async move {
@@ -376,12 +405,35 @@ mod tests {
             {"type": "indoor relative humidity", "parameter": {"humidity": {"unit": "%", "value": 83.2}}},
             {"type": "indoor temperature", "parameter": {"temperature": {"unit": "°C", "value": 21.5}}},
             {"type": "indoor CO2", "parameter": {"concentration": {"unit": "ppm", "value": 1120.0}}},
-            {"type": "indoor volatile organic compounds", "parameter": {"concentration": {"unit": "ppm", "value": 0.31}}},
+            // As Renson's documentation gives it: raw values of the sensor, and the one to show.
+            {"type": "indoor volatile organic compounds", "parameter": {
+                "baseline": {"unit": "ppm", "value": 5318.4}, "raw": {"unit": "ppm", "value": 960.0},
+                "total_filtered": {"unit": "ppm", "value": 1194.0}, "voc_calc_embedded": {"unit": "ppm", "value": 68.19}
+            }},
             {"type": "indoor air quality index", "parameter": {"index": {"value": 80.0}}}
         ]);
         let bath = &states_of(&data, None, &HashMap::new(), true)["room:2"];
         assert_eq!((bath["humidity"].clone(), bath["temperature"].clone()), (json!(83.2), json!(21.5)));
-        assert_eq!((bath["co2"].clone(), bath["voc"].clone()), (json!(1120.0), json!(0.31)));
+        assert_eq!((bath["co2"].clone(), bath["voc"].clone()), (json!(1120.0), json!(68.19)));
+        assert_eq!(bath["air_quality_index"], json!(80.0));
+        assert!(!bath.contains_key("main_pollutant"), "no cause under 40: none given");
+    }
+
+    /// As firmware 2.6.9 answers: the VOC as `concentration` (not the documented
+    /// `voc_calc_embedded`), and each room's own index with its cause.
+    #[test]
+    fn the_measures_as_firmware_2_6_9_gives_them() {
+        let mut data = current();
+        data["room"]["2"]["sensor"] = json!([
+            {"type": "indoor relative humidity", "parameter": {"humidity": {"unit": "pct", "value": 93.6}}},
+            {"type": "indoor volatile organic compounds", "parameter": {
+                "concentration": {"unit": "ppm", "value": 691.9}, "concentration_maximum": {"unit": "ppm", "value": 765.2}, "raw": {"unit": "ppm", "value": 45420.0}
+            }},
+            {"type": "indoor air quality index", "parameter": {"index": {"unit": "", "value": 198.9}, "main_pollutant": {"unit": "", "value": "indoor relative humidity"}}}
+        ]);
+        let bath = &states_of(&data, None, &HashMap::new(), true)["room:2"];
+        assert_eq!(bath["voc"], json!(691.9));
+        assert_eq!((bath["air_quality_index"].clone(), bath["main_pollutant"].clone()), (json!(198.9), json!("humidity")));
     }
 
     /// Real answers of a unit, saved with curl in `RENSON_DIR` (current.json, device.json, boost{n}.json).

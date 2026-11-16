@@ -166,6 +166,8 @@ fn layout(database: &Value) -> Layout {
             devices.push((DeviceInfo { reference: reference.clone(), kind: device_kind.into(), traits: vec![traits.into()], name }, Tracked { reference, aid, kind: tracked }));
         }
     }
+    // "Legrand Ecometer" already names its maker.
+    let maker = maker.filter(|m| !model.to_lowercase().starts_with(&m.to_lowercase()));
     Layout { model: [maker, Some(model)].into_iter().flatten().collect::<Vec<_>>().join(" "), firmware: bridge.as_ref().and_then(|b| text(b, hap::FIRMWARE)), devices }
 }
 

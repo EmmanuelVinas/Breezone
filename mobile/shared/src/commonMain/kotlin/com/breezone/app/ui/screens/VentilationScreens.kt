@@ -64,13 +64,15 @@ import kotlinx.serialization.json.put
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
+import kotlin.math.roundToInt
 
 private enum class Quality { Ok, Warn, Bad }
 
 private fun DeviceView.valve() = stateAs(VentilationRoomState.serializer()) ?: VentilationRoomState()
 
-/** What a room's own measures say (only with the Renson API key); none without them (as on the web). */
+/** How the unit judges the room, with its app's thresholds (up to 40 good, above 100 bad); without its index, the room's own measures (as on the web). */
 private fun VentilationRoomState.quality(): Quality? {
+    airQualityIndex?.let { return if (it > 100) Quality.Bad else if (it > 40) Quality.Warn else Quality.Ok }
     val levels = listOfNotNull(
         humidity?.let { if (it > 75) Quality.Bad else if (it > 60) Quality.Warn else Quality.Ok },
         co2?.let { if (it > 1200) Quality.Bad else if (it > 800) Quality.Warn else Quality.Ok },
@@ -248,11 +250,9 @@ fun VentilationRoomScreen(serverId: String, deviceId: Long, onBack: () -> Unit) 
         }
         val co2 = stringResource(Res.string.ventilation_co2)
         val voc = stringResource(Res.string.ventilation_voc)
-        val temperature = stringResource(Res.string.ventilation_temperature)
         val others = listOfNotNull(
             s.co2?.let { co2 to "${it.toInt()} ppm" },
-            s.voc?.let { voc to "${(it * 100).toInt() / 100.0} ppm" },
-            s.temperature?.let { temperature to "${(it * 10).toInt() / 10.0} °C" },
+            s.voc?.let { voc to (if (it < 10) "${(it * 10).roundToInt() / 10.0} ppm" else "${it.roundToInt()} ppm") },
         )
         LazyColumn(
             Modifier.fillMaxSize(),

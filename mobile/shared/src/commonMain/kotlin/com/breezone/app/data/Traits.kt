@@ -234,6 +234,14 @@ enum class VentilationRoomProfile {
     @SerialName("intense") Intense,
 }
 
+@Serializable
+enum class VentilationRoomMainPollutant {
+    @SerialName("humidity") Humidity,
+    @SerialName("co2") Co2,
+    @SerialName("voc") Voc,
+    @SerialName("other") Other,
+}
+
 /** Ventilation valve (`ventilation.room@1`): state. */
 @Serializable
 data class VentilationRoomState(
@@ -247,6 +255,8 @@ data class VentilationRoomState(
     val temperature: Double? = null,
     val co2: Double? = null,
     val voc: Double? = null,
+    val airQualityIndex: Double? = null,
+    val mainPollutant: VentilationRoomMainPollutant? = null,
 )
 
 /** Ventilation valve (`ventilation.room@1`): action `boost`. */

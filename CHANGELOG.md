@@ -6,6 +6,26 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.24] - 2026-11-16
+
+### Changed
+
+- Ventilation: a room is judged as the Renson app judges it, by the unit's own index of the room
+  (up to 40 good, above 100 bad), with its cause (`air_quality_index`, `main_pollutant` in
+  `ventilation.room@1`). Every room was "bad" as soon as its humidity passed 75 %.
+- Ventilation: the temperature of a room is no longer shown: the Healthbox measures it at the unit,
+  on the extract air (cold or hot in the attic). It keeps its history, named "Temperature at the unit
+  (extract air)".
+
+### Fixed
+
+- Renson Healthbox, with the API key: the VOC of each room are also read from the value Renson
+  documents (`voc_calc_embedded`), not only from `concentration` as firmware 2.6.9 gives it.
+- Ventilation: the VOC of a room show as a whole number (one decimal under 10 ppm), like the CO₂.
+- Renson Healthbox, « Diagnostic »: it holds the unit's raw answers (each sensor, each room's own
+  air quality index), without the address of the home. It held nothing.
+- HomeKit: a model that already names its maker no longer repeats it ("Legrand Legrand Ecometer").
+
 ## [0.11.0-beta.23] - 2026-11-16
 
 ### Fixed

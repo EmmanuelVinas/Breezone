@@ -430,7 +430,6 @@
     <string name="ventilation_humidity">Humidité</string>
     <string name="ventilation_co2">CO₂</string>
     <string name="ventilation_voc">COV</string>
-    <string name="ventilation_temperature">Température</string>
     <string name="ventilation_boost_30">Boost 30 min</string>
     <string name="ventilation_1h">1 h</string>
     <string name="ventilation_2h">2 h</string>

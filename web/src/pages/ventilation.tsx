@@ -32,7 +32,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { errorText } from "@/lib/format"
+import { errorText, number } from "@/lib/format"
 
 const isUnit = (d: DeviceView) => d.traits.includes("ventilation.unit@1")
 const isRoom = (d: DeviceView) => d.traits.includes("ventilation.room@1")
@@ -56,8 +56,17 @@ const CAUSE: Record<string, string> = {
 
 type Quality = "ok" | "warn" | "bad"
 
-/** What a room's own measures say (only with the Renson API key); none without them. */
+/**
+ * How the unit judges the room (only with the Renson API key), with the thresholds of its app: up
+ * to 40 good, above 100 bad. Without its index, what the room's own measures say.
+ */
 function quality(s: Partial<VentilationRoomState>): Quality | null {
+  if (typeof s.air_quality_index === "number")
+    return s.air_quality_index > 100
+      ? "bad"
+      : s.air_quality_index > 40
+        ? "warn"
+        : "ok"
   const levels: Quality[] = []
   if (typeof s.humidity === "number")
     levels.push(s.humidity > 75 ? "bad" : s.humidity > 60 ? "warn" : "ok")
@@ -147,10 +156,9 @@ function Measures({ s }: { s: Partial<VentilationRoomState> }) {
       `${Math.round(s.humidity)} %`,
     ],
     typeof s.co2 === "number" && [t("CO₂"), `${Math.round(s.co2)} ppm`],
-    typeof s.voc === "number" && [t("COV"), `${s.voc.toFixed(2)} ppm`],
-    typeof s.temperature === "number" && [
-      t("Température"),
-      `${s.temperature.toFixed(1)} °C`,
+    typeof s.voc === "number" && [
+      t("COV"),
+      `${number(s.voc, s.voc < 10 ? 1 : 0)} ppm`,
     ],
   ].filter(Boolean) as [string, string][]
   if (rows.length === 0) return null
@@ -382,7 +390,7 @@ function Detail({
             />
           </div>
         )}
-        <Measures s={{ co2: s.co2, voc: s.voc, temperature: s.temperature }} />
+        <Measures s={{ co2: s.co2, voc: s.voc }} />
         {s.boost ? (
           <Button
             variant="secondary"

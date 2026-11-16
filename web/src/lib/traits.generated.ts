@@ -232,12 +232,16 @@ export type VentilationRoomState = {
   boost_remaining: number | null
   /** Humidity (%) */
   humidity: number | null
-  /** Temperature (°C) */
+  /** Temperature at the unit (extract air) (°C) */
   temperature: number | null
   /** CO₂ (ppm) */
   co2: number | null
   /** VOC (ppm) */
   voc: number | null
+  /** Air quality index */
+  air_quality_index: number | null
+  /** Main cause */
+  main_pollutant: "humidity" | "co2" | "voc" | "other" | null
 }
 
 /** Ventilation valve (`ventilation.room@1`): action `boost`. */
