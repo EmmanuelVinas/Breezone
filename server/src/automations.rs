@@ -402,6 +402,8 @@ pub struct Automation {
     /// Run when a trigger starts the rule and the conditions are false.
     pub otherwise: Vec<Step>,
     pub mode: RunMode,
+    /// Run when the lasting trigger that started the rule stops holding ("tant que… ; ensuite…").
+    pub over: Vec<Step>,
 }
 
 /// One trigger (0.11.0-beta.18) or several.
@@ -426,12 +428,13 @@ impl Automation {
             actions: serde_json::from_str(&row.actions).ok()?,
             otherwise: serde_json::from_str(&row.else_actions).ok()?,
             mode: RunMode::parse(&row.run_mode)?,
+            over: serde_json::from_str(&row.over_actions).ok()?,
         })
     }
 
     /// Every condition, those of the groups and of the waits included.
     fn leaves(&self) -> Vec<&Condition> {
-        let waits = self.actions.iter().chain(&self.otherwise).filter_map(|s| match s {
+        let waits = self.steps().filter_map(|s| match s {
             Step::WaitUntil { condition, .. } => Some(condition.as_ref()),
             _ => None,
         });
@@ -446,7 +449,7 @@ impl Automation {
     }
 
     fn steps(&self) -> impl Iterator<Item = &Step> {
-        self.actions.iter().chain(&self.otherwise)
+        self.actions.iter().chain(&self.otherwise).chain(&self.over)
     }
 
     /// The conditions are true now (`None`: cannot be told).
@@ -514,6 +517,9 @@ pub struct AutomationInput {
     pub otherwise: Vec<Step>,
     #[serde(default)]
     pub mode: RunMode,
+    /// When the lasting trigger stops holding.
+    #[serde(default)]
+    pub over: Vec<Step>,
 }
 
 fn yes() -> bool {
@@ -723,6 +729,12 @@ impl Trigger {
     fn next_at(&self, ctx: &Context) -> Option<i64> {
         let today = ctx.local(ctx.now).date_naive();
         (0..8).filter_map(|d| self.occurrence(today + chrono::Days::new(d), ctx)).find(|ts| *ts > ctx.now)
+    }
+
+    /// It holds for a while (a measure, a state, the sun on a façade, presence): it can tell when
+    /// it is over.
+    pub fn lasts(&self) -> bool {
+        matches!(self, Trigger::Measure { .. } | Trigger::State { .. } | Trigger::Facade { .. } | Trigger::Presence { .. })
     }
 
     /// `None`: cannot be told now (a device that does not answer).
@@ -935,13 +947,15 @@ impl Context {
         crate::text!("{0} {1} {2}", "{0} {1} {2}", "{0} {1} {2}", name.arg(), op.sign(), threshold)
     }
 
-    /// "Borne · État : charging".
+    /// "Borne · État : En charge".
     fn state_text(&self, device_id: i64, field: &str, value: &Value) -> Text {
+        let named = self.field(device_id, field).and_then(|f| f.value_labels.get(value.as_str()?)).map(label);
         let (name, field) = (self.device_name(device_id), self.field_label(device_id, field));
-        let value = match value {
-            Value::Bool(b) => yes_no(*b),
-            Value::String(s) => Text::plain(s.clone()),
-            other => Text::plain(other.to_string()),
+        let value = match (named, value) {
+            (Some(named), _) => named,
+            (None, Value::Bool(b)) => yes_no(*b),
+            (None, Value::String(s)) => Text::plain(s.clone()),
+            (None, other) => Text::plain(other.to_string()),
         };
         crate::text!("{0} · {1} : {2}", "{0} · {1}: {2}", "{0} · {1}: {2}", name.arg(), field.arg(), value.arg())
     }
@@ -1182,6 +1196,7 @@ pub struct Summary {
     pub actions: Vec<Text>,
     #[serde(rename = "else")]
     pub otherwise: Vec<Text>,
+    pub over: Vec<Text>,
 }
 
 /// What the rule sees now.
@@ -1215,6 +1230,7 @@ pub struct AutomationView {
     #[serde(rename = "else")]
     pub otherwise: Vec<Step>,
     pub mode: RunMode,
+    pub over: Vec<Step>,
     pub summary: Summary,
     pub status: Status,
     /// Enabled rules that may set the same device otherwise at the same time.
@@ -1248,6 +1264,7 @@ pub fn view(row: &AutomationRow, rule: Automation, ctx: &Context, running: bool)
             joined: rule.joined.word(),
             actions: rule.actions.iter().map(|s| ctx.describe_step(s)).collect(),
             otherwise: rule.otherwise.iter().map(|s| ctx.describe_step(s)).collect(),
+            over: rule.over.iter().map(|s| ctx.describe_step(s)).collect(),
         },
         status: Status {
             value,
@@ -1264,6 +1281,7 @@ pub fn view(row: &AutomationRow, rule: Automation, ctx: &Context, running: bool)
         actions: rule.actions,
         otherwise: rule.otherwise,
         mode: rule.mode,
+        over: rule.over,
         conflicts: vec![],
         last_run_at: row.last_run_at,
         last_reason: row.last_reason.as_deref().map(Text::load),
@@ -1470,13 +1488,14 @@ impl Context {
         }
     }
 
-    fn check_branch(&self, steps: &[Step], required: bool) -> ApiResult<()> {
+    /// `before`: the steps run before these in the same run (what "put back" can undo).
+    fn check_branch(&self, steps: &[Step], required: bool, before: &[Step]) -> ApiResult<()> {
         if steps.len() > MAX_ACTIONS || (required && steps.is_empty()) {
             return Err(ApiError::bad_request(crate::text!("de 1 à {0} actions", "1 to {0} actions", "de 1 a {0} acciones", MAX_ACTIONS)));
         }
         for (i, s) in steps.iter().enumerate() {
             self.check_step(s)?;
-            if *s == Step::Restore && !steps[..i].iter().any(|p| matches!(p, Step::Device { .. })) {
+            if *s == Step::Restore && !before.iter().chain(&steps[..i]).any(|p| matches!(p, Step::Device { .. })) {
                 return Err(ApiError::bad_request(crate::text!(
                     "« remettre comme avant » vient après une action sur un appareil",
                     "“put back as before” comes after an action on a device",
@@ -1504,9 +1523,18 @@ pub fn validate(input: AutomationInput, ctx: &Context) -> ApiResult<(String, Aut
     }
     triggers.iter().try_for_each(|t| ctx.check_trigger(t))?;
     input.conditions.iter().try_for_each(|c| ctx.check_condition(c))?;
-    ctx.check_branch(&input.actions, true)?;
-    ctx.check_branch(&input.otherwise, false)?;
-    Ok((name, Automation { triggers, joined: input.joined, conditions: input.conditions, actions: input.actions, otherwise: input.otherwise, mode: input.mode }))
+    ctx.check_branch(&input.actions, true, &[])?;
+    ctx.check_branch(&input.otherwise, false, &[])?;
+    ctx.check_branch(&input.over, false, &input.actions)?;
+    if !input.over.is_empty() && !triggers.iter().any(Trigger::lasts) {
+        return Err(ApiError::bad_request(crate::text!(
+            "« quand ce n'est plus vrai » demande un déclencheur qui dure : une mesure, un état, le soleil sur une façade ou la présence",
+            "“when it is no longer true” needs a trigger that lasts: a measure, a state, the sun on a façade or presence",
+            "«cuando deja de ser cierto» necesita un disparador que dure: una medida, un estado, el sol en una fachada o la presencia"
+        )));
+    }
+    let rule = Automation { triggers, joined: input.joined, conditions: input.conditions, actions: input.actions, otherwise: input.otherwise, mode: input.mode, over: input.over };
+    Ok((name, rule))
 }
 
 // ---------------------------------------------------------------------------------------
@@ -1629,6 +1657,8 @@ pub struct Due {
     pub id: i64,
     pub branch: Branch,
     pub reason: Text,
+    /// The trigger that holds and started it (its end runs the "over" steps).
+    pub lasting: Option<usize>,
 }
 
 /// Decides which rules start. Kept in memory: after a restart, a measure already past its
@@ -1714,7 +1744,9 @@ impl Engine {
                     let waits = met.is_none() && !holding.is_empty();
                     if !told && !waits {
                         let why = ctx.why_not(rule);
-                        out.push(Due { id: row.id, branch: Branch::Skipped, reason: crate::text!("{0} — {1}", "{0} — {1}", "{0} — {1}", reason.arg(), why.arg()) });
+                        out.push(Due {
+                            id: row.id, branch: Branch::Skipped, reason: crate::text!("{0} — {1}", "{0} — {1}", "{0} — {1}", reason.arg(), why.arg()), lasting: None
+                        });
                     }
                     continue;
                 }
@@ -1726,7 +1758,8 @@ impl Engine {
                     }
                 }
             }
-            out.push(Due { id: row.id, branch, reason });
+            let lasting = started.iter().find(|(_, holding)| *holding).map(|(i, _)| *i);
+            out.push(Due { id: row.id, branch, reason, lasting });
         }
         self.checked = ctx.now;
         out
@@ -1816,15 +1849,8 @@ impl Runs {
 
 /// Starts the actions of a branch in the background. `None` when the rule already runs and is set
 /// to ignore a new start (the history tells it).
-pub async fn start(
-    state: &AppState,
-    row: &AutomationRow,
-    rule: &Automation,
-    branch: Branch,
-    ctx: Context,
-    reason: Text,
-    actor: &str,
-) -> Option<tokio::task::JoinHandle<Vec<StepDone>>> {
+pub async fn start(state: &AppState, row: &AutomationRow, rule: &Automation, due: Due, ctx: Context, actor: &str) -> Option<tokio::task::JoinHandle<Vec<StepDone>>> {
+    let Due { branch, reason, lasting, .. } = due;
     let runs = state.automations.clone();
     if runs.is_running(row.id) {
         match rule.mode {
@@ -1858,12 +1884,50 @@ pub async fn start(
     }
     let place = rule.place(&ctx);
     let steps = if branch == Branch::Else { rule.otherwise.clone() } else { rule.actions.clone() };
+    // Only a lasting trigger that started the "then" steps tells when it is over.
+    let until = lasting.filter(|_| branch == Branch::Then && !rule.over.is_empty()).and_then(|i| rule.triggers.get(i).cloned());
+    let over = rule.over.clone();
     let generation = runs.next.fetch_add(1, Ordering::Relaxed);
     let (state2, row2, actor2) = (state.clone(), row.clone(), actor.to_string());
     // Registered before it starts, so that a run that ends at once removes itself.
     let mut running = runs.running.lock().unwrap_or_else(|e| e.into_inner());
     let task = tokio::spawn(async move {
-        let (done, ended) = execute(&state2, &row2, run_id, &steps, ctx.at(place), place, &actor2).await;
+        let mut p = Progress { run_id, place, out: vec![], touched: vec![] };
+        let here = ctx.at(place);
+        let ended = match until {
+            None => execute(&state2, &row2, &steps, here, &actor2, &mut p).await,
+            Some(trigger) => {
+                let gone = ended_holding(&state2, &trigger, place);
+                tokio::pin!(gone);
+                let first = tokio::select! {
+                    e = execute(&state2, &row2, &steps, here.clone(), &actor2, &mut p) => Some(e),
+                    () = &mut gone => None,
+                };
+                match first {
+                    Some("stopped") => "stopped",
+                    finished => {
+                        if finished.is_some() {
+                            gone.await;
+                        }
+                        let what = here.describe_trigger(&trigger);
+                        let what = if finished.is_some() {
+                            crate::text!("ce n'est plus vrai : {0}", "no longer true: {0}", "ya no es cierto: {0}", what.arg())
+                        } else {
+                            crate::text!(
+                                "ce n'est plus vrai : {0} — la suite est arrêtée",
+                                "no longer true: {0} — the rest is stopped",
+                                "ya no es cierto: {0} — el resto se detiene",
+                                what.arg()
+                            )
+                        };
+                        p.out.push(StepDone { what, ok: true, error: None });
+                        let now = Context::load(&state2).await.map(|c| c.at(place)).unwrap_or(here);
+                        execute(&state2, &row2, &over, now, &actor2, &mut p).await
+                    }
+                }
+            }
+        };
+        let done = p.out;
         let stored = Value::Array(done.iter().map(StepDone::stored).collect()).to_string();
         if let Err(e) = db::finish_automation_run(&state2.db, run_id, ended, &stored).await {
             tracing::error!("automation {}: {e}", row2.id);
@@ -1929,6 +1993,26 @@ struct Touched {
     action: String,
     keys: Vec<String>,
     before: Map<String, Value>,
+    /// The last value the run gave to each setting.
+    set: Map<String, Value>,
+}
+
+/// Settings someone changed since the run set them: neither what the run gave nor what was there
+/// before (a device that has not caught up yet, or that was put back by hand, still counts as ours).
+fn changed_since(t: &Touched, now: &Map<String, Value>) -> Vec<String> {
+    let same = |a: &Value, b: &Value| match (a.as_f64(), b.as_f64()) {
+        // A setpoint comes back rounded to the device's step (0.5 °C on Airzone).
+        (Some(x), Some(y)) => (x - y).abs() < 0.3,
+        _ => a == b,
+    };
+    t.set
+        .iter()
+        .filter(|(k, v)| match now.get(*k).filter(|n| !n.is_null()) {
+            Some(n) => !same(n, v) && t.before.get(*k).is_none_or(|b| !same(n, b)),
+            None => false,
+        })
+        .map(|(k, _)| k.clone())
+        .collect()
 }
 
 /// The action that puts back `before` after `action` set `keys` (`None`: nothing to put back).
@@ -1957,36 +2041,66 @@ fn done(what: Text, r: ApiResult<()>) -> StepDone {
     StepDone { what, ok: r.is_ok(), error: r.err().map(|e| e.message) }
 }
 
-/// Runs the steps one after the other. Returns what was done and how it ended.
-async fn execute(state: &AppState, row: &AutomationRow, run_id: i64, steps: &[Step], mut ctx: Context, place: Option<i64>, actor: &str) -> (Vec<StepDone>, &'static str) {
+/// Returns once `trigger` no longer holds: past its threshold back by the margin (a measure), or
+/// changed (a state, the sun on a façade, presence), for as long as it had to hold to start.
+async fn ended_holding(state: &AppState, trigger: &Trigger, place: Option<i64>) {
+    let mut since: Option<i64> = None;
+    loop {
+        tokio::time::sleep(POLL).await;
+        let Ok(ctx) = Context::load(state).await else { continue };
+        let ctx = ctx.at(place);
+        // What cannot be read is not an end.
+        let Some(Look::Holds { released: true, for_minutes, .. }) = trigger.look(&ctx, ctx.now) else {
+            since = None;
+            continue;
+        };
+        if ctx.now - *since.get_or_insert(ctx.now) >= for_minutes * 60 {
+            return;
+        }
+    }
+}
+
+/// What a run did so far: kept outside the steps, so that a run cut short (its lasting trigger is
+/// over) still tells what it did and puts back what it drove.
+struct Progress {
+    run_id: i64,
+    /// The installation the rule is about (its sun, its weather).
+    place: Option<i64>,
+    out: Vec<StepDone>,
+    touched: Vec<Touched>,
+}
+
+/// Runs the steps one after the other. Returns how it ended.
+async fn execute(state: &AppState, row: &AutomationRow, steps: &[Step], mut ctx: Context, actor: &str, p: &mut Progress) -> &'static str {
+    let (run_id, place) = (p.run_id, p.place);
     let who = format!("{actor} · automatisme « {} »", row.name);
-    let mut out: Vec<StepDone> = vec![];
-    let mut touched: Vec<Touched> = vec![];
     let reload = |ctx: Context| async move { Context::load(state).await.map(|c| c.at(place)).unwrap_or(ctx) };
     for step in steps {
         let what = ctx.describe_step(step);
         match step {
             Step::Device { device_id, trait_name, action, params } => {
                 let keys: Vec<String> = params.keys().cloned().collect();
-                match touched.iter_mut().find(|t| t.device_id == *device_id && t.trait_name == *trait_name) {
+                match p.touched.iter_mut().find(|t| t.device_id == *device_id && t.trait_name == *trait_name) {
                     Some(t) => {
                         t.action = action.clone();
+                        t.set.extend(params.clone());
                         for k in keys {
                             if !t.keys.contains(&k) {
                                 t.keys.push(k);
                             }
                         }
                     }
-                    None => touched.push(Touched {
+                    None => p.touched.push(Touched {
                         device_id: *device_id,
                         trait_name: trait_name.clone(),
                         action: action.clone(),
                         keys,
                         before: ctx.device(*device_id).and_then(|d| d.state.as_object().cloned()).unwrap_or_default(),
+                        set: params.clone(),
                     }),
                 }
                 let input = ActionInput { trait_name: trait_name.clone(), action: action.clone(), params: params.clone() };
-                out.push(done(what, apply(state, &ctx, *device_id, &input, &who).await));
+                p.out.push(done(what, apply(state, &ctx, *device_id, &input, &who).await));
             }
             Step::Scene { routine_id } => {
                 let r = async {
@@ -1998,12 +2112,12 @@ async fn execute(state: &AppState, row: &AutomationRow, run_id: i64, steps: &[St
                     }
                 }
                 .await;
-                out.push(done(what, r));
+                p.out.push(done(what, r));
             }
             Step::Wait { seconds } => {
                 tokio::time::sleep(Duration::from_secs(*seconds as u64)).await;
                 ctx = reload(ctx).await;
-                out.push(done(what, Ok(())));
+                p.out.push(done(what, Ok(())));
             }
             Step::WaitUntil { condition, for_seconds, timeout_seconds, on_timeout } => {
                 let started = tokio::time::Instant::now();
@@ -2026,35 +2140,46 @@ async fn execute(state: &AppState, row: &AutomationRow, run_id: i64, steps: &[St
                     tokio::time::sleep(POLL.min(deadline.saturating_duration_since(now)).max(Duration::from_millis(100))).await;
                 };
                 if reached {
-                    out.push(done(what, Ok(())));
+                    p.out.push(done(what, Ok(())));
                 } else {
                     let late = crate::text!("{0} — temps écoulé", "{0} — time is up", "{0} — tiempo agotado", what.arg());
-                    out.push(StepDone { what: late, ok: true, error: None });
+                    p.out.push(StepDone { what: late, ok: true, error: None });
                     if *on_timeout == OnTimeout::Stop {
-                        save_steps(state, run_id, &out).await;
-                        return (out, "stopped");
+                        save_steps(state, run_id, &p.out).await;
+                        return "stopped";
                     }
                 }
             }
             Step::Notify { message } => {
-                out.push(done(what, notify(state, &row.name, message.trim(), actor).await));
+                p.out.push(done(what, notify(state, &row.name, message.trim(), actor).await));
             }
             Step::Restore => {
-                out.push(done(what, Ok(())));
+                p.out.push(done(what, Ok(())));
                 ctx = reload(ctx).await;
-                for t in touched.drain(..).rev() {
+                for t in p.touched.drain(..).rev() {
                     let Some((action, params)) = undo(&t.trait_name, &t.action, &t.keys, &t.before) else { continue };
                     let name = ctx.device_name(t.device_id);
+                    let now = ctx.device(t.device_id).and_then(|d| d.state.as_object().cloned()).unwrap_or_default();
+                    if !changed_since(&t, &now).is_empty() {
+                        let what = crate::text!(
+                            "{0} laissé tel quel : changé entre-temps",
+                            "{0} left as it is: changed in the meantime",
+                            "{0} se deja como está: cambiado mientras tanto",
+                            name.arg()
+                        );
+                        p.out.push(StepDone { what, ok: true, error: None });
+                        continue;
+                    }
                     let how = ctx.describe_action(t.device_id, &t.trait_name, &action, &params);
                     let what = crate::text!("remettre {0} : {1}", "put back {0}: {1}", "dejar {0}: {1}", name.arg(), how.arg());
                     let input = ActionInput { trait_name: t.trait_name.clone(), action, params };
-                    out.push(done(what, apply(state, &ctx, t.device_id, &input, &who).await));
+                    p.out.push(done(what, apply(state, &ctx, t.device_id, &input, &who).await));
                 }
             }
         }
-        save_steps(state, run_id, &out).await;
+        save_steps(state, run_id, &p.out).await;
     }
-    (out, "done")
+    "done"
 }
 
 /// Tells a message: in the activity feed (the open apps show it at once) and, when set, to an
@@ -2122,7 +2247,7 @@ pub async fn tick(state: &AppState, engine: &mut Engine) {
             state.hub.routines_changed();
             continue;
         }
-        start(state, row, rule, due.branch, ctx.clone(), due.reason, ACTOR).await;
+        start(state, row, rule, due, ctx.clone(), ACTOR).await;
     }
 }
 
@@ -2219,6 +2344,7 @@ mod tests {
             conditions: String::new(),
             actions: String::new(),
             else_actions: "[]".into(),
+            over_actions: "[]".into(),
             run_mode: "single".into(),
             last_run_at,
             last_reason: None,
@@ -2357,7 +2483,7 @@ mod tests {
         )
         .unwrap()
         .1;
-        assert_eq!(c(0, "plugged").describe_triggers(&rule.triggers).fr, "Borne · État : charging devient vrai ou à 12:30");
+        assert_eq!(c(0, "plugged").describe_triggers(&rule.triggers).fr, "Borne · État : En charge devient vrai ou à 12:30");
         let rules = vec![(row(1, None), rule)];
         let mut engine = Engine::new(t0);
         assert_eq!(started(&mut engine, &rules, &c(0, "plugged")).len(), 0);
@@ -2456,6 +2582,24 @@ mod tests {
         assert_eq!(undo("ventilation.room", "boost", &keys(&["minutes"]), &before(json!({"boost": true}))), None, "it was already boosting");
         assert_eq!(undo("cover.position", "stop", &[], &before(json!({"position": 40}))), None);
         assert_eq!(undo("cover.position", "set", &keys(&["position"]), &before(json!({"position": 40}))), Some(("set".into(), before(json!({"position": 40})))));
+    }
+
+    #[test]
+    fn a_setting_changed_by_hand_is_not_put_back() {
+        let obj = |v: Value| v.as_object().unwrap().clone();
+        let t = Touched {
+            device_id: 1,
+            trait_name: "climate.zone".into(),
+            action: "set".into(),
+            keys: vec!["on".into(), "setpoint".into()],
+            before: obj(json!({"on": false, "setpoint": 19.0})),
+            set: obj(json!({"on": true, "setpoint": 21})),
+        };
+        assert!(changed_since(&t, &obj(json!({"on": true, "setpoint": 21.0}))).is_empty(), "as the run left it");
+        assert!(changed_since(&t, &obj(json!({"on": true, "setpoint": 21.2}))).is_empty(), "rounded by the device");
+        assert!(changed_since(&t, &obj(json!({"on": false, "setpoint": 19.0}))).is_empty(), "not caught up, or put back by hand");
+        assert_eq!(changed_since(&t, &obj(json!({"on": true, "setpoint": 23.0}))), vec!["setpoint".to_string()]);
+        assert_eq!(changed_since(&t, &obj(json!({"on": true}))), Vec::<String>::new(), "a setting the device does not report");
     }
 
     #[test]

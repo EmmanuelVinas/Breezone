@@ -287,6 +287,8 @@ function firstValue(f: TraitField): boolean | string {
 }
 
 function valueLabel(field: TraitField | undefined, v: string) {
+  const named = field?.value_labels?.[v]
+  if (named) return tl(named)
   return field?.name === "mode" && v in MODE_LABEL ? MODE_LABEL[v as Mode] : v
 }
 
@@ -1279,14 +1281,17 @@ function ParamInput({
       />
     )
   return (
-    <NumberInput
-      value={typeof value === "number" ? value : undefined}
-      onChange={onChange}
-      unit={field.unit}
-      placeholder={tl(field.label)}
-      min={field.min}
-      max={field.max}
-    />
+    <label className="flex items-center gap-2">
+      <span className="text-sm text-muted-foreground">{tl(field.label)}</span>
+      <NumberInput
+        value={typeof value === "number" ? value : undefined}
+        onChange={onChange}
+        unit={field.unit}
+        placeholder={field.optional ? t("facultatif") : undefined}
+        min={field.min}
+        max={field.max}
+      />
+    </label>
   )
 }
 
@@ -1473,15 +1478,18 @@ function StepList({
   home,
   steps,
   onChange,
+  before = [],
 }: {
   home: Home
   steps: AutomationStep[]
   onChange: (s: AutomationStep[]) => void
+  /** The steps run before these in the same run (what "put back" can undo). */
+  before?: AutomationStep[]
 }) {
   const firstTarget = home.devices.find(
     (d) => home.drivable.has(d.id) && actionsOf(home, d).length > 0
   )
-  const drivesDevice = steps.some((s) => s.kind === "device")
+  const drivesDevice = [...before, ...steps].some((s) => s.kind === "device")
   const kinds: Option[] = [
     ...(firstTarget ? [["device", t("Agir sur un appareil")] as Option] : []),
     ...(home.scenes.length ? [["scene", t("Lancer une scène")] as Option] : []),
@@ -1598,7 +1606,7 @@ function complete(d: AutomationInput) {
   const triggersOk = d.triggers.every(
     (w) => w.kind !== "measure" || Number.isFinite(w.value)
   )
-  const stepsOk = [...d.actions, ...d.else].every(
+  const stepsOk = [...d.actions, ...d.else, ...d.over].every(
     (s) =>
       (s.kind !== "wait_until" || conditionComplete(s.condition)) &&
       (s.kind !== "notify" || s.message.trim().length > 0)
@@ -1623,7 +1631,23 @@ function inputOf(a: Automation): AutomationInput {
     actions: a.actions,
     else: a.else ?? [],
     mode: a.mode ?? "single",
+    over: a.over ?? [],
   }
+}
+
+/** A trigger that holds for a while: it can tell when it is over. */
+const lasts = (w: AutomationTrigger) =>
+  w.kind === "measure" ||
+  w.kind === "state" ||
+  w.kind === "facade" ||
+  w.kind === "presence"
+
+type OverMode = "none" | "restore" | "steps"
+
+function overModeOf(over: AutomationStep[]): OverMode {
+  if (over.length === 0) return "none"
+  if (over.length === 1 && over[0].kind === "restore") return "restore"
+  return "steps"
 }
 
 function AutomationEditor({
@@ -1641,11 +1665,19 @@ function AutomationEditor({
   const qc = useQueryClient()
   const [draft, setDraft] = useState<AutomationInput>(initial)
   const [withElse, setWithElse] = useState(initial.else.length > 0)
+  const [overMode, setOverMode] = useState<OverMode>(overModeOf(initial.over))
   const set = (patch: Partial<AutomationInput>) =>
     setDraft((d) => ({ ...d, ...patch }))
   const save = useMutation({
     mutationFn: () => {
-      const input = { ...draft, else: withElse ? draft.else : [] }
+      const over: AutomationStep[] = !lasting
+        ? []
+        : overMode === "restore"
+          ? [{ kind: "restore" }]
+          : overMode === "steps"
+            ? draft.over
+            : []
+      const input = { ...draft, else: withElse ? draft.else : [], over }
       return id ? api.updateAutomation(id, input) : api.createAutomation(input)
     },
     onSuccess: () => {
@@ -1656,7 +1688,13 @@ function AutomationEditor({
     onError: (e) => toast.error(e instanceof Error ? e.message : String(e)),
   })
 
-  const all = [...draft.actions, ...(withElse ? draft.else : [])]
+  const lasting = draft.triggers.some(lasts)
+  const drivesDevice = draft.actions.some((s) => s.kind === "device")
+  const all = [
+    ...draft.actions,
+    ...(withElse ? draft.else : []),
+    ...(lasting && overMode === "steps" ? draft.over : []),
+  ]
   const waits = all.some((s) => s.kind === "wait" || s.kind === "wait_until")
   const drivesZone = all.some(
     (s) => s.kind === "device" && s.trait === "climate.zone"
@@ -1787,6 +1825,44 @@ function AutomationEditor({
             />
           </Section>
 
+          {lasting && (
+            <Section
+              badge={t("Ensuite")}
+              tone={THEN_TONE}
+              hint={t(
+                "Quand ce n'est plus vrai : le déclencheur ne tient plus (repassé de l'autre côté du seuil avec une marge, aussi longtemps qu'il a fallu pour démarrer). Les étapes de « Alors » encore en cours s'arrêtent."
+              )}
+            >
+              <Pick
+                value={overMode}
+                onChange={(v) => setOverMode(v as OverMode)}
+                options={[
+                  ["none", t("Ne rien faire")],
+                  ...(drivesDevice
+                    ? [["restore", t("Remettre comme avant")] as Option]
+                    : []),
+                  ["steps", t("Faire…")],
+                ]}
+                className="w-full lg:w-72"
+              />
+              {overMode === "restore" && (
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    "Chaque appareil reprend son réglage d'avant, sauf si quelqu'un l'a changé entre-temps."
+                  )}
+                </p>
+              )}
+              {overMode === "steps" && (
+                <StepList
+                  home={home}
+                  steps={draft.over}
+                  before={draft.actions}
+                  onChange={(over) => set({ over })}
+                />
+              )}
+            </Section>
+          )}
+
           {withElse ? (
             <Section
               badge={t("Sinon")}
@@ -1877,6 +1953,7 @@ function blank(home: Home): AutomationInput {
     actions: [],
     else: [],
     mode: "single",
+    over: [],
   }
 }
 
@@ -1957,44 +2034,69 @@ function recipes(home: Home): Recipe[] {
         ],
       },
     })
-  if (home.roles.grid && zones[0])
-    out.push({
-      title: t("Surplus solaire : chauffer une pièce en hiver"),
-      description: t(
-        "Quand plus de 500 W repartent au réseau, si la pièce est sous 18 °C de novembre à mars, chauffer à 21°, puis remettre comme avant quand le surplus s'arrête."
-      ),
-      rule: {
-        ...base(t("Surplus solaire : chauffer le salon"), [exportAbove(500)]),
-        conditions: [
-          {
-            kind: "measure",
-            measure: {
-              kind: "device",
-              device_id: zones[0].id,
-              field: "room_temp",
-            },
-            op: "below",
-            value: 18,
-          },
-          { kind: "months", from: 11, to: 3 },
-        ],
-        actions: [
-          step(zones[0], "climate.zone", "set", {
-            on: true,
-            mode: "heating",
-            setpoint: 21,
-          }),
-          {
-            kind: "wait_until",
-            condition: importAbove(300),
-            for_seconds: 600,
-            timeout_seconds: 8 * 3600,
-            on_timeout: "continue",
-          },
-          { kind: "restore" },
-        ],
+  // The mode belongs to the system (its master zone): a surplus rule follows it, never sets it.
+  const onSurplus = (
+    zone: DeviceView,
+    name: string,
+    mode: "heating" | "cooling",
+    temp: AutomationCondition,
+    setpoint: number
+  ) => ({
+    ...base(name, [exportAbove(500)]),
+    conditions: [
+      { kind: "state", device_id: zone.id, field: "mode", value: mode },
+      temp,
+    ] as AutomationCondition[],
+    actions: [
+      step(zone, "climate.zone", "set", { on: true, setpoint }),
+      {
+        kind: "wait_until",
+        condition: importAbove(300),
+        for_seconds: 600,
+        timeout_seconds: 8 * 3600,
+        on_timeout: "continue",
       },
+      { kind: "restore" },
+    ] as AutomationStep[],
+  })
+  const roomTemp = (
+    zone: DeviceView,
+    op: "above" | "below",
+    value: number
+  ): AutomationCondition => ({
+    kind: "measure",
+    measure: { kind: "device", device_id: zone.id, field: "room_temp" },
+    op,
+    value,
+  })
+  if (home.roles.grid && zones[0]) {
+    out.push({
+      title: t("Surplus solaire : chauffer une pièce"),
+      description: t(
+        "Quand plus de 500 W repartent au réseau, si la climatisation est en mode chaud et la pièce sous 20 °C, chauffer à 21°. Remettre comme avant quand la maison tire plus de 300 W du réseau pendant 10 min, sauf si quelqu'un a changé la zone entre-temps."
+      ),
+      rule: onSurplus(
+        zones[0],
+        t("Surplus solaire : chauffer le salon"),
+        "heating",
+        roomTemp(zones[0], "below", 20),
+        21
+      ),
     })
+    out.push({
+      title: t("Surplus solaire : rafraîchir une pièce"),
+      description: t(
+        "Quand plus de 500 W repartent au réseau, si la climatisation est en mode froid et la pièce au-dessus de 26 °C, rafraîchir à 25°. Remettre comme avant quand la maison tire plus de 300 W du réseau pendant 10 min, sauf si quelqu'un a changé la zone entre-temps."
+      ),
+      rule: onSurplus(
+        zones[0],
+        t("Surplus solaire : rafraîchir le salon"),
+        "cooling",
+        roomTemp(zones[0], "above", 26),
+        25
+      ),
+    })
+  }
   if (shutters.length) {
     const some = shutters.slice(0, MAX_ACTIONS)
     out.push({
@@ -2502,6 +2604,16 @@ function AutomationCard({
               )}
             </p>
           )}
+          {(a.summary.over ?? []).length > 0 && (
+            <Line badge={t("Ensuite")} tone={THEN_TONE}>
+              <div className="text-muted-foreground">
+                {t("quand ce n'est plus vrai :")}
+              </div>
+              {a.summary.over!.map((s, i) => (
+                <div key={i}>{s}</div>
+              ))}
+            </Line>
+          )}
           {(a.summary.else ?? []).length > 0 && (
             <Line badge={t("Sinon")} tone={ELSE_TONE}>
               {a.summary.else.map((s, i) => (
@@ -2820,7 +2932,11 @@ export function AutomationsSection() {
         : c.kind === "measure" && c.measure.kind === "device"
           ? [c.measure.device_id]
           : []
-  const steps = (a: Automation) => [...a.actions, ...(a.else ?? [])]
+  const steps = (a: Automation) => [
+    ...a.actions,
+    ...(a.else ?? []),
+    ...(a.over ?? []),
+  ]
   const used = (a: Automation) => [
     ...steps(a).flatMap((s) => (s.kind === "device" ? [s.device_id] : [])),
     ...a.conditions.flatMap(deviceIds),

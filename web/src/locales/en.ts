@@ -1340,6 +1340,15 @@ const en: Record<string, string> = {
   Sinon: "Else",
   "Ce que Breezone fait quand les conditions sont fausses.":
     "What Breezone does when the conditions are false.",
+  Ensuite: "Afterwards",
+  "Ne rien faire": "Do nothing",
+  "Faire…": "Do…",
+  "quand ce n'est plus vrai :": "when it is no longer true:",
+  "Quand ce n'est plus vrai : le déclencheur ne tient plus (repassé de l'autre côté du seuil avec une marge, aussi longtemps qu'il a fallu pour démarrer). Les étapes de « Alors » encore en cours s'arrêtent.":
+    "When it is no longer true: the trigger no longer holds (back past the threshold with a margin, for as long as it took to start). The “Then” steps still under way stop.",
+  "Chaque appareil reprend son réglage d'avant, sauf si quelqu'un l'a changé entre-temps.":
+    "Each device gets its previous setting back, unless someone changed it in the meantime.",
+  facultatif: "optional",
   "Retirer « Sinon »": "Remove “Else”",
   "Ajouter « Sinon »": "Add “Else”",
   "Si la règle se redéclenche pendant qu'elle attend":
@@ -1349,10 +1358,14 @@ const en: Record<string, string> = {
   "Surplus solaire : charger la voiture": "Solar surplus: charge the car",
   "Quand plus de 500 W repartent au réseau pendant 5 min, lancer la charge, puis l'arrêter quand la maison tire plus de 200 W du réseau pendant 10 min.":
     "When more than 500 W go back to the grid for 5 min, start charging, then stop when the home draws more than 200 W from the grid for 10 min.",
-  "Surplus solaire : chauffer une pièce en hiver":
-    "Solar surplus: heat a room in winter",
-  "Quand plus de 500 W repartent au réseau, si la pièce est sous 18 °C de novembre à mars, chauffer à 21°, puis remettre comme avant quand le surplus s'arrête.":
-    "When more than 500 W go back to the grid, if the room is below 18 °C from November to March, heat to 21°, then put it back as before when the surplus ends.",
+  "Surplus solaire : chauffer une pièce": "Solar surplus: heat a room",
+  "Quand plus de 500 W repartent au réseau, si la climatisation est en mode chaud et la pièce sous 20 °C, chauffer à 21°. Remettre comme avant quand la maison tire plus de 300 W du réseau pendant 10 min, sauf si quelqu'un a changé la zone entre-temps.":
+    "When more than 500 W go back to the grid, if the air conditioning is heating and the room is below 20 °C, heat to 21°. Put it back as before when the home draws more than 300 W from the grid for 10 min, unless someone changed the zone in the meantime.",
+  "Surplus solaire : rafraîchir une pièce": "Solar surplus: cool a room",
+  "Quand plus de 500 W repartent au réseau, si la climatisation est en mode froid et la pièce au-dessus de 26 °C, rafraîchir à 25°. Remettre comme avant quand la maison tire plus de 300 W du réseau pendant 10 min, sauf si quelqu'un a changé la zone entre-temps.":
+    "When more than 500 W go back to the grid, if the air conditioning is cooling and the room is above 26 °C, cool to 25°. Put it back as before when the home draws more than 300 W from the grid for 10 min, unless someone changed the zone in the meantime.",
+  "Surplus solaire : rafraîchir le salon":
+    "Solar surplus: cool the living room",
   "Surplus solaire : chauffer le salon": "Solar surplus: heat the living room",
   "Fermer les volets au coucher du soleil": "Close the shutters at sunset",
   "Chaque soir, au coucher du soleil, fermer les volets (à ajuster).":

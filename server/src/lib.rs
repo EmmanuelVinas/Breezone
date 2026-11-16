@@ -81,7 +81,7 @@ pub async fn init_state(cfg: Config) -> anyhow::Result<AppState> {
     let drivers = Arc::new(drivers::Runtime::new(db.clone(), *cloud_key));
     drivers.reload().await?;
     drivers.clone().hear();
-    let weather = Arc::new(weather::Weather::new(db.clone(), cfg.timezone));
+    let weather = Arc::new(weather::Weather::new(db.clone(), cfg.timezone, cfg.weather));
     let automations = Arc::new(automations::Runs::default());
     let surplus = Arc::new(surplus::Surplus::default());
     let state = AppState { db, cfg, hub, auth, cloud_key, updater, drivers, weather, automations, surplus };

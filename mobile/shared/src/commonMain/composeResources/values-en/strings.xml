@@ -505,6 +505,8 @@
     <string name="automations_if">If</string>
     <string name="automations_then">Then</string>
     <string name="automations_else">Else</string>
+    <string name="automations_over">Afterwards</string>
+    <string name="automations_over_when">when it is no longer true:</string>
     <string name="automations_or">or</string>
     <string name="automations_conflict">May contradict %1$s: %2$s, at the same time.</string>
     <string name="automations_last">Last: %1$s — %2$s</string>

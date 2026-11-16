@@ -51,7 +51,7 @@ private fun devicesOf(a: Automation): List<Long> {
         (o["measure"] as? JsonObject)?.get("device_id")?.jsonPrimitive?.longOrNull,
     ) + (o["conditions"] as? kotlinx.serialization.json.JsonArray).orEmpty().flatMap { (it as? JsonObject)?.let(::of).orEmpty() } +
         ((o["condition"] as? JsonObject)?.let(::of).orEmpty())
-    return (a.triggers + a.conditions + a.actions + a.otherwise).flatMap(::of)
+    return (a.triggers + a.conditions + a.actions + a.otherwise + a.over).flatMap(::of)
 }
 
 /**
@@ -167,6 +167,13 @@ private fun AutomationCard(automation: Automation, onEnabled: (Boolean) -> Unit,
             a.status.conditions.map { it != true },
         )
         Line(stringResource(Res.string.automations_then), MaterialTheme.colorScheme.primary, a.summary.actions)
+        if (a.summary.over.isNotEmpty()) {
+            Line(
+                stringResource(Res.string.automations_over),
+                MaterialTheme.colorScheme.primary,
+                listOf(stringResource(Res.string.automations_over_when)) + a.summary.over,
+            )
+        }
         Line(stringResource(Res.string.automations_else), Fz.colors.muted, a.summary.otherwise)
         if (a.conflicts.isNotEmpty()) {
             Caption(stringResource(Res.string.automations_conflict, a.conflicts.joinToString(", ") { it.name }, a.conflicts.first().what), color = Fz.colors.warning)

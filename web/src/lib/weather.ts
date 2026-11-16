@@ -37,6 +37,8 @@ export type WeatherReport = {
 export type WeatherView = {
   weather: WeatherReport | null
   sun: { sunrise: number | null; sunset: number | null } | null
+  /** The server reads the weather (`BREEZONE_WEATHER`); the sun is computed anyway. */
+  online?: boolean
 }
 
 /** The look of a WMO weather code: an icon and a few words. */

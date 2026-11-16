@@ -909,6 +909,8 @@ export type TraitField = {
   type: "bool" | "integer" | "number" | "string" | "enum"
   unit?: string
   values?: string[]
+  /** The words for each value of an enum. */
+  value_labels?: Record<string, TraitLabel>
   min?: number
   max?: number
   optional?: boolean
@@ -1037,6 +1039,8 @@ export type AutomationInput = {
   else: AutomationStep[]
   /** Started again while it waits: ignored, or started over. */
   mode: "single" | "restart"
+  /** Run when the lasting trigger that started the rule no longer holds. */
+  over: AutomationStep[]
 }
 
 /** A rule "quand… si… alors… sinon…", with its sentence and what it sees now. */
@@ -1050,6 +1054,7 @@ export type Automation = AutomationInput & {
     joined: string
     actions: string[]
     else: string[]
+    over?: string[]
   }
   status: {
     value: number | null

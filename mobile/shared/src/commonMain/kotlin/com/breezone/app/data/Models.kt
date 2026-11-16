@@ -330,6 +330,7 @@ data class Automation(
     val conditions: List<JsonObject> = emptyList(),
     val actions: List<JsonObject> = emptyList(),
     @SerialName("else") val otherwise: List<JsonObject> = emptyList(),
+    val over: List<JsonObject> = emptyList(),
 )
 
 @Serializable
@@ -340,6 +341,8 @@ data class AutomationSummary(
     val joined: String = "",
     val actions: List<String> = emptyList(),
     @SerialName("else") val otherwise: List<String> = emptyList(),
+    /** When the lasting trigger no longer holds. */
+    val over: List<String> = emptyList(),
 )
 
 @Serializable

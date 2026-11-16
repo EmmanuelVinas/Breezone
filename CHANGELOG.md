@@ -11,6 +11,21 @@ All notable changes are documented here. The format follows
 - App, Lights: a switch per room turns all its lights on or off.
 - App, House: the Charging tile shows a car while a vehicle is plugged in, a bolt while it charges,
   a grey plug while the charger is free.
+- Automations, "Afterwards — when it is no longer true": a rule started by a measure, a state, the
+  sun on a façade or presence can do something when that trigger no longer holds (back past its
+  threshold with the margin, for as long as it took to start): put back as before, or other steps.
+  Steps of "Then" still under way stop. Shown in the app.
+- Automation recipes "Solar surplus: heat a room" and "Solar surplus: cool a room": they follow the
+  mode of the air conditioning instead of setting it.
+
+### Changed
+
+- The weather and the cities are looked up on the internet only when `BREEZONE_WEATHER` is on: on
+  by default in a release build (the Docker image), off in a development build and the tests, so
+  that working on the server sends nothing to Open-Meteo or MeteoAlarm. `GET /api/weather` tells it
+  (`online`).
+- Automations, "put back as before" leaves a device someone changed in the meantime as it is, and
+  the history says so.
 
 ### Fixed
 
@@ -20,6 +35,8 @@ All notable changes are documented here. The format follows
   gap to the setpoint, which a well-regulated zone never reaches: the web showed none, the app showed
   thin bands at the tops of the curve, the wrong way round.
 - App, House: a paused charger, which still says it is charging at 0 W, shows as paused.
+- Automations: the values of a state are in words ("Vehicle plugged in", not "plugged"), and the
+  number fields of an action show their name in full.
 
 ## [0.11.0-beta.20] - 2026-11-15
 

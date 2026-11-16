@@ -4,6 +4,7 @@
 //! and mobile types are generated from the same files.
 
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::sync::LazyLock;
 
 /// Every trait file, embedded at build time (the tests check that none is forgotten).
@@ -40,6 +41,9 @@ pub struct Field {
     pub unit: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub values: Vec<String>,
+    /// The words for each value of an enum.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub value_labels: BTreeMap<String, Label>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub min: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -124,6 +128,13 @@ mod tests {
     fn check_field(t: &str, f: &Field) {
         assert!(KINDS.contains(&f.kind.as_str()), "{t}.{}: unknown type {}", f.name, f.kind);
         assert_eq!(f.kind == "enum", !f.values.is_empty(), "{t}.{}: an enum lists its values, and only an enum", f.name);
+        let named: Vec<&String> = f.value_labels.keys().collect();
+        let mut values: Vec<&String> = f.values.iter().collect();
+        values.sort();
+        assert_eq!(named, values, "{t}.{}: one label per value, in value_labels", f.name);
+        for l in f.value_labels.values() {
+            assert!(![&l.fr, &l.en, &l.es].iter().any(|s| s.trim().is_empty()), "{t}.{}: a value label is missing", f.name);
+        }
         for l in [&f.label.fr, &f.label.en, &f.label.es] {
             assert!(!l.trim().is_empty(), "{t}.{}: a label is missing", f.name);
         }

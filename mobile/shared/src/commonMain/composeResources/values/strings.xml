@@ -517,6 +517,8 @@
     <string name="automations_if">Si</string>
     <string name="automations_then">Alors</string>
     <string name="automations_else">Sinon</string>
+    <string name="automations_over">Ensuite</string>
+    <string name="automations_over_when">quand ce n’est plus vrai :</string>
     <string name="automations_or">ou</string>
     <string name="automations_conflict">Peut contredire %1$s : %2$s, au même moment.</string>
     <string name="automations_last">Dernier : %1$s — %2$s</string>

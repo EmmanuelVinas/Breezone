@@ -6,7 +6,7 @@
     { "name": "flow", "type": "number", "unit": "m³/h", "min": 0, "label": { "fr": "Débit d'air", "en": "Air flow", "es": "Caudal de aire" } },
     { "name": "nominal", "type": "number", "history": false, "unit": "m³/h", "min": 0, "optional": true, "label": { "fr": "Débit nominal", "en": "Nominal flow", "es": "Caudal nominal" } },
     { "name": "level", "type": "integer", "unit": "%", "min": 0, "optional": true, "label": { "fr": "Niveau de ventilation", "en": "Ventilation level", "es": "Nivel de ventilación" } },
-    { "name": "profile", "type": "enum", "values": ["eco", "health", "intense"], "optional": true, "label": { "fr": "Profil", "en": "Profile", "es": "Perfil" } },
+    { "name": "profile", "type": "enum", "values": ["eco", "health", "intense"], "value_labels": { "eco": { "fr": "Éco", "en": "Eco", "es": "Eco" }, "health": { "fr": "Santé", "en": "Health", "es": "Salud" }, "intense": { "fr": "Intense", "en": "Intense", "es": "Intenso" } }, "optional": true, "label": { "fr": "Profil", "en": "Profile", "es": "Perfil" } },
     { "name": "boost", "type": "bool", "label": { "fr": "Boost en cours", "en": "Boosting", "es": "Boost activo" } },
     { "name": "boost_remaining", "type": "integer", "history": false, "unit": "s", "min": 0, "optional": true, "label": { "fr": "Fin du boost dans", "en": "Boost ends in", "es": "El boost termina en" } },
     { "name": "humidity", "type": "number", "unit": "%", "min": 0, "max": 100, "optional": true, "label": { "fr": "Humidité", "en": "Humidity", "es": "Humedad" } },
@@ -27,7 +27,7 @@
       "name": "set_profile",
       "label": { "fr": "Changer le profil", "en": "Change the profile", "es": "Cambiar el perfil" },
       "params": [
-        { "name": "profile", "type": "enum", "values": ["eco", "health", "intense"], "label": { "fr": "Profil", "en": "Profile", "es": "Perfil" } }
+        { "name": "profile", "type": "enum", "values": ["eco", "health", "intense"], "value_labels": { "eco": { "fr": "Éco", "en": "Eco", "es": "Eco" }, "health": { "fr": "Santé", "en": "Health", "es": "Salud" }, "intense": { "fr": "Intense", "en": "Intense", "es": "Intenso" } }, "label": { "fr": "Profil", "en": "Profile", "es": "Perfil" } }
       ]
     }
   ]

@@ -212,6 +212,8 @@ pub fn vigilance_of(feed: &str, area: &str, now: i64) -> Vigilance {
 pub struct View {
     pub weather: Option<Report>,
     pub sun: Option<SunTimes>,
+    /// This server reads the weather (`BREEZONE_WEATHER`); the sun is computed anyway.
+    pub online: bool,
 }
 
 /// Reads the forecast of Open-Meteo's answer (`current`, `hourly`, `daily`, `timezone=UTC`).
@@ -273,14 +275,19 @@ pub struct Weather {
     db: Db,
     tz: Tz,
     http: reqwest::Client,
+    /// The weather and the cities are looked up on the internet (`BREEZONE_WEATHER`).
+    online: bool,
     /// The last weather of each installation.
     last: RwLock<HashMap<i64, Report>>,
 }
 
 impl Weather {
-    pub fn new(db: Db, tz: Tz) -> Self {
+    pub fn new(db: Db, tz: Tz, online: bool) -> Self {
         let http = reqwest::Client::builder().timeout(Duration::from_secs(10)).user_agent("Breezone").build().unwrap_or_default();
-        Self { db, tz, http, last: RwLock::new(HashMap::new()) }
+        if !online {
+            tracing::info!("weather off: nothing is asked of Open-Meteo or MeteoAlarm (BREEZONE_WEATHER=1 to turn it on)");
+        }
+        Self { db, tz, http, online, last: RwLock::new(HashMap::new()) }
     }
 
     /// Looks up the cities set since the last time (once each): their coordinates, area and country
@@ -391,6 +398,9 @@ impl Weather {
     /// Reads the weather of every installation now (one reading per place); keeps their outdoor
     /// temperature.
     pub async fn refresh(&self) {
+        if !self.online {
+            return;
+        }
         self.locate().await;
         // Installations a few hundred metres apart share a reading.
         let mut read: HashMap<(i64, i64), Option<Report>> = HashMap::new();
@@ -436,10 +446,10 @@ impl Weather {
 
     /// The weather of an installation (or of the home) and the sun of today there.
     pub async fn view(&self, installation_id: Option<i64>) -> View {
-        let Some(place) = self.place(installation_id).await else { return View { weather: None, sun: None } };
+        let Some(place) = self.place(installation_id).await else { return View { weather: None, sun: None, online: self.online } };
         let weather = self.last.read().await.get(&place.installation_id).cloned();
         let today = chrono::Utc::now().with_timezone(&self.tz).date_naive();
-        View { weather, sun: Some(sun(today, place.lat, place.lon)) }
+        View { weather, sun: Some(sun(today, place.lat, place.lon)), online: self.online }
     }
 
     /// The outdoor temperature of an installation (or of the home) since `since`: `[ts, °C]`, one

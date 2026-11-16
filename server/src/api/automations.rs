@@ -80,12 +80,12 @@ async fn view_of(state: &AppState, id: i64) -> ApiResult<AutomationView> {
     Ok(automations::view(&row, rule, &here, state.automations.is_running(id)))
 }
 
-/// The rule as stored, as JSON: (triggers, conditions, actions, else).
-fn stored(rule: &Automation) -> [String; 4] {
-    [json!(rule.triggers).to_string(), json!(rule.conditions).to_string(), json!(rule.actions).to_string(), json!(rule.otherwise).to_string()]
+/// The rule as stored, as JSON: (triggers, conditions, actions, else, over).
+fn stored(rule: &Automation) -> [String; 5] {
+    [json!(rule.triggers).to_string(), json!(rule.conditions).to_string(), json!(rule.actions).to_string(), json!(rule.otherwise).to_string(), json!(rule.over).to_string()]
 }
 
-fn fields<'a>(name: &'a str, enabled: bool, rule: &Automation, json: &'a [String; 4]) -> AutomationFields<'a> {
+fn fields<'a>(name: &'a str, enabled: bool, rule: &Automation, json: &'a [String; 5]) -> AutomationFields<'a> {
     AutomationFields {
         name,
         enabled,
@@ -95,6 +95,7 @@ fn fields<'a>(name: &'a str, enabled: bool, rule: &Automation, json: &'a [String
         actions: &json[2],
         else_actions: &json[3],
         run_mode: rule.mode.as_str(),
+        over_actions: &json[4],
     }
 }
 
@@ -231,7 +232,7 @@ pub async fn run(State(state): State<AppState>, user: AuthUser, Path(id): Path<i
     let (row, rule) = load(&state, &access, &ctx, id).await?;
     check_control(&state, &access, &rule, &ctx).await?;
     let reason = crate::text!("lancé à la main", "run by hand", "lanzado a mano");
-    let Some(task) = automations::start(&state, &row, &rule, Branch::Then, ctx, reason, &user.username).await else {
+    let Some(task) = automations::start(&state, &row, &rule, automations::Due { id, branch: Branch::Then, reason, lasting: None }, ctx, &user.username).await else {
         return Err(ApiError::conflict(crate::text!("déjà en cours", "already running", "ya en curso")));
     };
     // A rule that waits goes on in the background: its history tells how it ends.

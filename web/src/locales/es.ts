@@ -1350,6 +1350,15 @@ const es: Record<string, string> = {
   Sinon: "Si no",
   "Ce que Breezone fait quand les conditions sont fausses.":
     "Lo que hace Breezone cuando las condiciones no se cumplen.",
+  Ensuite: "Después",
+  "Ne rien faire": "No hacer nada",
+  "Faire…": "Hacer…",
+  "quand ce n'est plus vrai :": "cuando deja de ser cierto:",
+  "Quand ce n'est plus vrai : le déclencheur ne tient plus (repassé de l'autre côté du seuil avec une marge, aussi longtemps qu'il a fallu pour démarrer). Les étapes de « Alors » encore en cours s'arrêtent.":
+    "Cuando deja de ser cierto: el disparador ya no se cumple (vuelve al otro lado del umbral con un margen, tanto tiempo como hizo falta para empezar). Los pasos de «Entonces» aún en curso se detienen.",
+  "Chaque appareil reprend son réglage d'avant, sauf si quelqu'un l'a changé entre-temps.":
+    "Cada dispositivo recupera su ajuste anterior, salvo si alguien lo cambió mientras tanto.",
+  facultatif: "opcional",
   "Retirer « Sinon »": "Quitar «Si no»",
   "Ajouter « Sinon »": "Añadir «Si no»",
   "Si la règle se redéclenche pendant qu'elle attend":
@@ -1359,10 +1368,16 @@ const es: Record<string, string> = {
   "Surplus solaire : charger la voiture": "Excedente solar: cargar el coche",
   "Quand plus de 500 W repartent au réseau pendant 5 min, lancer la charge, puis l'arrêter quand la maison tire plus de 200 W du réseau pendant 10 min.":
     "Cuando más de 500 W vuelven a la red durante 5 min, iniciar la carga y detenerla cuando la casa consume más de 200 W de la red durante 10 min.",
-  "Surplus solaire : chauffer une pièce en hiver":
-    "Excedente solar: calentar una habitación en invierno",
-  "Quand plus de 500 W repartent au réseau, si la pièce est sous 18 °C de novembre à mars, chauffer à 21°, puis remettre comme avant quand le surplus s'arrête.":
-    "Cuando más de 500 W vuelven a la red, si la habitación está por debajo de 18 °C de noviembre a marzo, calentar a 21° y dejarla como antes cuando acaba el excedente.",
+  "Surplus solaire : chauffer une pièce":
+    "Excedente solar: calentar una habitación",
+  "Quand plus de 500 W repartent au réseau, si la climatisation est en mode chaud et la pièce sous 20 °C, chauffer à 21°. Remettre comme avant quand la maison tire plus de 300 W du réseau pendant 10 min, sauf si quelqu'un a changé la zone entre-temps.":
+    "Cuando más de 500 W vuelven a la red, si la climatización está en modo calor y la habitación por debajo de 20 °C, calentar a 21°. Dejarla como antes cuando la casa consume más de 300 W de la red durante 10 min, salvo si alguien cambió la zona mientras tanto.",
+  "Surplus solaire : rafraîchir une pièce":
+    "Excedente solar: refrescar una habitación",
+  "Quand plus de 500 W repartent au réseau, si la climatisation est en mode froid et la pièce au-dessus de 26 °C, rafraîchir à 25°. Remettre comme avant quand la maison tire plus de 300 W du réseau pendant 10 min, sauf si quelqu'un a changé la zone entre-temps.":
+    "Cuando más de 500 W vuelven a la red, si la climatización está en modo frío y la habitación por encima de 26 °C, refrescar a 25°. Dejarla como antes cuando la casa consume más de 300 W de la red durante 10 min, salvo si alguien cambió la zona mientras tanto.",
+  "Surplus solaire : rafraîchir le salon":
+    "Excedente solar: refrescar el salón",
   "Surplus solaire : chauffer le salon": "Excedente solar: calentar el salón",
   "Fermer les volets au coucher du soleil": "Cerrar las persianas al atardecer",
   "Chaque soir, au coucher du soleil, fermer les volets (à ajuster).":

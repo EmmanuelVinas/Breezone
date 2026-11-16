@@ -357,6 +357,8 @@
     <string name="automations_if">Si</string>
     <string name="automations_then">Entonces</string>
     <string name="automations_else">Si no</string>
+    <string name="automations_over">Después</string>
+    <string name="automations_over_when">cuando deja de ser cierto:</string>
     <string name="automations_or">o</string>
     <string name="automations_conflict">Puede contradecir %1$s: %2$s, al mismo tiempo.</string>
     <string name="automations_last">Último: %1$s — %2$s</string>

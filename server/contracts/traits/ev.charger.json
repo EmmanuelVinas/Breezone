@@ -3,7 +3,7 @@
   "version": 1,
   "label": { "fr": "Borne de recharge", "en": "EV charger", "es": "Cargador de vehículo eléctrico" },
   "state": [
-    { "name": "status", "type": "enum", "values": ["available", "plugged", "charging", "fault"], "label": { "fr": "État", "en": "Status", "es": "Estado" } },
+    { "name": "status", "type": "enum", "values": ["available", "plugged", "charging", "fault"], "value_labels": { "available": { "fr": "Libre", "en": "Available", "es": "Libre" }, "plugged": { "fr": "Véhicule branché", "en": "Vehicle plugged in", "es": "Vehículo conectado" }, "charging": { "fr": "En charge", "en": "Charging", "es": "Cargando" }, "fault": { "fr": "En défaut", "en": "Fault", "es": "Avería" } }, "label": { "fr": "État", "en": "Status", "es": "Estado" } },
     { "name": "vehicle", "type": "bool", "optional": true, "label": { "fr": "Véhicule branché", "en": "Vehicle plugged in", "es": "Vehículo conectado" } },
     { "name": "paused", "type": "bool", "label": { "fr": "En pause", "en": "Paused", "es": "En pausa" } },
     { "name": "locked", "type": "bool", "history": false, "label": { "fr": "Verrouillée", "en": "Locked", "es": "Bloqueado" } },

@@ -9,7 +9,7 @@
     { "name": "color_temp_min", "type": "integer", "history": false, "unit": "K", "optional": true, "label": { "fr": "Blanc le plus chaud", "en": "Warmest white", "es": "Blanco más cálido" } },
     { "name": "color_temp_max", "type": "integer", "history": false, "unit": "K", "optional": true, "label": { "fr": "Blanc le plus froid", "en": "Coolest white", "es": "Blanco más frío" } },
     { "name": "color", "type": "string", "optional": true, "label": { "fr": "Couleur", "en": "Color", "es": "Color" } },
-    { "name": "mode", "type": "enum", "values": ["white", "color"], "optional": true, "label": { "fr": "Mode", "en": "Mode", "es": "Modo" } },
+    { "name": "mode", "type": "enum", "values": ["white", "color"], "value_labels": { "white": { "fr": "Blanc", "en": "White", "es": "Blanco" }, "color": { "fr": "Couleur", "en": "Colour", "es": "Color" } }, "optional": true, "label": { "fr": "Mode", "en": "Mode", "es": "Modo" } },
     { "name": "reachable", "type": "bool", "history": false, "optional": true, "label": { "fr": "Joignable", "en": "Reachable", "es": "Accesible" } }
   ],
   "actions": [

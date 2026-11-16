@@ -38,6 +38,10 @@ pub struct Config {
     /// Updates can be installed from the web UI (`BREEZONE_SELF_UPDATE`, on by default). An
     /// installed update keeps running even when it is turned off.
     pub self_update: bool,
+    /// The weather and the cities are looked up on the internet (Open-Meteo, MeteoAlarm):
+    /// `BREEZONE_WEATHER`, on by default in a release build, off in a development build and the
+    /// tests, so that working on the server sends nothing out.
+    pub weather: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -52,6 +56,11 @@ fn var(name: &str) -> Option<String> {
     let legacy = name.replacen("BREEZONE_", "FREEZONE_", 1);
     let value = std::env::var(name).or_else(|_| std::env::var(&legacy)).ok();
     value.filter(|v| !v.trim().is_empty())
+}
+
+/// A yes/no variable: `None` when not set.
+fn flag(name: &str) -> Option<bool> {
+    var(name).map(|v| !matches!(v.trim().to_lowercase().as_str(), "false" | "0" | "no" | "off"))
 }
 
 fn num<T: std::str::FromStr>(name: &str, default: T) -> T {
@@ -84,7 +93,8 @@ impl Config {
             admin_user: var("BREEZONE_ADMIN_USER"),
             admin_password: var("BREEZONE_ADMIN_PASSWORD"),
             airzone_hosts: var("BREEZONE_AIRZONE_HOSTS").map(|v| parse_bootstrap(&v)).unwrap_or_default(),
-            self_update: !var("BREEZONE_SELF_UPDATE").is_some_and(|v| matches!(v.trim().to_lowercase().as_str(), "false" | "0" | "no" | "off")),
+            self_update: flag("BREEZONE_SELF_UPDATE").unwrap_or(true),
+            weather: flag("BREEZONE_WEATHER").unwrap_or(!cfg!(debug_assertions)),
         }
     }
 
@@ -122,6 +132,7 @@ impl Config {
             admin_password: None,
             airzone_hosts: vec![],
             self_update: false,
+            weather: false,
         }
     }
 }

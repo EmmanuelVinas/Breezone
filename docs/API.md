@@ -159,7 +159,7 @@ avec un identifiant stable. Les routes des zones restent celles qui les pilotent
 
 | Méthode | Chemin | Description |
 |---------|--------|-------------|
-| GET 🔒 | `/api/traits` | Catalogue des traits : `[{trait, version, label{fr,en,es}, state:[champ], actions:[{name, label, params:[champ]}]}]`, champ = `{name, type (bool·integer·number·string·enum), unit?, values?, min?, max?, optional, label}`. Sert aussi de descripteur pour un trait inconnu du client |
+| GET 🔒 | `/api/traits` | Catalogue des traits : `[{trait, version, label{fr,en,es}, state:[champ], actions:[{name, label, params:[champ]}]}]`, champ = `{name, type (bool·integer·number·string·enum), unit?, values?, value_labels?, min?, max?, optional, label}` (`value_labels` : `{valeur: label}` pour chaque valeur d'un `enum`). Sert aussi de descripteur pour un trait inconnu du client |
 | GET 🔒 | `/api/devices` | Appareils visibles par l'utilisateur : `[{id, kind, traits, source, source_id, installation_id, reference, name, room_id, role, measures:{device_id, room_id}, position, available, state}]` (`state` : valeurs décrites par le catalogue ; `available` faux si la source ne fournit plus l'appareil) |
 | PUT 🔒 | `/api/devices/{id}` | `{name?, room_id?, position?, role?, measures_device_id?, measures_room_id?}` : seuls les champs donnés changent (`null` efface). `measures_device_id` désigne l'appareil mesuré par une consommation, ou l'onduleur mesuré par une production ; Nom personnalisé (vide = celui de la source), pièce, et pour une mesure d'énergie son **rôle** : `grid` (réseau, toute la maison), `solar`, `battery` ou `consumption` (consommation d'un appareil ou d'une pièce ; sans cible : autres usages). Même droit que pour renommer les zones de l'installation ; administrateurs pour les appareils des sources |
 | GET 🔒 | `/api/rooms` | `[{id, name, position, created_at, icon}]` (`icon` : nom Lucide choisi, `null` : deviné d'après le nom par les clients) |
@@ -216,7 +216,7 @@ serveur qui a une ville.
 
 | Méthode | Chemin | Description |
 |---------|--------|-------------|
-| GET 🔒 | `/api/weather?installation_id=` | `{weather:{place, temperature, apparent, humidity, code, precipitation, wind, today_min, today_max, tomorrow_min, tomorrow_max, tomorrow_code, hours:[{ts, temperature, code, precipitation_probability}], read_at, vigilance:{level, events, area} \| null} \| null, sun:{sunrise, sunset} \| null}` (`code` : code météo OMM ; `vigilance.level` : 0 vert … 3 rouge) |
+| GET 🔒 | `/api/weather?installation_id=` | `{weather:{place, temperature, apparent, humidity, code, precipitation, wind, today_min, today_max, tomorrow_min, tomorrow_max, tomorrow_code, hours:[{ts, temperature, code, precipitation_probability}], read_at, vigilance:{level, events, area} \| null} \| null, sun:{sunrise, sunset} \| null}` (`code` : code météo OMM ; `vigilance.level` : 0 vert … 3 rouge). `online` : faux quand ce serveur ne lit pas la météo (`BREEZONE_WEATHER`, coupée par défaut dans un build de développement) |
 | GET 🔒 | `/api/weather/history?hours=24&installation_id=` | `[[ts, °C]]` : température extérieure de l'installation (un point par 30 min, par jour au-delà d'un mois) |
 | PUT 👑 | `/api/weather/place` | `{place}` : la ville de la première installation de ce serveur (préférer la ville de chaque installation, `PUT /api/installations/{id}`) |
 
@@ -374,7 +374,12 @@ Fonction `automations@1`. Une règle : 1 à 3 déclencheurs (un seul suffit), ju
 | GET 🔒 | `/api/presence` | `{me, someone_home, people:[{user_id, username, home, changed_at}]}` (fonction `presence@1`) |
 | PUT 🔒 | `/api/presence` | `{home}` : l'utilisateur dit s'il est à la maison |
 
-`AutomationInput` : `{name, enabled?, triggers: [Trigger], match?: "all"|"any", conditions?: [Condition], actions: [Step], else?: [Step], mode?: "single"|"restart"}`.
+`AutomationInput` : `{name, enabled?, triggers: [Trigger], match?: "all"|"any", conditions?: [Condition], actions: [Step], else?: [Step], mode?: "single"|"restart", over?: [Step]}`.
+`over` (« quand ce n'est plus vrai ») : les étapes lancées quand le déclencheur qui dure (mesure, état,
+façade, présence) et qui a démarré « alors » ne tient plus — repassé de l'autre côté du seuil avec la
+marge, aussi longtemps que `for_minutes`. Les étapes de « alors » encore en cours s'arrêtent alors ;
+`restore` y remet ce que « alors » a changé. Refusé (`400`) sans déclencheur qui dure ; rien pour
+« Essayer » ni pour « sinon ».
 `when: Trigger` (un seul déclencheur, forme de 0.11.0-beta.18) est encore accepté à la place de `triggers`.
 
 `Trigger` :
@@ -412,13 +417,14 @@ peut pas lire (appareil injoignable) ne décide que si les autres ne le font pas
 `{kind:"scene", routine_id}` | `{kind:"wait", seconds}` (1 … 86400) | `{kind:"wait_until",
 condition, for_seconds?, timeout_seconds, on_timeout?: "continue"|"stop"}` (attend que la condition
 soit vraie, `for_seconds` d'affilée, au plus `timeout_seconds`) | `{kind:"restore"}` (remet les
-appareils pilotés plus haut dans la même liste comme ils étaient : réglages changés, charge, boost ;
-vient après une action sur un appareil) | `{kind:"notify", message}` (1 à 200 caractères : écrit dans
+appareils pilotés plus haut dans la même exécution comme ils étaient : réglages changés, charge,
+boost ; vient après une action sur un appareil ; un appareil dont quelqu'un a changé un de ces
+réglages entre-temps est laissé tel quel, et l'historique le dit) | `{kind:"notify", message}` (1 à 200 caractères : écrit dans
 le journal, `kind: "notification"`, que les applis ouvertes affichent aussitôt ; envoyé aussi au
 sujet ntfy réglé, avec le titre « Breezone · nom de la règle »).
 
 `Automation` ajoute `{id, when` (le premier déclencheur)`, summary:{when, triggers, conditions,
-joined, actions, else}` (la règle en phrases, dans la langue de la requête ; `joined` = « et » ou
+joined, actions, else, over}` (la règle en phrases, dans la langue de la requête ; `joined` = « et » ou
 « ou »)`, status:{value, unit, holds, conditions:[true|false|null], next_at, running}, last_run_at,
 last_reason, conflicts:[{id, name, what}], created_at, updated_at}` (`conflicts` : les règles activées
 qui peuvent donner au même appareil un autre réglage au même moment).

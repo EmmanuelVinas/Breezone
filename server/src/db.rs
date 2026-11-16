@@ -626,6 +626,8 @@ pub struct AutomationRow {
     pub else_actions: String,
     /// "single" | "restart".
     pub run_mode: String,
+    /// JSON: the actions run when the lasting trigger stops holding.
+    pub over_actions: String,
 }
 
 pub async fn list_automations(db: &Db) -> sqlx::Result<Vec<AutomationRow>> {
@@ -647,11 +649,12 @@ pub struct AutomationFields<'a> {
     pub actions: &'a str,
     pub else_actions: &'a str,
     pub run_mode: &'a str,
+    pub over_actions: &'a str,
 }
 
 pub async fn insert_automation(db: &Db, f: &AutomationFields<'_>) -> sqlx::Result<AutomationRow> {
     let t = now();
-    sqlx::query_as("INSERT INTO automations (name, enabled, trigger_def, condition_match, conditions, actions, else_actions, run_mode, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *")
+    sqlx::query_as("INSERT INTO automations (name, enabled, trigger_def, condition_match, conditions, actions, else_actions, run_mode, over_actions, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *")
         .bind(f.name)
         .bind(f.enabled)
         .bind(f.trigger)
@@ -660,6 +663,7 @@ pub async fn insert_automation(db: &Db, f: &AutomationFields<'_>) -> sqlx::Resul
         .bind(f.actions)
         .bind(f.else_actions)
         .bind(f.run_mode)
+        .bind(f.over_actions)
         .bind(t)
         .bind(t)
         .fetch_one(db)
@@ -667,7 +671,7 @@ pub async fn insert_automation(db: &Db, f: &AutomationFields<'_>) -> sqlx::Resul
 }
 
 pub async fn update_automation(db: &Db, id: i64, f: &AutomationFields<'_>) -> sqlx::Result<()> {
-    sqlx::query("UPDATE automations SET name = ?, enabled = ?, trigger_def = ?, condition_match = ?, conditions = ?, actions = ?, else_actions = ?, run_mode = ?, updated_at = ? WHERE id = ?")
+    sqlx::query("UPDATE automations SET name = ?, enabled = ?, trigger_def = ?, condition_match = ?, conditions = ?, actions = ?, else_actions = ?, run_mode = ?, over_actions = ?, updated_at = ? WHERE id = ?")
         .bind(f.name)
         .bind(f.enabled)
         .bind(f.trigger)
@@ -676,6 +680,7 @@ pub async fn update_automation(db: &Db, id: i64, f: &AutomationFields<'_>) -> sq
         .bind(f.actions)
         .bind(f.else_actions)
         .bind(f.run_mode)
+        .bind(f.over_actions)
         .bind(now())
         .bind(id)
         .execute(db)

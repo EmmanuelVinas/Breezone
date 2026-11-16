@@ -191,7 +191,16 @@ async fn a_rule_drives_a_zone_when_its_measure_crosses_the_threshold() {
     let row = breezone_server::db::automation_by_id(&state.db, waiting_id).await.unwrap().unwrap();
     let waits = automations::Automation::of(&row).unwrap();
     let ctx = automations::Context::load(&state).await.unwrap();
-    automations::start(&state, &row, &waits, automations::Branch::Then, ctx, breezone_server::i18n::Text::plain("test"), "test").await.unwrap();
+    automations::start(
+        &state,
+        &row,
+        &waits,
+        automations::Due { id: waiting_id, branch: automations::Branch::Then, reason: breezone_server::i18n::Text::plain("test"), lasting: None },
+        ctx,
+        "test",
+    )
+    .await
+    .unwrap();
     assert!(state.automations.is_running(waiting_id));
     let (_, listed) = call(Method::GET, &format!("/api/automations/{waiting_id}"), None).await;
     assert_eq!(listed["status"]["running"], true);
@@ -275,4 +284,84 @@ async fn a_rule_drives_a_zone_when_its_measure_crosses_the_threshold() {
     assert_eq!(s, StatusCode::NO_CONTENT);
     let (_, list) = call(Method::GET, "/api/automations", None).await;
     assert!(list.as_array().unwrap().iter().all(|a| a["id"] != rule_id), "deleted");
+}
+
+#[tokio::test]
+async fn while_a_trigger_holds_then_as_before() {
+    let maison: MockState = Arc::new(Mutex::new(mock::preset("maison")));
+    let ws = serve(mock::router(maison.clone())).await;
+    let dir = std::env::temp_dir().join(format!("breezone-automations-over-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let state = breezone_server::init_state(Config::for_tests(dir)).await.unwrap();
+    let port = serve(breezone_server::app(state.clone())).await;
+    let base = format!("http://127.0.0.1:{port}");
+    let http = reqwest::Client::new();
+    let v: Value = http.post(format!("{base}/api/setup")).json(&json!({"username":"admin","password":"motdepasse1"})).send().await.unwrap().json().await.unwrap();
+    let token = v["access_token"].as_str().unwrap().to_string();
+    let call = |m: Method, path: &str, body: Option<Value>| {
+        let mut r = http.request(m, format!("{base}{path}")).bearer_auth(&token).header("Accept-Language", "fr");
+        if let Some(b) = body {
+            r = r.json(&b);
+        }
+        async move {
+            let resp = r.send().await.unwrap();
+            let s = resp.status();
+            (s, serde_json::from_str::<Value>(&resp.text().await.unwrap()).unwrap_or(Value::Null))
+        }
+    };
+    let (_, inst) = call(Method::POST, "/api/installations", Some(json!({"name":"Maison","host":"127.0.0.1","port":ws}))).await;
+    let id = inst["id"].as_i64().unwrap();
+    let (_, devices) = call(Method::GET, "/api/devices", None).await;
+    let device = |zone: i64| devices.as_array().unwrap().iter().find(|d| d["reference"]["zone_id"] == zone).unwrap().clone();
+    let is_on = |z: i64| maison.lock().unwrap().iter().find(|x| x.zone_id == z).unwrap().is_on();
+    for z in [1, 2] {
+        call(Method::PATCH, &format!("/api/installations/{id}/zones/1/{z}"), Some(json!({"on": true}))).await;
+    }
+
+    // While zone 1 is off, zone 2 is off too; then it is put back.
+    let switch_off_2 = json!([{"kind": "device", "device_id": device(2)["id"], "trait": "climate.zone", "action": "set", "params": {"on": false}}]);
+    let (s, _) =
+        call(Method::POST, "/api/automations", Some(json!({"name": "Heure", "when": {"kind": "time", "time": "03:00"}, "actions": switch_off_2, "over": [{"kind": "restore"}]})))
+            .await;
+    assert_eq!(s, StatusCode::BAD_REQUEST, "a time does not last");
+    let (s, created) = call(
+        Method::POST,
+        "/api/automations",
+        Some(json!({
+            "name": "Ensemble",
+            "when": {"kind": "state", "device_id": device(1)["id"], "field": "on", "value": false},
+            "actions": switch_off_2,
+            "over": [{"kind": "restore"}]
+        })),
+    )
+    .await;
+    assert_eq!(s, StatusCode::CREATED, "{created}");
+    assert_eq!(created["summary"]["over"], json!(["remettre comme avant"]));
+    let rule_id = created["id"].as_i64().unwrap();
+
+    let mut engine = Engine::new(breezone_server::db::now());
+    automations::tick(&state, &mut engine).await;
+    call(Method::PATCH, &format!("/api/installations/{id}/zones/1/1"), Some(json!({"on": false}))).await;
+    automations::tick(&state, &mut engine).await;
+    for _ in 0..40 {
+        if !is_on(2) {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    assert!(!is_on(2), "the rule ran");
+    assert!(state.automations.is_running(rule_id), "it waits for the end");
+
+    call(Method::PATCH, &format!("/api/installations/{id}/zones/1/1"), Some(json!({"on": true}))).await;
+    for _ in 0..300 {
+        if !state.automations.is_running(rule_id) {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    assert!(is_on(2), "put back once zone 1 is on again");
+    let (_, runs) = call(Method::GET, &format!("/api/automations/{rule_id}/runs"), None).await;
+    let steps = runs[0]["steps"].as_array().unwrap();
+    assert_eq!(runs[0]["ended"], "done", "{runs}");
+    assert!(steps[1]["what"].as_str().unwrap().starts_with("ce n'est plus vrai : "), "{runs}");
 }
