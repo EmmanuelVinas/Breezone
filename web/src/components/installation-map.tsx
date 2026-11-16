@@ -61,8 +61,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { t, tn } from "@/lib/i18n"
-
-const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
+import { errorText } from "@/lib/format"
 
 type Way = "existing" | "local" | "node"
 

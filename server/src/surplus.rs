@@ -13,8 +13,8 @@
 //! * Only the loads and the grid meter of this server count: the surplus is physical, it is that of
 //!   this site.
 
-use crate::api::home::DeviceView;
 use crate::db::{self, SurplusLoadRow};
+use crate::devices::{self, DeviceView};
 use crate::i18n::Text;
 use crate::AppState;
 use chrono::{NaiveTime, TimeZone};
@@ -400,13 +400,13 @@ pub async fn tick(state: &AppState, now: i64) {
         Ok(rows) => rows,
         Err(e) => return tracing::error!("surplus: {e}"),
     };
-    let devices = match crate::api::home::devices_of(state).await {
+    let devices = match devices::list(state).await {
         Ok(d) => d,
         Err(e) => return tracing::error!("surplus: {}", e.message.en),
     };
-    let grid = match crate::api::energy::live_of(state, &devices).await {
+    let grid = match crate::energy::live_of(&state.db, &devices).await {
         Ok(live) => live.live.flows.grid,
-        Err(e) => return tracing::error!("surplus: {}", e.message.en),
+        Err(e) => return tracing::error!("surplus: {e}"),
     };
     let steered: Vec<(&SurplusLoadRow, &DeviceView, Kind)> =
         rows.iter().filter(|r| r.enabled).filter_map(|r| devices.iter().find(|d| d.id == r.device_id).and_then(|d| kind_of(d).map(|k| (r, d, k)))).collect();

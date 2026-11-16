@@ -314,7 +314,7 @@ impl Runtime {
                 }
                 None => {
                     let config: Value = serde_json::from_str(&source.config).unwrap_or(Value::Null);
-                    let secret = source.secret.as_deref().and_then(|s| crate::cloud::decrypt(&self.key, s));
+                    let secret = source.secret.as_deref().and_then(|s| crate::crypto::decrypt(&self.key, s));
                     let (driver, error) = match create(&source.driver, &config, secret.as_deref()) {
                         Ok(d) => {
                             d.listen(Sink::new(source.id, self.presses.clone()));

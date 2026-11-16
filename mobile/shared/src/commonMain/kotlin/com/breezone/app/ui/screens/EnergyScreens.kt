@@ -42,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.breezone.app.data.ChargerShown
 import com.breezone.app.data.DeviceView
 import com.breezone.app.data.EnergyDay
 import com.breezone.app.data.EnergyLive
@@ -54,6 +55,7 @@ import com.breezone.app.data.ServerDevices
 import com.breezone.app.data.SolarInverterState
 import com.breezone.app.data.SolarPanelState
 import com.breezone.app.data.TraitIds
+import com.breezone.app.data.shown
 import com.breezone.app.resources.*
 import com.breezone.app.ui.components.CommandIndicator
 import com.breezone.app.ui.components.DeviceGroupCard
@@ -280,13 +282,15 @@ fun SolarScreen(serverId: String, onBack: () -> Unit) {
 }
 
 @Composable
-private fun chargerStatus(s: EvChargerState): String = when {
-    s.status == EvChargerStatus.Charging -> stringResource(Res.string.charger_charging)
-    s.status == EvChargerStatus.Fault -> stringResource(Res.string.charger_fault)
-    s.paused && s.vehicle == true -> stringResource(Res.string.charger_paused)
-    s.status == EvChargerStatus.Plugged -> stringResource(Res.string.charger_plugged)
-    else -> stringResource(Res.string.charger_available)
-}
+fun chargerLabel(shown: ChargerShown): String = stringResource(
+    when (shown) {
+        ChargerShown.Charging -> Res.string.charger_charging
+        ChargerShown.Fault -> Res.string.charger_fault
+        ChargerShown.Paused -> Res.string.charger_paused
+        ChargerShown.Plugged -> Res.string.charger_plugged
+        ChargerShown.Available -> Res.string.charger_available
+    },
+)
 
 @Composable
 fun ChargingScreen(serverId: String, onBack: () -> Unit) {
@@ -329,7 +333,7 @@ fun ChargingScreen(serverId: String, onBack: () -> Unit) {
                             IconBadge(FzIcons.PlugZap, MaterialTheme.colorScheme.primary, active = charging, size = 48.dp)
                             Spacer(Modifier.width(12.dp))
                             Column {
-                                Text(chargerStatus(s), style = MaterialTheme.typography.titleMedium)
+                                Text(chargerLabel(s.shown), style = MaterialTheme.typography.titleMedium)
                                 if (s.vehicle == true && s.sessionSecs > 0) Caption(stringResource(Res.string.charger_session, formatEnergy(s.sessionEnergy), s.sessionSecs.toInt() / 3600, s.sessionSecs.toInt() % 3600 / 60))
                             }
                         }
@@ -350,14 +354,14 @@ fun ChargingScreen(serverId: String, onBack: () -> Unit) {
                             if (charging || !s.paused) {
                                 OutlinedButton(
                                     onClick = { act("stop", JsonObject(emptyMap()), buildJsonObject { put("paused", true) }) },
-                                    enabled = charger.available,
+                                    enabled = charger.usable,
                                     shape = Fz.shapes.button,
                                     modifier = Modifier.fillMaxWidth(),
                                 ) { Text(stringResource(Res.string.charger_pause)) }
                             } else {
                                 Button(
                                     onClick = { act("start", JsonObject(emptyMap()), buildJsonObject { put("paused", false) }) },
-                                    enabled = charger.available,
+                                    enabled = charger.usable,
                                     shape = Fz.shapes.button,
                                     modifier = Modifier.fillMaxWidth(),
                                 ) { Text(stringResource(Res.string.charger_start)) }
@@ -382,7 +386,7 @@ fun ChargingScreen(serverId: String, onBack: () -> Unit) {
                                 Text(stringResource(Res.string.charger_auto_limit))
                                 Caption(stringResource(Res.string.charger_auto_limit_hint))
                             }
-                            Switch(checked = s.autoLimit == true, enabled = charger.available, onCheckedChange = { on ->
+                            Switch(checked = s.autoLimit == true, enabled = charger.usable, onCheckedChange = { on ->
                                 act("set_auto_limit", buildJsonObject { put("on", on) }, buildJsonObject { put("auto_limit", on) })
                             })
                         }
@@ -397,13 +401,13 @@ fun ChargingScreen(serverId: String, onBack: () -> Unit) {
                                 value = (s.limit ?: min.toLong()).toFloat(),
                                 onCommit = { v -> act("set_limit", buildJsonObject { put("limit", v.roundToInt()) }, buildJsonObject { put("limit", v.roundToInt()) }) },
                                 range = min..max,
-                                enabled = charger.available,
+                                enabled = charger.usable,
                                 colors = SliderDefaults.colors(),
                             )
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(stringResource(Res.string.charger_locked), modifier = Modifier.weight(1f))
-                            Switch(checked = s.locked, enabled = charger.available, onCheckedChange = { locked ->
+                            Switch(checked = s.locked, enabled = charger.usable, onCheckedChange = { locked ->
                                 act("lock", buildJsonObject { put("locked", locked) }, buildJsonObject { put("locked", locked) })
                             })
                         }

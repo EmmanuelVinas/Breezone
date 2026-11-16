@@ -32,7 +32,7 @@ import {
 import type { LucideIcon } from "lucide-react"
 import type { DayEnergy, DeviceView, EnergyLive, MeasureRole } from "@/lib/api"
 import { api, currentUser } from "@/lib/api"
-import { percent, time } from "@/lib/format"
+import { kwh, number, percent, time, watts } from "@/lib/format"
 import { inverterCounting, isInverter } from "@/lib/solar"
 import { locale, t, tn } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
@@ -110,23 +110,6 @@ const ROLE_LABEL: Record<MeasureRole, string> = {
   solar: t("Production solaire"),
   battery: t("Batterie"),
   consumption: t("Consommation"),
-}
-
-function number(v: number, digits: number) {
-  return v.toLocaleString(locale(), { maximumFractionDigits: digits })
-}
-
-export function watts(v: number | null | undefined) {
-  if (v === null || v === undefined) return "–"
-  return Math.abs(v) >= 1000
-    ? `${number(v / 1000, 2)} kW`
-    : `${Math.round(v)} W`
-}
-
-export function kwh(v: number | null | undefined) {
-  if (v === null || v === undefined) return "–"
-  if (Math.abs(v) < 0.005) v = 0
-  return `${number(v, Math.abs(v) < 10 ? 2 : 1)} kWh`
 }
 
 function isoDay(d: Date) {
@@ -1074,7 +1057,7 @@ function Measures({
                         typeof on === "boolean" && (
                           <Switch
                             checked={on}
-                            disabled={!admin || !d.available}
+                            disabled={!d.can_control || !d.available}
                             loading={
                               relay.isPending && relay.variables?.id === d.id
                             }

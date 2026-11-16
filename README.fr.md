@@ -158,7 +158,8 @@ port 3000 des WebServers : leur API n'a aucune authentification.
 
 **Mise à jour.** `docker compose pull && docker compose up -d`. Pour rester sur une version précise,
 remplacez `latest` par son numéro (ex. `0.9.1`). Les données (base SQLite, secret de
-signature) sont dans le volume `breezone_data`. Sauvegarde :
+signature, `data.key` : la clé des mots de passe et appairages gardés, à garder avec la base)
+sont dans le volume `breezone_data`. Sauvegarde :
 `docker run --rm -v breezone_data:/data -v "$PWD":/backup alpine tar czf /backup/breezone.tgz -C /data .`
 
 Les réglages (variables `BREEZONE_*`) sont décrits dans le [README anglais](README.md#settings) et

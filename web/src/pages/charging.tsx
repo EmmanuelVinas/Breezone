@@ -15,10 +15,18 @@ import {
 } from "lucide-react"
 import type { DeviceView } from "@/lib/api"
 import { api, currentUser } from "@/lib/api"
-import { CHARGER_STATUS, CHARGER_TONE } from "@/lib/charger"
-import { duration, relativeTime, time } from "@/lib/format"
+import { CHARGER_STATUS, CHARGER_TONE, chargerStatus } from "@/lib/charger"
+import {
+  duration,
+  errorText,
+  kwh,
+  number,
+  relativeTime,
+  time,
+  watts,
+} from "@/lib/format"
 import { cn } from "@/lib/utils"
-import { locale, t } from "@/lib/i18n"
+import { t } from "@/lib/i18n"
 import { PageHeader } from "@/components/app-shell"
 import { ChargingMode } from "@/components/surplus"
 import { PeriodPicker } from "@/components/period-picker"
@@ -79,33 +87,7 @@ type ChargerState = {
   current?: number
 }
 
-const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
-
-function number(v: number, digits: number) {
-  return v.toLocaleString(locale(), { maximumFractionDigits: digits })
-}
-
-function kw(w: number | undefined) {
-  if (w === undefined) return "–"
-  return w >= 1000 ? `${number(w / 1000, 2)} kW` : `${Math.round(w)} W`
-}
-
-function kwh(v: number | undefined) {
-  return v === undefined ? "–" : `${number(v, v < 10 ? 2 : 1)} kWh`
-}
-
-/** Paused only matters with a car plugged in. */
-function shownStatus(s: ChargerState) {
-  const plugged = s.status === "plugged" || s.status === "charging"
-  return s.paused && plugged ? "paused" : (s.status ?? "fault")
-}
-
 const DRIVER_LABEL: Record<string, string> = { trydan: "V2C Trydan" }
-
-const STATUS_TITLE: Record<string, string> = {
-  ...CHARGER_STATUS,
-  paused: t("En pause"),
-}
 
 function Tile({
   label,
@@ -348,7 +330,7 @@ function PowerCurve({ device }: { device: DeviceView }) {
                 tickLine={false}
                 axisLine={false}
                 width={56}
-                tickFormatter={(v: number) => kw(v * 1000)}
+                tickFormatter={(v: number) => watts(v * 1000)}
               />
               <ChartTooltip
                 content={
@@ -366,7 +348,7 @@ function PowerCurve({ device }: { device: DeviceView }) {
                           {curveConfig[name as keyof typeof curveConfig]?.label}
                         </span>
                         <span className="tabular font-medium">
-                          {kw(Number(value) * 1000)}
+                          {watts(Number(value) * 1000)}
                         </span>
                       </div>
                     )}
@@ -417,7 +399,7 @@ function SettingsCard({
   // Draft while sliding; otherwise what the charger says.
   const [draft, setDraft] = useState<number | null>(null)
   const limit = draft ?? s.limit ?? min
-  const disabled = !admin || !device.available || act.isPending
+  const disabled = !device.can_control || !device.available || act.isPending
   return (
     <Card className="rounded-3xl">
       <CardHeader>
@@ -491,7 +473,7 @@ function StatesCard() {
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-wrap gap-2">
-        {Object.entries(STATUS_TITLE).map(([k, label]) => (
+        {Object.entries(CHARGER_STATUS).map(([k, label]) => (
           <Badge key={k} variant="outline" className="gap-1.5">
             <span
               className="size-2 rounded-full"
@@ -515,7 +497,7 @@ function ChargerCard({
 }) {
   const admin = currentUser()?.role === "admin"
   const s = (device.state ?? {}) as ChargerState
-  const status = device.available ? shownStatus(s) : "fault"
+  const status = device.available ? chargerStatus(s) : "fault"
   const tone = CHARGER_TONE[status] ?? "var(--muted-foreground)"
   const act = useAct(device)
   const [starting, setStarting] = useState(false)
@@ -524,7 +506,7 @@ function ChargerCard({
     s.energy_goal && s.session_energy !== undefined
       ? Math.min(1, s.session_energy / s.energy_goal)
       : null
-  const disabled = !admin || !device.available || act.isPending
+  const disabled = !device.can_control || !device.available || act.isPending
   const locking = act.isPending && act.variables?.action === "lock"
   // With an energy goal and a car charging: when it is reached at the current power.
   const left = s.energy_goal ? s.energy_goal - (s.session_energy ?? 0) : null
@@ -567,7 +549,9 @@ function ChargerCard({
                       className="size-2 rounded-full"
                       style={{ background: tone }}
                     />
-                    {device.available ? STATUS_TITLE[status] : t("Injoignable")}
+                    {device.available
+                      ? CHARGER_STATUS[status]
+                      : t("Injoignable")}
                   </Badge>
                 </div>
                 <div className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
@@ -632,7 +616,7 @@ function ChargerCard({
           <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
             <Tile
               label={t("Puissance")}
-              value={kw(s.power)}
+              value={watts(s.power)}
               sub={
                 typeof s.current === "number" && s.current > 0
                   ? `${number(s.current, 1)} A`

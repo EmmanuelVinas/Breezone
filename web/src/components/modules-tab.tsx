@@ -31,9 +31,9 @@ import type {
   SourceView,
 } from "@/lib/api"
 import { api } from "@/lib/api"
-import { CHARGER_STATUS } from "@/lib/charger"
+import { CHARGER_STATUS, chargerStatus } from "@/lib/charger"
 import { inverterCounting, isInverter } from "@/lib/solar"
-import { relativeTime } from "@/lib/format"
+import { errorText, kwh, relativeTime, watts } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { t } from "@/lib/i18n"
 import {
@@ -67,8 +67,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
-
-const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 const ROLE_LABEL: Record<MeasureRole | "none", string> = {
   none: t("Simple mesure, non comptée"),
@@ -110,18 +108,9 @@ function d_light(s: Record<string, unknown>) {
     : t("allumée")
 }
 
-function watts(v: unknown) {
-  if (typeof v !== "number") return null
-  return Math.abs(v) >= 1000
-    ? `${(v / 1000).toLocaleString(undefined, { maximumFractionDigits: 2 })} kW`
-    : `${Math.round(v)} W`
-}
-
-function kwh(v: unknown) {
-  return typeof v === "number"
-    ? `${v.toLocaleString(undefined, { maximumFractionDigits: 1 })} kWh`
-    : null
-}
+/** The model, without repeating the source's name ("Shelly Pro 3EM (monophasé…)" → "monophasé…"). */
+const wattsOf = (v: unknown) => (typeof v === "number" ? watts(v) : null)
+const kwhOf = (v: unknown) => (typeof v === "number" ? kwh(v) : null)
 
 /** The model, without repeating the source's name ("Shelly Pro 3EM (monophasé…)" → "monophasé…"). */
 function modelDetail(source: SourceView) {
@@ -216,23 +205,24 @@ function DeviceRow({
           .join(" · ")
       : null,
     typeof s.status === "string"
-      ? (CHARGER_STATUS[s.status] ?? s.status)
+      ? (CHARGER_STATUS[chargerStatus(s)] ?? s.status)
       : null,
-    watts(s.power),
+    wattsOf(s.power),
     typeof s.on === "boolean" && !d_light(s)
       ? s.on
         ? t("allumé")
         : t("éteint")
       : null,
-    kwh(s.energy_in) && t("{value} consommés", { value: kwh(s.energy_in)! }),
+    kwhOf(s.energy_in) &&
+      t("{value} consommés", { value: kwhOf(s.energy_in)! }),
     typeof s.energy_out === "number" && s.energy_out > 0
-      ? t("{value} injectés", { value: kwh(s.energy_out)! })
+      ? t("{value} injectés", { value: kwhOf(s.energy_out)! })
       : null,
     typeof s.energy_today === "number"
-      ? t("{value} aujourd'hui", { value: kwh(s.energy_today)! })
+      ? t("{value} aujourd'hui", { value: kwhOf(s.energy_today)! })
       : null,
     typeof s.session_energy === "number" && s.session_energy > 0
-      ? t("{value} cette session", { value: kwh(s.session_energy)! })
+      ? t("{value} cette session", { value: kwhOf(s.session_energy)! })
       : null,
   ].filter(Boolean)
 

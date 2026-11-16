@@ -129,15 +129,22 @@ data class ZoneCommand(
 
 @Serializable
 data class Action(
-    val installationId: Long,
-    val systemId: Long,
-    val zoneId: Long,
+    val installationId: Long? = null,
+    val systemId: Long? = null,
+    val zoneId: Long? = null,
     val on: Boolean? = null,
     val setpoint: Double? = null,
     val mode: Mode? = null,
     /** Run that many minutes after the routine starts (kept when editing elsewhere). */
     val delayMinutes: Long? = null,
-)
+    /** An action of a device of a module, edited on the web and kept as it is here. */
+    val deviceId: Long? = null,
+    val trait: String? = null,
+    val action: String? = null,
+    val params: JsonObject? = null,
+) {
+    val isDevice get() = deviceId != null
+}
 
 @Serializable
 data class Routine(
@@ -377,6 +384,10 @@ data class AutomationRunResult(val results: List<ActionResult> = emptyList(), va
 
 @Serializable
 data class AutomationSettings(val pausedUntil: Long? = null)
+
+/** A rule written by a newer version of the server: it does not run there. */
+@Serializable
+data class UnreadableAutomation(val id: Long, val name: String)
 
 /** Who is at home, as each user told it. */
 @Serializable

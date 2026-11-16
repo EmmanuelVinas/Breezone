@@ -52,13 +52,9 @@ pub struct Field {
     pub optional: bool,
     /// Worth a history (a measure): false for a setting or a fixed value (`"history": false`),
     /// which is then not written every few minutes.
-    #[serde(default = "yes", skip_serializing_if = "is_true")]
+    #[serde(default = "crate::yes", skip_serializing_if = "is_true")]
     pub history: bool,
     pub label: Label,
-}
-
-fn yes() -> bool {
-    true
 }
 
 fn is_true(b: &bool) -> bool {

@@ -104,7 +104,7 @@ pub async fn update(State(state): State<AppState>, _admin: AdminUser, Path(id): 
 /// pairing from it (and nothing else), so that it can be paired again.
 pub async fn delete(State(state): State<AppState>, _admin: AdminUser, Path(id): Path<i64>) -> ApiResult<StatusCode> {
     if let Some(source) = db::source_by_id(&state.db, id).await? {
-        let pairing = source.secret.as_deref().and_then(|s| crate::cloud::decrypt(&state.cloud_key, s)).and_then(|s| serde_json::from_str::<crate::homekit::Pairing>(&s).ok());
+        let pairing = source.secret.as_deref().and_then(|s| crate::crypto::decrypt(&state.data_key, s)).and_then(|s| serde_json::from_str::<crate::homekit::Pairing>(&s).ok());
         let host: Value = serde_json::from_str(&source.config).unwrap_or(Value::Null);
         if let (Some(pairing), Some(host)) = (pairing, host["host"].as_str()) {
             let removed = tokio::time::timeout(std::time::Duration::from_secs(15), crate::homekit::remove_own_pairing(host, &pairing)).await;
@@ -198,7 +198,7 @@ pub async fn pair_homekit(State(state): State<AppState>, _admin: AdminUser, Json
     };
     let pairing = paired.map_err(|e| ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, e.explain()))?;
     let config = serde_json::json!({"host": host, "device_id": pairing.accessory_id}).to_string();
-    let secret = crate::cloud::encrypt(&state.cloud_key, &serde_json::to_string(&pairing).unwrap_or_default());
+    let secret = crate::crypto::encrypt(&state.data_key, &serde_json::to_string(&pairing).unwrap_or_default());
     let stored = async {
         let id = db::insert_source(&state.db, "homekit", if name.is_empty() { "HomeKit" } else { &name }, &config).await?;
         db::set_source_secret(&state.db, id, Some(&secret)).await?;
@@ -245,7 +245,7 @@ pub async fn link_hue(State(state): State<AppState>, _admin: AdminUser, Json(inp
     let name: String = input.name.trim().chars().take(60).collect();
     let config = serde_json::json!({"host": host, "device_id": bridge.id}).to_string();
     let id = db::insert_source(&state.db, "hue", if name.is_empty() { "Philips Hue" } else { &name }, &config).await?;
-    db::set_source_secret(&state.db, id, Some(&crate::cloud::encrypt(&state.cloud_key, &key))).await?;
+    db::set_source_secret(&state.db, id, Some(&crate::crypto::encrypt(&state.data_key, &key))).await?;
     Ok((StatusCode::CREATED, Json(polled(&state, id).await?)))
 }
 

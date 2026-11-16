@@ -13,22 +13,22 @@ use axum::Json;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-/// The actions of the scenes a rule starts.
-async fn scene_actions(state: &AppState, rule: &Automation) -> ApiResult<Vec<routines::Action>> {
+/// What the scenes a rule starts drive.
+async fn scene_scopes(state: &AppState, rule: &Automation) -> ApiResult<Vec<routines::Scope>> {
     let mut out = vec![];
     for id in rule.scenes() {
         if let Some(row) = db::routine_by_id(&state.db, id).await? {
             out.extend(routines::to_view(&row).actions);
         }
     }
-    Ok(out)
+    Ok(routines::DeviceScopes::load(&state.db).await?.of(&out))
 }
 
 /// A user sees a rule when they see every installation it reads or drives.
 async fn sees(state: &AppState, access: &Access, rule: &Automation, ctx: &Context) -> ApiResult<bool> {
     let devices = rule.read_devices().into_iter().chain(rule.driven_devices());
     let installations = devices.filter_map(|id| ctx.device(id)?.installation_id).collect::<Vec<_>>();
-    Ok(installations.into_iter().all(|i| access.can_view(i)) && access.sees_actions(&scene_actions(state, rule).await?))
+    Ok(installations.into_iter().all(|i| access.can_view(i)) && access.sees_scopes(&scene_scopes(state, rule).await?))
 }
 
 /// Driving what the rule drives: the zones of an installation need the right to drive it, the
@@ -41,7 +41,7 @@ async fn check_control(state: &AppState, access: &Access, rule: &Automation, ctx
             None => {}
         }
     }
-    access.control_actions(&scene_actions(state, rule).await?)
+    access.control_scopes(&scene_scopes(state, rule).await?)
 }
 
 /// Creating, changing or deleting a rule: driving what it drives, with the right to change the
@@ -57,7 +57,7 @@ async fn check_edit(state: &AppState, access: &Access, rule: &Automation, ctx: &
     if driven.into_iter().any(|i| !access.rights(i).routines) {
         return Err(ApiError::forbidden("vous n'avez pas le droit de modifier les routines"));
     }
-    access.edit_routine(&scene_actions(state, rule).await?)
+    access.edit_routine(&scene_scopes(state, rule).await?)
 }
 
 /// The row and its rule, for a user who sees it.
@@ -203,11 +203,35 @@ pub async fn set_enabled(State(state): State<AppState>, user: AuthUser, Path(id)
     Ok(Json(view_of(&state, id).await?))
 }
 
+/// A rule this version cannot read (written by a newer one, kept as it is).
+#[derive(Serialize)]
+pub struct UnreadableView {
+    pub id: i64,
+    pub name: String,
+    pub enabled: bool,
+    pub updated_at: i64,
+}
+
+/// The rules this version cannot read: they do not run here. Administrators only, as what a rule
+/// reads or drives is not known.
+pub async fn unreadable(State(state): State<AppState>, _admin: AdminUser) -> ApiResult<Json<Vec<UnreadableView>>> {
+    let rows = db::list_automations(&state.db).await?;
+    let out = rows.into_iter().filter(|r| Automation::of(r).is_none()).map(|r| UnreadableView { id: r.id, name: r.name, enabled: r.enabled, updated_at: r.updated_at }).collect();
+    Ok(Json(out))
+}
+
 pub async fn delete(State(state): State<AppState>, user: AuthUser, Path(id): Path<i64>) -> ApiResult<StatusCode> {
     let access = Access::of(&state.db, &user).await?;
-    let ctx = Context::load(&state).await?;
-    let (row, rule) = load(&state, &access, &ctx, id).await?;
-    check_edit(&state, &access, &rule, &ctx).await?;
+    let row = db::automation_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("automation not found"))?;
+    // A rule this version cannot read: an administrator may still remove it.
+    if Automation::of(&row).is_none() && !access.is_admin() {
+        return Err(ApiError::not_found("automation not found"));
+    }
+    if Automation::of(&row).is_some() {
+        let ctx = Context::load(&state).await?;
+        let (_, rule) = load(&state, &access, &ctx, id).await?;
+        check_edit(&state, &access, &rule, &ctx).await?;
+    }
     state.automations.cancel(&state.db, id).await;
     db::delete_automation(&state.db, id).await?;
     state
@@ -254,7 +278,7 @@ pub struct SettingsView {
 
 pub async fn settings(State(state): State<AppState>, user: AuthUser) -> ApiResult<Json<SettingsView>> {
     let ntfy_url = if user.is_admin() { Some(db::get_setting(&state.db, automations::NTFY).await?.unwrap_or_default()) } else { None };
-    Ok(Json(SettingsView { paused_until: automations::paused_until(&state.db).await, ntfy_url }))
+    Ok(Json(SettingsView { paused_until: automations::paused_until(&state.db).await?, ntfy_url }))
 }
 
 /// Only the fields given change; `null` clears.

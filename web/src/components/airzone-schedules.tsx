@@ -19,7 +19,13 @@ import type {
 } from "@/lib/api"
 import { api } from "@/lib/api"
 import { useChosenInstallations } from "@/lib/selected-installation"
-import { DAY_LABEL, DAY_SHORT, MODE_LABEL, relativeTime } from "@/lib/format"
+import {
+  DAY_LABEL,
+  DAY_SHORT,
+  errorText,
+  MODE_LABEL,
+  relativeTime,
+} from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Confirm } from "@/components/confirm"
 import { Badge } from "@/components/ui/badge"
@@ -46,8 +52,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { t } from "@/lib/i18n"
-
-const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 function daysText(days: number[], time: string | null) {
   const d = [...days].sort()

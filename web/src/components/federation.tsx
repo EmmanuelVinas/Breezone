@@ -24,7 +24,7 @@ import type {
   ShareInput,
 } from "@/lib/api"
 import { api, ApiError } from "@/lib/api"
-import { dateTime, relativeTime } from "@/lib/format"
+import { dateTime, errorText, relativeTime } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Confirm } from "@/components/confirm"
 import { Badge } from "@/components/ui/badge"
@@ -56,8 +56,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { t } from "@/lib/i18n"
-
-const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 const NODE_STATE: Record<NodeState, { label: string; tone: string }> = {
   online: { label: t("Connecté"), tone: "bg-success" },

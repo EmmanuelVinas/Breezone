@@ -103,7 +103,8 @@ const en: Record<string, string> = {
   "Ajouter une installation": "Add an installation",
   "Ajouter une installation hors Airzone":
     "Add an installation outside Airzone",
-  "Ajoutez au moins une zone à piloter.": "Add at least one zone to drive.",
+  "Ajoutez au moins une zone ou un appareil à piloter.":
+    "Add at least one zone or device to drive.",
   "Alertes Airzone": "Airzone alerts",
   "Allumage inchangé": "On/off unchanged",
   Allumée: "On",
@@ -112,6 +113,7 @@ const en: Record<string, string> = {
   "Ambiante {temp}": "Room {temp}",
   Annuler: "Cancel",
   "Appareil déconnecté": "Device signed out",
+  Appareil: "Device",
   Appareils: "Devices",
   "Appareils connectés": "Connected devices",
   Appliqué: "Applied",
@@ -174,6 +176,8 @@ const en: Record<string, string> = {
     "HTTPS certificate accepted manually",
   "Certificat HTTPS non valide": "Invalid HTTPS certificate",
   "Certificat refusé": "Certificate refused",
+  "Ces automatismes viennent d'une version plus récente de Breezone : ils ne s'exécutent pas sur ce serveur. Mettez-le à jour pour les retrouver, ou supprimez-les.":
+    "These automations come from a newer version of Breezone: they do not run on this server. Update it to get them back, or delete them.",
   "Ces réglages sont propres à Breezone. Nom Airzone d'origine : « {name} ».":
     "These settings belong to Breezone. Original Airzone name: “{name}”.",
   "Cet appareil": "This device",

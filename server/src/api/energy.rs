@@ -1,11 +1,12 @@
 //! The energy of the home (energy page), and the history of each device.
 
-use super::home::{devices_of, DeviceView};
 use crate::access::Access;
 use crate::auth::AuthUser;
 use crate::db;
-use crate::energy::{self, Consumer, DayEnergy, Live, Measure, Role};
+use crate::devices::{self, DeviceView};
+use crate::energy::{self, DayEnergy, Measure};
 use crate::error::{ApiError, ApiResult};
+use crate::rollup::midnight;
 use crate::AppState;
 use axum::extract::{Path, Query, State};
 use axum::Json;
@@ -19,100 +20,16 @@ fn max_span(state: &AppState) -> i64 {
     state.cfg.history_interval_secs * 2
 }
 
-fn is_inverter(d: &DeviceView) -> bool {
-    d.traits.iter().any(|t| t == "solar.inverter@1")
-}
-
-fn is_charger(d: &DeviceView) -> bool {
-    d.traits.iter().any(|t| t == "ev.charger@1")
-}
-
-/// The role a measure has on the energy page. A solar inverter is a production without being told,
-/// a charger a consumption; a measure of a solar inverter (a meter on its line) is a production whatever role it was given.
-fn effective_role(d: &DeviceView, by_id: &HashMap<i64, &DeviceView>) -> Option<Role> {
-    let of_inverter = d.measures.device_id.and_then(|id| by_id.get(&id)).is_some_and(|t| is_inverter(t));
-    match d.role.as_deref().and_then(Role::parse) {
-        Some(Role::Consumption) if of_inverter => Some(Role::Solar),
-        Some(role) => Some(role),
-        None if is_inverter(d) => Some(Role::Solar),
-        // A charger is a consumption without being told, unless another measure (a meter on its
-        // line) measures it: it is then counted through that one.
-        None if is_charger(d) && !by_id.values().any(|o| o.id != d.id && o.measures.device_id == Some(d.id)) => Some(Role::Consumption),
-        None => None,
-    }
-}
-
-/// The energy measures of the home, with what each consumption measures. An inverter measured by
-/// another production measure counts once, through that measure (its meter is read more often).
-/// A production measure that does not say what it measures may measure the inverters too: they are
-/// then left out, unless they were explicitly given the role of a production (another installation).
+/// The energy measures of the home (see [`energy::measures`]).
 async fn measures(state: &AppState, devices: &[DeviceView]) -> ApiResult<Vec<Measure>> {
     let rooms: HashMap<i64, String> = db::list_rooms(&state.db).await?.into_iter().map(|r| (r.id, r.name)).collect();
-    let names: HashMap<i64, &str> = devices.iter().map(|d| (d.id, d.name.as_str())).collect();
-    let by_id: HashMap<i64, &DeviceView> = devices.iter().map(|d| (d.id, d)).collect();
-    let covered: Vec<i64> = devices
-        .iter()
-        .filter(|d| effective_role(d, &by_id) == Some(Role::Solar))
-        .filter_map(|d| d.measures.device_id.filter(|t| *t != d.id && by_id.get(t).is_some_and(|t| is_inverter(t))))
-        .collect();
-    let meter_of_all = devices
-        .iter()
-        .any(|d| !is_inverter(d) && d.measures.device_id.is_none() && d.traits.iter().any(|t| t == "energy.power@1") && effective_role(d, &by_id) == Some(Role::Solar));
-    Ok(devices
-        .iter()
-        .filter(|d| d.traits.iter().any(|t| t == "energy.power@1"))
-        .filter(|d| !covered.contains(&d.id))
-        .filter(|d| !(meter_of_all && is_inverter(d) && d.role.is_none()))
-        .filter_map(|d| {
-            let role = effective_role(d, &by_id)?;
-            let consumer = (role == Role::Consumption).then(|| {
-                let target = d.measures.device_id.and_then(|id| names.get(&id).map(|n| n.to_string()));
-                let room = d.measures.room_id.and_then(|id| rooms.get(&id).cloned());
-                Consumer { name: target.or(room).unwrap_or_else(|| d.name.clone()), device_id: d.measures.device_id, room_id: d.measures.room_id }
-            });
-            Some(Measure { device_id: d.id, role, consumer })
-        })
-        .collect())
-}
-
-#[derive(Serialize)]
-pub struct Roles {
-    pub grid: bool,
-    pub solar: bool,
-    pub battery: bool,
-    pub consumption: bool,
-}
-
-fn roles(measures: &[Measure]) -> Roles {
-    let has = |r| measures.iter().any(|m| m.role == r);
-    Roles { grid: has(Role::Grid), solar: has(Role::Solar), battery: has(Role::Battery), consumption: has(Role::Consumption) }
-}
-
-#[derive(Serialize)]
-pub struct LiveView {
-    /// The roles the home has a measure of: the page shows only their blocks.
-    pub roles: Roles,
-    #[serde(flatten)]
-    pub live: Live,
+    Ok(energy::measures(devices, &rooms))
 }
 
 /// The home now, from the last reading of its measures (every few seconds).
-pub async fn live(State(state): State<AppState>, _user: AuthUser) -> ApiResult<Json<LiveView>> {
-    let devices = devices_of(&state).await?;
-    Ok(Json(live_of(&state, &devices).await?))
-}
-
-/// The home now, from the last reading of these devices.
-pub(crate) async fn live_of(state: &AppState, devices: &[DeviceView]) -> ApiResult<LiveView> {
-    let measures = measures(state, devices).await?;
-    let power: HashMap<i64, f64> = devices.iter().filter(|d| d.available).filter_map(|d| Some((d.id, d.state.get("power")?.as_f64()?))).collect();
-    let live = energy::live(&measures, |id| power.get(&id).copied());
-    Ok(LiveView { roles: roles(&measures), live })
-}
-
-/// Midnight of a local day, as a timestamp.
-fn midnight(day: NaiveDate, tz: Tz) -> i64 {
-    day.and_hms_opt(0, 0, 0).and_then(|t| t.and_local_timezone(tz).earliest()).map_or(0, |t| t.timestamp())
+pub async fn live(State(state): State<AppState>, _user: AuthUser) -> ApiResult<Json<energy::LiveView>> {
+    let devices = devices::list(&state).await?;
+    Ok(Json(energy::live_of(&state.db, &devices).await?))
 }
 
 fn today(tz: Tz) -> NaiveDate {
@@ -154,7 +71,7 @@ pub async fn day(State(state): State<AppState>, _user: AuthUser, Query(q): Query
     };
     let from = midnight(date, tz);
     let until = midnight(date + Days::new(1), tz);
-    let devices = devices_of(&state).await?;
+    let devices = devices::list(&state).await?;
     let measures = measures(&state, &devices).await?;
     let spans = spans(&state, &measures, from, until).await?;
     let day = date.format("%Y-%m-%d").to_string();
@@ -207,7 +124,7 @@ pub async fn days(State(state): State<AppState>, _user: AuthUser, Query(q): Quer
         .collect();
     if computed_from <= last {
         let days: Vec<String> = (0..=(last - computed_from).num_days() as u64).map(|i| label(computed_from + Days::new(i))).collect();
-        let devices = devices_of(&state).await?;
+        let devices = devices::list(&state).await?;
         let measures = measures(&state, &devices).await?;
         let spans = spans(&state, &measures, midnight(computed_from, tz), midnight(last + Days::new(1), tz)).await?;
         let computed = energy::daily(&measures, &spans, tz, &days);
@@ -236,7 +153,7 @@ pub struct RangeView {
 /// How far back the energy of the home goes.
 pub async fn range(State(state): State<AppState>, _user: AuthUser) -> ApiResult<Json<RangeView>> {
     let tz = state.cfg.timezone;
-    let devices = devices_of(&state).await?;
+    let devices = devices::list(&state).await?;
     let measures = measures(&state, &devices).await?;
     let mut first: Option<NaiveDate> =
         sqlx::query_scalar::<_, Option<String>>("SELECT MIN(day) FROM energy_days").fetch_one(&state.db).await?.and_then(|d| NaiveDate::parse_from_str(&d, "%Y-%m-%d").ok());
@@ -251,7 +168,7 @@ pub async fn range(State(state): State<AppState>, _user: AuthUser) -> ApiResult<
 
 #[derive(Deserialize)]
 pub struct HistoryQuery {
-    #[serde(default = "default_hours")]
+    #[serde(default = "crate::api::default_hours")]
     pub hours: i64,
     #[serde(default = "default_points")]
     pub points: i64,
@@ -260,10 +177,6 @@ pub struct HistoryQuery {
     pub until: Option<i64>,
     /// Seconds per point (default: the period divided by `points`).
     pub bucket: Option<i64>,
-}
-
-fn default_hours() -> i64 {
-    24
 }
 
 fn default_points() -> i64 {
@@ -305,7 +218,7 @@ pub async fn device_history(State(state): State<AppState>, user: AuthUser, Path(
             let now = db::now();
             // Days start at local midnight, as the daily summaries do.
             let start = if bucket >= 86_400 {
-                crate::rollup::midnight(chrono::DateTime::from_timestamp(now - span, 0).unwrap_or_default().with_timezone(&state.cfg.timezone).date_naive(), state.cfg.timezone)
+                midnight(chrono::DateTime::from_timestamp(now - span, 0).unwrap_or_default().with_timezone(&state.cfg.timezone).date_naive(), state.cfg.timezone)
             } else {
                 (now - span).div_euclid(bucket) * bucket
             };

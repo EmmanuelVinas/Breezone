@@ -27,7 +27,7 @@ import type {
   UserRights,
 } from "@/lib/api"
 import { ALL_RIGHTS, api, currentUser } from "@/lib/api"
-import { dateTime, relativeTime } from "@/lib/format"
+import { dateTime, errorText, relativeTime } from "@/lib/format"
 import { PageHeader } from "@/components/app-shell"
 import { InstallationMap } from "@/components/installation-map"
 import { InstallationDialog } from "@/components/installation-dialog"
@@ -69,8 +69,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { browserLang, LANG_NAMES, setLang, t, tn, type Lang } from "@/lib/i18n"
-
-const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 // ---------------------------------------------------------------------------------------
 // Installations

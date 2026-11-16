@@ -25,8 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-
-const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
+import { errorText } from "@/lib/format"
 
 type InstallationForm = {
   name: string

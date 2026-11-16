@@ -19,10 +19,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.breezone.app.data.ChargerShown
 import com.breezone.app.data.CoverPositionState
 import com.breezone.app.data.EnergyPowerState
 import com.breezone.app.data.EvChargerState
-import com.breezone.app.data.EvChargerStatus
 import com.breezone.app.data.Hub
 import com.breezone.app.data.LightState
 import com.breezone.app.data.ServerDevices
@@ -35,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.breezone.app.data.installation
 import com.breezone.app.data.modulesHere
+import com.breezone.app.data.shown
 import com.breezone.app.resources.*
 import com.breezone.app.ui.components.TypeTile
 import com.breezone.app.ui.icons.FzIcons
@@ -116,26 +117,14 @@ fun HouseScreen(serverId: String, installationId: Long, onBack: () -> Unit, onOp
                     val c = devices.withTrait(TraitIds.CHARGER).first()
                     val state = c.stateAs(EvChargerState.serializer())
                     val power = c.stateAs(EnergyPowerState.serializer())?.power ?: 0.0
-                    // Paused, a charger still says "charging" at 0 W: it is only plugged in.
-                    val paused = state?.paused == true && state.status in listOf(EvChargerStatus.Charging, EvChargerStatus.Plugged)
-                    val charging = state?.status == EvChargerStatus.Charging && !paused
-                    val sub = when {
-                        charging -> formatPower(power)
-                        paused -> stringResource(Res.string.charger_paused)
-                        else -> stringResource(
-                            when (state?.status) {
-                                EvChargerStatus.Plugged -> Res.string.charger_plugged
-                                EvChargerStatus.Fault -> Res.string.charger_fault
-                                else -> Res.string.charger_available
-                            },
-                        )
-                    }
+                    val shown = state?.shown ?: ChargerShown.Available
+                    val sub = if (shown == ChargerShown.Charging) formatPower(power) else chargerLabel(shown)
                     // At a glance: a car plugged in, charging, or nothing.
-                    val (icon, color) = when {
-                        charging -> FzIcons.PlugZap to MaterialTheme.colorScheme.primary
-                        paused || state?.status == EvChargerStatus.Plugged -> FzIcons.Car to MaterialTheme.colorScheme.primary
-                        state?.status == EvChargerStatus.Fault -> FzIcons.PlugZap to MaterialTheme.colorScheme.error
-                        else -> FzIcons.Plug to Fz.colors.muted
+                    val (icon, color) = when (shown) {
+                        ChargerShown.Charging -> FzIcons.PlugZap to MaterialTheme.colorScheme.primary
+                        ChargerShown.Paused, ChargerShown.Plugged -> FzIcons.Car to MaterialTheme.colorScheme.primary
+                        ChargerShown.Fault -> FzIcons.PlugZap to MaterialTheme.colorScheme.error
+                        ChargerShown.Available -> FzIcons.Plug to Fz.colors.muted
                     }
                     add(Tile(type, icon, stringResource(Res.string.house_charging), sub, color))
                 }

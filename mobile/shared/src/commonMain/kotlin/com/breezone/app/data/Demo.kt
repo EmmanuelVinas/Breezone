@@ -146,6 +146,11 @@ object DemoServer {
         return list
     }
 
+    private fun applyZone(a: Action): Boolean {
+        val (inst, system, zone) = Triple(a.installationId ?: return false, a.systemId ?: return false, a.zoneId ?: return false)
+        return apply(inst, system, zone, ZoneCommand(on = a.on, setpoint = a.setpoint, mode = a.mode)) != null
+    }
+
     /** Applies a command to a zone (the mode applies to the whole system, as on Airzone). */
     private fun apply(installationId: Long, systemId: Long, zoneId: Long, cmd: ZoneCommand): Zone? {
         var result: Zone? = null
@@ -281,7 +286,7 @@ object DemoServer {
             path == "/api/control/batch" -> {
                 val actions = FzJson.parseToJsonElement(body(request)).jsonObject["actions"]
                     ?.let { FzJson.decodeFromJsonElement(ListSerializer(Action.serializer()), it) }.orEmpty()
-                val results = actions.map { a -> ActionResult(apply(a.installationId, a.systemId, a.zoneId, ZoneCommand(on = a.on, setpoint = a.setpoint, mode = a.mode)) != null) }
+                val results = actions.map { a -> ActionResult(applyZone(a)) }
                 ok(RunResult.serializer(), RunResult(results))
             }
             parts.size == 4 && parts[1] == "installations" && parts[3] == "trends" -> {
@@ -319,7 +324,7 @@ object DemoServer {
                     parts.size == 4 && parts[3] == "run" -> {
                         val r = routines[index]
                         val results = r.actions.filter { it.delayMinutes == null }.map { a ->
-                            ActionResult(apply(a.installationId, a.systemId, a.zoneId, ZoneCommand(on = a.on, setpoint = a.setpoint, mode = a.mode)) != null)
+                            ActionResult(applyZone(a))
                         }
                         routines[index] = r.copy(lastRunAt = now())
                         ok(RunResult.serializer(), RunResult(results))

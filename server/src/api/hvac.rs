@@ -47,7 +47,7 @@ pub struct InstallationInput {
     pub host: String,
     #[serde(default = "default_port")]
     pub port: i64,
-    #[serde(default = "yes")]
+    #[serde(default = "crate::yes")]
     pub enabled: bool,
     /// Record the time each zone spends in demand (installations of this server only).
     /// Unchanged when absent.
@@ -86,10 +86,6 @@ async fn save_place(state: &AppState, id: i64, req: &InstallationInput, current:
 
 fn default_port() -> i64 {
     3000
-}
-
-fn yes() -> bool {
-    true
 }
 
 fn validate_installation(i: &InstallationInput) -> ApiResult<(String, String)> {
@@ -315,12 +311,8 @@ pub async fn update_zone_meta(
 
 #[derive(Deserialize)]
 pub struct HistoryQuery {
-    #[serde(default = "default_hours")]
+    #[serde(default = "crate::api::default_hours")]
     pub hours: i64,
-}
-
-fn default_hours() -> i64 {
-    24
 }
 
 pub async fn zone_history(
@@ -353,7 +345,7 @@ pub async fn zone_range(State(state): State<AppState>, user: AuthUser, Path((id,
 
 #[derive(Deserialize)]
 pub struct TrendQuery {
-    #[serde(default = "default_hours")]
+    #[serde(default = "crate::api::default_hours")]
     pub hours: i64,
     /// Points per zone.
     #[serde(default = "default_points")]

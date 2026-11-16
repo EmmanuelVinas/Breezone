@@ -34,13 +34,9 @@ pub async fn weather(State(state): State<AppState>, user: AuthUser, Query(q): Qu
 
 #[derive(Deserialize)]
 pub struct HistoryQuery {
-    #[serde(default = "default_hours")]
+    #[serde(default = "crate::api::default_hours")]
     pub hours: i64,
     pub installation_id: Option<i64>,
-}
-
-fn default_hours() -> i64 {
-    24
 }
 
 /// The outdoor temperature over the last hours: `[[ts, °C]]`, at most one point per 30 min (per

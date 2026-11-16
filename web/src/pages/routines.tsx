@@ -4,18 +4,28 @@ import { ListPlus, Pencil, Play, Plus, Sparkles, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import type {
   Action,
+  DeviceAction,
+  DeviceView,
   Installation,
   Mode,
   Routine,
+  RoutineAction,
   RoutineInput,
+  TraitInfo,
 } from "@/lib/api"
-import { api } from "@/lib/api"
+import { api, currentUser, isDeviceAction } from "@/lib/api"
 import { MODE_LABEL, relativeTime } from "@/lib/format"
 import { PageHeader } from "@/components/app-shell"
 import { useChosenInstallations } from "@/lib/selected-installation"
 import { AirzoneSchedulesSection } from "@/components/airzone-schedules"
 import { AirzoneRoutinesSection, TimersSection } from "@/components/timers"
-import { AutomationsSection } from "@/components/automations"
+import {
+  AutomationsSection,
+  DeviceActionEditor,
+  describeDeviceAction,
+  drivableDevices,
+  newDeviceAction,
+} from "@/components/automations"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -69,7 +79,24 @@ function zoneOptions(installations: Installation[]): ZoneOption[] {
   )
 }
 
-function describeAction(a: Action, options: ZoneOption[]) {
+/** The devices of the home and the catalog of their traits, to show and edit device actions. */
+type Home = { devices: DeviceView[]; traits: TraitInfo[] }
+
+function useHome(): Home {
+  const devices = useQuery({ queryKey: ["devices"], queryFn: api.devices })
+  const traits = useQuery({
+    queryKey: ["traits"],
+    queryFn: api.traits,
+    staleTime: Infinity,
+  })
+  return { devices: devices.data ?? [], traits: traits.data ?? [] }
+}
+
+function describeAction(a: RoutineAction, options: ZoneOption[], home: Home) {
+  const delay = a.delay_minutes
+    ? ` (${DELAYS.find(([m]) => m === a.delay_minutes)?.[1].toLowerCase() ?? t("après {n} min", { n: a.delay_minutes })})`
+    : ""
+  if (isDeviceAction(a)) return describeDeviceAction(home, a) + delay
   const zone =
     options.find(
       (o) => o.key === `${a.installation_id}-${a.system_id}-${a.zone_id}`
@@ -78,15 +105,36 @@ function describeAction(a: Action, options: ZoneOption[]) {
   if (a.on !== undefined) parts.push(a.on ? t("allumer") : t("éteindre"))
   if (a.setpoint !== undefined) parts.push(`${a.setpoint}°`)
   if (a.mode) parts.push(MODE_LABEL[a.mode].toLowerCase())
-  const delay = a.delay_minutes
-    ? ` (${DELAYS.find(([m]) => m === a.delay_minutes)?.[1].toLowerCase() ?? t("après {n} min", { n: a.delay_minutes })})`
-    : ""
   return t("{zone} : {actions}", { zone, actions: parts.join(", ") }) + delay
+}
+
+/** A user may change a routine when they may drive all it drives: the devices of the modules
+ * are for administrators (as on the server). */
+function editableBy(
+  r: { actions: RoutineAction[] },
+  editable: Set<number>,
+  home: Home
+) {
+  const admin = currentUser()?.role === "admin"
+  return r.actions.every((a) => {
+    if (!isDeviceAction(a)) return editable.has(a.installation_id)
+    const inst = home.devices.find((d) => d.id === a.device_id)?.installation_id
+    return inst == null ? admin : editable.has(inst)
+  })
+}
+
+/** The devices of the modules a scene can drive (administrators). */
+function moduleDevices(home: Home) {
+  if (currentUser()?.role !== "admin") return []
+  return drivableDevices({
+    devices: home.devices.filter((d) => d.installation_id === null),
+    traits: home.traits,
+  })
 }
 
 type Draft = {
   name: string
-  actions: Action[]
+  actions: RoutineAction[]
 }
 
 function toDraft(r?: Routine): Draft {
@@ -190,31 +238,80 @@ function ActionRow({
           ))}
         </SelectContent>
       </Select>
-      <Select
-        value={String(action.delay_minutes ?? 0)}
-        onValueChange={(v) =>
-          onChange({ ...action, delay_minutes: Number(v) || null })
-        }
-      >
-        <SelectTrigger className="w-full lg:w-36" aria-label={t("Quand")}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {DELAYS.map(([m, label]) => (
-            <SelectItem key={m} value={String(m)}>
-              {label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={onRemove}
-        aria-label={t("Retirer")}
-      >
-        <Trash2 />
-      </Button>
+      <DelayPick
+        value={action.delay_minutes}
+        onChange={(delay_minutes) => onChange({ ...action, delay_minutes })}
+      />
+      <RemoveAction onClick={onRemove} />
+    </div>
+  )
+}
+
+function DelayPick({
+  value,
+  onChange,
+}: {
+  value?: number | null
+  onChange: (minutes: number | null) => void
+}) {
+  return (
+    <Select
+      value={String(value ?? 0)}
+      onValueChange={(v) => onChange(Number(v) || null)}
+    >
+      <SelectTrigger className="w-full lg:w-36" aria-label={t("Quand")}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {DELAYS.map(([m, label]) => (
+          <SelectItem key={m} value={String(m)}>
+            {label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+}
+
+function RemoveAction({ onClick }: { onClick: () => void }) {
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={onClick}
+      aria-label={t("Retirer")}
+    >
+      <Trash2 />
+    </Button>
+  )
+}
+
+/** An action of a scene on a device of a module: the device, its action, when. */
+function DeviceActionRow({
+  action,
+  home,
+  onChange,
+  onRemove,
+}: {
+  action: DeviceAction
+  home: Home
+  onChange: (a: DeviceAction) => void
+  onRemove: () => void
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-muted/30 p-3">
+      <DeviceActionEditor
+        home={{ devices: moduleDevices(home), traits: home.traits }}
+        action={action}
+        onChange={onChange}
+      />
+      <div className="ml-auto flex items-center gap-2">
+        <DelayPick
+          value={action.delay_minutes}
+          onChange={(delay_minutes) => onChange({ ...action, delay_minutes })}
+        />
+        <RemoveAction onClick={onRemove} />
+      </div>
     </div>
   )
 }
@@ -233,8 +330,16 @@ function RoutineEditor({
   const options = zoneOptions(
     installations.filter((i) => i.controllable && i.rights.routines)
   )
+  const home = useHome()
+  const devices = moduleDevices(home)
   const [draft, setDraft] = useState<Draft>(() => toDraft(routine))
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }))
+  const addDevice = () => {
+    const first =
+      devices[0] &&
+      newDeviceAction({ devices, traits: home.traits }, devices[0])
+    if (first) set({ actions: [...draft.actions, first] })
+  }
 
   const save = useMutation({
     mutationFn: () => {
@@ -279,6 +384,7 @@ function RoutineEditor({
             (o) =>
               !draft.actions.some(
                 (a) =>
+                  !isDeviceAction(a) &&
                   `${a.installation_id}-${a.system_id}-${a.zone_id}` === o.key
               )
           )
@@ -334,28 +440,43 @@ function RoutineEditor({
                 >
                   <Plus /> {t("Zone")}
                 </Button>
+                {devices.length > 0 && (
+                  <Button size="sm" variant="outline" onClick={addDevice}>
+                    <Plus /> {t("Appareil")}
+                  </Button>
+                )}
               </div>
             </div>
             {draft.actions.length === 0 && (
               <p className="text-sm text-muted-foreground">
-                {t("Ajoutez au moins une zone à piloter.")}
+                {t("Ajoutez au moins une zone ou un appareil à piloter.")}
               </p>
             )}
-            {draft.actions.map((a, i) => (
-              <ActionRow
-                key={i}
-                action={a}
-                options={options}
-                onChange={(next) =>
-                  set({
-                    actions: draft.actions.map((x, j) => (j === i ? next : x)),
-                  })
-                }
-                onRemove={() =>
-                  set({ actions: draft.actions.filter((_, j) => j !== i) })
-                }
-              />
-            ))}
+            {draft.actions.map((a, i) => {
+              const change = (next: RoutineAction) =>
+                set({
+                  actions: draft.actions.map((x, j) => (j === i ? next : x)),
+                })
+              const remove = () =>
+                set({ actions: draft.actions.filter((_, j) => j !== i) })
+              return isDeviceAction(a) ? (
+                <DeviceActionRow
+                  key={i}
+                  action={a}
+                  home={home}
+                  onChange={change}
+                  onRemove={remove}
+                />
+              ) : (
+                <ActionRow
+                  key={i}
+                  action={a}
+                  options={options}
+                  onChange={change}
+                  onRemove={remove}
+                />
+              )
+            })}
           </div>
         </div>
         <DialogFooter>
@@ -376,10 +497,12 @@ function RoutineEditor({
 function RoutineCard({
   routine,
   options,
+  home,
   onEdit,
 }: {
   routine: Routine
   options: ZoneOption[]
+  home: Home
   /** Absent when the user may not change routines. */
   onEdit?: () => void
 }) {
@@ -424,7 +547,7 @@ function RoutineCard({
         <ul className="space-y-1 text-sm">
           {routine.actions.slice(0, 4).map((a, i) => (
             <li key={i} className="truncate text-muted-foreground">
-              · {describeAction(a, options)}
+              · {describeAction(a, options, home)}
             </li>
           ))}
           {routine.actions.length > 4 && (
@@ -517,18 +640,20 @@ function BreezoneRoutines({
       .filter((i) => i.controllable && i.rights.routines)
       .map((i) => i.id)
   )
-  const canEdit = (r: Routine) =>
-    r.actions.every((a) => editable.has(a.installation_id))
+  const home = useHome()
+  const canEdit = (r: Routine) => editableBy(r, editable, home)
   const [editing, setEditing] = useState<{
     routine?: Routine
     nonce: number
   } | null>(null)
-  // The scenes of the installation chosen (those that act on it).
+  // The scenes of the installation chosen (those that act on it), and those of the modules of
+  // this server.
   const list = (routines.data ?? []).filter(
     (r) =>
       r.actions.length === 0 ||
-      r.actions.some((a) => ids.has(a.installation_id))
+      r.actions.some((a) => isDeviceAction(a) || ids.has(a.installation_id))
   )
+  const canCreate = options.length > 0 || moduleDevices(home).length > 0
   return (
     <section className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -536,10 +661,10 @@ function BreezoneRoutines({
           <h2 className="text-lg font-semibold">{title}</h2>
           <p className="text-sm text-muted-foreground">{description}</p>
         </div>
-        {editable.size > 0 && (
+        {(editable.size > 0 || canCreate) && (
           <Button
             onClick={() => setEditing({ nonce: Date.now() })}
-            disabled={!options.length}
+            disabled={!canCreate}
           >
             <Plus /> {t("Nouvelle")}
           </Button>
@@ -557,6 +682,7 @@ function BreezoneRoutines({
               key={r.id}
               routine={r}
               options={options}
+              home={home}
               onEdit={
                 canEdit(r)
                   ? () => setEditing({ routine: r, nonce: Date.now() })

@@ -21,20 +21,15 @@
 //!   GET  /api/v1/installations/{id}             → {groups: [{name, devices: [{type:"az_zone", ws_id, meta:{system_number, zone_number}, name}]}]}
 //!   GET  /api/v1/user/logout
 
-use crate::auth::random_bytes;
+use crate::crypto::{decrypt, encrypt};
 use crate::db::{self, CloudInstallationRow, InstallationAccess, ZoneMeta};
 use crate::discovery;
 use crate::error::{ApiError, ApiResult};
 use crate::hub::InstallationView;
 use crate::i18n::Text;
 use crate::AppState;
-use base64::engine::general_purpose::STANDARD;
-use base64::Engine;
-use chacha20poly1305::aead::{Aead, KeyInit};
-use chacha20poly1305::{ChaCha20Poly1305, Nonce};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
@@ -278,47 +273,16 @@ pub struct Credentials {
     pub password: String,
 }
 
-/// Encryption key derived from the server secret (stored in the data directory).
-pub fn derive_key(server_secret: &[u8]) -> [u8; 32] {
-    let mut h = Sha256::new();
-    h.update(b"breezone/airzone-cloud-credentials/");
-    h.update(server_secret);
-    let mut key = [0u8; 32];
-    key.copy_from_slice(&h.finalize());
-    key
-}
-
-pub fn encrypt(key: &[u8; 32], plain: &str) -> String {
-    let cipher = ChaCha20Poly1305::new_from_slice(key).expect("32-byte key");
-    let nonce_bytes = random_bytes::<12>();
-    let nonce = Nonce::from(nonce_bytes);
-    let ct = cipher.encrypt(&nonce, plain.as_bytes()).expect("encryption");
-    let mut out = nonce_bytes.to_vec();
-    out.extend(ct);
-    STANDARD.encode(out)
-}
-
-pub fn decrypt(key: &[u8; 32], encoded: &str) -> Option<String> {
-    let raw = STANDARD.decode(encoded).ok()?;
-    if raw.len() < 13 {
-        return None;
-    }
-    let cipher = ChaCha20Poly1305::new_from_slice(key).ok()?;
-    let nonce_bytes: [u8; 12] = raw[..12].try_into().ok()?;
-    let plain = cipher.decrypt(&Nonce::from(nonce_bytes), &raw[12..]).ok()?;
-    String::from_utf8(plain).ok()
-}
-
 pub async fn load_credentials(state: &AppState) -> Option<Credentials> {
     let email = db::get_setting(&state.db, KEY_EMAIL).await.ok()??;
     let enc = db::get_setting(&state.db, KEY_PASSWORD).await.ok()??;
-    let password = decrypt(&state.cloud_key, &enc)?;
+    let password = decrypt(&state.data_key, &enc)?;
     Some(Credentials { email, password })
 }
 
 async fn save_credentials(state: &AppState, c: &Credentials) -> ApiResult<()> {
     db::set_setting(&state.db, KEY_EMAIL, c.email.trim()).await?;
-    db::set_setting(&state.db, KEY_PASSWORD, &encrypt(&state.cloud_key, &c.password)).await?;
+    db::set_setting(&state.db, KEY_PASSWORD, &encrypt(&state.data_key, &c.password)).await?;
     Ok(())
 }
 
@@ -423,12 +387,8 @@ pub struct ConnectRequest {
     pub email: String,
     pub password: String,
     /// Remember the credentials (encrypted) for the automatic daily synchronisation.
-    #[serde(default = "yes")]
+    #[serde(default = "crate::yes")]
     pub remember: bool,
-}
-
-fn yes() -> bool {
-    true
 }
 
 /// Connects the Airzone Cloud account: synchronises now and optionally remembers credentials.
@@ -977,15 +937,5 @@ mod tests {
     fn normalizes_macs() {
         assert_eq!(normalize_mac("a8:03:2a:00:fe:ed"), "A8032A00FEED");
         assert_eq!(normalize_mac("A8-03-2A-00-FE-ED"), "A8032A00FEED");
-    }
-
-    #[test]
-    fn credentials_encryption_roundtrip() {
-        let key = derive_key(b"server-secret");
-        let enc = encrypt(&key, "mon mot de passe");
-        assert_ne!(enc, "mon mot de passe");
-        assert_eq!(decrypt(&key, &enc).as_deref(), Some("mon mot de passe"));
-        assert_eq!(decrypt(&derive_key(b"other"), &enc), None);
-        assert_ne!(encrypt(&key, "x"), encrypt(&key, "x"), "random nonce");
     }
 }

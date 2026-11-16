@@ -142,7 +142,7 @@ fun ShuttersScreen(serverId: String, onBack: () -> Unit, onOpen: (Long) -> Unit)
     // Faster while one moves: its position shows as it goes.
     val anyMoving = covers.any { hub.coverView(serverId, it).moving() }
     LaunchedEffect(serverId, anyMoving) { hub.followDevices(serverId, everyMs = if (anyMoving) 1_500 else 5_000) }
-    val usable = covers.filter { it.available }
+    val usable = covers.filter { it.usable }
     val noRoom = stringResource(Res.string.room_none)
 
     Scaffold(topBar = {
@@ -215,7 +215,7 @@ private fun ShutterRow(d: DeviceView, status: CommandStatus?, onOpen: () -> Unit
             )
         }
         CommandIndicator(status, Modifier.padding(end = 6.dp))
-        CoverButtons(d.available, { hub.setCover(serverId, d, 100) }, { hub.stopCover(serverId, d) }.takeIf { d.cover().stoppable() }, { hub.setCover(serverId, d, 0) })
+        CoverButtons(d.usable, { hub.setCover(serverId, d, 100) }, { hub.stopCover(serverId, d) }.takeIf { d.cover().stoppable() }, { hub.setCover(serverId, d, 0) })
     }
 }
 
@@ -249,7 +249,7 @@ fun ShutterScreen(serverId: String, deviceId: Long, onBack: () -> Unit) {
                 SectionCard {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(22.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
                         ShutterWindow({ draft?.let { it / 100f } ?: open }, Modifier.width(170.dp).height(150.dp))
-                        PositionBar(shown, enabled = d.available, onDraft = { draft = it }) { v ->
+                        PositionBar(shown, enabled = d.usable, onDraft = { draft = it }) { v ->
                             draft = null
                             hub.setCover(serverId, d, v)
                         }
@@ -260,18 +260,18 @@ fun ShutterScreen(serverId: String, deviceId: Long, onBack: () -> Unit) {
                         modifier = Modifier.align(Alignment.CenterHorizontally),
                     )
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { hub.setCover(serverId, d, 100) }, enabled = d.available, modifier = Modifier.weight(1f), shape = Fz.shapes.button) {
+                        OutlinedButton(onClick = { hub.setCover(serverId, d, 100) }, enabled = d.usable, modifier = Modifier.weight(1f), shape = Fz.shapes.button) {
                             Icon(FzIcons.ChevronUp, null, Modifier.size(18.dp))
                             Text(stringResource(Res.string.shutter_up))
                         }
                         if (s.stoppable()) {
-                            OutlinedButton(onClick = { hub.stopCover(serverId, d) }, enabled = d.available, modifier = Modifier.weight(1f), shape = Fz.shapes.button) {
+                            OutlinedButton(onClick = { hub.stopCover(serverId, d) }, enabled = d.usable, modifier = Modifier.weight(1f), shape = Fz.shapes.button) {
                                 Icon(FzIcons.Square, null, Modifier.size(14.dp))
                                 Spacer(Modifier.width(4.dp))
                                 Text(stringResource(Res.string.shutter_stop))
                             }
                         }
-                        OutlinedButton(onClick = { hub.setCover(serverId, d, 0) }, enabled = d.available, modifier = Modifier.weight(1f), shape = Fz.shapes.button) {
+                        OutlinedButton(onClick = { hub.setCover(serverId, d, 0) }, enabled = d.usable, modifier = Modifier.weight(1f), shape = Fz.shapes.button) {
                             Icon(FzIcons.ChevronDown, null, Modifier.size(18.dp))
                             Text(stringResource(Res.string.shutter_down))
                         }

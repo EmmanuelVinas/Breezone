@@ -22,8 +22,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-
-const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
+import { errorText } from "@/lib/format"
 
 /** Export of the configuration to a file, and import of such a file (restore or move). */
 export function ConfigTransfer() {

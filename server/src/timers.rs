@@ -1,16 +1,17 @@
 //! Timers ("minuteries"): one action to run later on a zone, a group, an installation or
 //! everything — e.g. "in 2 hours, switch the first floor off". Also used for the delayed
-//! actions of routines. Run by the server; the target is resolved when the timer fires, so a
+//! actions of routines, which may drive a device of a module. Run by the server; the target is
+//! resolved when the timer fires, so a
 //! group or an installation includes the zones it has at that moment.
 
 use crate::db::{self, Db};
 use crate::error::{ApiError, ApiResult};
 use crate::hub::{Hub, InstallationView, ZoneCommand};
 use crate::i18n::Text;
-use crate::routines::{run_actions, Action};
+use crate::routines::{run_actions, Action, ActionResult};
+use crate::AppState;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
-use std::sync::Arc;
+use serde_json::{json, Map, Value};
 use std::time::Duration;
 
 /// Longest delay: one week.
@@ -19,10 +20,28 @@ pub const MAX_DELAY_MINUTES: i64 = 7 * 24 * 60;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Target {
-    Zone { installation_id: i64, system_id: i64, zone_id: i64 },
-    Group { installation_id: i64, group: String },
-    Installation { installation_id: i64 },
+    Zone {
+        installation_id: i64,
+        system_id: i64,
+        zone_id: i64,
+    },
+    Group {
+        installation_id: i64,
+        group: String,
+    },
+    Installation {
+        installation_id: i64,
+    },
     All,
+    /// The delayed action of a routine on a device (its command is then empty).
+    Device {
+        device_id: i64,
+        #[serde(rename = "trait")]
+        trait_name: String,
+        action: String,
+        #[serde(default)]
+        params: Map<String, Value>,
+    },
 }
 
 impl Target {
@@ -30,7 +49,7 @@ impl Target {
     pub fn installation_id(&self) -> Option<i64> {
         match self {
             Target::Zone { installation_id, .. } | Target::Group { installation_id, .. } | Target::Installation { installation_id } => Some(*installation_id),
-            Target::All => None,
+            Target::All | Target::Device { .. } => None,
         }
     }
 
@@ -44,6 +63,7 @@ impl Target {
                 Target::Group { installation_id, group } => i.id == *installation_id && z.group.as_deref() == Some(group.as_str()),
                 Target::Installation { installation_id } => i.id == *installation_id,
                 Target::All => true,
+                Target::Device { .. } => false,
             })
             .filter(|(i, _)| i.controllable)
             .map(|(i, z)| (i.id, z.system_id, z.zone_id))
@@ -68,6 +88,7 @@ impl Target {
             }
             Target::Installation { installation_id } => Text::plain(inst_name(*installation_id)),
             Target::All => crate::text!("toutes les installations", "all installations", "todas las instalaciones"),
+            Target::Device { device_id, .. } => crate::text!("appareil {0}", "device {0}", "dispositivo {0}", device_id),
         }
     }
 }
@@ -190,7 +211,8 @@ pub fn human_delay(minutes: i64) -> String {
 }
 
 /// Runs the timers whose time has come.
-pub async fn run_due(hub: &Hub, db: &Db) {
+pub async fn run_due(state: &AppState) {
+    let (hub, db) = (&*state.hub, &state.db);
     let due = match db::due_timers(db, db::now()).await {
         Ok(d) => d,
         Err(e) => {
@@ -210,8 +232,15 @@ pub async fn run_due(hub: &Hub, db: &Db) {
         }
         let actor = row.created_by.clone().unwrap_or_else(|| "Minuterie".into());
         let Some(t) = view(row) else { continue };
-        let actions = actions(&t.target, &t.command, &installations);
-        let results = run_actions(hub, &actions, &format!("{actor} · minuterie")).await;
+        let who = format!("{actor} · minuterie");
+        let results = match &t.target {
+            Target::Device { device_id, trait_name, action, params } => {
+                let input = crate::devices::ActionInput { trait_name: trait_name.clone(), action: action.clone(), params: params.clone() };
+                let r = crate::devices::act(state, *device_id, &input, &who).await;
+                vec![ActionResult { ok: r.is_ok(), error: r.err().map(|e| e.message) }]
+            }
+            _ => run_actions(hub, &actions(&t.target, &t.command, &installations), &who).await,
+        };
         let failed = results.iter().filter(|r| !r.ok).count();
         let (level, message) = if failed == 0 {
             ("info", crate::text!("Minuterie exécutée : {0}", "Timer run: {0}", "Temporizador ejecutado: {0}", t.label.arg()))
@@ -233,12 +262,12 @@ pub async fn run_due(hub: &Hub, db: &Db) {
     hub.routines_changed();
 }
 
-pub async fn run_loop(hub: Arc<Hub>, db: Db) {
+pub async fn run_loop(state: AppState) {
     let mut ticker = tokio::time::interval(Duration::from_secs(5));
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         ticker.tick().await;
-        run_due(&hub, &db).await;
+        run_due(&state).await;
     }
 }
 

@@ -23,8 +23,13 @@ data class DeviceView(
     val position: Long = 0,
     val available: Boolean = true,
     val state: JsonObject? = null,
+    /** This user may drive it (absent before server 0.11: the server then decides). */
+    val canControl: Boolean? = null,
 ) {
     fun has(traitId: String) = traitId in traits
+
+    /** Its controls are enabled: it answers, and this user may drive it. */
+    val usable get() = available && canControl != false
 
     /** The state as a trait describes it (its defaults when unknown). */
     fun <T> stateAs(serializer: KSerializer<T>): T? =
@@ -85,6 +90,22 @@ object TraitIds {
  */
 fun ServerState.modulesHere(installation: Installation?): Boolean =
     installation?.access != "node" || installations.none { it.access == "local" }
+
+enum class ChargerShown { Available, Plugged, Charging, Paused, Fault }
+
+/** Paused only matters with a car plugged in, and a paused charger may still say "charging" at 0 W. */
+val EvChargerState.shown: ChargerShown
+    get() {
+        val plugged = vehicle == true || status == EvChargerStatus.Plugged || status == EvChargerStatus.Charging
+        return when {
+            status == EvChargerStatus.Fault -> ChargerShown.Fault
+            paused && plugged -> ChargerShown.Paused
+            status == EvChargerStatus.Charging -> ChargerShown.Charging
+            status == EvChargerStatus.Plugged -> ChargerShown.Plugged
+            status == null -> ChargerShown.Fault
+            else -> ChargerShown.Available
+        }
+    }
 
 /** The history of a device (`/api/devices/{id}/history`): `[ts, value]` points by field. */
 @Serializable

@@ -56,7 +56,7 @@ async fn timers_switch_a_group_off_later() {
 
     // Time passes.
     sqlx::query("UPDATE timers SET run_at = 0").execute(&state.db).await.unwrap();
-    breezone_server::timers::run_due(&state.hub, &state.db).await;
+    breezone_server::timers::run_due(&state).await;
     assert!(!is_on(3) && !is_on(4), "the group is off");
     assert!(is_on(1), "other zones untouched");
     let (_, list) = call(Method::GET, "/api/timers", None).await;
@@ -68,7 +68,7 @@ async fn timers_switch_a_group_off_later() {
         call(Method::POST, "/api/timers", Some(json!({"delay_minutes":5,"target":{"kind":"installation","installation_id":id},"command":{"mode":"heating","sleep":30}}))).await;
     assert_eq!(s, StatusCode::CREATED);
     sqlx::query("UPDATE timers SET run_at = 0").execute(&state.db).await.unwrap();
-    breezone_server::timers::run_due(&state.hub, &state.db).await;
+    breezone_server::timers::run_due(&state).await;
     let sleeps: Vec<Option<i64>> = maison.lock().unwrap().iter().map(|z| z.sleep).collect();
     assert_eq!(sleeps, vec![Some(30); 5], "sleep on every zone");
 
@@ -95,6 +95,6 @@ async fn timers_switch_a_group_off_later() {
     let (_, list) = call(Method::GET, "/api/timers", None).await;
     assert_eq!(list.as_array().unwrap().len(), 1);
     sqlx::query("UPDATE timers SET run_at = 0").execute(&state.db).await.unwrap();
-    breezone_server::timers::run_due(&state.hub, &state.db).await;
+    breezone_server::timers::run_due(&state).await;
     assert!(!is_on(2));
 }

@@ -14,11 +14,12 @@
 //! read, and counts for nothing. The energy of a span comes from the meter's counters when the
 //! device has them, else from the mean power.
 
-use crate::db::DeviceSample;
+use crate::db::{Db, DeviceSample};
+use crate::devices::DeviceView;
 use chrono::{TimeZone, Utc};
 use chrono_tz::Tz;
 use serde::Serialize;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
@@ -332,6 +333,95 @@ pub fn daily(measures: &[Measure], spans: &[Span], tz: Tz, days: &[String]) -> V
             }
         })
         .collect()
+}
+
+// ---------------------------------------------------------------------------------------
+// The measures of the home, from its devices
+// ---------------------------------------------------------------------------------------
+
+fn is_inverter(d: &DeviceView) -> bool {
+    d.traits.iter().any(|t| t == "solar.inverter@1")
+}
+
+fn is_charger(d: &DeviceView) -> bool {
+    d.traits.iter().any(|t| t == "ev.charger@1")
+}
+
+/// The role a measure has on the energy page. A solar inverter is a production without being told,
+/// a charger a consumption; a measure of a solar inverter (a meter on its line) is a production whatever role it was given.
+fn effective_role(d: &DeviceView, by_id: &HashMap<i64, &DeviceView>) -> Option<Role> {
+    let of_inverter = d.measures.device_id.and_then(|id| by_id.get(&id)).is_some_and(|t| is_inverter(t));
+    match d.role.as_deref().and_then(Role::parse) {
+        Some(Role::Consumption) if of_inverter => Some(Role::Solar),
+        Some(role) => Some(role),
+        None if is_inverter(d) => Some(Role::Solar),
+        // A charger is a consumption without being told, unless another measure (a meter on its
+        // line) measures it: it is then counted through that one.
+        None if is_charger(d) && !by_id.values().any(|o| o.id != d.id && o.measures.device_id == Some(d.id)) => Some(Role::Consumption),
+        None => None,
+    }
+}
+
+/// The energy measures of the home, with what each consumption measures. An inverter measured by
+/// another production measure counts once, through that measure (its meter is read more often).
+/// A production measure that does not say what it measures may measure the inverters too: they are
+/// then left out, unless they were explicitly given the role of a production (another installation).
+pub fn measures(devices: &[DeviceView], rooms: &HashMap<i64, String>) -> Vec<Measure> {
+    let names: HashMap<i64, &str> = devices.iter().map(|d| (d.id, d.name.as_str())).collect();
+    let by_id: HashMap<i64, &DeviceView> = devices.iter().map(|d| (d.id, d)).collect();
+    let covered: Vec<i64> = devices
+        .iter()
+        .filter(|d| effective_role(d, &by_id) == Some(Role::Solar))
+        .filter_map(|d| d.measures.device_id.filter(|t| *t != d.id && by_id.get(t).is_some_and(|t| is_inverter(t))))
+        .collect();
+    let meter_of_all = devices
+        .iter()
+        .any(|d| !is_inverter(d) && d.measures.device_id.is_none() && d.traits.iter().any(|t| t == "energy.power@1") && effective_role(d, &by_id) == Some(Role::Solar));
+    devices
+        .iter()
+        .filter(|d| d.traits.iter().any(|t| t == "energy.power@1"))
+        .filter(|d| !covered.contains(&d.id))
+        .filter(|d| !(meter_of_all && is_inverter(d) && d.role.is_none()))
+        .filter_map(|d| {
+            let role = effective_role(d, &by_id)?;
+            let consumer = (role == Role::Consumption).then(|| {
+                let target = d.measures.device_id.and_then(|id| names.get(&id).map(|n| n.to_string()));
+                let room = d.measures.room_id.and_then(|id| rooms.get(&id).cloned());
+                Consumer { name: target.or(room).unwrap_or_else(|| d.name.clone()), device_id: d.measures.device_id, room_id: d.measures.room_id }
+            });
+            Some(Measure { device_id: d.id, role, consumer })
+        })
+        .collect()
+}
+
+#[derive(Serialize)]
+pub struct Roles {
+    pub grid: bool,
+    pub solar: bool,
+    pub battery: bool,
+    pub consumption: bool,
+}
+
+pub fn roles(measures: &[Measure]) -> Roles {
+    let has = |r| measures.iter().any(|m| m.role == r);
+    Roles { grid: has(Role::Grid), solar: has(Role::Solar), battery: has(Role::Battery), consumption: has(Role::Consumption) }
+}
+
+#[derive(Serialize)]
+pub struct LiveView {
+    /// The roles the home has a measure of: the page shows only their blocks.
+    pub roles: Roles,
+    #[serde(flatten)]
+    pub live: Live,
+}
+
+/// The home now, from the last reading of these devices.
+pub async fn live_of(db: &Db, devices: &[DeviceView]) -> sqlx::Result<LiveView> {
+    let rooms: HashMap<i64, String> = crate::db::list_rooms(db).await?.into_iter().map(|r| (r.id, r.name)).collect();
+    let measures = measures(devices, &rooms);
+    let power: HashMap<i64, f64> = devices.iter().filter(|d| d.available).filter_map(|d| Some((d.id, d.state.get("power")?.as_f64()?))).collect();
+    let live = live(&measures, |id| power.get(&id).copied());
+    Ok(LiveView { roles: roles(&measures), live })
 }
 
 #[cfg(test)]

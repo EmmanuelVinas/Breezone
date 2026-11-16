@@ -1,8 +1,8 @@
 //! Solar surplus steering: the loads run on the surplus, in order of priority, and what they do now.
 
-use super::home::{devices_of, DeviceView};
 use crate::auth::{AdminUser, AuthUser};
 use crate::db::{self, SurplusLoadRow};
+use crate::devices::{self, DeviceView};
 use crate::error::{ApiError, ApiResult};
 use crate::surplus::{self, Kind, Status};
 use crate::AppState;
@@ -48,7 +48,7 @@ fn limit(d: &DeviceView, field: &str) -> Option<i64> {
 }
 
 async fn view(state: &AppState) -> ApiResult<SurplusView> {
-    let devices = devices_of(state).await?;
+    let devices = devices::list(state).await?;
     let rows = db::list_surplus_loads(&state.db).await?;
     let snapshot = state.surplus.snapshot().await;
     let looked = !snapshot.statuses.is_empty() || snapshot.meter;
@@ -83,7 +83,7 @@ pub async fn get(State(state): State<AppState>, _user: AuthUser) -> ApiResult<Js
 /// How a load is run (all optional: the device's own limits by default).
 #[derive(Deserialize)]
 pub struct LoadInput {
-    #[serde(default = "yes")]
+    #[serde(default = "crate::yes")]
     pub enabled: bool,
     pub min_amps: Option<i64>,
     pub max_amps: Option<i64>,
@@ -98,13 +98,9 @@ pub struct LoadInput {
     pub tolerance: i64,
 }
 
-fn yes() -> bool {
-    true
-}
-
 /// Adds a load (last in priority) or changes how it is run.
 pub async fn save(State(state): State<AppState>, _admin: AdminUser, Path(device_id): Path<i64>, Json(input): Json<LoadInput>) -> ApiResult<Json<SurplusView>> {
-    let devices = devices_of(&state).await?;
+    let devices = devices::list(&state).await?;
     let d = devices.iter().find(|d| d.id == device_id).ok_or_else(|| ApiError::not_found("device not found"))?;
     let kind = surplus::kind_of(d).ok_or_else(|| {
         ApiError::bad_request(crate::text!(

@@ -37,7 +37,7 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 
 /** A zone of the edited installation (its actions on other installations are kept aside). */
-private fun zoneKey(systemId: Long, zoneId: Long) = systemId to zoneId
+private fun zoneKey(systemId: Long?, zoneId: Long?) = systemId to zoneId
 
 @Composable
 fun InstallationRoutines(serverId: String, inst: Installation, canEdit: Boolean, modifier: Modifier = Modifier) {
@@ -47,10 +47,12 @@ fun InstallationRoutines(serverId: String, inst: Installation, canEdit: Boolean,
     var editing by remember { mutableStateOf<Routine?>(null) }
     var creating by remember { mutableStateOf(false) }
     var refreshKey by remember { mutableIntStateOf(0) }
+    val admin = hub.server(serverId)?.user?.isAdmin == true
 
     LaunchedEffect(serverId, refreshKey) {
         runCatching { hub.api(serverId)?.routines() }.getOrNull()?.let { list ->
-            routines = list.filter { r -> r.actions.any { it.installationId == inst.id } }
+            // The scenes that act on this installation, and those of the modules of the server.
+            routines = list.filter { r -> r.actions.any { it.installationId == inst.id || it.isDevice } }
         }
     }
     fun reload() {
@@ -82,7 +84,8 @@ fun InstallationRoutines(serverId: String, inst: Installation, canEdit: Boolean,
                         reload()
                     }
                 },
-                onEdit = if (canEdit) ({ editing = r }) else null,
+                // The devices of the modules are for administrators, as on the server.
+                onEdit = if (canEdit && (admin || r.actions.none { it.isDevice })) ({ editing = r }) else null,
             )
         }
     }
@@ -111,7 +114,8 @@ private fun RoutineCard(routine: Routine, onRun: () -> Unit, onEdit: (() -> Unit
         ItemCardHeader(FzIcons.Sparkles, Fz.colors.fan, routine.name)
         Row(verticalAlignment = Alignment.CenterVertically) {
             val parts = buildList {
-                add(pluralStringResource(Res.plurals.routines_zone_count, routine.actions.size, routine.actions.size))
+                val n = routine.actions.size
+                add(pluralStringResource(if (routine.actions.any { it.isDevice }) Res.plurals.routines_action_count else Res.plurals.routines_zone_count, n, n))
                 routine.lastRunAt?.let { add(stringResource(Res.string.routines_last, relativeTime(it))) }
             }
             Caption(parts.joinToString(" · "), Modifier.weight(1f))
@@ -165,7 +169,7 @@ private fun RoutineEditor(serverId: String, inst: Installation, routine: Routine
 
     EditorSheet(
         title = stringResource(if (routine == null) Res.string.routines_new else Res.string.routine_editor_edit),
-        canSave = !busy && name.isNotBlank() && (!simple || selected.isNotEmpty()),
+        canSave = !busy && name.isNotBlank() && (!simple || selected.isNotEmpty() || others.isNotEmpty()),
         onSave = ::save,
         onDismiss = onDismiss,
         deleteName = routine?.name,
@@ -193,7 +197,11 @@ private fun RoutineEditor(serverId: String, inst: Installation, routine: Routine
                 selected = selected,
                 keyOf = { z: Zone -> zoneKey(z.systemId, z.zoneId) },
                 onChange = { selected = it },
-                note = if (others.isNotEmpty()) stringResource(Res.string.routine_editor_other_installations) else null,
+                note = when {
+                    others.any { it.isDevice } -> stringResource(Res.string.routine_editor_devices_kept)
+                    others.isNotEmpty() -> stringResource(Res.string.routine_editor_other_installations)
+                    else -> null
+                },
             )
         } else {
             Muted(stringResource(Res.string.routine_editor_complex))

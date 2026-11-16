@@ -5,9 +5,32 @@ import type { WeatherView } from "@/lib/weather"
 export const ANDROID_APP_URL =
   "https://play.google.com/store/apps/details?id=com.breezone.app"
 import { lang } from "@/lib/i18n"
+import type {
+  DeviceView,
+  Installation,
+  MeasureRole,
+  Mode,
+  NodeState,
+  Room,
+  Zone,
+} from "@/lib/api.generated"
 
-export type Mode =
-  "stop" | "cooling" | "heating" | "fan" | "dry" | "aux_heating" | "auto"
+/** The main views, generated from the contract of the server (`server/contracts/views.json`). */
+export type {
+  AirQuality,
+  AirQualityLevel,
+  Connection,
+  DeviceView,
+  Installation,
+  InstallationUserRights,
+  MeasureRole,
+  Measures,
+  Mode,
+  NodeRef,
+  NodeState,
+  Room,
+  Zone,
+} from "@/lib/api.generated"
 
 export type User = { id: number; username: string; role: "admin" | "user" }
 
@@ -20,89 +43,20 @@ export type TokenPair = {
   user: User
 }
 
-export type Connection = {
-  state: "online" | "offline" | "unknown"
-  last_seen: number | null
-  last_error: string | null
-  latency_ms: number | null
+/** An action of a routine on a device of a module, as `POST /api/devices/{id}/actions` takes it. */
+export type DeviceAction = {
+  device_id: number
+  trait: string
+  action: string
+  params: Record<string, unknown>
+  delay_minutes?: number | null
 }
 
-export type Zone = {
-  installation_id: number
-  system_id: number
-  zone_id: number
-  name: string
-  airzone_name: string | null
-  group: string | null
-  position: number
-  on: boolean
-  room_temp: number | null
-  humidity: number | null
-  setpoint: number | null
-  min_temp: number | null
-  max_temp: number | null
-  step: number
-  units: "celsius" | "fahrenheit"
-  mode: Mode | null
-  modes: Mode[]
-  is_master: boolean
-  speed: number | null
-  speeds: number[]
-  sleep: number | null
-  double_setpoint: boolean
-  cool_setpoint: number | null
-  heat_setpoint: number | null
-  demand: boolean
-  /** Thermostats with an air quality sensor only. */
-  air_quality: AirQuality | null
-  battery_low: boolean
-  errors: string[]
-}
+/** One action of a routine: a zone command, or an action of a device. */
+export type RoutineAction = Action | DeviceAction
 
-export type AirQualityLevel = "good" | "regular" | "bad"
-
-export type AirQuality = {
-  /** null while the sensor gives no measure. */
-  level: AirQualityLevel | null
-  /** Value read from the WebServer. */
-  value: number
-  /** Air purification. */
-  mode: "off" | "on" | "auto" | null
-  threshold_low: number | null
-  threshold_high: number | null
-}
-
-export type NodeState =
-  | "online"
-  | "offline"
-  | "revoked"
-  | "expired"
-  | "error"
-  | "pending"
-  | "certificate"
-  | "unknown"
-
-export type NodeRef = { id: number; name: string; state: NodeState }
-
-export type Installation = {
-  id: number
-  name: string
-  location: string | null
-  host: string
-  port: number
-  enabled: boolean
-  /** "local": WebServer on this server's network; "node": through another Breezone server. */
-  access: "local" | "node"
-  node?: NodeRef
-  /** false when read-only (for this user, or shared read-only by its node). */
-  controllable: boolean
-  /** What the signed-in user may change on it. */
-  rights: InstallationUserRights
-  /** The time each zone spends in demand is recorded (set on the server that owns it). */
-  record_demand: boolean
-  connection: Connection
-  zones: Zone[]
-}
+export const isDeviceAction = (a: RoutineAction): a is DeviceAction =>
+  "device_id" in a
 
 export type InstallationInput = {
   name: string
@@ -274,6 +228,14 @@ export type TimerTarget =
   | { kind: "group"; installation_id: number; group: string }
   | { kind: "installation"; installation_id: number }
   | { kind: "all" }
+  /** The delayed action of a routine on a device. */
+  | {
+      kind: "device"
+      device_id: number
+      trait: string
+      action: string
+      params: Record<string, unknown>
+    }
 
 /** "Minuterie": one action planned later on a zone, group, installation or everything. */
 export type Timer = {
@@ -298,7 +260,7 @@ export type Routine = {
   id: number
   name: string
   enabled: boolean
-  actions: Action[]
+  actions: RoutineAction[]
   last_run_at: number | null
   created_at: number
   updated_at: number
@@ -342,7 +304,7 @@ export type AirzoneScheduleInput = {
 export type RoutineInput = {
   name: string
   enabled: boolean
-  actions: Action[]
+  actions: RoutineAction[]
 }
 
 export type Reading = {
@@ -447,11 +409,6 @@ export const ALL_RIGHTS: UserRights = {
 export type UserDetails = User & {
   created_at: number
   access: AccessEntry[]
-}
-
-export type InstallationUserRights = UserRights & {
-  /** The installation's settings (address, Airzone link, deletion). */
-  admin: boolean
 }
 
 export type Me = User & {
@@ -757,27 +714,6 @@ export type UpdateView = {
   prerelease: boolean
 }
 
-/** Role of an energy measure (energy page). */
-export type MeasureRole = "grid" | "solar" | "battery" | "consumption"
-
-/** A device (ADR 0013): an Airzone zone, a Shelly channel or relay… described by its traits. */
-export type DeviceView = {
-  id: number
-  kind: string
-  traits: string[]
-  source: string
-  source_id: number | null
-  installation_id: number | null
-  reference: unknown
-  name: string
-  room_id: number | null
-  role: MeasureRole | null
-  measures: { device_id: number | null; room_id: number | null }
-  position: number
-  available: boolean
-  state: Record<string, unknown> | null
-}
-
 /** Only the fields given change; `null` clears. */
 export type DeviceInput = {
   name?: string | null
@@ -786,15 +722,6 @@ export type DeviceInput = {
   role?: MeasureRole | null
   measures_device_id?: number | null
   measures_room_id?: number | null
-}
-
-export type Room = {
-  id: number
-  name: string
-  position: number
-  created_at: number
-  /** Chosen by hand (a Lucide name); null: guessed from the name. */
-  icon: string | null
 }
 
 export type DriverInfo = {
@@ -1044,6 +971,14 @@ export type AutomationInput = {
 }
 
 /** A rule "quand… si… alors… sinon…", with its sentence and what it sees now. */
+/** A rule written by a newer version: it does not run on this server. */
+export type UnreadableAutomation = {
+  id: number
+  name: string
+  enabled: boolean
+  updated_at: number
+}
+
 export type Automation = AutomationInput & {
   id: number
   summary: {
@@ -1159,6 +1094,9 @@ export const api = {
     }),
   traits: () => request<TraitInfo[]>("GET", "/api/traits"),
   automations: () => request<Automation[]>("GET", "/api/automations"),
+  /** Rules this server version cannot read (administrators). */
+  unreadableAutomations: () =>
+    request<UnreadableAutomation[]>("GET", "/api/automations/unreadable"),
   createAutomation: (a: AutomationInput) =>
     request<Automation>("POST", "/api/automations", a),
   updateAutomation: (id: number, a: AutomationInput) =>

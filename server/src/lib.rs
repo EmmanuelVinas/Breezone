@@ -12,7 +12,9 @@ pub mod backup;
 pub mod capabilities;
 pub mod cloud;
 pub mod config;
+pub mod crypto;
 pub mod db;
+pub mod devices;
 pub mod discovery;
 pub mod drivers;
 pub mod energy;
@@ -52,8 +54,8 @@ pub struct AppState {
     pub cfg: Arc<Config>,
     pub hub: Arc<Hub>,
     pub auth: Arc<AuthService>,
-    /// Key encrypting the remembered Airzone Cloud credentials.
-    pub cloud_key: Arc<[u8; 32]>,
+    /// Key encrypting the secrets kept in the database (see `crypto`).
+    pub data_key: Arc<[u8; 32]>,
     /// Checks for and installs new releases (issue #40).
     pub updater: Arc<update::Updater>,
     /// Sources of devices read by drivers (ADR 0013).
@@ -74,17 +76,17 @@ pub async fn init_state(cfg: Config) -> anyhow::Result<AppState> {
     let db = db::connect(&cfg.data_dir.join("breezone.db")).await?;
     let secret = AuthService::load_secret(cfg.jwt_secret.as_deref(), &cfg.data_dir)?;
     let auth = Arc::new(AuthService::new(&secret, cfg.access_token_ttl_secs, cfg.refresh_token_ttl_days));
-    let cloud_key = Arc::new(cloud::derive_key(&secret));
-    let hub = Hub::new(db.clone(), cfg.clone(), cloud_key.clone());
+    let data_key = Arc::new(crypto::load_key(&cfg.data_dir, &db, &secret).await?);
+    let hub = Hub::new(db.clone(), cfg.clone(), data_key.clone());
     let updater = Arc::new(update::Updater::new(cfg.data_dir.clone(), cfg.self_update));
     updater.set_beta(db::get_setting(&db, update::CHANNEL_SETTING).await?.as_deref() == Some("beta"));
-    let drivers = Arc::new(drivers::Runtime::new(db.clone(), *cloud_key));
+    let drivers = Arc::new(drivers::Runtime::new(db.clone(), *data_key));
     drivers.reload().await?;
     drivers.clone().hear();
     let weather = Arc::new(weather::Weather::new(db.clone(), cfg.timezone, cfg.weather));
     let automations = Arc::new(automations::Runs::default());
     let surplus = Arc::new(surplus::Surplus::default());
-    let state = AppState { db, cfg, hub, auth, cloud_key, updater, drivers, weather, automations, surplus };
+    let state = AppState { db, cfg, hub, auth, data_key, updater, drivers, weather, automations, surplus };
     bootstrap(&state).await?;
     state.hub.reload_installations().await?;
     Ok(state)
@@ -125,6 +127,11 @@ async fn bootstrap(state: &AppState) -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+/// `#[serde(default = "crate::yes")]`: a flag on unless said otherwise.
+pub(crate) fn yes() -> bool {
+    true
 }
 
 /// The full HTTP application: API + web UI.
@@ -172,7 +179,7 @@ pub fn spawn_background(state: &AppState) {
     ));
     tokio::spawn(cloud::run_auto_sync(state.clone()));
     tokio::spawn(airzone_schedules::run_sync(state.clone()));
-    tokio::spawn(timers::run_loop(state.hub.clone(), state.db.clone()));
+    tokio::spawn(timers::run_loop(state.clone()));
     tokio::spawn(automations::run_loop(state.clone()));
     tokio::spawn(surplus::run_loop(state.clone()));
     tokio::spawn(state.updater.clone().run_checks());

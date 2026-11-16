@@ -365,3 +365,50 @@ async fn while_a_trigger_holds_then_as_before() {
     assert_eq!(runs[0]["ended"], "done", "{runs}");
     assert!(steps[1]["what"].as_str().unwrap().starts_with("ce n'est plus vrai : "), "{runs}");
 }
+
+#[tokio::test]
+async fn a_rule_written_by_a_newer_version_is_shown_apart_and_can_be_removed() {
+    let dir = std::env::temp_dir().join(format!("breezone-automations-newer-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let state = breezone_server::init_state(Config::for_tests(dir)).await.unwrap();
+    let port = serve(breezone_server::app(state.clone())).await;
+    let base = format!("http://127.0.0.1:{port}");
+    let http = reqwest::Client::new();
+    let v: Value = http.post(format!("{base}/api/setup")).json(&json!({"username":"admin","password":"motdepasse1"})).send().await.unwrap().json().await.unwrap();
+    let admin = v["access_token"].as_str().unwrap().to_string();
+    let call = |token: String, m: Method, path: &str| {
+        let r = http.request(m, format!("{base}{path}")).bearer_auth(token);
+        async move {
+            let resp = r.send().await.unwrap();
+            let s = resp.status();
+            (s, serde_json::from_str::<Value>(&resp.text().await.unwrap()).unwrap_or(Value::Null))
+        }
+    };
+    // A trigger this version does not know (a newer one wrote it, then the server went back).
+    let id: i64 = sqlx::query_scalar(
+        "INSERT INTO automations (name, enabled, trigger_def, condition_match, conditions, actions, else_actions, run_mode, over_actions, created_at, updated_at) \
+         VALUES ('Arrosage', 1, '{\"kind\":\"rain_forecast\"}', 'all', '[]', '[]', '[]', 'single', '[]', 1, 1) RETURNING id",
+    )
+    .fetch_one(&state.db)
+    .await
+    .unwrap();
+
+    let (_, list) = call(admin.clone(), Method::GET, "/api/automations").await;
+    assert_eq!(list, json!([]), "not among the rules this version runs");
+    let (s, unreadable) = call(admin.clone(), Method::GET, "/api/automations/unreadable").await;
+    assert_eq!(s, StatusCode::OK);
+    assert_eq!(unreadable, json!([{"id": id, "name": "Arrosage", "enabled": true, "updated_at": 1}]));
+
+    // A user neither lists nor removes it; an administrator removes it.
+    http.post(format!("{base}/api/users")).bearer_auth(&admin).json(&json!({"username":"bob","password":"motdepasse1","role":"user"})).send().await.unwrap();
+    let v: Value = http.post(format!("{base}/api/auth/login")).json(&json!({"username":"bob","password":"motdepasse1"})).send().await.unwrap().json().await.unwrap();
+    let bob = v["access_token"].as_str().unwrap().to_string();
+    let (s, _) = call(bob.clone(), Method::GET, "/api/automations/unreadable").await;
+    assert_eq!(s, StatusCode::FORBIDDEN);
+    let (s, _) = call(bob, Method::DELETE, &format!("/api/automations/{id}")).await;
+    assert_eq!(s, StatusCode::NOT_FOUND);
+    let (s, _) = call(admin.clone(), Method::DELETE, &format!("/api/automations/{id}")).await;
+    assert_eq!(s, StatusCode::NO_CONTENT);
+    let (_, unreadable) = call(admin, Method::GET, "/api/automations/unreadable").await;
+    assert_eq!(unreadable, json!([]));
+}

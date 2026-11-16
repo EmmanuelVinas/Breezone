@@ -10,7 +10,7 @@ use crate::auth::AuthUser;
 use crate::db::{self, Db, Grant, UserRights};
 use crate::error::{ApiError, ApiResult};
 use crate::hub::{InstallationUserRights, InstallationView};
-use crate::routines::Action;
+use crate::routines::{Action, Scope};
 use crate::timers::Target;
 use std::collections::HashMap;
 
@@ -113,10 +113,23 @@ impl Access {
         Self::allowed(self.rights(installation_id).zones, "vous n'avez pas le droit de renommer ni de regrouper les zones")
     }
 
-    /// Creating, changing or deleting a routine with these actions.
-    pub fn edit_routine(&self, actions: &[Action]) -> ApiResult<()> {
-        self.control_actions(actions)?;
-        actions.iter().try_for_each(|a| Self::allowed(self.rights(a.installation_id).routines, "vous n'avez pas le droit de modifier les routines"))
+    /// Driving what a routine drives: the zones of an installation need the right to drive it, the
+    /// devices of the modules an administrator (until rights per type of device).
+    pub fn control_scopes(&self, scopes: &[Scope]) -> ApiResult<()> {
+        scopes.iter().try_for_each(|s| match s {
+            Scope::Installation(i) => self.control(*i),
+            Scope::Modules if self.admin => Ok(()),
+            Scope::Modules => Err(ApiError::forbidden("administrators only")),
+        })
+    }
+
+    /// Creating, changing or deleting a routine that drives these.
+    pub fn edit_routine(&self, scopes: &[Scope]) -> ApiResult<()> {
+        self.control_scopes(scopes)?;
+        scopes.iter().try_for_each(|s| match s {
+            Scope::Installation(i) => Self::allowed(self.rights(*i).routines, "vous n'avez pas le droit de modifier les routines"),
+            Scope::Modules => Ok(()),
+        })
     }
 
     /// Creating, changing or deleting an Airzone schedule of an installation (control is checked
@@ -165,7 +178,11 @@ impl Access {
         views.into_iter().filter(|i| self.can_view(i.id)).map(|i| self.apply(i)).collect()
     }
 
-    pub fn sees_actions(&self, actions: &[Action]) -> bool {
-        actions.iter().all(|a| self.can_view(a.installation_id))
+    /// The devices of the modules are seen by everyone, as `/api/devices` lists them.
+    pub fn sees_scopes(&self, scopes: &[Scope]) -> bool {
+        scopes.iter().all(|s| match s {
+            Scope::Installation(i) => self.can_view(*i),
+            Scope::Modules => true,
+        })
     }
 }

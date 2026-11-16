@@ -38,6 +38,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import org.jetbrains.compose.resources.getString
+import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 
@@ -65,6 +66,8 @@ fun AutomationsSection(serverId: String, inst: Installation) {
     var list by remember { mutableStateOf<List<Automation>?>(null) }
     var presence by remember { mutableStateOf<Presence?>(null) }
     var paused by remember { mutableStateOf(false) }
+    var unreadable by remember { mutableIntStateOf(0) }
+    val admin = hub.server(serverId)?.user?.isAdmin == true
     var refreshKey by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(serverId, inst.id, refreshKey) {
@@ -79,6 +82,8 @@ fun AutomationsSection(serverId: String, inst: Installation) {
                 presence = api.presence()
                 paused = api.automationSettings().pausedUntil != null
             }
+            // Administrators only, and absent before server 0.11.
+            if (admin) runCatching { unreadable = api.unreadableAutomations().size }
             delay(REFRESH_MS)
         }
     }
@@ -94,6 +99,7 @@ fun AutomationsSection(serverId: String, inst: Installation) {
                 )
             }
             if (paused) Caption(stringResource(Res.string.automations_paused), color = Fz.colors.warning)
+            if (unreadable > 0) Caption(pluralStringResource(Res.plurals.automations_unreadable, unreadable, unreadable), color = Fz.colors.warning)
         }
         val rules = list
         when {

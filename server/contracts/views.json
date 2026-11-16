@@ -1,0 +1,136 @@
+{
+  "doc": "The main views of the API, as `GET /api/installations`, `/api/devices` and `/api/rooms` give them. `tests/views.rs` checks them against the real answers of the server and writes the web types from them (`web/src/lib/api.generated.ts`). A type is a TypeScript expression; `optional` fields may be absent.",
+  "aliases": {
+    "Mode": { "type": "\"stop\" | \"cooling\" | \"heating\" | \"fan\" | \"dry\" | \"aux_heating\" | \"auto\"" },
+    "AirQualityLevel": { "type": "\"good\" | \"regular\" | \"bad\"" },
+    "NodeState": { "type": "\"online\" | \"offline\" | \"pending\" | \"certificate\" | \"revoked\" | \"expired\" | \"error\" | \"unknown\"" },
+    "MeasureRole": { "type": "\"grid\" | \"solar\" | \"battery\" | \"consumption\"" }
+  },
+  "objects": {
+    "Connection": {
+      "doc": "The link with an installation's WebServer (or its node).",
+      "fields": [
+        { "name": "state", "type": "\"online\" | \"offline\" | \"unknown\"" },
+        { "name": "last_seen", "type": "number | null" },
+        { "name": "last_error", "type": "string | null" },
+        { "name": "latency_ms", "type": "number | null" }
+      ]
+    },
+    "AirQuality": {
+      "doc": "Air quality, for thermostats with a sensor.",
+      "fields": [
+        { "name": "level", "type": "AirQualityLevel | null", "doc": "null while the sensor gives no measure." },
+        { "name": "value", "type": "number", "doc": "Value read from the WebServer." },
+        { "name": "mode", "type": "\"off\" | \"on\" | \"auto\" | null", "doc": "Air purification." },
+        { "name": "threshold_low", "type": "number | null" },
+        { "name": "threshold_high", "type": "number | null" }
+      ]
+    },
+    "Zone": {
+      "doc": "A zone of an installation.",
+      "fields": [
+        { "name": "installation_id", "type": "number" },
+        { "name": "system_id", "type": "number" },
+        { "name": "zone_id", "type": "number" },
+        { "name": "name", "type": "string", "doc": "Name to display (Breezone custom name, else the Airzone name)." },
+        { "name": "airzone_name", "type": "string | null" },
+        { "name": "group", "type": "string | null" },
+        { "name": "position", "type": "number" },
+        { "name": "on", "type": "boolean" },
+        { "name": "room_temp", "type": "number | null" },
+        { "name": "humidity", "type": "number | null" },
+        { "name": "setpoint", "type": "number | null" },
+        { "name": "min_temp", "type": "number | null" },
+        { "name": "max_temp", "type": "number | null" },
+        { "name": "step", "type": "number" },
+        { "name": "units", "type": "\"celsius\" | \"fahrenheit\"" },
+        { "name": "mode", "type": "Mode | null" },
+        { "name": "modes", "type": "Mode[]", "doc": "Modes available on this zone's system." },
+        { "name": "is_master", "type": "boolean" },
+        { "name": "speed", "type": "number | null" },
+        { "name": "speeds", "type": "number[]" },
+        { "name": "sleep", "type": "number | null" },
+        { "name": "double_setpoint", "type": "boolean" },
+        { "name": "cool_setpoint", "type": "number | null" },
+        { "name": "heat_setpoint", "type": "number | null" },
+        { "name": "demand", "type": "boolean", "doc": "The zone is currently asking for heat or cold." },
+        { "name": "air_quality", "type": "AirQuality | null", "doc": "Thermostats with an air quality sensor only." },
+        { "name": "battery_low", "type": "boolean" },
+        { "name": "errors", "type": "string[]" }
+      ]
+    },
+    "NodeRef": {
+      "doc": "The node an installation is reached through.",
+      "fields": [
+        { "name": "id", "type": "number" },
+        { "name": "name", "type": "string" },
+        { "name": "state", "type": "NodeState" }
+      ]
+    },
+    "InstallationUserRights": {
+      "doc": "What a user may change on an installation, besides driving it.",
+      "fields": [
+        { "name": "zones", "type": "boolean", "doc": "Zone names and groups." },
+        { "name": "routines", "type": "boolean" },
+        { "name": "schedules", "type": "boolean", "doc": "Airzone schedules." },
+        { "name": "admin", "type": "boolean", "doc": "The installation's own settings (address, Airzone link, deletion)." }
+      ]
+    },
+    "Installation": {
+      "doc": "An Airzone installation, with its zones.",
+      "fields": [
+        { "name": "id", "type": "number" },
+        { "name": "name", "type": "string" },
+        { "name": "location", "type": "string | null" },
+        { "name": "country", "type": "string", "optional": true, "doc": "Country (ISO 3166-1 alpha-2), set by hand." },
+        { "name": "host", "type": "string" },
+        { "name": "port", "type": "number" },
+        { "name": "enabled", "type": "boolean" },
+        { "name": "access", "type": "\"local\" | \"node\"", "doc": "\"local\": WebServer on this server's network; \"node\": through another Breezone server." },
+        { "name": "node", "type": "NodeRef", "optional": true },
+        { "name": "controllable", "type": "boolean", "doc": "false when read-only (for this user, or shared read-only by its node)." },
+        { "name": "rights", "type": "InstallationUserRights", "doc": "What the signed-in user may change on it." },
+        { "name": "record_demand", "type": "boolean", "doc": "The time each zone spends in demand is recorded (set on the server that owns it)." },
+        { "name": "connection", "type": "Connection" },
+        { "name": "zones", "type": "Zone[]" }
+      ]
+    },
+    "Measures": {
+      "doc": "What a \"consumption\" measure measures: a device, or a room.",
+      "fields": [
+        { "name": "device_id", "type": "number | null" },
+        { "name": "room_id", "type": "number | null" }
+      ]
+    },
+    "DeviceView": {
+      "doc": "A device of the home: an Airzone zone or a device of a module (ADR 0013).",
+      "fields": [
+        { "name": "id", "type": "number" },
+        { "name": "kind", "type": "string", "doc": "Main trait (\"climate.zone\")." },
+        { "name": "traits", "type": "string[]", "doc": "`trait@version` the device has." },
+        { "name": "source", "type": "string", "doc": "Driver that provides it (\"airzone\", \"shelly\")." },
+        { "name": "source_id", "type": "number | null" },
+        { "name": "installation_id", "type": "number | null" },
+        { "name": "reference", "type": "unknown", "doc": "Where to find it in its source (Airzone: `{system_id, zone_id}`)." },
+        { "name": "name", "type": "string" },
+        { "name": "room_id", "type": "number | null" },
+        { "name": "role", "type": "MeasureRole | null" },
+        { "name": "measures", "type": "Measures" },
+        { "name": "position", "type": "number" },
+        { "name": "available", "type": "boolean", "doc": "The source currently provides it (a zone removed from its installation is not)." },
+        { "name": "state", "type": "Record<string, unknown> | null", "doc": "Values of its traits (fields described in the catalog)." },
+        { "name": "can_control", "type": "boolean", "doc": "This user may drive it." }
+      ]
+    },
+    "Room": {
+      "doc": "A room of the home.",
+      "fields": [
+        { "name": "id", "type": "number" },
+        { "name": "name", "type": "string" },
+        { "name": "position", "type": "number" },
+        { "name": "created_at", "type": "number" },
+        { "name": "icon", "type": "string | null", "doc": "Chosen by hand (a Lucide name); null: guessed from the name." }
+      ]
+    }
+  }
+}

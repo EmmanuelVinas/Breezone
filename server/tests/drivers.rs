@@ -190,6 +190,9 @@ async fn a_shelly_source_provides_devices_driven_through_their_traits() {
     let bob = v["access_token"].as_str().unwrap().to_string();
     let (_, seen) = server.call("GET", "/api/devices", Some(&bob), None).await;
     assert_eq!(seen.as_array().unwrap().len(), 2);
+    assert!(seen.as_array().unwrap().iter().all(|d| d["can_control"] == false), "{seen}");
+    let (_, mine) = server.call("GET", "/api/devices", t, None).await;
+    assert!(mine.as_array().unwrap().iter().all(|d| d["can_control"] == true), "{mine}");
     let (s, _) = server.call("POST", &actions, Some(&bob), Some(json!({"trait":"switch.relay","action":"set","params":{"on":false}}))).await;
     assert_eq!(s, StatusCode::FORBIDDEN);
     let (s, _) = server.call("GET", "/api/sources", Some(&bob), None).await;
@@ -801,4 +804,55 @@ async fn a_healthbox_boosts_a_room_and_the_whole_house() {
     let (s, k) = server.call("POST", &format!("/api/sources/{}/key", source["id"]), t, Some(json!({"key": "nope"}))).await;
     assert_eq!(s, StatusCode::OK, "{k}");
     assert_eq!(k["accepted"], false);
+}
+
+#[tokio::test]
+async fn a_routine_drives_the_devices_of_the_modules() {
+    let relay = Arc::new(Mutex::new(true));
+    let shelly = fake_shelly(relay.clone()).await;
+    let (server, token) = Server::start().await;
+    let t = Some(token.as_str());
+    server.call("POST", "/api/sources", t, Some(json!({"driver":"shelly","name":"Tableau","config":{"host": format!("127.0.0.1:{shelly}")}}))).await;
+    let (_, devices) = server.call("GET", "/api/devices", t, None).await;
+    let relay_id = devices.as_array().unwrap().iter().find(|d| d["reference"] == "switch:0").unwrap()["id"].as_i64().unwrap();
+
+    // An action of the catalog is checked when the routine is saved.
+    let off = json!({"device_id": relay_id, "trait": "switch.relay", "action": "set", "params": {"on": false}});
+    let (s, _) = server
+        .call("POST", "/api/routines", t, Some(json!({"name":"Je pars","actions":[{"device_id": relay_id, "trait": "switch.relay", "action": "set", "params": {"on": "no"}}]})))
+        .await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+    let (s, _) = server
+        .call("POST", "/api/routines", t, Some(json!({"name":"Je pars","actions":[{"device_id": 9999, "trait": "switch.relay", "action": "set", "params": {"on": false}}]})))
+        .await;
+    assert_eq!(s, StatusCode::BAD_REQUEST, "unknown device");
+    let later = json!({"device_id": relay_id, "trait": "switch.relay", "action": "set", "params": {"on": true}, "delay_minutes": 30});
+    let (s, routine) = server.call("POST", "/api/routines", t, Some(json!({"name":"Je pars","actions":[off, later]}))).await;
+    assert_eq!(s, StatusCode::CREATED, "{routine}");
+    assert_eq!(routine["actions"][0], off, "{routine}");
+    let id = routine["id"].as_i64().unwrap();
+
+    // Run: the relay switches off now, and switches back on in 30 min (a timer).
+    let (s, run) = server.call("POST", &format!("/api/routines/{id}/run"), t, None).await;
+    assert_eq!(s, StatusCode::OK, "{run}");
+    assert_eq!(run["results"], json!([{"ok": true, "error": null}]));
+    assert!(!*relay.lock().unwrap());
+    let (_, timers) = server.call("GET", "/api/timers", t, None).await;
+    let timer = &timers.as_array().unwrap()[0];
+    assert_eq!(timer["target"]["kind"], "device", "{timers}");
+    assert!(timer["label"].as_str().unwrap().contains("Je pars"), "{timer}");
+    sqlx::query("UPDATE timers SET run_at = 0").execute(&server.state.db).await.unwrap();
+    breezone_server::timers::run_due(&server.state).await;
+    assert!(*relay.lock().unwrap(), "the timer drove the relay");
+
+    // A user sees the routine (they see the devices) but does not run or change it.
+    server.call("POST", "/api/users", t, Some(json!({"username":"bob","password":"motdepasse1","role":"user"}))).await;
+    let (_, v) = server.call("POST", "/api/auth/login", None, Some(json!({"username":"bob","password":"motdepasse1"}))).await;
+    let bob = v["access_token"].as_str().unwrap().to_string();
+    let (_, seen) = server.call("GET", "/api/routines", Some(&bob), None).await;
+    assert_eq!(seen.as_array().unwrap().len(), 1);
+    let (s, _) = server.call("POST", &format!("/api/routines/{id}/run"), Some(&bob), None).await;
+    assert_eq!(s, StatusCode::FORBIDDEN);
+    let (s, _) = server.call("DELETE", &format!("/api/routines/{id}"), Some(&bob), None).await;
+    assert_eq!(s, StatusCode::FORBIDDEN);
 }

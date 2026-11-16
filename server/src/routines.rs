@@ -1,18 +1,22 @@
-//! Routines ("scènes"): a named list of zone actions, started on demand, run by the Breezone
-//! server. Each action can wait (`delay_minutes`): it then becomes a timer. Airzone gates its
-//! own routines behind its paid cloud plan; Breezone runs these locally, with no subscription.
+//! Routines ("scènes"): a named list of actions, started on demand, run by the Breezone server.
+//! An action drives an Airzone zone or a device of any module (a light, a shutter, a charger…).
+//! Each action can wait (`delay_minutes`): it then becomes a timer. Airzone gates its own
+//! routines behind its paid cloud plan; Breezone runs these locally, with no subscription.
 //!
 //! Fixed-time schedules are not routines: they are the schedules of the Airzone app, run by
 //! Airzone and edited from Breezone (see `airzone_schedules`).
 
 use crate::db::{self, Db, RoutineRow};
+use crate::devices::{self, ActionInput};
 use crate::error::{ApiError, ApiResult};
 use crate::hub::{Hub, ZoneCommand};
 use crate::i18n::Text;
+use crate::AppState;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{json, Map, Value};
+use std::collections::HashMap;
 
-/// One action of a routine: a command applied to one zone.
+/// A command applied to one zone (also what a timer and the batch of zone commands run).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Action {
     pub installation_id: i64,
@@ -25,12 +29,77 @@ pub struct Action {
     pub delay_minutes: Option<i64>,
 }
 
+/// An action of a trait of a device, as `POST /api/devices/{id}/actions` takes it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DeviceAction {
+    pub device_id: i64,
+    #[serde(rename = "trait")]
+    pub trait_name: String,
+    pub action: String,
+    #[serde(default)]
+    pub params: Map<String, Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delay_minutes: Option<i64>,
+}
+
+impl DeviceAction {
+    pub fn input(&self) -> ActionInput {
+        ActionInput { trait_name: self.trait_name.clone(), action: self.action.clone(), params: self.params.clone() }
+    }
+}
+
+/// One action of a routine. The zones keep the shape they were stored with: a routine written by
+/// an older version reads the same.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum RoutineAction {
+    Device(DeviceAction),
+    Zone(Action),
+}
+
+impl RoutineAction {
+    pub fn delay_minutes(&self) -> Option<i64> {
+        match self {
+            RoutineAction::Device(d) => d.delay_minutes,
+            RoutineAction::Zone(z) => z.delay_minutes,
+        }
+    }
+}
+
+/// What an action needs the right to drive: an installation, or the devices of the modules
+/// (administrators, until rights per type of device).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Scope {
+    Installation(i64),
+    Modules,
+}
+
+/// The installation of each device (`None`: a device of a module).
+pub struct DeviceScopes(HashMap<i64, Option<i64>>);
+
+impl DeviceScopes {
+    pub async fn load(db: &Db) -> sqlx::Result<DeviceScopes> {
+        Ok(DeviceScopes(db::list_devices(db).await?.into_iter().map(|d| (d.id, d.installation_id)).collect()))
+    }
+
+    /// A device no longer there needs what a device of a module needs.
+    pub fn of(&self, actions: &[RoutineAction]) -> Vec<Scope> {
+        actions
+            .iter()
+            .map(|a| match a {
+                RoutineAction::Zone(z) => Scope::Installation(z.installation_id),
+                RoutineAction::Device(d) => self.0.get(&d.device_id).copied().flatten().map_or(Scope::Modules, Scope::Installation),
+            })
+            .collect()
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct RoutineView {
     pub id: i64,
     pub name: String,
     pub enabled: bool,
-    pub actions: Vec<Action>,
+    pub actions: Vec<RoutineAction>,
     pub last_run_at: Option<i64>,
     pub created_at: i64,
     pub updated_at: i64,
@@ -39,19 +108,16 @@ pub struct RoutineView {
 #[derive(Debug, Clone, Deserialize)]
 pub struct RoutineInput {
     pub name: String,
-    #[serde(default = "yes")]
+    #[serde(default = "crate::yes")]
     pub enabled: bool,
     /// Not supported any more: fixed-time schedules are the Airzone ones.
     #[serde(default)]
     pub time: Option<String>,
-    pub actions: Vec<Action>,
+    pub actions: Vec<RoutineAction>,
 }
 
-fn yes() -> bool {
-    true
-}
-
-/// Validates user input and returns (name, actions JSON).
+/// Validates user input and returns (name, actions JSON). The device actions are checked against
+/// the devices by [`check_devices`].
 pub fn validate(input: &RoutineInput) -> ApiResult<(String, String)> {
     let name = input.name.trim().to_string();
     if name.is_empty() || name.chars().count() > 80 {
@@ -63,14 +129,35 @@ pub fn validate(input: &RoutineInput) -> ApiResult<(String, String)> {
     if input.actions.is_empty() || input.actions.len() > 100 {
         return Err(ApiError::bad_request("a routine needs 1 to 100 actions"));
     }
-    if input.actions.iter().any(|a| a.command.is_empty()) {
+    if input.actions.iter().any(|a| matches!(a, RoutineAction::Zone(z) if z.command.is_empty())) {
         return Err(ApiError::bad_request("every action must change at least one setting"));
     }
-    if input.actions.iter().any(|a| a.delay_minutes.is_some_and(|d| !(0..=crate::timers::MAX_DELAY_MINUTES).contains(&d))) {
+    if input.actions.iter().any(|a| a.delay_minutes().is_some_and(|d| !(0..=crate::timers::MAX_DELAY_MINUTES).contains(&d))) {
         return Err(ApiError::bad_request("délai entre 0 minute et 7 jours"));
     }
     let actions = serde_json::to_string(&input.actions).map_err(|e| ApiError::internal(e.to_string()))?;
     Ok((name, actions))
+}
+
+/// Every device action names a device there, and an action of one of its traits with valid
+/// parameters.
+pub async fn check_devices(state: &AppState, actions: &[RoutineAction]) -> ApiResult<()> {
+    let devices: Vec<&DeviceAction> = actions
+        .iter()
+        .filter_map(|a| match a {
+            RoutineAction::Device(d) => Some(d),
+            RoutineAction::Zone(_) => None,
+        })
+        .collect();
+    if devices.is_empty() {
+        return Ok(());
+    }
+    let views = devices::list(state).await?;
+    for d in devices {
+        let view = views.iter().find(|v| v.id == d.device_id).ok_or_else(|| ApiError::bad_request("unknown device"))?;
+        devices::check_action(view, &d.input())?;
+    }
+    Ok(())
 }
 
 pub fn to_view(row: &RoutineRow) -> RoutineView {
@@ -91,31 +178,61 @@ pub struct ActionResult {
     pub error: Option<Text>,
 }
 
-/// Runs a list of actions sequentially and returns one result per action.
+impl ActionResult {
+    fn of(r: ApiResult<()>) -> ActionResult {
+        ActionResult { ok: r.is_ok(), error: r.err().map(|e| e.message) }
+    }
+}
+
+/// Runs a list of zone commands sequentially and returns one result per action.
 pub async fn run_actions(hub: &Hub, actions: &[Action], actor: &str) -> Vec<ActionResult> {
     let mut results = Vec::with_capacity(actions.len());
     for a in actions {
-        let r = hub.control(a.installation_id, a.system_id, a.zone_id, &a.command, actor).await;
-        results.push(ActionResult { ok: r.is_ok(), error: r.err().map(|e| e.message) });
+        results.push(ActionResult::of(hub.control(a.installation_id, a.system_id, a.zone_id, &a.command, actor).await.map(|_| ())));
     }
     results
 }
 
 /// Runs a routine now. Returns the per-action results.
-pub async fn run_routine(hub: &Hub, db: &Db, row: &RoutineRow, actor: &str) -> ApiResult<Vec<ActionResult>> {
-    let all: Vec<Action> = serde_json::from_str(&row.actions).map_err(|e| ApiError::internal(e.to_string()))?;
-    let (delayed, actions): (Vec<Action>, Vec<Action>) = all.into_iter().partition(|a| a.delay_minutes.unwrap_or(0) > 0);
-    let results = run_actions(hub, &actions, &format!("{actor} · routine « {} »", row.name)).await;
+pub async fn run_routine(state: &AppState, row: &RoutineRow, actor: &str) -> ApiResult<Vec<ActionResult>> {
+    let (hub, db) = (&state.hub, &state.db);
+    let all: Vec<RoutineAction> = serde_json::from_str(&row.actions).map_err(|e| ApiError::internal(e.to_string()))?;
+    let (delayed, now): (Vec<RoutineAction>, Vec<RoutineAction>) = all.into_iter().partition(|a| a.delay_minutes().unwrap_or(0) > 0);
+    let who = format!("{actor} · routine « {} »", row.name);
+    let mut results = Vec::with_capacity(now.len());
+    for a in &now {
+        let r = match a {
+            RoutineAction::Zone(z) => hub.control(z.installation_id, z.system_id, z.zone_id, &z.command, &who).await.map(|_| ()),
+            RoutineAction::Device(d) => devices::act(state, d.device_id, &d.input(), &who).await,
+        };
+        results.push(ActionResult::of(r));
+    }
     // Delayed actions become timers.
     let installations = hub.snapshot().await;
+    let context = match delayed.iter().any(|a| matches!(a, RoutineAction::Device(_))) {
+        true => crate::automations::Context::load(state).await.ok(),
+        false => None,
+    };
     for a in delayed {
-        let target = crate::timers::Target::Zone { installation_id: a.installation_id, system_id: a.system_id, zone_id: a.zone_id };
-        let delay = a.delay_minutes.unwrap_or(0);
-        let (target, command) = (target.describe(&installations), a.command.describe());
-        let label = crate::text!("{0} — {1} : {2}", "{0} — {1}: {2}", "{0} — {1}: {2}", row.name, target.arg(), command.arg()).store();
-        let target = crate::timers::Target::Zone { installation_id: a.installation_id, system_id: a.system_id, zone_id: a.zone_id };
+        let delay = a.delay_minutes().unwrap_or(0);
+        let (target, command, what) = match a {
+            RoutineAction::Zone(z) => {
+                let target = crate::timers::Target::Zone { installation_id: z.installation_id, system_id: z.system_id, zone_id: z.zone_id };
+                let (place, command) = (target.describe(&installations), z.command.describe());
+                (target, z.command, crate::text!("{0} : {1}", "{0}: {1}", "{0}: {1}", place.arg(), command.arg()))
+            }
+            RoutineAction::Device(d) => {
+                let what = match &context {
+                    Some(ctx) => ctx.describe_device_action(d.device_id, &d.trait_name, &d.action, &d.params),
+                    None => Text::plain(format!("{}.{}", d.trait_name, d.action)),
+                };
+                let target = crate::timers::Target::Device { device_id: d.device_id, trait_name: d.trait_name, action: d.action, params: d.params };
+                (target, ZoneCommand::default(), what)
+            }
+        };
+        let label = crate::text!("{0} — {1}", "{0} — {1}", "{0} — {1}", row.name, what.arg()).store();
         let run_at = db::now() + delay * 60;
-        if let Err(e) = db::insert_timer(db, &label, run_at, &json!(target).to_string(), &json!(a.command).to_string(), &format!("{actor} · routine « {} »", row.name)).await {
+        if let Err(e) = db::insert_timer(db, &label, run_at, &json!(target).to_string(), &json!(command).to_string(), &who).await {
             tracing::error!("cannot plan delayed action: {e}");
         }
     }
@@ -145,16 +262,39 @@ pub async fn run_routine(hub: &Hub, db: &Db, row: &RoutineRow, actor: &str) -> A
 mod tests {
     use super::*;
 
+    fn zone(delay: Option<i64>) -> RoutineAction {
+        RoutineAction::Zone(Action { installation_id: 1, system_id: 1, zone_id: 1, command: ZoneCommand { on: Some(true), ..Default::default() }, delay_minutes: delay })
+    }
+
     #[test]
     fn routines_have_no_fixed_time() {
-        let action = Action { installation_id: 1, system_id: 1, zone_id: 1, command: ZoneCommand { on: Some(true), ..Default::default() }, delay_minutes: Some(120) };
-        let ok = RoutineInput { name: "Je pars".into(), enabled: true, time: None, actions: vec![action.clone()] };
+        let ok = RoutineInput { name: "Je pars".into(), enabled: true, time: None, actions: vec![zone(Some(120))] };
         assert!(validate(&ok).is_ok());
         let timed = RoutineInput { time: Some("07:00".into()), ..ok.clone() };
         assert!(validate(&timed).is_err());
-        let empty = RoutineInput { actions: vec![Action { command: ZoneCommand::default(), ..action.clone() }], ..ok.clone() };
+        let empty = RoutineInput {
+            actions: vec![RoutineAction::Zone(Action { installation_id: 1, system_id: 1, zone_id: 1, command: ZoneCommand::default(), delay_minutes: None })],
+            ..ok.clone()
+        };
         assert!(validate(&empty).is_err());
-        let too_long = RoutineInput { actions: vec![Action { delay_minutes: Some(20_000), ..action }], ..ok };
+        let too_long = RoutineInput { actions: vec![zone(Some(20_000))], ..ok };
         assert!(validate(&too_long).is_err());
+    }
+
+    #[test]
+    fn reads_the_zones_stored_before_and_the_devices() {
+        let stored = r#"[{"installation_id":1,"system_id":1,"zone_id":2,"on":false},{"device_id":7,"trait":"light","action":"set","params":{"on":false},"delay_minutes":30}]"#;
+        let actions: Vec<RoutineAction> = serde_json::from_str(stored).unwrap();
+        assert!(matches!(&actions[0], RoutineAction::Zone(z) if z.zone_id == 2 && z.command.on == Some(false)));
+        assert!(matches!(&actions[1], RoutineAction::Device(d) if d.device_id == 7 && d.trait_name == "light" && d.delay_minutes == Some(30)));
+        // Written back, a zone keeps its shape.
+        assert_eq!(serde_json::to_value(&actions[0]).unwrap(), json!({"installation_id":1,"system_id":1,"zone_id":2,"on":false}));
+    }
+
+    #[test]
+    fn a_device_of_a_module_needs_the_modules_scope() {
+        let scopes = DeviceScopes(HashMap::from([(7, None), (8, Some(3))]));
+        let device = |id| RoutineAction::Device(DeviceAction { device_id: id, trait_name: "light".into(), action: "set".into(), params: Map::new(), delay_minutes: None });
+        assert_eq!(scopes.of(&[zone(None), device(7), device(8), device(99)]), vec![Scope::Installation(1), Scope::Modules, Scope::Installation(3), Scope::Modules]);
     }
 }

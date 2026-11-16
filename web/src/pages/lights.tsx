@@ -21,8 +21,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
-
-const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
+import { errorText } from "@/lib/format"
 
 /** The state of a light, as `light@1` describes it. */
 type LightState = {
@@ -522,6 +521,7 @@ export function LightsPage() {
             {wide.length > 0 && <Scenes scenes={wide} canDrive={admin} />}
             {groups.map((g) => {
               const on = g.lights.filter((d) => stateOf(d).on && d.available)
+              const drivable = g.lights.filter((d) => d.can_control)
               return (
                 <section key={g.room?.id ?? "none"} className="grid gap-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -536,10 +536,10 @@ export function LightsPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        disabled={!admin || many.isPending}
+                        disabled={!drivable.length || many.isPending}
                         onClick={() =>
                           many.mutate({
-                            ids: g.lights.map((d) => d.id),
+                            ids: drivable.map((d) => d.id),
                             on: true,
                           })
                         }
@@ -549,10 +549,10 @@ export function LightsPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        disabled={!admin || many.isPending}
+                        disabled={!drivable.length || many.isPending}
                         onClick={() =>
                           many.mutate({
-                            ids: g.lights.map((d) => d.id),
+                            ids: drivable.map((d) => d.id),
                             on: false,
                           })
                         }
@@ -574,7 +574,7 @@ export function LightsPage() {
                         light={d}
                         selected={shown?.id === d.id}
                         onSelect={() => setSelected(d.id)}
-                        canDrive={admin}
+                        canDrive={d.can_control}
                       />
                     ))}
                   </div>
@@ -589,7 +589,7 @@ export function LightsPage() {
               room={
                 rooms.data?.find((r) => r.id === shown.room_id)?.name ?? null
               }
-              canDrive={admin}
+              canDrive={shown.can_control}
             />
           )}
         </div>

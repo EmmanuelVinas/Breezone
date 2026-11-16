@@ -12,8 +12,8 @@ import {
 import { SolarPanel } from "lucide-react"
 import type { DeviceView } from "@/lib/api"
 import { api } from "@/lib/api"
-import { time } from "@/lib/format"
-import { locale, t, tn } from "@/lib/i18n"
+import { kwh, number, stateNumber, time, watts } from "@/lib/format"
+import { t, tn } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import {
   Card,
@@ -44,27 +44,6 @@ const PANEL_COLORS = [
   "var(--fan)",
 ]
 
-function number(v: number, digits: number) {
-  return v.toLocaleString(locale(), { maximumFractionDigits: digits })
-}
-
-function watts(v: number | null | undefined) {
-  if (v === null || v === undefined) return "–"
-  return Math.abs(v) >= 1000
-    ? `${number(v / 1000, 2)} kW`
-    : `${Math.round(v)} W`
-}
-
-function kwh(v: number | null | undefined) {
-  if (v === null || v === undefined) return "–"
-  return `${number(Math.abs(v) < 0.005 ? 0 : v, Math.abs(v) < 10 ? 2 : 1)} kWh`
-}
-
-function num(d: DeviceView, key: string) {
-  const v = d.state?.[key]
-  return typeof v === "number" ? v : null
-}
-
 /** The panels of an inverter: their reference ("pv:<serial>:<port>") names it, even unread. */
 function panelsOf(inverter: DeviceView, panels: DeviceView[]) {
   const serial = String(inverter.reference).replace(/^inv:/, "")
@@ -83,14 +62,14 @@ function InverterCard({
   inverter: DeviceView
   panels: DeviceView[]
 }) {
-  const peak = Math.max(1, ...panels.map((p) => num(p, "power") ?? 0))
+  const peak = Math.max(1, ...panels.map((p) => stateNumber(p, "power") ?? 0))
   const facts = [
-    num(inverter, "temperature") !== null &&
-      `${number(num(inverter, "temperature")!, 1)} °C`,
-    num(inverter, "voltage") !== null &&
-      `${number(num(inverter, "voltage")!, 1)} V`,
-    num(inverter, "frequency") !== null &&
-      `${number(num(inverter, "frequency")!, 2)} Hz`,
+    stateNumber(inverter, "temperature") !== null &&
+      `${number(stateNumber(inverter, "temperature")!, 1)} °C`,
+    stateNumber(inverter, "voltage") !== null &&
+      `${number(stateNumber(inverter, "voltage")!, 1)} V`,
+    stateNumber(inverter, "frequency") !== null &&
+      `${number(stateNumber(inverter, "frequency")!, 2)} Hz`,
   ].filter(Boolean)
   return (
     <Card className="rounded-3xl">
@@ -108,18 +87,18 @@ function InverterCard({
             className="tabular font-heading text-2xl font-semibold"
             style={{ color: SUN }}
           >
-            {inverter.available ? watts(num(inverter, "power")) : "–"}
+            {inverter.available ? watts(stateNumber(inverter, "power")) : "–"}
           </div>
           <div className="text-xs text-muted-foreground">
             {t("{kwh} aujourd'hui", {
-              kwh: kwh(num(inverter, "energy_today")),
+              kwh: kwh(stateNumber(inverter, "energy_today")),
             })}
           </div>
         </div>
       </CardHeader>
       <CardContent className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {panels.map((p, i) => {
-          const power = num(p, "power") ?? 0
+          const power = stateNumber(p, "power") ?? 0
           const share = power / peak
           return (
             <div
@@ -155,19 +134,23 @@ function InverterCard({
               <div className="tabular grid gap-0.5 text-xs text-muted-foreground">
                 <span>
                   {[
-                    num(p, "voltage") !== null &&
-                      `${number(num(p, "voltage")!, 1)} V`,
-                    num(p, "current") !== null &&
-                      `${number(num(p, "current")!, 2)} A`,
+                    stateNumber(p, "voltage") !== null &&
+                      `${number(stateNumber(p, "voltage")!, 1)} V`,
+                    stateNumber(p, "current") !== null &&
+                      `${number(stateNumber(p, "current")!, 2)} A`,
                   ]
                     .filter(Boolean)
                     .join(" · ")}
                 </span>
                 <span>
-                  {t("{kwh} aujourd'hui", { kwh: kwh(num(p, "energy_today")) })}
+                  {t("{kwh} aujourd'hui", {
+                    kwh: kwh(stateNumber(p, "energy_today")),
+                  })}
                 </span>
                 <span>
-                  {t("{kwh} au total", { kwh: kwh(num(p, "energy_total")) })}
+                  {t("{kwh} au total", {
+                    kwh: kwh(stateNumber(p, "energy_total")),
+                  })}
                 </span>
               </div>
             </div>

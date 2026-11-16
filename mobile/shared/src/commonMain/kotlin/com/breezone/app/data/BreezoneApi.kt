@@ -240,6 +240,7 @@ class BreezoneApi(
     suspend fun runAutomation(id: Long): AutomationRunResult = call(HttpMethod.Post, "/api/automations/$id/run")
     suspend fun automationRuns(id: Long): List<AutomationRun> = call(HttpMethod.Get, "/api/automations/$id/runs")
     suspend fun automationSettings(): AutomationSettings = call(HttpMethod.Get, "/api/automations/settings")
+    suspend fun unreadableAutomations(): List<UnreadableAutomation> = call(HttpMethod.Get, "/api/automations/unreadable")
     suspend fun presence(): Presence = call(HttpMethod.Get, "/api/presence")
     suspend fun setPresence(home: Boolean): Presence =
         call(HttpMethod.Put, "/api/presence", FzJson.encodeToString(PresenceBody.serializer(), PresenceBody(home)))

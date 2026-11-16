@@ -89,6 +89,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/automations/{id}/enabled", put(automations::set_enabled))
         .route("/api/automations/{id}/run", post(automations::run))
         .route("/api/automations/{id}/runs", get(automations::runs))
+        .route("/api/automations/unreadable", get(automations::unreadable))
         .route("/api/automations/settings", get(automations::settings).put(automations::save_settings))
         .route("/api/automations/notify-test", post(automations::notify_test))
         .route("/api/presence", get(automations::presence).put(automations::set_presence))
@@ -200,6 +201,11 @@ async fn version() -> impl IntoResponse {
     let mut body = versions();
     body["name"] = json!("Breezone");
     Json(body)
+}
+
+/// Hours of history shown when the query does not say.
+pub(crate) fn default_hours() -> i64 {
+    24
 }
 
 async fn api_not_found() -> impl IntoResponse {

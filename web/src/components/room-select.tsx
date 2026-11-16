@@ -23,8 +23,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { errorText } from "@/lib/format"
 
-const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 const NEW = "new"
 
 /** The room of a device, with a new room created on the spot. */

@@ -204,6 +204,11 @@
         <item quantity="many">%1$d zones</item>
         <item quantity="other">%1$d zones</item>
     </plurals>
+    <plurals name="routines_action_count">
+        <item quantity="one">%1$d action</item>
+        <item quantity="many">%1$d actions</item>
+        <item quantity="other">%1$d actions</item>
+    </plurals>
     <string name="routines_last">dernière %1$s</string>
     <string name="routine_editor_edit">Modifier la scène</string>
     <string name="routine_editor_name">Nom</string>
@@ -225,6 +230,7 @@
     <string name="routines_installation_hint">Scènes lancées à la demande, exécutées par votre serveur Breezone.</string>
     <string name="routines_installation_empty">Aucune scène pour cette installation.</string>
     <string name="routine_editor_other_installations">Cette scène pilote aussi des zones d’autres installations : elles restent inchangées.</string>
+    <string name="routine_editor_devices_kept">Cette scène pilote aussi des appareils des modules : ils restent inchangés (modifiables sur le web).</string>
     <string name="schedules_hint">Programmations de votre compte Airzone : Airzone les exécute, même sans Breezone.</string>
     <string name="schedules_empty">Aucune programmation pour cette installation.</string>
     <string name="schedules_no_account">Connectez votre compte Airzone dans les réglages pour voir et modifier les programmations de cette installation.</string>
@@ -508,6 +514,11 @@
     <string name="automations_title">Automatismes</string>
     <string name="automations_home">Je suis à la maison</string>
     <string name="automations_paused">Pause vacances : aucun automatisme ne se déclenche.</string>
+    <plurals name="automations_unreadable">
+        <item quantity="one">%1$d automatisme vient d’une version plus récente de Breezone : il ne s’exécute pas sur ce serveur (à mettre à jour, ou à supprimer sur le web).</item>
+        <item quantity="many">%1$d automatismes viennent d’une version plus récente de Breezone : ils ne s’exécutent pas sur ce serveur (à mettre à jour, ou à supprimer sur le web).</item>
+        <item quantity="other">%1$d automatismes viennent d’une version plus récente de Breezone : ils ne s’exécutent pas sur ce serveur (à mettre à jour, ou à supprimer sur le web).</item>
+    </plurals>
     <string name="automations_empty">Aucun automatisme pour cette installation.</string>
     <string name="automations_on_web">Les automatismes se créent et se modifient depuis Breezone sur le web (Programmations).</string>
     <string name="automations_started">« %1$s » a démarré ; elle continue en attendant.</string>

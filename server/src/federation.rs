@@ -92,18 +92,18 @@ pub async fn save_identity(db: &Db, name: &str, public_url: Option<&str>) -> Res
     Ok(identity(db).await?)
 }
 
-/// The Ed25519 key of this node, created at first use and stored encrypted with the server
+/// The Ed25519 key of this node, created at first use and stored encrypted (see `crypto`)
 /// secret. Its public half is what other nodes use to check this node's requests.
 pub async fn signing_key(db: &Db, secret: &[u8; 32]) -> sqlx::Result<SigningKey> {
     if let Some(enc) = db::get_setting(db, SETTING_SIGNING_KEY).await? {
-        let bytes = crate::cloud::decrypt(secret, &enc).and_then(|b64| URL_SAFE_NO_PAD.decode(b64).ok());
+        let bytes = crate::crypto::decrypt(secret, &enc).and_then(|b64| URL_SAFE_NO_PAD.decode(b64).ok());
         if let Some(bytes) = bytes.and_then(|b| <[u8; 32]>::try_from(b).ok()) {
             return Ok(SigningKey::from_bytes(&bytes));
         }
-        tracing::warn!("node key unreadable (server secret changed?): a new one is created, nodes must pair again");
+        tracing::warn!("node key unreadable (data.key changed?): a new one is created, nodes must pair again");
     }
     let key = SigningKey::from_bytes(&random_bytes::<32>());
-    let enc = crate::cloud::encrypt(secret, &URL_SAFE_NO_PAD.encode(key.to_bytes()));
+    let enc = crate::crypto::encrypt(secret, &URL_SAFE_NO_PAD.encode(key.to_bytes()));
     db::set_setting(db, SETTING_SIGNING_KEY, &enc).await?;
     Ok(key)
 }

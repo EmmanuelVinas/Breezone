@@ -198,6 +198,10 @@
         <item quantity="one">%1$d zone</item>
         <item quantity="other">%1$d zones</item>
     </plurals>
+    <plurals name="routines_action_count">
+        <item quantity="one">%1$d action</item>
+        <item quantity="other">%1$d actions</item>
+    </plurals>
     <string name="routines_last">last %1$s</string>
     <string name="routine_editor_edit">Edit scene</string>
     <string name="routine_editor_name">Name</string>
@@ -219,6 +223,7 @@
     <string name="routines_installation_hint">Scenes started on demand, run by your Breezone server.</string>
     <string name="routines_installation_empty">No scene for this installation yet.</string>
     <string name="routine_editor_other_installations">This scene also drives zones of other installations: they are left unchanged.</string>
+    <string name="routine_editor_devices_kept">This scene also drives devices of the modules: they stay unchanged (edit them on the web).</string>
     <string name="schedules_hint">Schedules of your Airzone account: Airzone runs them, even without Breezone.</string>
     <string name="schedules_empty">No schedule for this installation.</string>
     <string name="schedules_no_account">Connect your Airzone account in the settings to view and edit the schedules of this installation.</string>
@@ -496,6 +501,10 @@
     <string name="automations_title">Automations</string>
     <string name="automations_home">I am home</string>
     <string name="automations_paused">Holiday pause: no automation starts.</string>
+    <plurals name="automations_unreadable">
+        <item quantity="one">%1$d automation comes from a newer version of Breezone: it does not run on this server (update it, or delete it on the web).</item>
+        <item quantity="other">%1$d automations come from a newer version of Breezone: they do not run on this server (update it, or delete them on the web).</item>
+    </plurals>
     <string name="automations_empty">No automation for this installation.</string>
     <string name="automations_on_web">Automations are created and changed from Breezone on the web (Schedules).</string>
     <string name="automations_started">“%1$s” started; it goes on while it waits.</string>

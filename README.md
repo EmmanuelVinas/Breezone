@@ -153,8 +153,8 @@ profile, token in `.env`: `CLOUDFLARE_TUNNEL_TOKEN`). No port is opened on your 
 3000 of the WebServers: their API has no authentication.
 
 **Update.** `docker compose pull && docker compose up -d`. To stay on a given version, replace
-`latest` with its number (e.g. `0.9.1`). Data (SQLite database, signing secret) is
-in the `breezone_data` volume; back it up with
+`latest` with its number (e.g. `0.9.1`). Data (SQLite database, signing secret, `data.key`: the key of the stored passwords and
+pairings, to keep with the database) is in the `breezone_data` volume; back it up with
 `docker run --rm -v breezone_data:/data -v "$PWD":/backup alpine tar czf /backup/breezone.tgz -C /data .`
 
 ### Settings

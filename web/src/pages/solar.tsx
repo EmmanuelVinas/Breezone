@@ -13,9 +13,8 @@ import {
 } from "recharts"
 import { CalendarDays, Leaf, Sun, UtilityPole } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
-import type { DeviceView } from "@/lib/api"
 import { api } from "@/lib/api"
-import { percent, time } from "@/lib/format"
+import { kwh, percent, stateNumber, time, watts } from "@/lib/format"
 import { locale, t, tn } from "@/lib/i18n"
 import { PageHeader } from "@/components/app-shell"
 import { PeriodPicker } from "@/components/period-picker"
@@ -36,14 +35,8 @@ import {
 import type { ChartConfig } from "@/components/ui/chart"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SolarPanels } from "@/components/solar-panels"
-import { kwh, watts } from "@/pages/energy"
 
 const SUN = "var(--warning)"
-
-function num(d: DeviceView, key: string) {
-  const v = d.state?.[key]
-  return typeof v === "number" ? v : null
-}
 
 function sum(values: (number | null)[]) {
   return values.reduce<number>((a, v) => a + (v ?? 0), 0)
@@ -369,10 +362,11 @@ export function SolarPage() {
   const now0 = new Date()
   const day = `${now0.getFullYear()}-${String(now0.getMonth() + 1).padStart(2, "0")}-${String(now0.getDate()).padStart(2, "0")}`
   // The production as the energy page counts it (a meter on the line, else the inverters).
-  const now = live.data?.solar ?? sum(inverters.map((i) => num(i, "power")))
+  const now =
+    live.data?.solar ?? sum(inverters.map((i) => stateNumber(i, "power")))
   const totals = today.data?.totals
   // The inverters count their own production since sunrise: better than the history.
-  const counted = sum(inverters.map((i) => num(i, "energy_today")))
+  const counted = sum(inverters.map((i) => stateNumber(i, "energy_today")))
   const produced = counted > 0 ? counted : (totals?.production ?? null)
   const selfShare =
     totals?.production && totals.self_consumed !== null

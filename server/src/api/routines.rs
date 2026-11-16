@@ -4,7 +4,7 @@ use crate::access::Access;
 use crate::auth::AuthUser;
 use crate::db;
 use crate::error::{ApiError, ApiResult};
-use crate::routines::{self, RoutineInput, RoutineView};
+use crate::routines::{self, DeviceScopes, RoutineInput, RoutineView};
 use crate::AppState;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
@@ -13,13 +13,15 @@ use serde_json::{json, Value};
 
 pub async fn list(State(state): State<AppState>, user: AuthUser) -> ApiResult<Json<Vec<RoutineView>>> {
     let access = Access::of(&state.db, &user).await?;
-    Ok(Json(db::list_routines(&state.db).await?.iter().map(routines::to_view).filter(|r| access.sees_actions(&r.actions)).collect()))
+    let scopes = DeviceScopes::load(&state.db).await?;
+    Ok(Json(db::list_routines(&state.db).await?.iter().map(routines::to_view).filter(|r| access.sees_scopes(&scopes.of(&r.actions))).collect()))
 }
 
 pub async fn get(State(state): State<AppState>, user: AuthUser, Path(id): Path<i64>) -> ApiResult<Json<RoutineView>> {
     let row = db::routine_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("routine not found"))?;
     let view = routines::to_view(&row);
-    if !Access::of(&state.db, &user).await?.sees_actions(&view.actions) {
+    let scopes = DeviceScopes::load(&state.db).await?;
+    if !Access::of(&state.db, &user).await?.sees_scopes(&scopes.of(&view.actions)) {
         return Err(ApiError::not_found("routine not found"));
     }
     Ok(Json(view))
@@ -27,7 +29,9 @@ pub async fn get(State(state): State<AppState>, user: AuthUser, Path(id): Path<i
 
 pub async fn create(State(state): State<AppState>, user: AuthUser, Json(input): Json<RoutineInput>) -> ApiResult<(StatusCode, Json<RoutineView>)> {
     let (name, actions) = routines::validate(&input)?;
-    Access::of(&state.db, &user).await?.edit_routine(&input.actions)?;
+    let scopes = DeviceScopes::load(&state.db).await?;
+    Access::of(&state.db, &user).await?.edit_routine(&scopes.of(&input.actions))?;
+    routines::check_devices(&state, &input.actions).await?;
     let row = db::insert_routine(&state.db, &name, input.enabled, 0, None, &actions).await?;
     state.hub.log("routine", "info", None, Some(&user.username), crate::text!("Routine « {0} » créée", "Routine “{0}” created", "Rutina «{0}» creada", name), None).await;
     state.hub.routines_changed();
@@ -38,8 +42,10 @@ pub async fn update(State(state): State<AppState>, user: AuthUser, Path(id): Pat
     let before = db::routine_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("routine not found"))?;
     let (name, actions) = routines::validate(&input)?;
     let access = Access::of(&state.db, &user).await?;
-    access.edit_routine(&routines::to_view(&before).actions)?;
-    access.edit_routine(&input.actions)?;
+    let scopes = DeviceScopes::load(&state.db).await?;
+    access.edit_routine(&scopes.of(&routines::to_view(&before).actions))?;
+    access.edit_routine(&scopes.of(&input.actions))?;
+    routines::check_devices(&state, &input.actions).await?;
     db::update_routine(&state.db, id, &name, input.enabled, 0, None, &actions).await?;
     state.hub.log("routine", "info", None, Some(&user.username), crate::text!("Routine « {0} » modifiée", "Routine “{0}” changed", "Rutina «{0}» modificada", name), None).await;
     state.hub.routines_changed();
@@ -49,7 +55,8 @@ pub async fn update(State(state): State<AppState>, user: AuthUser, Path(id): Pat
 
 pub async fn delete(State(state): State<AppState>, user: AuthUser, Path(id): Path<i64>) -> ApiResult<StatusCode> {
     let row = db::routine_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("routine not found"))?;
-    Access::of(&state.db, &user).await?.edit_routine(&routines::to_view(&row).actions)?;
+    let scopes = DeviceScopes::load(&state.db).await?;
+    Access::of(&state.db, &user).await?.edit_routine(&scopes.of(&routines::to_view(&row).actions))?;
     db::delete_routine(&state.db, id).await?;
     state
         .hub
@@ -61,7 +68,8 @@ pub async fn delete(State(state): State<AppState>, user: AuthUser, Path(id): Pat
 
 pub async fn run(State(state): State<AppState>, user: AuthUser, Path(id): Path<i64>) -> ApiResult<Json<Value>> {
     let row = db::routine_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("routine not found"))?;
-    Access::of(&state.db, &user).await?.control_actions(&routines::to_view(&row).actions)?;
-    let results = routines::run_routine(&state.hub, &state.db, &row, &user.username).await?;
+    let scopes = DeviceScopes::load(&state.db).await?;
+    Access::of(&state.db, &user).await?.control_scopes(&scopes.of(&routines::to_view(&row).actions))?;
+    let results = routines::run_routine(&state, &row, &user.username).await?;
     Ok(Json(json!({ "results": results })))
 }

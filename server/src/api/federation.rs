@@ -468,7 +468,7 @@ pub async fn add_node(State(state): State<AppState>, AdminUser(admin): AdminUser
         Some(c) => Some(tls::normalize_fingerprint(c).ok_or_else(|| ApiError::bad_request("empreinte de certificat invalide"))?),
         None => None,
     };
-    let key = federation::signing_key(&state.db, &state.cloud_key).await?;
+    let key = federation::signing_key(&state.db, &state.data_key).await?;
     let client = NodeClient::new(&url, &me.node_id, key, pinned.as_deref());
     let back_url = share_back.as_ref().map(|(_, _, _, u)| u.as_str());
     let paired = match client.pair(&inv.code, &me.name, back_url).await {
@@ -836,7 +836,7 @@ pub async fn pair(State(state): State<AppState>, signed: Signed) -> ApiResult<Js
             None,
         )
         .await;
-    let key = federation::signing_key(&state.db, &state.cloud_key).await?;
+    let key = federation::signing_key(&state.db, &state.data_key).await?;
     Ok(Json(PairResponse { status: "pending".into(), node_id: me.node_id, name: me.name, public_key: Some(federation::public_key_text(&key)) }))
 }
 

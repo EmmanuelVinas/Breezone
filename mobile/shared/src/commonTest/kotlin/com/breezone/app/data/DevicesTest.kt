@@ -37,4 +37,13 @@ class DevicesTest {
         // A server reaching only other servers' installations still shows its own modules.
         assertTrue(server.copy(installations = listOf(node)).modulesHere(node))
     }
+
+    @Test
+    fun aDeviceTheUserMayNotDriveHasItsControlsOff() {
+        val read = { json: String -> FzJson.decodeFromString(DeviceView.serializer(), json) }
+        assertFalse(read("""{"id":1,"available":true,"can_control":false}""").usable)
+        assertTrue(read("""{"id":1,"available":true,"can_control":true}""").usable)
+        assertTrue(read("""{"id":1,"available":true}""").usable, "an older server decides")
+        assertFalse(read("""{"id":1,"available":false,"can_control":true}""").usable)
+    }
 }

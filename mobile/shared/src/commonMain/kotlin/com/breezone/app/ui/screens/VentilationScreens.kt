@@ -169,13 +169,13 @@ fun VentilationScreen(serverId: String, onBack: () -> Unit, onOpen: (Long) -> Un
                         LevelBar(level ?: 0)
                         if (flow.size > 1) Sparkline(flow, Fz.colors.air, Modifier.fillMaxWidth().height(56.dp))
                         if (u.boost) {
-                            OutlinedButton(onClick = { hub.stopBoost(serverId, unit, "ventilation.unit") }, enabled = unit.available, shape = Fz.shapes.button) {
+                            OutlinedButton(onClick = { hub.stopBoost(serverId, unit, "ventilation.unit") }, enabled = unit.usable, shape = Fz.shapes.button) {
                                 Icon(FzIcons.Square, null, Modifier.size(14.dp))
                                 Spacer(Modifier.width(6.dp))
                                 Text(stringResource(Res.string.ventilation_stop_boosts))
                             }
                         } else {
-                            Button(onClick = { hub.boost(serverId, unit, "ventilation.unit", 60) }, enabled = unit.available, shape = Fz.shapes.button) {
+                            Button(onClick = { hub.boost(serverId, unit, "ventilation.unit", 60) }, enabled = unit.usable, shape = Fz.shapes.button) {
                                 Icon(FzIcons.Fan, null, Modifier.size(18.dp))
                                 Spacer(Modifier.width(6.dp))
                                 Text(stringResource(Res.string.ventilation_boost_house))
@@ -308,20 +308,20 @@ fun VentilationRoomScreen(serverId: String, deviceId: Long, onBack: () -> Unit) 
             item(key = "actions", contentType = "actions") {
                 SectionCard {
                     if (s.boost) {
-                        OutlinedButton(onClick = { hub.stopBoost(serverId, d, "ventilation.room") }, enabled = d.available, shape = Fz.shapes.button, modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(onClick = { hub.stopBoost(serverId, d, "ventilation.room") }, enabled = d.usable, shape = Fz.shapes.button, modifier = Modifier.fillMaxWidth()) {
                             Icon(FzIcons.Square, null, Modifier.size(14.dp))
                             Spacer(Modifier.width(6.dp))
                             Text(stringResource(Res.string.ventilation_stop_boost))
                         }
                     } else {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { hub.boost(serverId, d, "ventilation.room", 30) }, enabled = d.available, shape = Fz.shapes.button, modifier = Modifier.weight(1f)) {
+                            Button(onClick = { hub.boost(serverId, d, "ventilation.room", 30) }, enabled = d.usable, shape = Fz.shapes.button, modifier = Modifier.weight(1f)) {
                                 Icon(FzIcons.Fan, null, Modifier.size(18.dp))
                                 Spacer(Modifier.width(6.dp))
                                 Text(stringResource(Res.string.ventilation_boost_30))
                             }
-                            OutlinedButton(onClick = { hub.boost(serverId, d, "ventilation.room", 60) }, enabled = d.available, shape = Fz.shapes.button) { Text(stringResource(Res.string.ventilation_1h)) }
-                            OutlinedButton(onClick = { hub.boost(serverId, d, "ventilation.room", 120) }, enabled = d.available, shape = Fz.shapes.button) { Text(stringResource(Res.string.ventilation_2h)) }
+                            OutlinedButton(onClick = { hub.boost(serverId, d, "ventilation.room", 60) }, enabled = d.usable, shape = Fz.shapes.button) { Text(stringResource(Res.string.ventilation_1h)) }
+                            OutlinedButton(onClick = { hub.boost(serverId, d, "ventilation.room", 120) }, enabled = d.usable, shape = Fz.shapes.button) { Text(stringResource(Res.string.ventilation_2h)) }
                         }
                     }
                     Caption(stringResource(Res.string.ventilation_profile))
@@ -329,7 +329,7 @@ fun VentilationRoomScreen(serverId: String, deviceId: Long, onBack: () -> Unit) 
                         VentilationRoomProfile.entries.forEach { p ->
                             FilterChip(
                                 selected = s.profile == p,
-                                enabled = d.available,
+                                enabled = d.usable,
                                 onClick = {
                                     if (s.profile != p) {
                                         val value = p.name.lowercase()

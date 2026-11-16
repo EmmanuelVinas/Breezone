@@ -160,7 +160,7 @@ avec un identifiant stable. Les routes des zones restent celles qui les pilotent
 | Méthode | Chemin | Description |
 |---------|--------|-------------|
 | GET 🔒 | `/api/traits` | Catalogue des traits : `[{trait, version, label{fr,en,es}, state:[champ], actions:[{name, label, params:[champ]}]}]`, champ = `{name, type (bool·integer·number·string·enum), unit?, values?, value_labels?, min?, max?, optional, label}` (`value_labels` : `{valeur: label}` pour chaque valeur d'un `enum`). Sert aussi de descripteur pour un trait inconnu du client |
-| GET 🔒 | `/api/devices` | Appareils visibles par l'utilisateur : `[{id, kind, traits, source, source_id, installation_id, reference, name, room_id, role, measures:{device_id, room_id}, position, available, state}]` (`state` : valeurs décrites par le catalogue ; `available` faux si la source ne fournit plus l'appareil) |
+| GET 🔒 | `/api/devices` | Appareils visibles par l'utilisateur : `[{id, kind, traits, source, source_id, installation_id, reference, name, room_id, role, measures:{device_id, room_id}, position, available, state, can_control}]` (`state` : valeurs décrites par le catalogue ; `available` faux si la source ne fournit plus l'appareil ; `can_control` : l'utilisateur peut le piloter — une zone selon ses droits sur l'installation, un appareil de module s'il est administrateur) |
 | PUT 🔒 | `/api/devices/{id}` | `{name?, room_id?, position?, role?, measures_device_id?, measures_room_id?}` : seuls les champs donnés changent (`null` efface). `measures_device_id` désigne l'appareil mesuré par une consommation, ou l'onduleur mesuré par une production ; Nom personnalisé (vide = celui de la source), pièce, et pour une mesure d'énergie son **rôle** : `grid` (réseau, toute la maison), `solar`, `battery` ou `consumption` (consommation d'un appareil ou d'une pièce ; sans cible : autres usages). Même droit que pour renommer les zones de l'installation ; administrateurs pour les appareils des sources |
 | GET 🔒 | `/api/rooms` | `[{id, name, position, created_at, icon}]` (`icon` : nom Lucide choisi, `null` : deviné d'après le nom par les clients) |
 | POST 👑 | `/api/rooms` | `{name, position?, icon?}` → 201 |
@@ -307,6 +307,11 @@ Actions `ev.charger` :
 Les types web et mobile sont générés depuis `server/contracts/traits/` :
 `BREEZONE_WRITE_GENERATED=1 cargo test --test generated` (dans `server/`).
 
+Les vues principales (`Installation`, `Zone`, `DeviceView`, `Room`…) sont décrites dans
+`server/contracts/views.json` : `cargo test --test views` vérifie les vraies réponses du serveur
+contre ce contrat, et en écrit les types web (`web/src/lib/api.generated.ts`) et un exemple de
+chaque vue que les modèles de l'appli doivent savoir lire (`BREEZONE_WRITE_GENERATED=1`).
+
 ## Routines (scènes, exécutées par Breezone)
 
 Lancées à la demande seulement ; les programmations à heure fixe sont celles d'Airzone (voir
@@ -319,8 +324,15 @@ plus bas). Une action peut attendre (`delay_minutes`) : elle devient une minuter
 | GET / PUT / DELETE 🔒 | `/api/routines/{id}` | |
 | POST 🔒 | `/api/routines/{id}/run` | Exécute maintenant → `{results}` |
 
-`RoutineInput` : `{name, enabled?, actions:[Action]}` (un `time` est refusé).
+`RoutineInput` : `{name, enabled?, actions:[RoutineAction]}` (un `time` est refusé).
 `Routine` ajoute `{id, last_run_at, created_at, updated_at}`.
+
+`RoutineAction` : une commande de zone `{installation_id, system_id, zone_id, …ZoneCommand,
+delay_minutes?}`, ou une action d'appareil de n'importe quel module `{device_id, trait, action,
+params, delay_minutes?}` (comme `POST /api/devices/{id}/actions`, vérifiée contre le catalogue à
+l'enregistrement : 400 / 422 sinon). Droits : une zone demande le pilotage de son installation (et
+le droit « routines » pour modifier la scène) ; un appareil de module, un administrateur. Les
+scènes qui pilotent des appareils de modules sont visibles de tous, comme `/api/devices`.
 
 ## Pilotage sur surplus solaire (fonction `surplus@1`)
 
@@ -369,6 +381,7 @@ Fonction `automations@1`. Une règle : 1 à 3 déclencheurs (un seul suffit), ju
 | POST 🔒 | `/api/automations/{id}/run` | Lance les étapes « alors » maintenant, sans regarder déclencheurs ni conditions → `{results, running}` (`running` : elle attend encore après 10 s ; `409` si elle tourne déjà en mode `single`) |
 | GET 🔒 | `/api/automations/{id}/runs` | Les 20 derniers passages : `[{started_at, finished_at, branch, reason, ended, steps:[{what, ok, error}]}]` |
 | GET 🔒 | `/api/automations/settings` | `{paused_until, ntfy_url?}` : pause vacances (`null` : pas de pause ; `0` : jusqu'à la reprise ; sinon un instant) ; `ntfy_url` aux administrateurs seulement |
+| GET 👑 | `/api/automations/unreadable` | `[{id, name, enabled, updated_at}]` : les règles écrites par une version plus récente, que celle-ci ne sait pas lire (elles ne s'exécutent pas ; un administrateur peut les supprimer par `DELETE /api/automations/{id}`) |
 | PUT 👑 | `/api/automations/settings` | `{paused_until?, ntfy_url?}` (seuls les champs donnés changent ; `null` efface) |
 | POST 👑 | `/api/automations/notify-test` | Envoie une notification de test (journal et ntfy) |
 | GET 🔒 | `/api/presence` | `{me, someone_home, people:[{user_id, username, home, changed_at}]}` (fonction `presence@1`) |
@@ -538,7 +551,9 @@ consommateur garde sa propre copie de l'historique. Tant que le partage n'est pa
 
 `target` : `{kind:"zone", installation_id, system_id, zone_id}` | `{kind:"group", installation_id, group}` |
 `{kind:"installation", installation_id}` | `{kind:"all"}`, résolue au déclenchement. Une action de
-routine peut avoir `delay_minutes` : lancée avec la routine, elle devient une minuterie.
+routine peut avoir `delay_minutes` : lancée avec la routine, elle devient une minuterie ; sur un
+appareil, sa cible est `{kind:"device", device_id, trait, action, params}` (et `command` est vide),
+visible des administrateurs seulement. On ne crée pas ce type de minuterie par `POST /api/timers`.
 
 ## Programmations Airzone (miroir d'Airzone Cloud)
 

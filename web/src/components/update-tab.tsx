@@ -12,7 +12,7 @@ import Markdown from "react-markdown"
 import { toast } from "sonner"
 import type { UpdateView } from "@/lib/api"
 import { api } from "@/lib/api"
-import { relativeTime } from "@/lib/format"
+import { errorText, relativeTime } from "@/lib/format"
 import { t } from "@/lib/i18n"
 import { ConfirmDialog } from "@/components/confirm"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -39,8 +39,6 @@ function BetaBadge() {
     </Badge>
   )
 }
-
-const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 const REASON: Record<NonNullable<UpdateView["reason"]>, string> = {
   disabled: t(

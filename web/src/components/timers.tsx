@@ -5,7 +5,7 @@ import { toast } from "sonner"
 import type { Installation, Mode, TimerTarget, ZoneCommand } from "@/lib/api"
 import { api } from "@/lib/api"
 import { useChosenInstallations } from "@/lib/selected-installation"
-import { MODE_LABEL } from "@/lib/format"
+import { errorText, MODE_LABEL } from "@/lib/format"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -21,8 +21,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { locale, t } from "@/lib/i18n"
-
-const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 const DELAYS: [number, string][] = [
   [15, t("{n} min", { n: 15 })],
@@ -300,10 +298,12 @@ export function TimersSection() {
         </CardContent>
       </Card>
       {(timers.data ?? [])
-        // The timers of the installation chosen (and those on every installation).
+        // The timers of the installation chosen (and those on every installation or on a device).
         .filter(
           (timer) =>
-            timer.target.kind === "all" || ids.has(timer.target.installation_id)
+            timer.target.kind === "all" ||
+            timer.target.kind === "device" ||
+            ids.has(timer.target.installation_id)
         )
         .map((timer) => (
           <TimerRow

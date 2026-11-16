@@ -17,7 +17,7 @@ import type {
   SurplusStatus,
 } from "@/lib/api"
 import { api, currentUser } from "@/lib/api"
-import { t } from "@/lib/i18n"
+import { locale, t } from "@/lib/i18n"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -47,7 +47,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 
 const kw = (w: number) =>
-  `${(Math.round(w / 100) / 10).toLocaleString(undefined, { maximumFractionDigits: 1 })} kW`
+  `${(Math.round(w / 100) / 10).toLocaleString(locale(), { maximumFractionDigits: 1 })} kW`
 
 const TONE: Record<SurplusStatus["state"], string> = {
   solar: "var(--sun, var(--warning))",

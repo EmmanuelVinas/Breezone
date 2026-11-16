@@ -32,8 +32,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-
-const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
+import { errorText } from "@/lib/format"
 
 const isUnit = (d: DeviceView) => d.traits.includes("ventilation.unit@1")
 const isRoom = (d: DeviceView) => d.traits.includes("ventilation.room@1")
@@ -631,7 +630,7 @@ export function VentilationPage() {
         </Card>
       ) : (
         <div className="grid gap-5">
-          <House unit={unit} rooms={valves} canDrive={admin} />
+          <House unit={unit} rooms={valves} canDrive={unit.can_control} />
           <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
             <div className="grid gap-3 sm:grid-cols-2">
               {valves.map((d) => (
@@ -641,7 +640,7 @@ export function VentilationPage() {
                   demanding={!!worst && worst === d.name}
                   selected={shown?.id === d.id}
                   onSelect={() => setSelected(d.id)}
-                  canDrive={admin}
+                  canDrive={d.can_control}
                 />
               ))}
             </div>
@@ -652,7 +651,7 @@ export function VentilationPage() {
                 demanding={!!worst && worst === shown.name}
                 cause={cause}
                 rooms={rooms.data ?? []}
-                canDrive={admin}
+                canDrive={shown.can_control}
                 admin={admin}
               />
             )}

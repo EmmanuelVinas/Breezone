@@ -32,8 +32,7 @@ import {
 } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Slider } from "@/components/ui/slider"
-
-const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
+import { errorText } from "@/lib/format"
 
 type Command = {
   device: DeviceView
@@ -312,7 +311,7 @@ export function ShuttersPage() {
   const command = useCommand()
   const all = (devices.data ?? []).filter(isCover)
   const open = all.filter(isOpen)
-  const usable = all.filter((d) => d.available)
+  const usable = all.filter((d) => d.available && d.can_control)
   const groups: { room: Room | null; covers: DeviceView[] }[] = [
     ...(rooms.data ?? []).map((r) => ({
       room: r,
@@ -324,7 +323,7 @@ export function ShuttersPage() {
   const every = (list: DeviceView[], position: number) =>
     command.mutate(
       list
-        .filter((d) => d.available)
+        .filter((d) => d.available && d.can_control)
         .map((d) => ({ device: d, action: "set" as const, position }))
     )
 
@@ -346,7 +345,7 @@ export function ShuttersPage() {
               <Button
                 variant="outline"
                 size="sm"
-                disabled={!admin || command.isPending || usable.length === 0}
+                disabled={command.isPending || usable.length === 0}
                 onClick={() => every(all, 100)}
               >
                 <ChevronUp /> {t("Tout ouvrir")}
@@ -354,7 +353,7 @@ export function ShuttersPage() {
               <Button
                 variant="outline"
                 size="sm"
-                disabled={!admin || command.isPending || usable.length === 0}
+                disabled={command.isPending || usable.length === 0}
                 onClick={() => every(all, 0)}
               >
                 <ChevronDown /> {t("Tout fermer")}
@@ -407,7 +406,10 @@ export function ShuttersPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        disabled={!admin || command.isPending}
+                        disabled={
+                          command.isPending ||
+                          !g.covers.some((d) => d.can_control)
+                        }
                         onClick={() => every(g.covers, 100)}
                       >
                         <ChevronUp /> {t("Tout ouvrir")}
@@ -415,7 +417,10 @@ export function ShuttersPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        disabled={!admin || command.isPending}
+                        disabled={
+                          command.isPending ||
+                          !g.covers.some((d) => d.can_control)
+                        }
                         onClick={() => every(g.covers, 0)}
                       >
                         <ChevronDown /> {t("Tout fermer")}
@@ -429,7 +434,7 @@ export function ShuttersPage() {
                         device={d}
                         selected={shown?.id === d.id}
                         onSelect={() => setSelected(d.id)}
-                        canDrive={admin}
+                        canDrive={d.can_control}
                       />
                     ))}
                   </div>
@@ -442,7 +447,7 @@ export function ShuttersPage() {
               key={shown.id}
               device={shown}
               rooms={rooms.data ?? []}
-              canDrive={admin}
+              canDrive={shown.can_control}
               admin={admin}
             />
           )}

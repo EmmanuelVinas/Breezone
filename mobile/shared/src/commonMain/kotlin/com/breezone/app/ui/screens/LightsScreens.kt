@@ -133,8 +133,8 @@ fun LightsScreen(serverId: String, onBack: () -> Unit, onOpen: (Long) -> Unit) {
                     }
                     item(key = "all-off") {
                         AssistChip(
-                            onClick = { on.forEach { hub.setLight(serverId, it, buildJsonObject { put("on", false) }) } },
-                            enabled = on.isNotEmpty(),
+                            onClick = { on.filter { it.usable }.forEach { hub.setLight(serverId, it, buildJsonObject { put("on", false) }) } },
+                            enabled = on.any { it.usable },
                             label = { Text(stringResource(Res.string.lights_all_off)) },
                             leadingIcon = { Icon(FzIcons.Power, null, Modifier.size(16.dp)) },
                         )
@@ -147,7 +147,7 @@ fun LightsScreen(serverId: String, onBack: () -> Unit, onOpen: (Long) -> Unit) {
             items(groups, key = { it.first?.id ?: -1L }, contentType = { "room" }) { (room, list) ->
                 val lit = list.count { it.available && it.stateAs(LightState.serializer())?.on == true }
                 // The whole room at once: on when any of its lights is.
-                val reachable = list.filter { it.available && it.stateAs(LightState.serializer())?.reachable != false }
+                val reachable = list.filter { it.usable && it.stateAs(LightState.serializer())?.reachable != false }
                 DeviceGroupCard(
                     room?.name ?: noRoom,
                     pluralStringResource(Res.plurals.lights_on_of, lit, lit, list.size),
@@ -180,7 +180,7 @@ private fun LightRow(d: DeviceView, status: CommandStatus?, onOpen: () -> Unit, 
                 Text(if (d.available) describe(s) else stringResource(Res.string.device_unavailable), fontSize = 12.sp, color = Fz.colors.muted)
             }
             CommandIndicator(status, Modifier.padding(end = 6.dp))
-            Switch(checked = lit, enabled = d.available && s.reachable != false, onCheckedChange = { onSet(buildJsonObject { put("on", it) }) })
+            Switch(checked = lit, enabled = d.usable && s.reachable != false, onCheckedChange = { onSet(buildJsonObject { put("on", it) }) })
         }
         if (lit && s.brightness != null) {
             FzSlider(
@@ -221,12 +221,12 @@ fun LightScreen(serverId: String, deviceId: Long, onBack: () -> Unit) {
             item(key = "main", contentType = "main") {
                 SectionCard {
                     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        if (s.brightness != null) BrightnessBar(s.brightness.toInt(), s.on, glow, enabled = d.available) { v ->
+                        if (s.brightness != null) BrightnessBar(s.brightness.toInt(), s.on, glow, enabled = d.usable) { v ->
                             set(buildJsonObject { put("on", true); put("brightness", v) })
                         }
                         Button(
                             onClick = { set(buildJsonObject { put("on", !s.on) }) },
-                            enabled = d.available && s.reachable != false,
+                            enabled = d.usable && s.reachable != false,
                             shape = Fz.shapes.button,
                             colors = if (s.on) ButtonDefaults.buttonColors() else ButtonDefaults.outlinedButtonColors(),
                             modifier = Modifier.width(200.dp),
@@ -253,7 +253,7 @@ fun LightScreen(serverId: String, deviceId: Long, onBack: () -> Unit) {
                             value = k.coerceIn(min, max),
                             onCommit = { v -> set(buildJsonObject { put("on", true); put("color_temp", v.toInt()) }) },
                             range = min..max,
-                            enabled = d.available,
+                            enabled = d.usable,
                             colors = SliderDefaults.colors(thumbColor = kelvinColor(k.toLong()), activeTrackColor = Color.Transparent, inactiveTrackColor = Color.Transparent),
                         )
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -274,7 +274,7 @@ fun LightScreen(serverId: String, deviceId: Long, onBack: () -> Unit) {
                                 Box(
                                     Modifier.size(40.dp).clip(CircleShape).background(hexColor(hex)!!)
                                         .then(if (chosen) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape) else Modifier)
-                                        .clickable(enabled = d.available) {
+                                        .clickable(enabled = d.usable) {
                                             val params = buildJsonObject { put("on", true); put("color", JsonPrimitive(hex)) }
                                             // The light turns to its color mode: shown at once.
                                             hub.act(serverId, d, "light", "set", params, optimistic = JsonObject(params + ("mode" to JsonPrimitive("color"))))

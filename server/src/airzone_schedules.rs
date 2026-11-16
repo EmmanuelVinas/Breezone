@@ -219,7 +219,7 @@ pub struct ScheduleInput {
     #[serde(default)]
     pub cloud_id: Option<String>,
     pub name: String,
-    #[serde(default = "yes")]
+    #[serde(default = "crate::yes")]
     pub enabled: bool,
     /// ISO weekdays.
     pub days: Vec<u8>,
@@ -228,10 +228,6 @@ pub struct ScheduleInput {
     pub zones: Vec<ZoneRef>,
     /// `on: true`, `on: false`, or a `mode` (with an optional `setpoint`).
     pub action: ZoneCommand,
-}
-
-fn yes() -> bool {
-    true
 }
 
 /// A change to the Airzone schedules of an installation reached through another node: that node,

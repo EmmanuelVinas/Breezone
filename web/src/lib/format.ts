@@ -192,3 +192,33 @@ export function percent(v: number | null | undefined) {
     ? `${Math.round(v * 100)}%`
     : `${Math.round(v * 100)} %`
 }
+
+export const errorText = (e: unknown) =>
+  e instanceof Error ? e.message : String(e)
+
+/** A number in the language of the app. */
+export function number(v: number, digits: number) {
+  return v.toLocaleString(locale(), { maximumFractionDigits: digits })
+}
+
+export function watts(v: number | null | undefined) {
+  if (v === null || v === undefined) return "–"
+  return Math.abs(v) >= 1000
+    ? `${number(v / 1000, 2)} kW`
+    : `${Math.round(v)} W`
+}
+
+export function kwh(v: number | null | undefined) {
+  if (v === null || v === undefined) return "–"
+  if (Math.abs(v) < 0.005) v = 0
+  return `${number(v, Math.abs(v) < 10 ? 2 : 1)} kWh`
+}
+
+/** A numeric field of a device's state. */
+export function stateNumber(
+  d: { state?: Record<string, unknown> | null },
+  key: string
+) {
+  const v = d.state?.[key]
+  return typeof v === "number" ? v : null
+}

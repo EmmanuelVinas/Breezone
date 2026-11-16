@@ -8,3 +8,6 @@ yarn.lock
 
 # Generated from server/contracts/traits
 src/lib/traits.generated.ts
+
+# Generated from server/contracts/views.json
+src/lib/api.generated.ts

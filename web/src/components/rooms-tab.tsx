@@ -27,8 +27,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { ROOM_ICONS, roomIconName } from "@/lib/room-icons"
 import { Switch } from "@/components/ui/switch"
-
-const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
+import { errorText } from "@/lib/format"
 
 /** A room of the house: renamed in place, moved up or down, deleted. */
 function RoomRow({
