@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.23] - 2026-11-16
+
 ### Fixed
 
 - Modules, « Rechercher »: it says what the network announces of the device. Announced at the same
