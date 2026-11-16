@@ -21,43 +21,101 @@ export const ZONE_STATE_COLOR: Record<ZoneState, string> = {
   off: "var(--muted-foreground)",
 }
 
-/** Without a recorded demand time, a zone this far from its setpoint is taken as in demand (°). */
-const MARGIN = 0.5
+// Without a recorded demand time, the demand is read on the temperature: a zone heats while its
+// temperature rises from below its setpoint, cools while it falls from above it.
+/** A rise or a fall smaller than this (°) is noise (the thermostats count in tenths). */
+const STEP = 0.3
+/** A rise counts as heating when it starts at most this far above the setpoint (°)… */
+const ABOVE = 0.2
+/** …a fall counts as cooling in auto mode only from this far above it (°): further than the
+ * overshoot of a heating, which cools down by itself. */
+const AUTO_ABOVE = 1
 
 // Airzone operation modes.
 const COOLING = 2
 const HEATING = [3, 6]
 const AUTO = 7
 
+const kindOf = (r: Reading) =>
+  !r.is_on || r.room_temp === null
+    ? null
+    : HEATING.includes(r.mode ?? 0)
+      ? "heat"
+      : r.mode === COOLING
+        ? "cool"
+        : r.mode === AUTO
+          ? "auto"
+          : null
+
+/**
+ * Where the temperature rises or falls steadily, from reading `i` to the next one: a run of steps
+ * the same way (flat steps inside it are kept, those at its ends are not) of `STEP` at least.
+ */
+function trends(readings: Reading[]): ("up" | "down" | null)[] {
+  const out: ("up" | "down" | null)[] = readings.map(() => null)
+  const temp = (i: number) => readings[i]?.room_temp ?? null
+  const together = (i: number) =>
+    temp(i) !== null &&
+    temp(i + 1) !== null &&
+    kindOf(readings[i]) !== null &&
+    kindOf(readings[i]) === kindOf(readings[i + 1])
+  for (const way of [1, -1] as const) {
+    let i = 0
+    while (i < readings.length - 1) {
+      // The first step the right way.
+      if (!together(i) || (temp(i + 1)! - temp(i)!) * way <= 0) {
+        i++
+        continue
+      }
+      let end = i + 1
+      let last = i + 1
+      while (together(end) && (temp(end + 1)! - temp(end)!) * way >= 0) {
+        end++
+        if ((temp(end)! - temp(end - 1)!) * way > 0) last = end
+      }
+      if ((temp(last)! - temp(i)!) * way >= STEP - 1e-9)
+        for (let k = i; k < last; k++) out[k] = way > 0 ? "up" : "down"
+      i = end
+    }
+  }
+  return out
+}
+
 /**
  * The state of each reading until the next one. In demand comes from the demand time recorded with
  * the next reading (it covers the time since this one) when the installation records it, else from
- * how far the temperature is from the setpoint. Fan and dry modes, and gaps, have no state.
+ * the temperature: rising from below the setpoint is heating, falling from above it cooling. Fan
+ * and dry modes, and gaps, have no state.
  */
 export function zoneStates(readings: Reading[]): (ZoneState | null)[] {
+  const way = trends(readings)
+  // Where each rise or fall started: it decides whether it is the zone's doing.
+  const from: (number | null)[] = []
+  readings.forEach((r, i) => {
+    from.push(
+      way[i] && way[i] === way[i - 1] ? from[i - 1] : (r.room_temp ?? null)
+    )
+  })
   return readings.map((r, i) => {
     if (r.is_on === null || r.room_temp === null) return null
     if (!r.is_on) return "off"
-    const mode = r.mode ?? 0
-    if (mode !== COOLING && !HEATING.includes(mode) && mode !== AUTO)
-      return null
-    const next = readings[i + 1]
+    const kind = kindOf(r)
+    if (!kind) return null
+    const recorded = readings[i + 1]?.demand_secs ?? null
     const sp = r.setpoint ?? r.room_temp
-    const recorded = next?.demand_secs ?? null
-    const tooCold = r.room_temp < sp - MARGIN
-    const tooHot = r.room_temp > sp + MARGIN
-    // Estimated: heating asks for heat only when the room is too cold, cooling only when it is
-    // too hot (a room warmer than its heating setpoint is not heated).
-    const estimated = HEATING.includes(mode)
-      ? tooCold
-      : mode === COOLING
-        ? tooHot
-        : tooCold || tooHot
-    const demand = recorded !== null ? recorded > 0 : estimated
-    if (!demand) return "comfort"
-    if (HEATING.includes(mode)) return "heating"
-    if (mode === COOLING) return "cooling"
-    return r.room_temp < sp ? "heating" : "cooling"
+    const start = from[i] ?? r.room_temp
+    if (recorded !== null) {
+      if (recorded <= 0) return "comfort"
+      if (kind === "heat") return "heating"
+      if (kind === "cool") return "cooling"
+      return r.room_temp < sp ? "heating" : "cooling"
+    }
+    const heats = way[i] === "up" && start <= sp + ABOVE
+    const cools =
+      way[i] === "down" && start >= sp + (kind === "auto" ? AUTO_ABOVE : -ABOVE)
+    if (kind !== "cool" && heats) return "heating"
+    if (kind !== "heat" && cools) return "cooling"
+    return "comfort"
   })
 }
 

@@ -69,6 +69,7 @@ import com.breezone.app.ui.components.HistoryChart
 import com.breezone.app.ui.components.HistorySeries
 import com.breezone.app.ui.components.ZoneState
 import com.breezone.app.ui.components.labelRes
+import com.breezone.app.ui.components.historyGap
 import com.breezone.app.ui.components.zoneStates
 import com.breezone.app.ui.components.SetpointDial
 import com.breezone.app.ui.components.rememberSetpointDraft
@@ -281,7 +282,7 @@ private fun History(hub: Hub, serverId: String, zone: Zone) {
                 Caption(stringResource(Res.string.zone_history_hint))
                 HistoryChart(data, hours, hidden)
                 val toggle = { s: HistorySeries -> hidden = if (s in hidden) hidden - s else hidden + s }
-                val states = remember(data) { zoneStates(data).filter { it != null && it != ZoneState.Comfort }.toSet() }
+                val states = remember(data) { zoneStates(data, historyGap(hours)).filter { it != null && it != ZoneState.Comfort }.toSet() }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     val stateColors = mapOf(ZoneState.Heating to Fz.colors.heat, ZoneState.Cooling to Fz.colors.cool, ZoneState.Comfort to Fz.colors.success)
                     ZoneState.entries.filter { it in states }.forEach { state ->

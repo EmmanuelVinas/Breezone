@@ -87,7 +87,7 @@ fun IconBadge(icon: ImageVector, color: Color, active: Boolean = true, size: Dp 
 
 /** A card of devices: a title, a count on the right, then the rows. */
 @Composable
-fun DeviceGroupCard(title: String, count: String?, content: @Composable ColumnScope.() -> Unit) {
+fun DeviceGroupCard(title: String, count: String?, trailing: @Composable () -> Unit = {}, content: @Composable ColumnScope.() -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -98,6 +98,7 @@ fun DeviceGroupCard(title: String, count: String?, content: @Composable ColumnSc
         Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (count != null) Text(count, fontSize = 12.sp, color = Fz.colors.muted)
+            trailing()
         }
         content()
     }

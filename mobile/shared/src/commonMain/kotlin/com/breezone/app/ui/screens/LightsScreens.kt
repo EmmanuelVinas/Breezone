@@ -146,7 +146,20 @@ fun LightsScreen(serverId: String, onBack: () -> Unit, onOpen: (Long) -> Unit) {
             }
             items(groups, key = { it.first?.id ?: -1L }, contentType = { "room" }) { (room, list) ->
                 val lit = list.count { it.available && it.stateAs(LightState.serializer())?.on == true }
-                DeviceGroupCard(room?.name ?: noRoom, pluralStringResource(Res.plurals.lights_on_of, lit, lit, list.size)) {
+                // The whole room at once: on when any of its lights is.
+                val reachable = list.filter { it.available && it.stateAs(LightState.serializer())?.reachable != false }
+                DeviceGroupCard(
+                    room?.name ?: noRoom,
+                    pluralStringResource(Res.plurals.lights_on_of, lit, lit, list.size),
+                    trailing = {
+                        Switch(
+                            checked = lit > 0,
+                            enabled = reachable.isNotEmpty(),
+                            onCheckedChange = { on -> reachable.forEach { hub.setLight(serverId, it, buildJsonObject { put("on", on) }) } },
+                            modifier = Modifier.padding(start = 10.dp),
+                        )
+                    },
+                ) {
                     list.forEach { d -> LightRow(d, status["$serverId/${d.id}"], onOpen = { onOpen(d.id) }, onSet = { hub.setLight(serverId, d, it) }) }
                 }
             }

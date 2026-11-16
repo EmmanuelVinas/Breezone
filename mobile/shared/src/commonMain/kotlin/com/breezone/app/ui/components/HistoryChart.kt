@@ -56,39 +56,95 @@ enum class HistorySeries { Temperature, Setpoint, Humidity, Air, Periods }
 /** What a zone was doing until its next history point. */
 enum class ZoneState { Heating, Cooling, Comfort }
 
-/** Without a recorded demand time, a zone this far from its setpoint is taken as in demand (°). */
-private const val STATE_MARGIN = 0.5
+/** A rise or a fall smaller than this (°) is noise: the thermostats count in tenths. */
+private const val STEP = 0.3
+/** A rise counts as heating when it starts at most this far above the setpoint (°). */
+private const val ABOVE = 0.2
+/** In auto mode a fall counts as cooling only from this far above it: further than the overshoot of a heating. */
+private const val AUTO_ABOVE = 1.0
+
+private enum class Kind { Heat, Cool, Auto }
+
+private fun Reading.kind(): Kind? {
+    if (isOn != true || roomTemp == null) return null
+    return when (mode?.toInt()) {
+        3, 6 -> Kind.Heat
+        2 -> Kind.Cool
+        7 -> Kind.Auto
+        else -> null
+    }
+}
+
+/**
+ * Where the temperature rises (1) or falls (-1) steadily from a reading to the next one: a run of
+ * steps the same way of [STEP] at least; flat steps inside it are kept, those at its ends are not.
+ */
+private fun trends(readings: List<Reading>, gap: Long): IntArray {
+    val out = IntArray(readings.size)
+    fun together(i: Int): Boolean {
+        val (a, b) = readings.getOrNull(i) to readings.getOrNull(i + 1)
+        return a?.roomTemp != null && b?.roomTemp != null && b.ts - a.ts <= gap && a.kind() != null && a.kind() == b.kind()
+    }
+    fun step(i: Int) = readings[i + 1].roomTemp!! - readings[i].roomTemp!!
+    for (way in intArrayOf(1, -1)) {
+        var i = 0
+        while (i < readings.size - 1) {
+            if (!together(i) || step(i) * way <= 0) {
+                i++
+                continue
+            }
+            var end = i + 1
+            var last = i + 1
+            while (together(end) && step(end) * way >= 0) {
+                end++
+                if (step(end - 1) * way > 0) last = end
+            }
+            if ((readings[last].roomTemp!! - readings[i].roomTemp!!) * way >= STEP - 1e-9) {
+                for (k in i until last) out[k] = way
+            }
+            i = end
+        }
+    }
+    return out
+}
 
 /**
  * The state of each reading until the next one. In demand comes from the demand time recorded with
  * the next reading (it covers the time since this one) when the installation records it, else from
- * how far the temperature is from the setpoint. Off, fan and dry modes, and gaps, have no state.
+ * the temperature: rising from below the setpoint is heating, falling from above it cooling. Off,
+ * fan and dry modes, and gaps, have no state.
  */
-fun zoneStates(readings: List<Reading>): List<ZoneState?> = readings.mapIndexed { i, r ->
-    val temp = r.roomTemp
-    if (r.isOn != true || temp == null) return@mapIndexed null
-    val mode = r.mode?.toInt() ?: 0
-    val heating = mode == 3 || mode == 6
-    if (!heating && mode != 2 && mode != 7) return@mapIndexed null
-    val setpoint = r.setpoint ?: temp
-    val recorded = readings.getOrNull(i + 1)?.demandSecs
-    val tooCold = temp < setpoint - STATE_MARGIN
-    val tooHot = temp > setpoint + STATE_MARGIN
-    // Estimated: heating asks for heat only when the room is too cold, cooling only when too hot.
-    val estimated = when {
-        heating -> tooCold
-        mode == 2 -> tooHot
-        else -> tooCold || tooHot
-    }
-    val demand = recorded?.let { it > 0 } ?: estimated
-    when {
-        !demand -> ZoneState.Comfort
-        heating -> ZoneState.Heating
-        mode == 2 -> ZoneState.Cooling
-        temp < setpoint -> ZoneState.Heating
-        else -> ZoneState.Cooling
+fun zoneStates(readings: List<Reading>, gap: Long = GAP_SECS): List<ZoneState?> {
+    val way = trends(readings, gap)
+    // Where each rise or fall started: it tells whether it is the zone's doing.
+    val from = DoubleArray(readings.size)
+    readings.forEachIndexed { i, r -> from[i] = if (i > 0 && way[i] != 0 && way[i] == way[i - 1]) from[i - 1] else r.roomTemp ?: 0.0 }
+    return readings.mapIndexed { i, r ->
+        val kind = r.kind() ?: return@mapIndexed null
+        val temp = r.roomTemp!!
+        val setpoint = r.setpoint ?: temp
+        val recorded = readings.getOrNull(i + 1)?.demandSecs
+        if (recorded != null) {
+            return@mapIndexed when {
+                recorded <= 0 -> ZoneState.Comfort
+                kind == Kind.Heat -> ZoneState.Heating
+                kind == Kind.Cool -> ZoneState.Cooling
+                temp < setpoint -> ZoneState.Heating
+                else -> ZoneState.Cooling
+            }
+        }
+        val heats = way[i] == 1 && from[i] <= setpoint + ABOVE
+        val cools = way[i] == -1 && from[i] >= setpoint + if (kind == Kind.Auto) AUTO_ABOVE else -ABOVE
+        when {
+            kind != Kind.Cool && heats -> ZoneState.Heating
+            kind != Kind.Heat && cools -> ZoneState.Cooling
+            else -> ZoneState.Comfort
+        }
     }
 }
+
+/** The longest time between two readings of a history over `hours` that still belong together. */
+fun historyGap(hours: Int): Long = if (hours > 24 * 31) 2 * 86_400L else GAP_SECS
 
 /** Longest time between two readings still drawn as one line (they are 5 minutes apart). */
 private const val GAP_SECS = 1800L
@@ -136,7 +192,7 @@ private fun airRuns(readings: List<Reading>, t0: Long, gap: Long = GAP_SECS): Li
 
 /** Runs of the same state, each up to the next reading, as full-height bands (y = 100 on 0-100). */
 private fun stateRuns(readings: List<Reading>, t0: Long, gap: Long = GAP_SECS): List<Pair<ZoneState, List<Pair<Double, Double>>>> {
-    val states = zoneStates(readings)
+    val states = zoneStates(readings, gap)
     val result = mutableListOf<Pair<ZoneState, MutableList<Pair<Double, Double>>>>()
     readings.forEachIndexed { i, r ->
         val x = round((r.ts - t0) / HOUR * 10_000) / 10_000
@@ -159,9 +215,9 @@ private fun stateRuns(readings: List<Reading>, t0: Long, gap: Long = GAP_SECS): 
 @Composable
 fun HistoryChart(readings: List<Reading>, hours: Int, hidden: Set<HistorySeries> = emptySet(), modifier: Modifier = Modifier) {
     val t0 = readings.firstOrNull()?.ts ?: 0L
-    // Over a year and more, a point per day: two days apart is a gap.
+    // Over a year and more, a point per day.
     val daily = hours > 24 * 31
-    val gap = if (daily) 2 * 86_400L else GAP_SECS
+    val gap = historyGap(hours)
     val temperature = remember(readings) { runs(readings, t0, gap) { it.roomTemp } }
     val setpoint = remember(readings) { runs(readings, t0, gap) { r -> r.setpoint.takeIf { r.isOn == true } } }
     val humidity = remember(readings) { runs(readings, t0, gap) { r -> r.humidity?.toDouble() } }
@@ -294,7 +350,7 @@ fun HistoryChart(readings: List<Reading>, hours: Int, hidden: Set<HistorySeries>
         levels = LEVELS.map { stringResource(Res.string.air_quality_badge, airQualityLabel(it)) },
         states = ZoneState.entries.map { stringResource(it.labelRes) },
     )
-    val states = remember(readings) { zoneStates(readings) }
+    val states = remember(readings) { zoneStates(readings, gap) }
     val marker = rememberTextMarker(readings, hidden, labels) { x ->
         val ts = t0 + (x * HOUR).toLong()
         val index = readings.indices.minByOrNull { abs(readings[it].ts - ts) } ?: return@rememberTextMarker ""

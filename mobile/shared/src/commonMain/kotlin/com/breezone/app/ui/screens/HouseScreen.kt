@@ -116,14 +116,28 @@ fun HouseScreen(serverId: String, installationId: Long, onBack: () -> Unit, onOp
                     val c = devices.withTrait(TraitIds.CHARGER).first()
                     val state = c.stateAs(EvChargerState.serializer())
                     val power = c.stateAs(EnergyPowerState.serializer())?.power ?: 0.0
-                    val sub = if (state?.status == EvChargerStatus.Charging) formatPower(power) else stringResource(
-                        when (state?.status) {
-                            EvChargerStatus.Plugged -> Res.string.charger_plugged
-                            EvChargerStatus.Fault -> Res.string.charger_fault
-                            else -> Res.string.charger_available
-                        },
-                    )
-                    add(Tile(type, FzIcons.PlugZap, stringResource(Res.string.house_charging), sub, MaterialTheme.colorScheme.primary))
+                    // Paused, a charger still says "charging" at 0 W: it is only plugged in.
+                    val paused = state?.paused == true && state.status in listOf(EvChargerStatus.Charging, EvChargerStatus.Plugged)
+                    val charging = state?.status == EvChargerStatus.Charging && !paused
+                    val sub = when {
+                        charging -> formatPower(power)
+                        paused -> stringResource(Res.string.charger_paused)
+                        else -> stringResource(
+                            when (state?.status) {
+                                EvChargerStatus.Plugged -> Res.string.charger_plugged
+                                EvChargerStatus.Fault -> Res.string.charger_fault
+                                else -> Res.string.charger_available
+                            },
+                        )
+                    }
+                    // At a glance: a car plugged in, charging, or nothing.
+                    val (icon, color) = when {
+                        charging -> FzIcons.PlugZap to MaterialTheme.colorScheme.primary
+                        paused || state?.status == EvChargerStatus.Plugged -> FzIcons.Car to MaterialTheme.colorScheme.primary
+                        state?.status == EvChargerStatus.Fault -> FzIcons.PlugZap to MaterialTheme.colorScheme.error
+                        else -> FzIcons.Plug to Fz.colors.muted
+                    }
+                    add(Tile(type, icon, stringResource(Res.string.house_charging), sub, color))
                 }
                 HouseType.Climate -> Unit
             }

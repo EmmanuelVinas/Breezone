@@ -6,6 +6,21 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- App, Lights: a switch per room turns all its lights on or off.
+- App, House: the Charging tile shows a car while a vehicle is plugged in, a bolt while it charges,
+  a grey plug while the charger is free.
+
+### Fixed
+
+- Zone history: heating and cooling periods, when the installation does not record its demand time,
+  are read on the temperature: a zone heats while its temperature rises from below its setpoint (and
+  cools while it falls from above it), from the trough to the top. They were guessed from a 0.5°
+  gap to the setpoint, which a well-regulated zone never reaches: the web showed none, the app showed
+  thin bands at the tops of the curve, the wrong way round.
+- App, House: a paused charger, which still says it is charging at 0 W, shows as paused.
+
 ## [0.11.0-beta.20] - 2026-11-15
 
 ### Added
