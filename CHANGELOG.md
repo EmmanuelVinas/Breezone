@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.27] - 2026-11-17
+
 ### Changed
 
 - Overview, energy blocks: one figure with its curve of the day at the bottom, or several figures
