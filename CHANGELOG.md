@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.29] - 2026-11-17
+
 ### Added
 
 - Energy: what the home cost (each quarter of an hour at its price, plus the day's share of the
