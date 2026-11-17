@@ -12,7 +12,21 @@ import { lang, t } from "@/lib/i18n"
 
 /** The kinds of blocks of the overview, as the server knows them. */
 export type BlockType =
-  "energy" | "surplus" | "group" | "device" | "chart" | "weather" | "scenes"
+  | "energy"
+  | "surplus"
+  | "group"
+  | "device"
+  | "chart"
+  | "weather"
+  | "scenes"
+  | "price"
+  | "energy_kpis"
+  | "energy_flow"
+  | "energy_curve"
+  | "energy_bars"
+  | "energy_breakdown"
+  | "energy_measures"
+  | "energy_surplus"
 
 export type EnergyFlow = "solar" | "home" | "battery" | "grid"
 
@@ -23,7 +37,34 @@ export const BLOCK_LABEL: Record<BlockType, string> = {
   device: t("Appareil, avec ses commandes"),
   chart: t("Graphique"),
   weather: t("Météo"),
+  price: t("Prix de l'électricité"),
   scenes: t("Scènes"),
+  energy_kpis: t("Chiffres de la période"),
+  energy_flow: t("Flux en direct"),
+  energy_curve: t("Courbe de la journée"),
+  energy_bars: t("Énergie jour par jour"),
+  energy_breakdown: t("Répartition par usage"),
+  energy_measures: t("Appareils mesurés"),
+  energy_surplus: t("Pilotage sur le surplus"),
+}
+
+/** Where a type of block comes from: the page it is a part of (the menu of blocks groups them). */
+export const BLOCK_GROUP: Record<BlockType, string> = {
+  energy: t("Vue d'ensemble"),
+  surplus: t("Vue d'ensemble"),
+  group: t("Vue d'ensemble"),
+  device: t("Vue d'ensemble"),
+  chart: t("Vue d'ensemble"),
+  weather: t("Vue d'ensemble"),
+  scenes: t("Vue d'ensemble"),
+  price: t("Énergie"),
+  energy_kpis: t("Énergie"),
+  energy_flow: t("Énergie"),
+  energy_curve: t("Énergie"),
+  energy_bars: t("Énergie"),
+  energy_breakdown: t("Énergie"),
+  energy_measures: t("Énergie"),
+  energy_surplus: t("Énergie"),
 }
 
 export const FLOW_LABEL: Record<EnergyFlow, string> = {
@@ -47,7 +88,15 @@ export const DEFAULT_SIZE: Record<BlockType, DashboardSize> = {
   device: "quarter",
   chart: "half",
   weather: "full",
+  price: "half",
   scenes: "full",
+  energy_kpis: "full",
+  energy_flow: "full",
+  energy_curve: "full",
+  energy_bars: "half",
+  energy_breakdown: "half",
+  energy_measures: "full",
+  energy_surplus: "full",
 }
 
 export const newId = () => Math.random().toString(36).slice(2, 10)
@@ -102,6 +151,8 @@ export function generate(
     >
     surplus: boolean
     scenes: boolean
+    /** This server has a tariff of electricity. */
+    priced?: boolean
   }
 ): DashboardLayout {
   const blocks: DashboardBlock[] = []
@@ -112,6 +163,7 @@ export function generate(
   if (roles.battery) blocks.push(block("energy", { flow: "battery" }))
   if (roles.grid) blocks.push(block("energy", { flow: "grid" }))
   if (home.surplus) blocks.push(block("surplus"))
+  if (home.priced) blocks.push(block("price"))
   const devices = home.devices.filter(shown)
   if (by === "room") {
     for (const r of home.rooms)
@@ -203,4 +255,18 @@ export function zoneOf(d: DeviceView) {
     system_id: r.system_id,
     zone_id: r.zone_id,
   }
+}
+
+/** The energy page as it comes, before anyone arranges it. */
+export function energyLayout(priced: boolean): DashboardBlock[] {
+  return [
+    block("energy_kpis"),
+    ...(priced ? [block("price", {}, "full")] : []),
+    block("energy_flow"),
+    block("energy_curve"),
+    block("energy_bars"),
+    block("energy_breakdown"),
+    block("energy_measures"),
+    block("energy_surplus"),
+  ]
 }

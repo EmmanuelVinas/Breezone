@@ -81,8 +81,20 @@ async fn each_user_may_have_an_overview_over_the_installations_one() {
     // A user does not set the installation's; a wrong layout is refused.
     let (s, _) = user.call(Method::PUT, &format!("{path}/default"), Some(mine.clone())).await;
     assert_eq!(s, StatusCode::FORBIDDEN);
-    let (s, _) = user.call(Method::PUT, &path, Some(layout(json!([{"id": "x", "type": "clock", "size": "half"}])))).await;
+    let (s, _) = user.call(Method::PUT, &path, Some(layout(json!([{"id": "x", "type": "Clock!", "size": "half"}])))).await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
+
+    // Each page has its own: the energy page of this user leaves their overview as it is.
+    let parts = layout(json!([{"id": "k", "type": "energy_kpis", "size": "full", "config": {"curves": true}}]));
+    let (s, v) = user.call(Method::PUT, &format!("{path}?page=energy"), Some(parts.clone())).await;
+    assert_eq!((s, v["layout"].clone()), (StatusCode::OK, parts.clone()), "{v}");
+    let (_, v) = user.call(Method::GET, &path, None).await;
+    assert_eq!((v["source"].clone(), v["layout"]["blocks"][0]["type"].clone()), (json!("mine"), json!("weather")), "the overview is still theirs: {v}");
+    let (_, v) = admin.call(Method::GET, &format!("{path}?page=energy"), None).await;
+    assert_eq!(v["source"], "generated", "the administrator has none on that page");
+    let (s, _) = user.call(Method::GET, &format!("{path}?page=garage"), None).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST, "an unknown page");
+    user.call(Method::DELETE, &format!("{path}?page=energy"), None).await;
 
     // Back to the installation's.
     let (_, v) = user.call(Method::DELETE, &path, None).await;

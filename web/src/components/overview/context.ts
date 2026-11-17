@@ -23,6 +23,10 @@ export type OverviewData = {
   traits: TraitInfo[]
   /** The devices with a history, and its fields. */
   charted: Charted[]
+  /** This server has a tariff of electricity, shown here (the price block). */
+  priced: boolean
+  /** This server measures energy: the parts of the energy page have something to show. */
+  energy: boolean
 }
 
 export const OverviewContext = createContext<OverviewData | null>(null)

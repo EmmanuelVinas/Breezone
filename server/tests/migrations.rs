@@ -43,6 +43,7 @@ const APPLIED: &[(&str, &str)] = &[
     ("0036_electricity_price.sql", "525f40b62d7fd06dfdb8f35cf95d1e4f21e2d6023c9824572c284d42dce064d8"),
     ("0037_day_colors.sql", "4d3902c62b6347ade841b4edb1eebca80ab7892dceac8864fbb1c66f7576a3da"),
     ("0038_contract_offpeak.sql", "f4c466e78e514327b84e1d870f620337ebda487af04cf20d535b82b321424d48"),
+    ("0039_dashboard_pages.sql", "976f99dee26edd7f839bb1bf0e4b9c21f36a6e4175f850f3c9496f4152689f83"),
 ];
 
 #[test]

@@ -1011,6 +1011,16 @@ export type AutomationInput = {
 export type Charted = { device_id: number; fields: string[] }
 
 /** The share of a row a block of the overview takes on a wide screen. */
+/** The pages that are dashboards of blocks. */
+export type DashboardPage =
+  | "overview"
+  | "energy"
+  | "climate"
+  | "lights"
+  | "ventilation"
+  | "charging"
+  | "shutters"
+
 export type DashboardSize = "quarter" | "half" | "full"
 
 /** A block of the overview: what it shows is set by its type and `config`. */
@@ -1154,29 +1164,38 @@ export const api = {
     }),
   traits: () => request<TraitInfo[]>("GET", "/api/traits"),
   charted: () => request<Charted[]>("GET", "/api/devices/charted"),
-  dashboard: (installationId: number) =>
+  /** The layout of a page of an installation ("overview", "energy"…). */
+  dashboard: (installationId: number, page: DashboardPage = "overview") =>
     request<DashboardView>(
       "GET",
-      `/api/installations/${installationId}/dashboard`
+      `/api/installations/${installationId}/dashboard?page=${page}`
     ),
-  /** The user's own overview of the installation. */
-  saveDashboard: (installationId: number, layout: DashboardLayout) =>
+  /** The user's own layout of the page. */
+  saveDashboard: (
+    installationId: number,
+    layout: DashboardLayout,
+    page: DashboardPage = "overview"
+  ) =>
     request<DashboardView>(
       "PUT",
-      `/api/installations/${installationId}/dashboard`,
+      `/api/installations/${installationId}/dashboard?page=${page}`,
       layout
     ),
-  /** Back to the installation's overview. */
-  resetDashboard: (installationId: number) =>
+  /** Back to the installation's layout of the page. */
+  resetDashboard: (installationId: number, page: DashboardPage = "overview") =>
     request<DashboardView>(
       "DELETE",
-      `/api/installations/${installationId}/dashboard`
+      `/api/installations/${installationId}/dashboard?page=${page}`
     ),
-  /** The overview everyone sees (administrators of the installation). */
-  saveDefaultDashboard: (installationId: number, layout: DashboardLayout) =>
+  /** The layout everyone sees on the page (administrators of the installation). */
+  saveDefaultDashboard: (
+    installationId: number,
+    layout: DashboardLayout,
+    page: DashboardPage = "overview"
+  ) =>
     request<DashboardView>(
       "PUT",
-      `/api/installations/${installationId}/dashboard/default`,
+      `/api/installations/${installationId}/dashboard/default?page=${page}`,
       layout
     ),
   automations: () => request<Automation[]>("GET", "/api/automations"),

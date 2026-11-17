@@ -1738,6 +1738,21 @@ const es: Record<string, string> = {
   "Lecture des prix de la CRE…": "Leyendo los precios de la CRE…",
   "Afficher les plus récents": "Mostrar los más recientes",
   "Tout afficher ({n})": "Mostrar todo ({n})",
+  "vaut {price}": "vale {price}",
+  "achetés {price}": "comprados {price}",
+  "Chiffres de la période": "Cifras del periodo",
+  "Flux en direct": "Flujos en directo",
+  "Courbe de la journée": "Curva del día",
+  "Énergie jour par jour": "Energía día a día",
+  "Répartition par usage": "Reparto por uso",
+  "Pilotage sur le surplus": "Control del excedente",
+  "Celle choisie sur la page": "La elegida en la página",
+  "Courbe dans les tuiles": "Curva en los recuadros",
+  "La production, la consommation, le réseau et le coût le long de la période.":
+    "La producción, el consumo, la red y el coste a lo largo del periodo.",
+  "Montants en euros": "Importes en euros",
+  "Le coût, les gains du solaire et ce que vaut chaque énergie, avec un tarif (Réglages › Électricité).":
+    "El coste, las ganancias solares y lo que vale cada energía, con una tarifa (Ajustes › Electricidad).",
 }
 
 export default es

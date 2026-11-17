@@ -26,6 +26,7 @@ import { t, tn } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { Sparkline } from "@/components/sparkline"
 import { WeatherCard } from "@/components/weather-card"
+import { PriceNow } from "@/components/electricity/electricity-tab"
 import { ZoneCard } from "@/components/zone-card"
 import { LightCard } from "@/pages/lights"
 import { ShutterCard } from "@/pages/shutters"
@@ -35,6 +36,15 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { ChartBlock } from "./chart-block"
+import {
+  EnergyBarsBlock,
+  EnergyBreakdownBlock,
+  EnergyCurveBlock,
+  EnergyFlowBlock,
+  EnergyKpisBlock,
+  EnergyMeasuresBlock,
+  EnergySurplusBlock,
+} from "./energy-blocks"
 import { useOverview } from "./context"
 import type { EnergyFlow, GroupConfig } from "./model"
 import {
@@ -597,6 +607,28 @@ function SurplusBlock() {
   )
 }
 
+/** The price of electricity now, the next hours, and the Tempo days. */
+function PriceBlock() {
+  const price = useQuery({
+    queryKey: ["price"],
+    queryFn: () => api.price(24),
+    refetchInterval: 60_000,
+  })
+  const tariff = useQuery({
+    queryKey: ["tariff"],
+    queryFn: api.tariff,
+    staleTime: 5 * 60_000,
+  })
+  if (!price.data?.now) return null
+  return (
+    <PriceNow
+      price={price.data}
+      tariff={tariff.data?.versions.at(-1)?.tariff}
+      className="h-full"
+    />
+  )
+}
+
 function ScenesBlock({ ids }: { ids?: number[] }) {
   const { routines, installation } = useOverview()
   const run = useMutation({
@@ -707,6 +739,22 @@ export function BlockView({
       return <WeatherBlock editing={editing} />
     case "scenes":
       return <ScenesBlock ids={c.routine_ids as number[] | undefined} />
+    case "price":
+      return <PriceBlock />
+    case "energy_kpis":
+      return <EnergyKpisBlock config={c} />
+    case "energy_flow":
+      return <EnergyFlowBlock />
+    case "energy_curve":
+      return <EnergyCurveBlock config={c} />
+    case "energy_bars":
+      return <EnergyBarsBlock config={c} />
+    case "energy_breakdown":
+      return <EnergyBreakdownBlock config={c} />
+    case "energy_measures":
+      return <EnergyMeasuresBlock config={c} />
+    case "energy_surplus":
+      return <EnergySurplusBlock />
     default:
       return null
   }

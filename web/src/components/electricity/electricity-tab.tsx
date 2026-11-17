@@ -24,6 +24,7 @@ import type {
 import { api } from "@/lib/api"
 import { DAY_LABEL, errorText, time } from "@/lib/format"
 import { locale, t } from "@/lib/i18n"
+import { cn } from "@/lib/utils"
 import { Confirm } from "@/components/confirm"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -159,9 +160,11 @@ function TempoTiles({ tempo }: { tempo: TempoView }) {
 export function PriceNow({
   price,
   tariff,
+  className,
 }: {
   price: PriceView
   tariff?: Tariff
+  className?: string
 }) {
   const now = price.now
   if (!now) return null
@@ -175,7 +178,7 @@ export function PriceNow({
   const high = Math.max(...prices)
   const next = periods.find((p) => p.price !== now.price)
   return (
-    <Card className="rounded-3xl">
+    <Card className={cn("rounded-3xl", className)}>
       <CardContent className="grid gap-4">
         <div className="flex flex-wrap items-center gap-4">
           <span className="grid size-14 place-items-center rounded-2xl bg-primary/15 text-primary">

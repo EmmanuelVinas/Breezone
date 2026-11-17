@@ -1720,6 +1720,21 @@ const en: Record<string, string> = {
   "Lecture des prix de la CRE…": "Reading the prices of the CRE…",
   "Afficher les plus récents": "Show the latest",
   "Tout afficher ({n})": "Show all ({n})",
+  "vaut {price}": "worth {price}",
+  "achetés {price}": "bought {price}",
+  "Chiffres de la période": "Figures of the period",
+  "Flux en direct": "Live flows",
+  "Courbe de la journée": "Curve of the day",
+  "Énergie jour par jour": "Energy day by day",
+  "Répartition par usage": "Breakdown by use",
+  "Pilotage sur le surplus": "Surplus steering",
+  "Celle choisie sur la page": "The one chosen on the page",
+  "Courbe dans les tuiles": "Curve in the tiles",
+  "La production, la consommation, le réseau et le coût le long de la période.":
+    "Production, consumption, grid and cost along the period.",
+  "Montants en euros": "Amounts in euros",
+  "Le coût, les gains du solaire et ce que vaut chaque énergie, avec un tarif (Réglages › Électricité).":
+    "The cost, the solar gains and what each energy is worth, with a tariff (Settings › Electricity).",
 }
 
 export default en

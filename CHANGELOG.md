@@ -6,6 +6,21 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Overview: a block with the price of electricity now, the next 24 hours and the Tempo days, for
+  an installation of the server that has the tariff.
+- Every page becomes a dashboard, starting with Energy: “Edit” lets one move, resize, remove and
+  set up its parts (figures of the period, live flows, curve of the day, energy day by day, breakdown
+  by use, measured devices, surplus steering, electricity price), for oneself or, for an
+  administrator, for everyone, as on the overview. These parts can be added to the overview too,
+  listed by page. The figures may show a curve in each tile and their amounts in euros (with a
+  tariff).
+
+### Changed
+
+- Edit mode: the blocks are outlined with a dashed line.
+
 ## [0.11.0-beta.29] - 2026-11-17
 
 ### Added

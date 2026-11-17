@@ -4,6 +4,7 @@ import type { LucideIcon } from "lucide-react"
 import type {
   Charted,
   DashboardBlock,
+  DashboardPage,
   EnergyLive,
   SurplusView,
   DeviceView,
@@ -30,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import {
   Select,
   SelectContent,
@@ -41,6 +43,7 @@ import {
 } from "@/components/ui/select"
 import type { BlockType, EnergyFlow } from "./model"
 import {
+  BLOCK_GROUP,
   BLOCK_LABEL,
   block as newBlock,
   chartFields,
@@ -60,6 +63,9 @@ type Home = {
   charted: Charted[]
   live: EnergyLive | undefined
   surplus: SurplusView | undefined
+  priced: boolean
+  /** This server measures energy (the parts of the energy page have something to show). */
+  energy: boolean
 }
 
 /** A choice of a list: its value, its words, its icon, and the heading it is listed under. */
@@ -159,6 +165,9 @@ function available(home: Home): BlockType[] {
     if (b === "surplus") return (home.surplus?.loads.length ?? 0) > 0
     if (b === "chart") return home.charted.length > 0
     if (b === "scenes") return home.routines.length > 0
+    if (b === "price") return home.priced
+    // The parts of the energy page: with a measure of the energy of this server.
+    if (b.startsWith("energy_")) return home.energy
     return true
   })
 }
@@ -181,10 +190,12 @@ export function complete(b: DashboardBlock) {
 function Settings({
   block,
   home,
+  page,
   onChange,
 }: {
   block: DashboardBlock
   home: Home
+  page: DashboardPage
   onChange: (b: DashboardBlock) => void
 }) {
   const c = block.config
@@ -513,6 +524,65 @@ function Settings({
         </>
       )
     }
+    case "energy_kpis":
+    case "energy_bars":
+    case "energy_breakdown":
+    case "energy_measures": {
+      const period = (c.period as string | undefined) ?? "page"
+      return (
+        <>
+          <Field label={t("Période")}>
+            <Pick
+              value={
+                page === "energy" ? period : period === "page" ? "day" : period
+              }
+              onChange={(v) => set({ period: v === "page" ? undefined : v })}
+              choices={[
+                ...(page === "energy"
+                  ? [{ value: "page", label: t("Celle choisie sur la page") }]
+                  : []),
+                { value: "day", label: t("Aujourd'hui") },
+                { value: "week", label: t("7 jours") },
+                { value: "month", label: t("30 jours") },
+                { value: "year", label: t("Année") },
+              ]}
+            />
+          </Field>
+          {block.type === "energy_kpis" && (
+            <>
+              <label className="flex items-center justify-between gap-4 text-sm">
+                <span>
+                  {t("Courbe dans les tuiles")}
+                  <span className="block text-muted-foreground">
+                    {t(
+                      "La production, la consommation, le réseau et le coût le long de la période."
+                    )}
+                  </span>
+                </span>
+                <Switch
+                  checked={c.curves === true}
+                  onCheckedChange={(v) => set({ curves: v || undefined })}
+                />
+              </label>
+              <label className="flex items-center justify-between gap-4 text-sm">
+                <span>
+                  {t("Montants en euros")}
+                  <span className="block text-muted-foreground">
+                    {t(
+                      "Le coût, les gains du solaire et ce que vaut chaque énergie, avec un tarif (Réglages › Électricité)."
+                    )}
+                  </span>
+                </span>
+                <Switch
+                  checked={c.money !== false}
+                  onCheckedChange={(v) => set({ money: v ? undefined : false })}
+                />
+              </label>
+            </>
+          )}
+        </>
+      )
+    }
     case "scenes": {
       const ids = new Set((c.routine_ids as number[] | undefined) ?? [])
       return (
@@ -549,11 +619,13 @@ function Settings({
 export function BlockDialog({
   initial,
   home,
+  page,
   onDone,
   onClose,
 }: {
   initial?: DashboardBlock
   home: Home
+  page: DashboardPage
   onDone: (b: DashboardBlock) => void
   onClose: () => void
 }) {
@@ -585,11 +657,19 @@ export function BlockDialog({
                 choices={available(home).map((b) => ({
                   value: b,
                   label: BLOCK_LABEL[b],
+                  group: BLOCK_GROUP[b],
                 }))}
               />
             </Field>
           )}
-          {draft && <Settings block={draft} home={home} onChange={setDraft} />}
+          {draft && (
+            <Settings
+              block={draft}
+              home={home}
+              page={page}
+              onChange={setDraft}
+            />
+          )}
         </div>
         <DialogFooter>
           <Button
