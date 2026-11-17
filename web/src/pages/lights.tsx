@@ -109,7 +109,7 @@ function useSet() {
   })
 }
 
-function LightCard({
+export function LightCard({
   light,
   selected,
   onSelect,

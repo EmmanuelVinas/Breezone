@@ -92,3 +92,26 @@ async fn each_user_may_have_an_overview_over_the_installations_one() {
     let (_, v) = user.call(Method::GET, &path, None).await;
     assert_eq!(v["source"], "generated");
 }
+
+#[tokio::test]
+async fn a_zone_has_a_history_a_chart_can_show() {
+    let dir = std::env::temp_dir().join(format!("breezone-dashboard-charts-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let mut cfg = Config::for_tests(dir);
+    cfg.scan_port = 9;
+    let state = breezone_server::init_state(cfg).await.unwrap();
+    let base = format!("http://127.0.0.1:{}", serve(breezone_server::app(state)).await);
+    let http = reqwest::Client::new();
+    let admin = Client { token: token(&http, &base, "/api/setup", "admin").await, base: base.clone(), http: http.clone() };
+    let ws = serve(mock::router(Arc::new(Mutex::new(mock::preset("maison"))) as MockState)).await;
+    admin.call(Method::POST, "/api/installations", Some(json!({"name": "Maison", "host": "127.0.0.1", "port": ws}))).await;
+
+    // The first reading of the zones is recorded: their device has a history of its measures.
+    let (_, charted) = admin.call(Method::GET, "/api/devices/charted", None).await;
+    let first = &charted.as_array().unwrap_or_else(|| panic!("{charted}"))[0];
+    assert!(first["fields"].as_array().unwrap().contains(&json!("room_temp")), "{charted}");
+    let id = first["device_id"].as_i64().unwrap();
+    let (s, history) = admin.call(Method::GET, &format!("/api/devices/{id}/history?hours=24"), None).await;
+    assert_eq!(s, StatusCode::OK, "{history}");
+    assert!(!history["series"]["room_temp"].as_array().unwrap().is_empty(), "{history}");
+}

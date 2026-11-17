@@ -174,7 +174,7 @@ function Measures({ s }: { s: Partial<VentilationRoomState> }) {
   )
 }
 
-function RoomCard({
+export function RoomCard({
   device,
   demanding,
   selected,

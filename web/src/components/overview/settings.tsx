@@ -1,5 +1,7 @@
 import { useState } from "react"
+import type { LucideIcon } from "lucide-react"
 import type {
+  Charted,
   DashboardBlock,
   DeviceView,
   Room,
@@ -8,6 +10,7 @@ import type {
 } from "@/lib/api"
 import { deviceType, typeOrder } from "@/lib/device-icons"
 import { t } from "@/lib/i18n"
+import { ROOM_ICONS, roomIconName } from "@/lib/room-icons"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -21,7 +24,9 @@ import { Label } from "@/components/ui/label"
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
@@ -39,6 +44,15 @@ type Home = {
   rooms: Room[]
   routines: Routine[]
   traits: TraitInfo[]
+  charted: Charted[]
+}
+
+/** A choice of a list: its value, its words, its icon, and the heading it is listed under. */
+type Choice = {
+  value: string
+  label: string
+  icon?: LucideIcon
+  group?: string
 }
 
 function Field({
@@ -59,28 +73,68 @@ function Field({
 function Pick({
   value,
   onChange,
-  options,
+  choices,
   placeholder,
 }: {
   value: string | undefined
   onChange: (v: string) => void
-  options: [string, string][]
+  choices: Choice[]
   placeholder?: string
 }) {
+  const groups = [...new Set(choices.map((c) => c.group ?? ""))]
+  const item = (c: Choice) => (
+    <SelectItem key={c.value} value={c.value}>
+      <span className="inline-flex items-center gap-2">
+        {c.icon && (
+          <c.icon className="size-4 text-muted-foreground" aria-hidden />
+        )}
+        {c.label}
+      </span>
+    </SelectItem>
+  )
   return (
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger className="w-full">
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent>
-        {options.map(([v, label]) => (
-          <SelectItem key={v} value={v}>
-            {label}
-          </SelectItem>
-        ))}
+        {groups.map((g) =>
+          g ? (
+            <SelectGroup key={g}>
+              <SelectLabel>{g}</SelectLabel>
+              {choices.filter((c) => c.group === g).map(item)}
+            </SelectGroup>
+          ) : (
+            choices.filter((c) => !c.group).map(item)
+          )
+        )}
       </SelectContent>
     </Select>
   )
+}
+
+/** Devices as choices, grouped by type (in the order of the menu), with the icon of their type. */
+function deviceChoices(devices: DeviceView[]): Choice[] {
+  return [...devices]
+    .sort(
+      (a, b) =>
+        typeOrder(deviceType(a)) - typeOrder(deviceType(b)) ||
+        a.name.localeCompare(b.name)
+    )
+    .map((d) => ({
+      value: String(d.id),
+      label: d.name,
+      icon: deviceType(d).icon,
+      group: deviceType(d).label,
+    }))
+}
+
+/** The fields of a device a chart can show: those with a history, with their label. */
+function chartedFields(d: DeviceView, home: Home) {
+  const has = new Set(
+    home.charted.find((c) => c.device_id === d.id)?.fields ?? []
+  )
+  return chartFields(d, home.traits).filter((f) => has.has(f.name))
 }
 
 /** Whether a block has what it needs to show something. */
@@ -107,10 +161,6 @@ function Settings({
   const set = (patch: Record<string, unknown>) =>
     onChange({ ...block, config: { ...c, ...patch } })
   const devices = home.devices.filter(shown)
-  const deviceOptions = devices.map((d): [string, string] => [
-    String(d.id),
-    `${d.name} · ${deviceType(d).label}`,
-  ])
   switch (block.type as BlockType) {
     case "energy":
       return (
@@ -118,10 +168,10 @@ function Settings({
           <Pick
             value={String(c.flow ?? "solar")}
             onChange={(flow) => set({ flow })}
-            options={(Object.keys(FLOW_LABEL) as EnergyFlow[]).map((f) => [
-              f,
-              FLOW_LABEL[f],
-            ])}
+            choices={(Object.keys(FLOW_LABEL) as EnergyFlow[]).map((f) => ({
+              value: f,
+              label: FLOW_LABEL[f],
+            }))}
           />
         </Field>
       )
@@ -138,6 +188,7 @@ function Settings({
             ? `room:${c.room_id ?? "none"}`
             : undefined
       const hidden = new Set((c.hidden as number[] | undefined) ?? [])
+      const charts = (c.charts as Record<string, string> | undefined) ?? {}
       const members = devices.filter((d) =>
         c.type !== undefined
           ? deviceType(d).id === c.type
@@ -159,36 +210,74 @@ function Settings({
                       : { room_id: v === "none" ? null : Number(v) },
                 })
               }}
-              options={[
-                ...home.rooms.map((r): [string, string] => [
-                  `room:${r.id}`,
-                  r.name,
-                ]),
-                ["room:none", t("Sans pièce")],
-                ...types.map((ty): [string, string] => [
-                  `type:${ty.id}`,
-                  ty.label,
-                ]),
+              choices={[
+                ...home.rooms.map((r): Choice => ({
+                  value: `room:${r.id}`,
+                  label: r.name,
+                  icon: ROOM_ICONS[roomIconName(r)],
+                  group: t("Pièces"),
+                })),
+                {
+                  value: "room:none",
+                  label: t("Sans pièce"),
+                  icon: ROOM_ICONS.house,
+                  group: t("Pièces"),
+                },
+                ...types.map((ty): Choice => ({
+                  value: `type:${ty.id}`,
+                  label: ty.label,
+                  icon: ty.icon,
+                  group: t("Types d'appareils"),
+                })),
               ]}
             />
           </Field>
           {members.length > 0 && (
-            <Field label={t("Appareils montrés")}>
+            <Field label={t("Appareils montrés, et leur courbe")}>
               <div className="grid gap-2">
-                {members.map((d) => (
-                  <label key={d.id} className="flex items-center gap-2 text-sm">
-                    <Checkbox
-                      checked={!hidden.has(d.id)}
-                      onCheckedChange={(v) => {
-                        const next = new Set(hidden)
-                        if (v) next.delete(d.id)
-                        else next.add(d.id)
-                        set({ hidden: [...next] })
-                      }}
-                    />
-                    {d.name}
-                  </label>
-                ))}
+                {members.map((d) => {
+                  const fields = chartedFields(d, home)
+                  const Icon = deviceType(d).icon
+                  return (
+                    <div key={d.id} className="flex items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={!hidden.has(d.id)}
+                        onCheckedChange={(v) => {
+                          const next = new Set(hidden)
+                          if (v) next.delete(d.id)
+                          else next.add(d.id)
+                          set({ hidden: [...next] })
+                        }}
+                        aria-label={d.name}
+                      />
+                      <Icon
+                        className="size-4 text-muted-foreground"
+                        aria-hidden
+                      />
+                      <span className="min-w-0 flex-1 truncate">{d.name}</span>
+                      {fields.length > 0 && !hidden.has(d.id) && (
+                        <div className="w-40">
+                          <Pick
+                            value={charts[String(d.id)] ?? "none"}
+                            onChange={(v) => {
+                              const next = { ...charts }
+                              if (v === "none") delete next[String(d.id)]
+                              else next[String(d.id)] = v
+                              set({ charts: next })
+                            }}
+                            choices={[
+                              { value: "none", label: t("Sans courbe") },
+                              ...fields.map((f) => ({
+                                value: f.name,
+                                label: f.label,
+                              })),
+                            ]}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </Field>
           )}
@@ -202,39 +291,44 @@ function Settings({
             value={c.device_id !== undefined ? String(c.device_id) : undefined}
             placeholder={t("Choisir")}
             onChange={(v) => set({ device_id: Number(v) })}
-            options={deviceOptions}
+            choices={deviceChoices(devices)}
           />
         </Field>
       )
     case "chart": {
+      const withData = home.devices.filter(
+        (x) => chartedFields(x, home).length > 0
+      )
       const d = home.devices.find((x) => x.id === c.device_id)
-      const fields = d ? chartFields(d, home.traits) : []
+      const fields = d ? chartedFields(d, home) : []
       return (
         <>
-          <Field label={t("Appareil")}>
-            <Pick
-              value={
-                c.device_id !== undefined ? String(c.device_id) : undefined
-              }
-              placeholder={t("Choisir")}
-              onChange={(v) => {
-                const next = home.devices.find((x) => x.id === Number(v))
-                const first = next
-                  ? chartFields(next, home.traits)[0]
-                  : undefined
-                set({ device_id: Number(v), field: first?.name })
-              }}
-              options={home.devices
-                .filter((x) => chartFields(x, home.traits).length > 0)
-                .map((x): [string, string] => [String(x.id), x.name])}
-            />
-          </Field>
+          {withData.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {t("Aucun appareil n'a encore d'historique.")}
+            </p>
+          ) : (
+            <Field label={t("Appareil")}>
+              <Pick
+                value={
+                  c.device_id !== undefined ? String(c.device_id) : undefined
+                }
+                placeholder={t("Choisir")}
+                onChange={(v) => {
+                  const next = home.devices.find((x) => x.id === Number(v))
+                  const first = next ? chartedFields(next, home)[0] : undefined
+                  set({ device_id: Number(v), field: first?.name })
+                }}
+                choices={deviceChoices(withData)}
+              />
+            </Field>
+          )}
           {fields.length > 0 && (
             <Field label={t("Mesure")}>
               <Pick
                 value={typeof c.field === "string" ? c.field : undefined}
                 onChange={(field) => set({ field })}
-                options={fields.map((f) => [f.name, f.label])}
+                choices={fields.map((f) => ({ value: f.name, label: f.label }))}
               />
             </Field>
           )}
@@ -242,9 +336,9 @@ function Settings({
             <Pick
               value={String(c.hours ?? 24)}
               onChange={(v) => set({ hours: Number(v) })}
-              options={[
-                ["24", t("24 heures")],
-                ["168", t("7 jours")],
+              choices={[
+                { value: "24", label: t("24 heures") },
+                { value: "168", label: t("7 jours") },
               ]}
             />
           </Field>
@@ -311,10 +405,10 @@ export function BlockDialog({
                 value={draft?.type}
                 placeholder={t("Choisir")}
                 onChange={(type) => setDraft(newBlock(type as BlockType))}
-                options={(Object.keys(BLOCK_LABEL) as BlockType[]).map((b) => [
-                  b,
-                  BLOCK_LABEL[b],
-                ])}
+                choices={(Object.keys(BLOCK_LABEL) as BlockType[]).map((b) => ({
+                  value: b,
+                  label: BLOCK_LABEL[b],
+                }))}
               />
             </Field>
           )}

@@ -162,7 +162,7 @@ function Controls({
   )
 }
 
-function ShutterCard({
+export function ShutterCard({
   device,
   selected,
   onSelect,

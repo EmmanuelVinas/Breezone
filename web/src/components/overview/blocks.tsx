@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ChevronRight, Play, Sun } from "lucide-react"
 import { toast } from "sonner"
 import type {
+  Charted,
   DashboardBlock,
   DeviceView,
   EnergyDay,
@@ -31,6 +32,11 @@ import { t, tn } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { Sparkline } from "@/components/sparkline"
 import { WeatherCard } from "@/components/weather-card"
+import { ZoneCard } from "@/components/zone-card"
+import { LightCard } from "@/pages/lights"
+import { ShutterCard } from "@/pages/shutters"
+import { RoomCard } from "@/pages/ventilation"
+import { RoomIcon } from "@/lib/room-icons"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
@@ -47,6 +53,8 @@ export type OverviewData = {
   surplus: SurplusView | undefined
   routines: Routine[]
   traits: TraitInfo[]
+  /** The devices with a history, and its fields. */
+  charted: Charted[]
 }
 
 export const OverviewContext = createContext<OverviewData | null>(null)
@@ -86,127 +94,165 @@ const glow = (color: string | null) =>
       }
     : undefined
 
-/** What a line says of a device, and the switch it offers. */
-function describe(d: DeviceView): {
+/** A small picture of a shutter: its slats cover what is closed. */
+function ShutterGlyph({ position }: { position: number | null }) {
+  const closed =
+    position === null ? 0.5 : 1 - Math.min(100, Math.max(0, position)) / 100
+  const slats = Math.round(closed * 5)
+  return (
+    <svg viewBox="0 0 16 16" className="size-4 shrink-0" aria-hidden>
+      <rect
+        x="1.5"
+        y="1.5"
+        width="13"
+        height="13"
+        rx="3"
+        fill="none"
+        stroke="currentColor"
+        strokeOpacity="0.5"
+      />
+      {Array.from({ length: slats }, (_, i) => (
+        <rect
+          key={i}
+          x="3"
+          y={3 + i * 2.2}
+          width="10"
+          height="1.4"
+          rx="0.5"
+          fill="currentColor"
+        />
+      ))}
+    </svg>
+  )
+}
+
+/** What a device shows on a line: its state in words, its value, how its icon looks. */
+function look(d: DeviceView): {
   text: string | null
   value: string | null
-  toggle: { trait: string; on: boolean } | null
+  tone: string | null
+  shutter: number | null | undefined
 } {
   const s = state(d)
-  if (!d.available)
-    return { text: t("indisponible"), value: null, toggle: null }
-  switch (d.kind) {
-    case "climate.zone": {
+  const none = { text: null, value: null, tone: null, shutter: undefined }
+  if (!d.available) return { ...none, text: t("indisponible") }
+  switch (deviceType(d).id) {
+    case "climate": {
       const on = s.on === true
       const temp = num(s.room_temp)
       const mode =
         typeof s.mode === "string" ? MODE_LABEL[s.mode as Mode] : null
       return {
+        ...none,
         text: on ? mode : t("Éteinte"),
         value:
           on && num(s.setpoint) !== null
             ? `${formatTemp(temp)} → ${formatTemp(num(s.setpoint))}`
             : formatTemp(temp),
-        toggle: { trait: "climate.zone", on },
+        tone: !on ? null : s.mode === "cooling" ? "text-cool" : "text-heat",
       }
     }
     case "light": {
       const on = s.on === true
       const b = num(s.brightness)
       return {
-        text: on && b !== null ? `${Math.round(b)} %` : null,
-        value: null,
-        toggle: { trait: "light", on },
+        ...none,
+        text: on
+          ? b !== null
+            ? `${Math.round(b)} %`
+            : t("allumée")
+          : t("éteinte"),
+        tone: on ? "text-warning" : null,
       }
     }
-    case "switch.relay": {
+    case "switch": {
+      const on = s.on === true
       const p = num(s.power)
       return {
-        text: p !== null && s.on === true ? watts(p) : null,
-        value: null,
-        toggle: { trait: "switch.relay", on: s.on === true },
+        ...none,
+        text: on ? t("allumé") : t("éteint"),
+        value: on && p !== null ? watts(p) : null,
+        tone: on ? "text-warning" : null,
       }
     }
-    case "ev.charger": {
+    case "shutter":
+    case "window":
+    case "door": {
+      const c = coverState(d)
+      return {
+        ...none,
+        value: coverText(c),
+        shutter: typeof c.position === "number" ? c.position : null,
+      }
+    }
+    case "charger": {
       const status = chargerStatus(s as Parameters<typeof chargerStatus>[0])
       const p = num(s.power)
       return {
+        ...none,
         text: CHARGER_STATUS[status] ?? null,
-        value: [
-          p !== null && p > 0 ? watts(p) : null,
-          num(s.session_energy) ? kwh(num(s.session_energy)) : null,
-        ]
-          .filter(Boolean)
-          .join(" · "),
-        toggle: null,
+        value:
+          [
+            p !== null && p > 0 ? watts(p) : null,
+            num(s.session_energy) ? kwh(num(s.session_energy)) : null,
+          ]
+            .filter(Boolean)
+            .join(" · ") || null,
+        tone: status === "charging" ? "text-primary" : null,
       }
     }
-    case "cover.position":
-      return { text: null, value: coverText(coverState(d)), toggle: null }
-    case "ventilation.room":
-    case "ventilation.unit": {
+    case "ventilation":
+    case "room-air": {
       const level = num(s.level)
       const flow = num(s.flow)
       return {
-        text: null,
+        ...none,
         value:
           level !== null
             ? `${level} %`
             : flow !== null
               ? `${number(flow, 0)} m³/h`
               : null,
-        toggle: null,
       }
     }
     default: {
       const p = num(s.power)
-      return { text: null, value: p !== null ? watts(p) : null, toggle: null }
+      return { ...none, value: p !== null ? watts(p) : null }
     }
   }
 }
 
-function DeviceLine({ d, large }: { d: DeviceView; large?: boolean }) {
-  const qc = useQueryClient()
-  const { text, value, toggle } = describe(d)
-  const act = useMutation({
-    mutationFn: (on: boolean) => api.act(d.id, toggle!.trait, "set", { on }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["devices"] }),
-    onError: (e) => toast.error(errorText(e)),
+/** A device on a line of a card: what it is now, and its curve when the card shows one. Only to
+ * look at: a device is driven from its own card. */
+function DeviceLine({ d, curve }: { d: DeviceView; curve?: string }) {
+  const { text, value, tone, shutter } = look(d)
+  const history = useQuery({
+    queryKey: ["device-history", d.id, 24],
+    queryFn: () => api.deviceHistory(d.id, 24, 96),
+    enabled: curve !== undefined,
+    refetchInterval: 5 * 60_000,
   })
-  const type = deviceType(d)
-  const active = toggle?.on ?? false
+  const points = curve ? (history.data?.series[curve] ?? []) : []
   return (
-    <div
-      className={cn(
-        "flex items-center gap-3",
-        large ? "py-1" : "border-t border-border/60 py-3 first:border-t-0"
-      )}
-    >
-      <DeviceTypeIcon
-        of={type}
-        className={cn(
-          "size-4 shrink-0",
-          active ? "text-warning" : "text-muted-foreground"
+    <div className="flex items-center gap-3 border-t border-border/60 py-3 first:border-t-0">
+      <span className={cn("shrink-0", tone ?? "text-muted-foreground")}>
+        {shutter !== undefined ? (
+          <ShutterGlyph position={shutter} />
+        ) : (
+          <DeviceTypeIcon of={deviceType(d)} className="size-4" aria-hidden />
         )}
-        aria-hidden
-      />
+      </span>
       <span className="min-w-0 flex-1 truncate">
         {d.name}
         {text && <span className="text-muted-foreground"> · {text}</span>}
       </span>
+      {points.length > 1 && (
+        <Sparkline points={points} className="h-6 w-20 shrink-0 text-primary" />
+      )}
       {value && (
         <span className="tabular shrink-0 text-sm text-muted-foreground">
           {value}
         </span>
-      )}
-      {toggle && (
-        <Switch
-          checked={toggle.on}
-          disabled={!d.can_control || !d.available}
-          loading={act.isPending}
-          onCheckedChange={(on) => act.mutate(on)}
-          aria-label={d.name}
-        />
       )}
     </div>
   )
@@ -273,7 +319,7 @@ function GroupBlock({ config }: { config: GroupConfig }) {
         : t("Appareils")
       : (room?.name ?? t("Sans pièce"))
   const temps = list
-    .filter((d) => d.kind === "climate.zone")
+    .filter((d) => deviceType(d).id === "climate")
     .map((d) => num(state(d).room_temp))
     .filter((v): v is number => v !== null)
   const meta =
@@ -291,32 +337,120 @@ function GroupBlock({ config }: { config: GroupConfig }) {
           meta={meta}
           to={config.type !== undefined ? TYPE_PAGE[config.type] : undefined}
         >
-          {title}
+          {room && config.type === undefined ? (
+            <span className="inline-flex items-center gap-2">
+              <RoomIcon
+                room={room}
+                className="size-4 text-muted-foreground"
+                aria-hidden
+              />
+              {title}
+            </span>
+          ) : (
+            title
+          )}
         </Title>
         {list.length === 0 ? (
           <p className="py-3 text-sm text-muted-foreground">
             {t("Aucun appareil.")}
           </p>
         ) : (
-          list.map((d) => <DeviceLine key={d.id} d={d} />)
+          list.map((d) => (
+            <DeviceLine
+              key={d.id}
+              d={d}
+              curve={config.charts?.[String(d.id)]}
+            />
+          ))
         )}
       </CardContent>
     </Card>
   )
 }
 
+/** A device driven from the overview: the card of its own page, or its line with its switch. */
 function DeviceBlock({ id }: { id: number }) {
-  const { devices } = useOverview()
+  const { devices, installation } = useOverview()
+  const qc = useQueryClient()
   const d = devices.find((x) => x.id === id)
+  const toggleTrait =
+    d &&
+    (deviceType(d).id === "light"
+      ? "light"
+      : deviceType(d).id === "switch"
+        ? "switch.relay"
+        : deviceType(d).id === "climate"
+          ? "climate.zone"
+          : null)
+  const act = useMutation({
+    mutationFn: (on: boolean) => api.act(id, toggleTrait!, "set", { on }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["devices"] }),
+    onError: (e) => toast.error(errorText(e)),
+  })
+  if (!d)
+    return (
+      <Card className="h-full rounded-3xl">
+        <CardContent className="text-sm text-muted-foreground">
+          {t("Appareil indisponible")}
+        </CardContent>
+      </Card>
+    )
+  const noop = () => {}
+  switch (deviceType(d).id) {
+    case "shutter":
+    case "window":
+    case "door":
+      return (
+        <ShutterCard
+          device={d}
+          selected={false}
+          onSelect={noop}
+          canDrive={d.can_control}
+        />
+      )
+    case "light":
+      return (
+        <LightCard
+          light={d}
+          selected={false}
+          onSelect={noop}
+          canDrive={d.can_control}
+        />
+      )
+    case "room-air":
+      return (
+        <RoomCard
+          device={d}
+          demanding={false}
+          selected={false}
+          onSelect={noop}
+          canDrive={d.can_control}
+        />
+      )
+    case "climate": {
+      const ref = d.reference as { system_id?: number; zone_id?: number }
+      const zone = installation.zones.find(
+        (z) => z.system_id === ref.system_id && z.zone_id === ref.zone_id
+      )
+      if (zone) return <ZoneCard zone={zone} readOnly={!d.can_control} />
+      break
+    }
+  }
+  const on = state(d).on === true
   return (
-    <Card className="h-full rounded-3xl" style={glow(d ? tint([d]) : null)}>
-      <CardContent>
-        {d ? (
-          <DeviceLine d={d} large />
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            {t("Appareil indisponible")}
-          </p>
+    <Card className="h-full rounded-3xl" style={glow(tint([d]))}>
+      <CardContent className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <DeviceLine d={d} />
+        </div>
+        {toggleTrait && (
+          <Switch
+            checked={on}
+            disabled={!d.can_control || !d.available}
+            loading={act.isPending}
+            onCheckedChange={(v) => act.mutate(v)}
+            aria-label={d.name}
+          />
         )}
       </CardContent>
     </Card>

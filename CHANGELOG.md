@@ -6,6 +6,22 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Overview: a room card only shows (a device is driven from its own block): each line says the state
+  of its device (a shutter drawn at its position, a light or the air conditioning lit), and may show
+  its curve over 24 hours. A device block is the full card of its page (a shutter, a light, a zone, a
+  valve of the ventilation), with its controls. A chart offers only the measures that have a history.
+  The lists of devices and rooms are grouped by type, with their icon.
+- More icons for the rooms (kitchen, vegetable garden, terrace, workshop, fireplace, pets…), and
+  names that suggest them.
+
+### Fixed
+
+- Overview: a shutter's line showed nothing of its state.
+- The history of an Airzone zone is read like that of any device (`/api/devices/{id}/history`): its
+  temperature, humidity and setpoint. `GET /api/devices/charted` lists the devices with a history.
+
 ## [0.11.0-beta.25] - 2026-11-16
 
 ### Added

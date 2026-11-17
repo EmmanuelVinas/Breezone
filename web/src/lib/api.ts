@@ -971,6 +971,9 @@ export type AutomationInput = {
 }
 
 /** A rule "quand… si… alors… sinon…", with its sentence and what it sees now. */
+/** A device with a history, and the fields it has one of (what a chart can show). */
+export type Charted = { device_id: number; fields: string[] }
+
 /** The share of a row a block of the overview takes on a wide screen. */
 export type DashboardSize = "quarter" | "half" | "full"
 
@@ -1114,6 +1117,7 @@ export const api = {
       device_ids: deviceIds,
     }),
   traits: () => request<TraitInfo[]>("GET", "/api/traits"),
+  charted: () => request<Charted[]>("GET", "/api/devices/charted"),
   dashboard: (installationId: number) =>
     request<DashboardView>(
       "GET",

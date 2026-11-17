@@ -1546,11 +1546,9 @@ const en: Record<string, string> = {
   "Aucune scène.": "No scene.",
   "{n} appareil": "{n} device",
   "Mesure d'énergie": "Energy figure",
-  "Pièce ou type d'appareils": "Room or type of devices",
   Graphique: "Chart",
   "Pleine largeur": "Full width",
   "Ce que la carte rassemble": "What the card gathers",
-  "Appareils montrés": "Devices shown",
   "24 heures": "24 hours",
   "Scènes montrées (aucune cochée : toutes)": "Scenes shown (none ticked: all)",
   "Ce bloc n'a pas de réglage.": "This block has no settings.",
@@ -1578,6 +1576,12 @@ const en: Record<string, string> = {
   "{n} pièces": "{n} rooms",
   "Météo (pas encore de données)": "Weather (no data yet)",
   "Pas encore d'historique.": "No history yet.",
+  "Pièce ou type d'appareils (affichage)": "Room or type of devices (display)",
+  "Appareil, avec ses commandes": "Device, with its controls",
+  "Types d'appareils": "Types of devices",
+  "Appareils montrés, et leur courbe": "Devices shown, and their curve",
+  "Sans courbe": "No curve",
+  "Aucun appareil n'a encore d'historique.": "No device has a history yet.",
 }
 
 export default en

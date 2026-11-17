@@ -183,6 +183,61 @@ fn default_points() -> i64 {
     96
 }
 
+/// The zone an Airzone device stands for: (installation, system, zone).
+fn zone_of(device: &db::Device) -> Option<(i64, i64, i64)> {
+    let inst = device.installation_id.filter(|_| device.source == "airzone")?;
+    match device.source_ref.split('/').collect::<Vec<_>>()[..] {
+        [_, system, zone] => Some((inst, system.parse().ok()?, zone.parse().ok()?)),
+        _ => None,
+    }
+}
+
+/// The readings of a zone as the samples of its device (fields of `climate.zone@1`).
+async fn zone_samples(db: &db::Db, device_id: i64, (inst, system, zone): (i64, i64, i64), from: i64, until: i64) -> ApiResult<Vec<db::DeviceSample>> {
+    let mut out = vec![];
+    for r in db::readings(db, inst, system, zone, from).await?.into_iter().filter(|r| r.ts < until) {
+        let fields = [("room_temp", r.room_temp), ("humidity", r.humidity.filter(|h| *h > 0).map(|h| h as f64)), ("setpoint", r.setpoint)];
+        for (field, value) in fields {
+            if let Some(value) = value {
+                out.push(db::DeviceSample { device_id, ts: r.ts, field: field.into(), value });
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// A device with a history, and the fields it has one of.
+#[derive(Serialize)]
+pub struct Charted {
+    pub device_id: i64,
+    pub fields: Vec<String>,
+}
+
+/// The devices this user sees that have a history, with its fields: what a chart can show.
+pub async fn charted(State(state): State<AppState>, user: AuthUser) -> ApiResult<Json<Vec<Charted>>> {
+    let access = Access::of(&state.db, &user).await?;
+    let since = db::now() - 3 * 86_400;
+    let devices = db::list_devices(&state.db).await?;
+    let mut by_device: BTreeMap<i64, Vec<String>> = BTreeMap::new();
+    for (id, field) in db::charted_fields(&state.db, since).await? {
+        by_device.entry(id).or_default().push(field);
+    }
+    for (inst, system, zone, temp, humidity, setpoint) in db::charted_zones(&state.db, since).await? {
+        let reference = format!("{inst}/{system}/{zone}");
+        if let Some(d) = devices.iter().find(|d| d.source == "airzone" && d.source_ref == reference) {
+            let fields = [("room_temp", temp), ("humidity", humidity), ("setpoint", setpoint)];
+            by_device.entry(d.id).or_default().extend(fields.into_iter().filter(|(_, has)| *has).map(|(f, _)| f.to_string()));
+        }
+    }
+    Ok(Json(
+        by_device
+            .into_iter()
+            .filter(|(id, fields)| !fields.is_empty() && devices.iter().find(|d| d.id == *id).is_some_and(|d| d.installation_id.is_none_or(|i| access.can_view(i))))
+            .map(|(device_id, fields)| Charted { device_id, fields })
+            .collect(),
+    ))
+}
+
 #[derive(Serialize)]
 pub struct HistoryView {
     /// Seconds per point.
@@ -226,9 +281,15 @@ pub async fn device_history(State(state): State<AppState>, user: AuthUser, Path(
         }
         _ => return Err(ApiError::bad_request("from and until go together")),
     };
-    // The summary that fits the bucket: a curve over years reads days, not every few minutes.
-    let samples = crate::rollup::device_points(&state.db, state.cfg.timezone, id, from, until, crate::rollup::Level::for_bucket(bucket)).await?;
-    let oldest = crate::rollup::device_oldest(&state.db, id).await?;
+    let (samples, oldest) = match zone_of(&device) {
+        // An Airzone zone keeps its own history: its temperature, humidity and setpoint.
+        Some((inst, system, zone)) => (zone_samples(&state.db, id, (inst, system, zone), from, until).await?, None),
+        // The summary that fits the bucket: a curve over years reads days, not every few minutes.
+        None => (
+            crate::rollup::device_points(&state.db, state.cfg.timezone, id, from, until, crate::rollup::Level::for_bucket(bucket)).await?,
+            crate::rollup::device_oldest(&state.db, id).await?,
+        ),
+    };
     // Per field and bucket: (sum, count, last).
     let mut acc: BTreeMap<String, BTreeMap<i64, (f64, u32, f64)>> = BTreeMap::new();
     for s in samples {

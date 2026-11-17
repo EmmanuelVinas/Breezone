@@ -333,6 +333,11 @@ sans pièce) ou `{type}` (un type d'appareil), avec `hidden` (appareils masqués
 `{device_id}` · `chart` `{device_id, field, hours: 24|168}` · `weather` · `scenes`
 `{routine_ids?}` (aucune : toutes). Un client ignore un type qu'il ne connaît pas.
 
+`GET /api/devices/charted` 🔒 : `[{device_id, fields}]`, les appareils qui ont un historique et ses
+champs (ce qu'un graphique peut montrer). L'historique d'une zone Airzone se lit aussi par
+`/api/devices/{id}/history` (`room_temp`, `humidity`, `setpoint`). Un bloc `group` peut avoir
+`charts` `{device_id: field}` : la courbe de la ligne d'un appareil.
+
 ## Routines (scènes, exécutées par Breezone)
 
 Lancées à la demande seulement ; les programmations à heure fixe sont celles d'Airzone (voir

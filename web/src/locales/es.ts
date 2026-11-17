@@ -1560,11 +1560,9 @@ const es: Record<string, string> = {
   "Aucune scène.": "Ninguna escena.",
   "{n} appareil": "{n} dispositivo",
   "Mesure d'énergie": "Medida de energía",
-  "Pièce ou type d'appareils": "Habitación o tipo de dispositivos",
   Graphique: "Gráfico",
   "Pleine largeur": "Ancho completo",
   "Ce que la carte rassemble": "Lo que reúne la tarjeta",
-  "Appareils montrés": "Dispositivos mostrados",
   "24 heures": "24 horas",
   "Scènes montrées (aucune cochée : toutes)":
     "Escenas mostradas (ninguna marcada: todas)",
@@ -1593,6 +1591,14 @@ const es: Record<string, string> = {
   "{n} pièces": "{n} habitaciones",
   "Météo (pas encore de données)": "Tiempo (aún sin datos)",
   "Pas encore d'historique.": "Aún sin historial.",
+  "Pièce ou type d'appareils (affichage)":
+    "Habitación o tipo de dispositivos (visualización)",
+  "Appareil, avec ses commandes": "Dispositivo, con sus mandos",
+  "Types d'appareils": "Tipos de dispositivos",
+  "Appareils montrés, et leur courbe": "Dispositivos mostrados y su curva",
+  "Sans courbe": "Sin curva",
+  "Aucun appareil n'a encore d'historique.":
+    "Ningún dispositivo tiene historial aún.",
 }
 
 export default es

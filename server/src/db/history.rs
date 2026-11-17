@@ -86,3 +86,15 @@ pub async fn temperature_trends(db: &Db, installation_id: i64, since: i64, bucke
     .fetch_all(db)
     .await
 }
+
+/// The zones recorded since `since`, and which of their measures were: (installation, system,
+/// zone, temperature, humidity, setpoint).
+pub async fn charted_zones(db: &Db, since: i64) -> sqlx::Result<Vec<(i64, i64, i64, bool, bool, bool)>> {
+    sqlx::query_as(
+        "SELECT installation_id, system_id, zone_id, MAX(room_temp IS NOT NULL), MAX(humidity > 0), MAX(setpoint IS NOT NULL) \
+         FROM readings WHERE ts >= ? GROUP BY installation_id, system_id, zone_id",
+    )
+    .bind(since)
+    .fetch_all(db)
+    .await
+}

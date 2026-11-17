@@ -46,3 +46,15 @@ pub async fn device_samples(db: &Db, devices: &[i64], fields: &[&str], since: i6
     }
     Ok(out)
 }
+
+/// The fields of the devices of the modules that have a history: those summed up by the hour, and
+/// those read since `since` (not summed up yet).
+pub async fn charted_fields(db: &Db, since: i64) -> sqlx::Result<Vec<(i64, String)>> {
+    sqlx::query_as(
+        "SELECT device_id, field FROM device_hourly GROUP BY device_id, field \
+         UNION SELECT device_id, field FROM device_samples WHERE ts >= ? GROUP BY device_id, field",
+    )
+    .bind(since)
+    .fetch_all(db)
+    .await
+}

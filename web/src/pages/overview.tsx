@@ -166,6 +166,11 @@ export function OverviewPage() {
     refetchInterval: 10_000,
   })
   const routines = useQuery({ queryKey: ["routines"], queryFn: api.routines })
+  const charted = useQuery({
+    queryKey: ["charted"],
+    queryFn: api.charted,
+    staleTime: 5 * 60_000,
+  })
   const traits = useQuery({
     queryKey: ["traits"],
     queryFn: api.traits,
@@ -258,6 +263,7 @@ export function OverviewPage() {
     surplus: surplus.data,
     routines: routines.data ?? [],
     traits: traits.data ?? [],
+    charted: charted.data ?? [],
   }
   const busy = saveMine.isPending || saveDefault.isPending || reset.isPending
   const source =

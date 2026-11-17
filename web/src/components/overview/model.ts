@@ -19,8 +19,8 @@ export type EnergyFlow = "solar" | "home" | "battery" | "grid"
 export const BLOCK_LABEL: Record<BlockType, string> = {
   energy: t("Mesure d'énergie"),
   surplus: t("Surplus solaire"),
-  group: t("Pièce ou type d'appareils"),
-  device: t("Appareil"),
+  group: t("Pièce ou type d'appareils (affichage)"),
+  device: t("Appareil, avec ses commandes"),
   chart: t("Graphique"),
   weather: t("Météo"),
   scenes: t("Scènes"),
@@ -64,6 +64,8 @@ export type GroupConfig = {
   type?: string
   /** Devices left out of the card. */
   hidden?: number[]
+  /** The curve a device's line shows (device id → field), over the last 24 hours. */
+  charts?: Record<string, string>
 }
 
 export function groupDevices(config: GroupConfig, devices: DeviceView[]) {
