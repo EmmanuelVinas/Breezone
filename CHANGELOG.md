@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.26] - 2026-11-17
+
 ### Changed
 
 - Overview: a room card only shows (a device is driven from its own block): each line says the state
