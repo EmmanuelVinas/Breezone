@@ -2,6 +2,8 @@
 
 export type AirQualityLevel = "good" | "regular" | "bad"
 
+export type DayColor = "blue" | "white" | "red"
+
 export type MeasureRole = "grid" | "solar" | "battery" | "consumption"
 
 export type Mode = "stop" | "cooling" | "heating" | "fan" | "dry" | "aux_heating" | "auto"
@@ -20,12 +22,41 @@ export type AirQuality = {
   threshold_high: number | null
 }
 
+/** The profile a day of an announced colour follows (Tempo). */
+export type ColorProfiles = {
+  blue?: string
+  white?: string
+  red?: string
+}
+
 /** The link with an installation's WebServer (or its node). */
 export type Connection = {
   state: "online" | "offline" | "unknown"
   last_seen: number | null
   last_error: string | null
   latency_ms: number | null
+}
+
+/** The electricity contract of the home (one per server, as its meter). */
+export type Contract = {
+  /** ISO 3166-1 alpha-2 ("FR"). */
+  country: string | null
+  supplier: string | null
+  /** "custom": prices set by hand. */
+  offer: string
+  /** Subscribed power (kVA). */
+  power_kva: number | null
+  /** ISO 4217 ("EUR"). */
+  currency: string
+}
+
+/** The prices of a kind of day ("normal", "red day"…), slot by slot. */
+export type DayProfile = {
+  id: string
+  name: string
+  /** Chosen by hand ("#2563eb"). */
+  color: string | null
+  slots: PriceSlot[]
 }
 
 /** A device of the home: an Airzone zone or a device of a module (ADR 0013). */
@@ -101,6 +132,49 @@ export type NodeRef = {
   state: NodeState
 }
 
+/** The price at a moment, and where it comes from. */
+export type PriceAt = {
+  /** Per kWh. */
+  price: number
+  slot: string
+  profile: string
+  profile_name: string
+  /** The colour of the day, when the calendar follows one and it is known. */
+  color: DayColor | null
+  /** The day of the tariff ("YYYY-MM-DD"): the day before at night when a day starts at 06:00. */
+  day: string
+}
+
+/** A stretch of time at one price. */
+export type PricePeriod = {
+  start: number
+  end: number
+  price: number
+  slot: string
+  profile: string
+  profile_name: string
+  color: DayColor | null
+}
+
+/** A slot of a profile of day: from its start until the next one. */
+export type PriceSlot = {
+  /** "HH:MM", local time; the first one is "00:00". */
+  start: string
+  /** "HP", "HC"… */
+  name: string
+  /** Per kWh, taxes included. */
+  price: number
+}
+
+/** The price of electricity now, and over the next hours. */
+export type PriceView = {
+  currency: string
+  /** null: no tariff for now. */
+  now: PriceAt | null
+  /** From now on. */
+  periods: PricePeriod[]
+}
+
 /** A room of the home. */
 export type Room = {
   id: number
@@ -109,6 +183,43 @@ export type Room = {
   created_at: number
   /** Chosen by hand (a Lucide name); null: guessed from the name. */
   icon: string | null
+}
+
+/** The prices from a day on. */
+export type Tariff = {
+  /** Per month, taxes included. */
+  subscription: number
+  /** Per kWh returned to the grid; null: not sold. */
+  export_price: number | null
+  profiles: DayProfile[]
+  calendar: TariffCalendar
+}
+
+/** Which profile a day follows. */
+export type TariffCalendar = {
+  /** "HH:MM": when a day of the tariff starts (Tempo: "06:00"). */
+  day_start: string
+  /** The profile of each day of the week, Monday first. */
+  weekdays: string[]
+  /** Instead of the day of the week, when the colour of the day is announced. */
+  colors: ColorProfiles
+}
+
+/** A tariff and the local day it applies from. */
+export type TariffVersion = {
+  /** "YYYY-MM-DD". */
+  valid_from: string
+  tariff: Tariff
+}
+
+/** The contract of the home and its tariffs. */
+export type TariffView = {
+  /** null: not set yet. */
+  contract: Contract | null
+  /** Oldest first. */
+  versions: TariffVersion[]
+  /** This user may change them. */
+  can_edit: boolean
 }
 
 /** A zone of an installation. */

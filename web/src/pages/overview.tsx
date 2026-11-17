@@ -34,9 +34,15 @@ import {
 } from "@/lib/selected-installation"
 import { cn } from "@/lib/utils"
 import { PageHeader } from "@/components/app-shell"
-import { BlockView, OverviewContext } from "@/components/overview/blocks"
-import type { OverviewData } from "@/components/overview/blocks"
-import { generate, SIZE_LABEL } from "@/components/overview/model"
+import { BlockView } from "@/components/overview/blocks"
+import { OverviewContext } from "@/components/overview/context"
+import type { OverviewData } from "@/components/overview/context"
+import {
+  generate,
+  measuredFlows,
+  SIZE_LABEL,
+  worthShowing,
+} from "@/components/overview/model"
 import { BlockDialog } from "@/components/overview/settings"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -134,6 +140,8 @@ function Slot({
   )
 }
 
+const NO_ROLES = {}
+
 export function OverviewPage() {
   const qc = useQueryClient()
   const installation = useChosenInstallation()
@@ -193,20 +201,32 @@ export function OverviewPage() {
       ),
     [devices.data, id, modulesHere]
   )
+  // The energy of the home is measured by modules: an installation without them has none.
+  const energyHere = mine.some((d) => d.role !== null)
+  const roles = energyHere ? live.data?.roles : NO_ROLES
+  const surplusHere = (surplus.data?.loads ?? []).some((l) =>
+    mine.some((d) => d.id === l.device_id)
+  )
   const generated = useMemo(
     () =>
       generate(by, {
         devices: mine,
         rooms: rooms.data ?? [],
-        roles: live.data?.roles ?? {},
-        surplus: (surplus.data?.loads.length ?? 0) > 0,
+        roles: roles ?? {},
+        surplus: surplusHere,
         scenes: (routines.data?.length ?? 0) > 0,
       }),
-    [by, mine, rooms.data, live.data?.roles, surplus.data, routines.data]
+    [by, mine, rooms.data, roles, surplusHere, routines.data]
   )
   const view = dashboard.data
-  const blocks = draft ?? view?.layout?.blocks ?? generated.blocks
   const editing = draft !== null
+  // Out of the edit mode, the blocks with nothing to show here are left out.
+  const blocks = (draft ?? view?.layout?.blocks ?? generated.blocks).filter(
+    (b) =>
+      editing ||
+      (energyHere && live.isLoading) ||
+      worthShowing(b, { flows: measuredFlows(roles), surplus: surplusHere })
+  )
 
   const done = (v: DashboardView, message: string) => {
     qc.setQueryData(["dashboard", id], v)
@@ -258,9 +278,9 @@ export function OverviewPage() {
     installation,
     devices: mine,
     rooms: rooms.data ?? [],
-    live: live.data,
-    today: today.data,
-    surplus: surplus.data,
+    live: energyHere ? live.data : undefined,
+    today: energyHere ? today.data : undefined,
+    surplus: surplusHere ? surplus.data : undefined,
     routines: routines.data ?? [],
     traits: traits.data ?? [],
     charted: charted.data ?? [],

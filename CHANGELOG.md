@@ -6,6 +6,29 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Overview, energy blocks: one figure with its curve of the day at the bottom, or several figures
+  side by side in one block (solar, home, battery, grid), as chosen in its settings.
+- Overview, settings of the blocks: only what the home has is offered (no battery without one; the
+  solar surplus, charts and scenes only when there are some), and a flow it has no measure of is
+  left out of a block.
+- Overview, charts: several curves of a device in one chart (temperature, setpoint, humidity…), and
+  the outdoor temperature, added as chips; an air-conditioning zone may show its comfort day by day
+  instead. Charts are compact (the comfort of the week in one small chart), or as tall as on their
+  page, as chosen in their settings.
+
+- Electricity price (server): the contract of the home (country, supplier, offer, subscribed power)
+  and its dated tariffs (subscription, profiles of day cut into slots of clock time, a calendar by
+  day of the week or by announced colour, a day that may start at 06:00 as Tempo's), the price now
+  and the stretches of the next hours (`/api/energy/tariff`, `/api/energy/contract`,
+  `/api/energy/tariffs/{day}`, `/api/energy/price`); kept in the configuration backup.
+
+### Fixed
+
+- Overview: an installation without energy measures (only air conditioning, or on another server)
+  no longer shows the solar, home and grid figures of the home, nor its solar surplus.
+
 ## [0.11.0-beta.26] - 2026-11-17
 
 ### Changed

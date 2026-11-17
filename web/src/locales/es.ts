@@ -1599,6 +1599,20 @@ const es: Record<string, string> = {
   "Sans courbe": "Sin curva",
   "Aucun appareil n'a encore d'historique.":
     "Ningún dispositivo tiene historial aún.",
+  Affichage: "Visualización",
+  "Une mesure, avec sa courbe du jour": "Una medida, con su curva del día",
+  "Plusieurs mesures côte à côte": "Varias medidas una al lado de otra",
+  Mesures: "Medidas",
+  "Confort · {name}": "Confort · {name}",
+  "Courbes des mesures": "Curvas de las medidas",
+  Courbes: "Curvas",
+  "Retirer {name}": "Quitar {name}",
+  "Ajouter une courbe": "Añadir una curva",
+  Hauteur: "Altura",
+  Compacte: "Compacta",
+  "Grande, comme sur la page de la zone":
+    "Grande, como en la página de la zona",
+  Grande: "Grande",
 }
 
 export default es

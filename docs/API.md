@@ -191,6 +191,37 @@ Conventions :
 - L'énergie vient des compteurs des appareils quand ils en ont, sinon de la puissance moyenne.
 - Un trou de plus de deux intervalles (appareil non lu) ne compte pas.
 
+### Prix de l'électricité
+
+Le contrat de la maison est unique pour ce serveur, comme le compteur que lisent ses modules. Ses
+tarifs sont datés : chacun s'applique à partir d'un jour local (`valid_from`), et changer les prix en
+ajoute un, si bien que le passé garde les siens. Les prix sont ceux de la facture, taxes comprises,
+par kWh.
+
+Un tarif contient l'abonnement (par mois), le prix de rachat facultatif (`export_price`), des
+**profils de jour** et un **calendrier** :
+- un profil est découpé en **plages** (`slots`). La première commence à `00:00`, et chacune dure
+  jusqu'à la suivante ;
+- le calendrier donne le profil de chaque jour de la semaine (`weekdays`, lundi d'abord) ;
+- il peut aussi donner un profil par couleur annoncée (`colors`: `blue`, `white`, `red`, pour Tempo),
+  qui l'emporte sur le jour de la semaine ;
+- `day_start` (Tempo : `06:00`) fait commencer le jour du tarif plus tard que minuit. La nuit garde
+  alors le profil de la veille.
+
+| Méthode | Chemin | Description |
+|---------|--------|-------------|
+| GET 🔒 | `/api/energy/tariff` | `TariffView` : `{contract, versions:[{valid_from, tariff}], can_edit}` (`contract` vaut `null` tant qu'il n'est pas réglé) |
+| PUT 👑 | `/api/energy/contract` | `{country?, supplier?, offer?="custom", power_kva?, currency?="EUR"}` → `TariffView` |
+| PUT 👑 | `/api/energy/tariffs/{YYYY-MM-DD}` | `Tariff` : `{subscription, export_price?, profiles:[{id, name, color?, slots:[{start, name, price}]}], calendar:{day_start?="00:00", weekdays:[7 profils], colors?:{blue?, white?, red?}}}`, le tarif à partir de ce jour (créé ou remplacé) → `TariffView` |
+| DELETE 👑 | `/api/energy/tariffs/{YYYY-MM-DD}` | → `TariffView` ; 404 s'il n'y en a pas |
+| GET 🔒 | `/api/energy/price?hours=24` | `PriceView` : `{currency, now:{price, slot, profile, profile_name, color, day}, periods:[{start, end, price, slot, profile, profile_name, color}]}`, le prix maintenant et les plages des heures qui viennent (1 h à 7 jours). `now` vaut `null` sans tarif |
+
+Un tarif est refusé s'il a :
+- aucun profil, ou plus de 10 ;
+- des plages hors de l'ordre de la journée, ou une première plage qui ne commence pas à `00:00` ;
+- un prix hors de 0 à 10 par kWh ;
+- un jour du calendrier qui renvoie vers un profil inconnu.
+
 ### Historique long
 
 Le détail (toutes les 5 min) est gardé quelques semaines ; chaque heure, le serveur le résume par

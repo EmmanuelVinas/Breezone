@@ -40,6 +40,7 @@ const APPLIED: &[(&str, &str)] = &[
     ("0033_surplus.sql", "2d50614ab66df8190e850da57bbc68d7e05d316c33f909e4656105bd6f379481"),
     ("0034_automation_over.sql", "051801a2c9addc39b59bb141ea2f009e170281f94498ebaf36111028a9842852"),
     ("0035_dashboards.sql", "619155a3d90b18139c6433dce69d6749843b713dc3a23a7480b9f258b64aff11"),
+    ("0036_electricity_price.sql", "525f40b62d7fd06dfdb8f35cf95d1e4f21e2d6023c9824572c284d42dce064d8"),
 ];
 
 #[test]

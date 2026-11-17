@@ -6,12 +6,16 @@ export const ANDROID_APP_URL =
   "https://play.google.com/store/apps/details?id=com.breezone.app"
 import { lang } from "@/lib/i18n"
 import type {
+  Contract,
   DeviceView,
   Installation,
   MeasureRole,
   Mode,
   NodeState,
+  PriceView,
   Room,
+  Tariff,
+  TariffView,
   Zone,
 } from "@/lib/api.generated"
 
@@ -19,7 +23,19 @@ import type {
 export type {
   AirQuality,
   AirQualityLevel,
+  ColorProfiles,
   Connection,
+  Contract,
+  DayColor,
+  DayProfile,
+  PriceAt,
+  PricePeriod,
+  PriceSlot,
+  PriceView,
+  Tariff,
+  TariffCalendar,
+  TariffVersion,
+  TariffView,
   DeviceView,
   Installation,
   InstallationUserRights,
@@ -1208,6 +1224,18 @@ export const api = {
   energyLive: () => request<EnergyLive>("GET", "/api/energy/live"),
   energyDay: (date?: string) =>
     request<EnergyDay>("GET", `/api/energy/day${date ? `?date=${date}` : ""}`),
+  /** The electricity contract of the home and its dated tariffs. */
+  tariff: () => request<TariffView>("GET", "/api/energy/tariff"),
+  saveContract: (contract: Contract) =>
+    request<TariffView>("PUT", "/api/energy/contract", contract),
+  /** The tariff from a local day on ("YYYY-MM-DD"). */
+  saveTariff: (validFrom: string, tariff: Tariff) =>
+    request<TariffView>("PUT", `/api/energy/tariffs/${validFrom}`, tariff),
+  deleteTariff: (validFrom: string) =>
+    request<TariffView>("DELETE", `/api/energy/tariffs/${validFrom}`),
+  /** The price now, and the stretches of the next `hours`. */
+  price: (hours = 24) =>
+    request<PriceView>("GET", `/api/energy/price?hours=${hours}`),
   energyDays: (days: number) =>
     request<DayEnergy[]>("GET", `/api/energy/days?days=${days}`),
   /** The weather of the home and the sun of today. */

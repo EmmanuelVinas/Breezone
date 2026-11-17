@@ -9,10 +9,11 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
-import type { DayStats, Zone } from "@/lib/api"
+import type { DayStats } from "@/lib/api"
 import { api } from "@/lib/api"
 import { duration, formatTemp, percent } from "@/lib/format"
 import { locale, t } from "@/lib/i18n"
+import { cn } from "@/lib/utils"
 import {
   Card,
   CardContent,
@@ -60,7 +61,15 @@ function Summary({ label, value }: { label: string; value: string }) {
 }
 
 /** Comfort of a zone day by day: temperatures, share of the time near the setpoint, demand. */
-export function DailyComfort({ zone }: { zone: Zone }) {
+export function DailyComfort({
+  zone,
+  title,
+  className,
+}: {
+  zone: { installation_id: number; system_id: number; zone_id: number }
+  title?: string
+  className?: string
+}) {
   const [days, setDays] = useState("7")
   const daily = useQuery({
     queryKey: [
@@ -93,10 +102,10 @@ export function DailyComfort({ zone }: { zone: Zone }) {
   const demand = recordedDemand.reduce((s, d) => s + (d.demand_secs ?? 0), 0)
 
   return (
-    <Card className="rounded-3xl">
+    <Card className={cn("rounded-3xl", className)}>
       <CardHeader className="flex flex-row items-start justify-between gap-4">
         <div>
-          <CardTitle>{t("Confort jour par jour")}</CardTitle>
+          <CardTitle>{title ?? t("Confort jour par jour")}</CardTitle>
           <CardDescription>
             {t(
               "Part du temps allumée où la température est à ±0,5° de la consigne"

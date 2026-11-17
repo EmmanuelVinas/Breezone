@@ -1,8 +1,11 @@
 import { useState } from "react"
+import { Plus, X } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import type {
   Charted,
   DashboardBlock,
+  EnergyLive,
+  SurplusView,
   DeviceView,
   Room,
   Routine,
@@ -20,6 +23,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Label } from "@/components/ui/label"
 import {
   Select,
@@ -35,8 +44,12 @@ import {
   BLOCK_LABEL,
   block as newBlock,
   chartFields,
+  chartSeries,
   FLOW_LABEL,
+  measuredFlows,
+  OUTDOOR,
   shown,
+  zoneOf,
 } from "./model"
 
 type Home = {
@@ -45,6 +58,8 @@ type Home = {
   routines: Routine[]
   traits: TraitInfo[]
   charted: Charted[]
+  live: EnergyLive | undefined
+  surplus: SurplusView | undefined
 }
 
 /** A choice of a list: its value, its words, its icon, and the heading it is listed under. */
@@ -137,13 +152,28 @@ function chartedFields(d: DeviceView, home: Home) {
   return chartFields(d, home.traits).filter((f) => has.has(f.name))
 }
 
+/** The blocks worth adding: those with something to show in this home. */
+function available(home: Home): BlockType[] {
+  return (Object.keys(BLOCK_LABEL) as BlockType[]).filter((b) => {
+    if (b === "energy") return measuredFlows(home.live?.roles).length > 0
+    if (b === "surplus") return (home.surplus?.loads.length ?? 0) > 0
+    if (b === "chart") return home.charted.length > 0
+    if (b === "scenes") return home.routines.length > 0
+    return true
+  })
+}
+
 /** Whether a block has what it needs to show something. */
 export function complete(b: DashboardBlock) {
   const c = b.config
   if (b.type === "device") return typeof c.device_id === "number"
   if (b.type === "chart")
-    return typeof c.device_id === "number" && typeof c.field === "string"
+    return (
+      typeof c.device_id === "number" &&
+      (c.view === "comfort" || chartSeries(c).length > 0)
+    )
   if (b.type === "group") return "room_id" in c || "type" in c
+  if (b.type === "energy" && Array.isArray(c.flows)) return c.flows.length > 0
   return true
 }
 
@@ -162,19 +192,66 @@ function Settings({
     onChange({ ...block, config: { ...c, ...patch } })
   const devices = home.devices.filter(shown)
   switch (block.type as BlockType) {
-    case "energy":
+    case "energy": {
+      // Only what the home measures (no battery offered without one).
+      const all = measuredFlows(home.live?.roles)
+      const split = Array.isArray(c.flows)
+      const flows = new Set((c.flows as EnergyFlow[] | undefined) ?? [])
       return (
-        <Field label={t("Mesure")}>
-          <Pick
-            value={String(c.flow ?? "solar")}
-            onChange={(flow) => set({ flow })}
-            choices={(Object.keys(FLOW_LABEL) as EnergyFlow[]).map((f) => ({
-              value: f,
-              label: FLOW_LABEL[f],
-            }))}
-          />
-        </Field>
+        <>
+          <Field label={t("Affichage")}>
+            <Pick
+              value={split ? "split" : "one"}
+              onChange={(v) =>
+                onChange({
+                  ...block,
+                  config:
+                    v === "split"
+                      ? { flows: all }
+                      : { flow: (c.flow as EnergyFlow | undefined) ?? all[0] },
+                })
+              }
+              choices={[
+                {
+                  value: "one",
+                  label: t("Une mesure, avec sa courbe du jour"),
+                },
+                { value: "split", label: t("Plusieurs mesures côte à côte") },
+              ]}
+            />
+          </Field>
+          {split ? (
+            <Field label={t("Mesures")}>
+              <div className="grid gap-2">
+                {all.map((f) => (
+                  <label key={f} className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={flows.has(f)}
+                      onCheckedChange={(v) =>
+                        set({
+                          flows: all.filter((x) =>
+                            x === f ? v === true : flows.has(x)
+                          ),
+                        })
+                      }
+                    />
+                    {FLOW_LABEL[f]}
+                  </label>
+                ))}
+              </div>
+            </Field>
+          ) : (
+            <Field label={t("Mesure")}>
+              <Pick
+                value={String(c.flow ?? all[0])}
+                onChange={(flow) => set({ flow })}
+                choices={all.map((f) => ({ value: f, label: FLOW_LABEL[f] }))}
+              />
+            </Field>
+          )}
+        </>
       )
+    }
     case "group": {
       const types = [
         ...new Map(
@@ -301,6 +378,21 @@ function Settings({
       )
       const d = home.devices.find((x) => x.id === c.device_id)
       const fields = d ? chartedFields(d, home) : []
+      const zone = d ? zoneOf(d) : undefined
+      const comfort = zone !== undefined && c.view === "comfort"
+      const chosen = chartSeries(c)
+      // The outdoor temperature goes with the temperatures of a device.
+      const offered = [
+        ...fields.map((f) => ({ name: f.name, label: f.label })),
+        ...(fields.some((f) => f.unit === "°C")
+          ? [{ name: OUTDOOR, label: t("Extérieur") }]
+          : []),
+      ]
+      const label = (name: string) =>
+        offered.find((f) => f.name === name)?.label ?? name
+      const rest = offered.filter((f) => !chosen.includes(f.name))
+      const setFields = (next: string[]) =>
+        set({ fields: next, field: undefined })
       return (
         <>
           {withData.length === 0 ? (
@@ -317,31 +409,107 @@ function Settings({
                 onChange={(v) => {
                   const next = home.devices.find((x) => x.id === Number(v))
                   const first = next ? chartedFields(next, home)[0] : undefined
-                  set({ device_id: Number(v), field: first?.name })
+                  set({
+                    device_id: Number(v),
+                    fields: first ? [first.name] : [],
+                    field: undefined,
+                    view: undefined,
+                  })
                 }}
                 choices={deviceChoices(withData)}
               />
             </Field>
           )}
-          {fields.length > 0 && (
-            <Field label={t("Mesure")}>
+          {zone && (
+            <Field label={t("Affichage")}>
               <Pick
-                value={typeof c.field === "string" ? c.field : undefined}
-                onChange={(field) => set({ field })}
-                choices={fields.map((f) => ({ value: f.name, label: f.label }))}
+                value={comfort ? "comfort" : "curves"}
+                onChange={(v) =>
+                  set({ view: v === "comfort" ? "comfort" : undefined })
+                }
+                choices={[
+                  { value: "curves", label: t("Courbes des mesures") },
+                  { value: "comfort", label: t("Confort jour par jour") },
+                ]}
               />
             </Field>
           )}
-          <Field label={t("Période")}>
-            <Pick
-              value={String(c.hours ?? 24)}
-              onChange={(v) => set({ hours: Number(v) })}
-              choices={[
-                { value: "24", label: t("24 heures") },
-                { value: "168", label: t("7 jours") },
-              ]}
-            />
-          </Field>
+          {!comfort && fields.length > 0 && (
+            <Field label={t("Courbes")}>
+              <div className="flex flex-wrap items-center gap-2">
+                {chosen.map((name) => (
+                  <span
+                    key={name}
+                    className="inline-flex items-center gap-1 rounded-full border py-1 pr-1 pl-3 text-sm"
+                  >
+                    {label(name)}
+                    <button
+                      type="button"
+                      className="rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      aria-label={t("Retirer {name}", { name: label(name) })}
+                      onClick={() =>
+                        setFields(chosen.filter((x) => x !== name))
+                      }
+                    >
+                      <X className="size-3.5" aria-hidden />
+                    </button>
+                  </span>
+                ))}
+                {rest.length > 0 && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-full"
+                      >
+                        <Plus /> {t("Ajouter une courbe")}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      {rest.map((f) => (
+                        <DropdownMenuItem
+                          key={f.name}
+                          onSelect={() => setFields([...chosen, f.name])}
+                        >
+                          {f.label}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </div>
+            </Field>
+          )}
+          {d && (
+            <Field label={t("Hauteur")}>
+              <Pick
+                value={c.tall === true ? "tall" : "compact"}
+                onChange={(v) => set({ tall: v === "tall" || undefined })}
+                choices={[
+                  { value: "compact", label: t("Compacte") },
+                  {
+                    value: "tall",
+                    label: comfort
+                      ? t("Grande, comme sur la page de la zone")
+                      : t("Grande"),
+                  },
+                ]}
+              />
+            </Field>
+          )}
+          {!comfort && (
+            <Field label={t("Période")}>
+              <Pick
+                value={String(c.hours ?? 24)}
+                onChange={(v) => set({ hours: Number(v) })}
+                choices={[
+                  { value: "24", label: t("24 heures") },
+                  { value: "168", label: t("7 jours") },
+                ]}
+              />
+            </Field>
+          )}
         </>
       )
     }
@@ -404,8 +572,17 @@ export function BlockDialog({
               <Pick
                 value={draft?.type}
                 placeholder={t("Choisir")}
-                onChange={(type) => setDraft(newBlock(type as BlockType))}
-                choices={(Object.keys(BLOCK_LABEL) as BlockType[]).map((b) => ({
+                onChange={(type) =>
+                  setDraft(
+                    newBlock(
+                      type as BlockType,
+                      type === "energy"
+                        ? { flow: measuredFlows(home.live?.roles)[0] }
+                        : {}
+                    )
+                  )
+                }
+                choices={available(home).map((b) => ({
                   value: b,
                   label: BLOCK_LABEL[b],
                 }))}

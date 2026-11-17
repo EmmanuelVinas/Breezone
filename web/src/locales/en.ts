@@ -1582,6 +1582,19 @@ const en: Record<string, string> = {
   "Appareils montrés, et leur courbe": "Devices shown, and their curve",
   "Sans courbe": "No curve",
   "Aucun appareil n'a encore d'historique.": "No device has a history yet.",
+  Affichage: "Display",
+  "Une mesure, avec sa courbe du jour": "One figure, with its curve of the day",
+  "Plusieurs mesures côte à côte": "Several figures side by side",
+  Mesures: "Figures",
+  "Confort · {name}": "Comfort · {name}",
+  "Courbes des mesures": "Curves of the measures",
+  Courbes: "Curves",
+  "Retirer {name}": "Remove {name}",
+  "Ajouter une courbe": "Add a curve",
+  Hauteur: "Height",
+  Compacte: "Compact",
+  "Grande, comme sur la page de la zone": "Tall, as on the zone's page",
+  Grande: "Tall",
 }
 
 export default en

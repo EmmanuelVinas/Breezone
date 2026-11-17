@@ -25,6 +25,7 @@ mod routines;
 mod samples;
 mod schedules;
 mod settings;
+mod tariffs;
 mod timers;
 mod users;
 
@@ -41,6 +42,7 @@ pub use routines::*;
 pub use samples::*;
 pub use schedules::*;
 pub use settings::*;
+pub use tariffs::*;
 pub use timers::*;
 pub use users::*;
 

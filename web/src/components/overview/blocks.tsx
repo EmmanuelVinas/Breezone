@@ -1,20 +1,14 @@
-import { createContext, useContext } from "react"
 import { Link } from "react-router"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ChevronRight, Play, Sun } from "lucide-react"
 import { toast } from "sonner"
 import type {
-  Charted,
   DashboardBlock,
   DeviceView,
   EnergyDay,
   EnergyLive,
-  Installation,
   Mode,
-  Room,
   Routine,
-  SurplusView,
-  TraitInfo,
 } from "@/lib/api"
 import { api, isDeviceAction } from "@/lib/api"
 import { CHARGER_STATUS, chargerStatus } from "@/lib/charger"
@@ -40,30 +34,16 @@ import { RoomIcon } from "@/lib/room-icons"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
+import { ChartBlock } from "./chart-block"
+import { useOverview } from "./context"
 import type { EnergyFlow, GroupConfig } from "./model"
-import { chartFields, FLOW_LABEL, groupDevices, shown } from "./model"
-
-/** What the blocks read: fetched once by the page. */
-export type OverviewData = {
-  installation: Installation
-  devices: DeviceView[]
-  rooms: Room[]
-  live: EnergyLive | undefined
-  today: EnergyDay | undefined
-  surplus: SurplusView | undefined
-  routines: Routine[]
-  traits: TraitInfo[]
-  /** The devices with a history, and its fields. */
-  charted: Charted[]
-}
-
-export const OverviewContext = createContext<OverviewData | null>(null)
-
-function useOverview() {
-  const data = useContext(OverviewContext)
-  if (!data) throw new Error("overview data missing")
-  return data
-}
+import {
+  chartSeries,
+  FLOW_LABEL,
+  groupDevices,
+  measuredFlows,
+  shown,
+} from "./model"
 
 const state = (d: DeviceView) => (d.state ?? {}) as Record<string, unknown>
 const num = (v: unknown) => (typeof v === "number" ? v : null)
@@ -457,8 +437,12 @@ function DeviceBlock({ id }: { id: number }) {
   )
 }
 
-function EnergyBlock({ flow }: { flow: EnergyFlow }) {
-  const { live, today } = useOverview()
+/** What an energy flow is now: its value, a word on it, its colour. */
+function figure(
+  flow: EnergyFlow,
+  live: EnergyLive | undefined,
+  today: EnergyDay | undefined
+) {
   const f = {
     solar: live?.solar,
     home: live?.home,
@@ -490,20 +474,92 @@ function EnergyBlock({ flow }: { flow: EnergyFlow }) {
             : v < 0
               ? t("injecte")
               : t("soutire")
-  const color =
-    flow === "solar"
-      ? "text-warning"
-      : flow === "battery"
-        ? "text-success"
-        : "text-muted-foreground"
+  return {
+    value: v === null ? "–" : watts(flow === "battery" ? Math.abs(v) : v),
+    sub,
+    color:
+      flow === "solar"
+        ? "text-warning"
+        : flow === "battery"
+          ? "text-success"
+          : flow === "grid"
+            ? "text-cool"
+            : "text-primary",
+  }
+}
+
+/** One energy flow, with its curve of the day at the bottom. */
+function EnergyBlock({ flow }: { flow: EnergyFlow }) {
+  const { live, today } = useOverview()
+  const { value, sub, color } = figure(flow, live, today)
+  const points = (today?.points ?? [])
+    .map((p): [number, number | null] => [p.ts, p[flow]])
+    .filter((p): p is [number, number] => p[1] !== null)
+  return (
+    <Card className="h-full overflow-hidden rounded-3xl pb-0">
+      <CardContent className="flex h-full flex-col gap-1 px-0">
+        <div className="grid gap-1 px-6">
+          <span
+            className={cn(
+              "text-sm",
+              flow === "home" || flow === "grid"
+                ? "text-muted-foreground"
+                : color
+            )}
+          >
+            {FLOW_LABEL[flow]}
+          </span>
+          <span className="tabular font-heading text-3xl font-bold">
+            {value}
+          </span>
+          {sub && <span className="text-sm text-muted-foreground">{sub}</span>}
+        </div>
+        {points.length > 1 && (
+          <Sparkline
+            points={points}
+            className={cn("mt-auto h-14", color)}
+            label={t("Aujourd'hui")}
+          />
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+/** Several energy flows in one block, side by side. */
+function EnergyFiguresBlock({ flows: chosen }: { flows: EnergyFlow[] }) {
+  const { live, today } = useOverview()
+  // A flow the home has no measure of (no battery yet) is left out.
+  const measured = measuredFlows(live?.roles)
+  const flows = chosen.filter((f) => measured.includes(f))
   return (
     <Card className="h-full rounded-3xl">
-      <CardContent className="grid gap-1">
-        <span className={cn("text-sm", color)}>{FLOW_LABEL[flow]}</span>
-        <span className="tabular font-heading text-3xl font-bold">
-          {v === null ? "–" : watts(flow === "battery" ? Math.abs(v) : v)}
-        </span>
-        {sub && <span className="text-sm text-muted-foreground">{sub}</span>}
+      <CardContent className="grid h-full grid-cols-2 gap-x-4 gap-y-3">
+        {flows.map((flow) => {
+          const { value, sub, color } = figure(flow, live, today)
+          return (
+            <div key={flow} className="grid content-start gap-0.5">
+              <span
+                className={cn(
+                  "text-xs",
+                  flow === "home" || flow === "grid"
+                    ? "text-muted-foreground"
+                    : color
+                )}
+              >
+                {FLOW_LABEL[flow]}
+              </span>
+              <span className="tabular font-heading text-xl font-bold">
+                {value}
+              </span>
+              {sub && (
+                <span className="truncate text-xs text-muted-foreground">
+                  {sub}
+                </span>
+              )}
+            </div>
+          )
+        })}
       </CardContent>
     </Card>
   )
@@ -536,60 +592,6 @@ function SurplusBlock() {
         >
           {t("Voir l'énergie")} <ChevronRight className="size-4" aria-hidden />
         </Link>
-      </CardContent>
-    </Card>
-  )
-}
-
-function ChartBlock({
-  id,
-  field,
-  hours,
-}: {
-  id: number
-  field: string
-  hours: number
-}) {
-  const { devices, traits } = useOverview()
-  const d = devices.find((x) => x.id === id)
-  const history = useQuery({
-    queryKey: ["device-history", id, hours],
-    queryFn: () => api.deviceHistory(id, hours, hours > 24 ? 168 : 96),
-    enabled: d !== undefined,
-    refetchInterval: 5 * 60_000,
-  })
-  const info = d
-    ? chartFields(d, traits).find((f) => f.name === field)
-    : undefined
-  const now = d ? num(state(d)[field]) : null
-  return (
-    <Card className="h-full rounded-3xl">
-      <CardContent className="grid gap-2">
-        <Title
-          meta={
-            now !== null
-              ? `${number(now, Math.abs(now) < 10 ? 1 : 0)}${info?.unit ? ` ${info.unit}` : ""}`
-              : null
-          }
-        >
-          {d
-            ? `${d.name} · ${info?.label ?? field}`
-            : t("Appareil indisponible")}
-        </Title>
-        {(history.data?.series[field]?.length ?? 0) > 1 ? (
-          <Sparkline
-            points={history.data!.series[field]}
-            className="h-24 text-primary"
-            label={info?.label}
-          />
-        ) : (
-          <p className="grid h-24 place-items-center text-sm text-muted-foreground">
-            {history.isLoading ? "…" : t("Pas encore d'historique.")}
-          </p>
-        )}
-        <span className="text-xs text-muted-foreground">
-          {hours > 24 ? t("7 derniers jours") : t("24 dernières heures")}
-        </span>
       </CardContent>
     </Card>
   )
@@ -680,7 +682,11 @@ export function BlockView({
   const c = block.config
   switch (block.type) {
     case "energy":
-      return <EnergyBlock flow={(c.flow as EnergyFlow) ?? "solar"} />
+      return Array.isArray(c.flows) ? (
+        <EnergyFiguresBlock flows={c.flows as EnergyFlow[]} />
+      ) : (
+        <EnergyBlock flow={(c.flow as EnergyFlow) ?? "solar"} />
+      )
     case "surplus":
       return <SurplusBlock />
     case "group":
@@ -691,8 +697,10 @@ export function BlockView({
       return (
         <ChartBlock
           id={Number(c.device_id)}
-          field={String(c.field ?? "")}
+          fields={chartSeries(c)}
           hours={Number(c.hours ?? 24)}
+          view={c.view === "comfort" ? "comfort" : "curves"}
+          tall={c.tall === true}
         />
       )
     case "weather":

@@ -150,3 +150,57 @@ export function chartFields(d: DeviceView, traits: TraitInfo[]) {
 }
 
 const numeric = (f: TraitField) => f.type === "number" || f.type === "integer"
+
+/** The energy flows the home has a measure of (none while that is not known). */
+export function measuredFlows(
+  roles:
+    | Partial<Record<"grid" | "solar" | "battery" | "consumption", boolean>>
+    | undefined
+): EnergyFlow[] {
+  if (!roles) return []
+  return (
+    [
+      roles.solar && "solar",
+      (roles.grid || roles.consumption) && "home",
+      roles.battery && "battery",
+      roles.grid && "grid",
+    ] as (EnergyFlow | false | undefined)[]
+  ).filter((f): f is EnergyFlow => !!f)
+}
+
+/** Whether a block has something to show here: an energy measure the home has, a steered surplus. */
+export function worthShowing(
+  b: DashboardBlock,
+  home: { flows: EnergyFlow[]; surplus: boolean }
+) {
+  if (b.type === "surplus") return home.surplus
+  if (b.type !== "energy") return true
+  const flows = Array.isArray(b.config.flows)
+    ? (b.config.flows as EnergyFlow[])
+    : [(b.config.flow as EnergyFlow | undefined) ?? "solar"]
+  return flows.some((f) => home.flows.includes(f))
+}
+
+/** The outdoor temperature, from the weather of the installation: a curve any chart may add. */
+export const OUTDOOR = "weather.outdoor"
+
+/** What a chart block shows: curves of measures, or the comfort of a zone day by day. */
+export type ChartView = "curves" | "comfort"
+
+/** The curves of a chart block (a single `field` before several could be chosen). */
+export function chartSeries(c: Record<string, unknown>): string[] {
+  if (Array.isArray(c.fields)) return c.fields as string[]
+  return typeof c.field === "string" ? [c.field] : []
+}
+
+/** The Airzone zone a device is, which keeps a day-by-day comfort. */
+export function zoneOf(d: DeviceView) {
+  const r = d.reference as { system_id?: unknown; zone_id?: unknown } | null
+  if (d.source !== "airzone" || d.installation_id === null || !r) return
+  if (typeof r.system_id !== "number" || typeof r.zone_id !== "number") return
+  return {
+    installation_id: d.installation_id,
+    system_id: r.system_id,
+    zone_id: r.zone_id,
+  }
+}

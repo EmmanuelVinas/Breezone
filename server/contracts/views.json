@@ -4,7 +4,8 @@
     "Mode": { "type": "\"stop\" | \"cooling\" | \"heating\" | \"fan\" | \"dry\" | \"aux_heating\" | \"auto\"" },
     "AirQualityLevel": { "type": "\"good\" | \"regular\" | \"bad\"" },
     "NodeState": { "type": "\"online\" | \"offline\" | \"pending\" | \"certificate\" | \"revoked\" | \"expired\" | \"error\" | \"unknown\"" },
-    "MeasureRole": { "type": "\"grid\" | \"solar\" | \"battery\" | \"consumption\"" }
+    "MeasureRole": { "type": "\"grid\" | \"solar\" | \"battery\" | \"consumption\"" },
+    "DayColor": { "type": "\"blue\" | \"white\" | \"red\"" }
   },
   "objects": {
     "Connection": {
@@ -130,6 +131,104 @@
         { "name": "position", "type": "number" },
         { "name": "created_at", "type": "number" },
         { "name": "icon", "type": "string | null", "doc": "Chosen by hand (a Lucide name); null: guessed from the name." }
+      ]
+    },
+    "Contract": {
+      "doc": "The electricity contract of the home (one per server, as its meter).",
+      "fields": [
+        { "name": "country", "type": "string | null", "doc": "ISO 3166-1 alpha-2 (\"FR\")." },
+        { "name": "supplier", "type": "string | null" },
+        { "name": "offer", "type": "string", "doc": "\"custom\": prices set by hand." },
+        { "name": "power_kva", "type": "number | null", "doc": "Subscribed power (kVA)." },
+        { "name": "currency", "type": "string", "doc": "ISO 4217 (\"EUR\")." }
+      ]
+    },
+    "PriceSlot": {
+      "doc": "A slot of a profile of day: from its start until the next one.",
+      "fields": [
+        { "name": "start", "type": "string", "doc": "\"HH:MM\", local time; the first one is \"00:00\"." },
+        { "name": "name", "type": "string", "doc": "\"HP\", \"HC\"…" },
+        { "name": "price", "type": "number", "doc": "Per kWh, taxes included." }
+      ]
+    },
+    "DayProfile": {
+      "doc": "The prices of a kind of day (\"normal\", \"red day\"…), slot by slot.",
+      "fields": [
+        { "name": "id", "type": "string" },
+        { "name": "name", "type": "string" },
+        { "name": "color", "type": "string | null", "doc": "Chosen by hand (\"#2563eb\")." },
+        { "name": "slots", "type": "PriceSlot[]" }
+      ]
+    },
+    "ColorProfiles": {
+      "doc": "The profile a day of an announced colour follows (Tempo).",
+      "fields": [
+        { "name": "blue", "type": "string", "optional": true },
+        { "name": "white", "type": "string", "optional": true },
+        { "name": "red", "type": "string", "optional": true }
+      ]
+    },
+    "TariffCalendar": {
+      "doc": "Which profile a day follows.",
+      "fields": [
+        { "name": "day_start", "type": "string", "doc": "\"HH:MM\": when a day of the tariff starts (Tempo: \"06:00\")." },
+        { "name": "weekdays", "type": "string[]", "doc": "The profile of each day of the week, Monday first." },
+        { "name": "colors", "type": "ColorProfiles", "doc": "Instead of the day of the week, when the colour of the day is announced." }
+      ]
+    },
+    "Tariff": {
+      "doc": "The prices from a day on.",
+      "fields": [
+        { "name": "subscription", "type": "number", "doc": "Per month, taxes included." },
+        { "name": "export_price", "type": "number | null", "doc": "Per kWh returned to the grid; null: not sold." },
+        { "name": "profiles", "type": "DayProfile[]" },
+        { "name": "calendar", "type": "TariffCalendar" }
+      ]
+    },
+    "TariffVersion": {
+      "doc": "A tariff and the local day it applies from.",
+      "fields": [
+        { "name": "valid_from", "type": "string", "doc": "\"YYYY-MM-DD\"." },
+        { "name": "tariff", "type": "Tariff" }
+      ]
+    },
+    "TariffView": {
+      "doc": "The contract of the home and its tariffs.",
+      "fields": [
+        { "name": "contract", "type": "Contract | null", "doc": "null: not set yet." },
+        { "name": "versions", "type": "TariffVersion[]", "doc": "Oldest first." },
+        { "name": "can_edit", "type": "boolean", "doc": "This user may change them." }
+      ]
+    },
+    "PriceAt": {
+      "doc": "The price at a moment, and where it comes from.",
+      "fields": [
+        { "name": "price", "type": "number", "doc": "Per kWh." },
+        { "name": "slot", "type": "string" },
+        { "name": "profile", "type": "string" },
+        { "name": "profile_name", "type": "string" },
+        { "name": "color", "type": "DayColor | null", "doc": "The colour of the day, when the calendar follows one and it is known." },
+        { "name": "day", "type": "string", "doc": "The day of the tariff (\"YYYY-MM-DD\"): the day before at night when a day starts at 06:00." }
+      ]
+    },
+    "PricePeriod": {
+      "doc": "A stretch of time at one price.",
+      "fields": [
+        { "name": "start", "type": "number" },
+        { "name": "end", "type": "number" },
+        { "name": "price", "type": "number" },
+        { "name": "slot", "type": "string" },
+        { "name": "profile", "type": "string" },
+        { "name": "profile_name", "type": "string" },
+        { "name": "color", "type": "DayColor | null" }
+      ]
+    },
+    "PriceView": {
+      "doc": "The price of electricity now, and over the next hours.",
+      "fields": [
+        { "name": "currency", "type": "string" },
+        { "name": "now", "type": "PriceAt | null", "doc": "null: no tariff for now." },
+        { "name": "periods", "type": "PricePeriod[]", "doc": "From now on." }
       ]
     }
   }

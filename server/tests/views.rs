@@ -217,5 +217,21 @@ async fn the_server_answers_as_the_contract_says() {
     errors.extend(check(&c, &one, "Installation", "installations/1"));
     errors.extend(check(&c, &devices, "DeviceView[]", "devices"));
     errors.extend(check(&c, &rooms, "Room[]", "rooms"));
+    // The price of electricity, with a contract and a tariff that use every field.
+    call(reqwest::Method::PUT, "/api/energy/contract", Some(json!({"country":"FR","supplier":"EDF","offer":"custom","power_kva":9,"currency":"EUR"}))).await;
+    let tempo = json!({
+        "subscription": 16.0, "export_price": 0.04,
+        "profiles": [
+            {"id":"blue","name":"Bleu","color":"#2563eb","slots":[{"start":"00:00","name":"HC","price":0.13},{"start":"06:00","name":"HP","price":0.16},{"start":"22:00","name":"HC","price":0.13}]},
+            {"id":"red","name":"Rouge","slots":[{"start":"00:00","name":"HC","price":0.15},{"start":"06:00","name":"HP","price":0.7}]}
+        ],
+        "calendar": {"day_start":"06:00","weekdays":["blue","blue","blue","blue","blue","blue","blue"],"colors":{"blue":"blue","red":"red"}}
+    });
+    call(reqwest::Method::PUT, "/api/energy/tariffs/2020-01-01", Some(tempo)).await;
+    let tariff = call(reqwest::Method::GET, "/api/energy/tariff", None).await;
+    let price = call(reqwest::Method::GET, "/api/energy/price", None).await;
+    assert!(!price["now"].is_null() && !price["periods"].as_array().unwrap().is_empty(), "{price}");
+    errors.extend(check(&c, &tariff, "TariffView", "energy/tariff"));
+    errors.extend(check(&c, &price, "PriceView", "energy/price"));
     assert!(errors.is_empty(), "the server and contracts/views.json disagree:\n{}", errors.join("\n"));
 }
