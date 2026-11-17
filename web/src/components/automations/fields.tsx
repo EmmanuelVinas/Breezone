@@ -69,6 +69,14 @@ export const FACINGS: [number, string][] = [
 /** The colours of the weather warnings, 0 to 3. */
 export const VIGILANCE = [t("verte"), t("jaune"), t("orange"), t("rouge")]
 
+/** A Tempo colour as a comparison of its code (1 blue, 2 white, 3 red). */
+const TEMPO_CHOICES: [string, string][] = [
+  ["above:2", t("est rouge")],
+  ["above:1", t("est blanc ou rouge")],
+  ["below:2", t("est bleu")],
+  ["below:3", t("est bleu ou blanc")],
+]
+
 export const PRESSES: [string, string][] = [
   ["any", t("tout appui")],
   ["single", t("appui")],
@@ -105,6 +113,8 @@ export type Home = {
   traits: TraitInfo[]
   scenes: Routine[]
   roles: { grid: boolean; solar: boolean; consumption: boolean }
+  /** The home has a tariff of electricity, and one that follows the Tempo colours. */
+  prices?: { tariff: boolean; tempo: boolean }
 }
 
 export function traitsOf(home: Home, d: DeviceView): TraitInfo[] {
@@ -141,6 +151,8 @@ export function measureKey(m: AutomationMeasure) {
   if (m.kind === "energy") return `energy:${m.flow}`
   if (m.kind === "device") return `device:${m.device_id}:${m.field}`
   if (m.kind === "weather") return `weather:${m.field}`
+  if (m.kind === "price") return "price"
+  if (m.kind === "tempo") return `tempo:${m.day}`
   return "outdoor"
 }
 
@@ -189,6 +201,25 @@ export function measureOptions(home: Home, current?: AutomationMeasure) {
   out.push(weather("tomorrow_max", t("Maximale de demain"), "°C"))
   out.push(weather("humidity", t("Humidité extérieure"), "%"))
   out.push(weather("vigilance", t("Vigilance météo"), ""))
+  if (home.prices?.tariff)
+    out.push({
+      key: "price",
+      label: t("Prix de l'électricité"),
+      unit: "€/kWh",
+      type: HOME_TYPE,
+      measure: { kind: "price" },
+    })
+  if (home.prices?.tempo)
+    for (const [day, label] of [
+      ["today", t("Couleur Tempo du jour")],
+      ["tomorrow", t("Couleur Tempo de demain")],
+    ] as const)
+      out.push({
+        key: `tempo:${day}`,
+        label,
+        type: HOME_TYPE,
+        measure: { kind: "tempo", day },
+      })
   for (const { d, type } of byType(home.devices))
     for (const trait of traitsOf(home, d))
       for (const f of trait.state)
@@ -395,6 +426,9 @@ export function suggested(
       solar: pick(1500, 200),
       home: pick(3000, 500),
     }[m.flow]
+  if (m.kind === "price") return pick(0.2, 0.15)
+  // Tomorrow red (above white), or blue (below white).
+  if (m.kind === "tempo") return 2
   if (m.kind === "outdoor") return pick(28, 5)
   if (m.kind === "weather")
     return {
@@ -456,6 +490,34 @@ export function Comparison({
 }) {
   const options = measureOptions(home, measure)
   const chosen = options.find((o) => o.key === measureKey(measure))
+  if (measure.kind === "tempo")
+    return (
+      <>
+        <Pick
+          value={measureKey(measure)}
+          onChange={(k) => {
+            const next = options.find((o) => o.key === k)!
+            onChange({
+              measure: next.measure,
+              op,
+              value:
+                next.measure.kind === "tempo" ? value : suggested(next, op),
+            })
+          }}
+          options={options.map((o) => [o.key, o.label, o.type])}
+          className="w-full lg:w-72"
+        />
+        <Pick
+          value={`${op}:${value}`}
+          onChange={(v) => {
+            const [o, n] = v.split(":")
+            onChange({ measure, op: o as AutomationOp, value: Number(n) })
+          }}
+          options={TEMPO_CHOICES}
+          className="w-full lg:w-48"
+        />
+      </>
+    )
   return (
     <>
       <Pick

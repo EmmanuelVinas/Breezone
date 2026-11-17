@@ -211,10 +211,28 @@ Un tarif contient l'abonnement (par mois), le prix de rachat facultatif (`export
 | Méthode | Chemin | Description |
 |---------|--------|-------------|
 | GET 🔒 | `/api/energy/tariff` | `TariffView` : `{contract, versions:[{valid_from, tariff}], can_edit}` (`contract` vaut `null` tant qu'il n'est pas réglé) |
-| PUT 👑 | `/api/energy/contract` | `{country?, supplier?, offer?="custom", power_kva?, currency?="EUR"}` → `TariffView` |
+| PUT 👑 | `/api/energy/contract` | `{country?, supplier?, offer?="custom", power_kva?, currency?="EUR", offpeak?:[{from, to}]}` → `TariffView`. `offer` `base`, `hc` ou `tempo` : les tarifs sont remplacés par ceux de la CRE pour `power_kva` (502 si elle est injoignable ou n'a pas de prix pour cette puissance) ; `offpeak` (heures creuses, à l'heure ou à la demi-heure ; 22:00 → 06:00 par défaut) découpe les prix de l'offre `hc` |
 | PUT 👑 | `/api/energy/tariffs/{YYYY-MM-DD}` | `Tariff` : `{subscription, export_price?, profiles:[{id, name, color?, slots:[{start, name, price}]}], calendar:{day_start?="00:00", weekdays:[7 profils], colors?:{blue?, white?, red?}}}`, le tarif à partir de ce jour (créé ou remplacé) → `TariffView` |
 | DELETE 👑 | `/api/energy/tariffs/{YYYY-MM-DD}` | → `TariffView` ; 404 s'il n'y en a pas |
-| GET 🔒 | `/api/energy/price?hours=24` | `PriceView` : `{currency, now:{price, slot, profile, profile_name, color, day}, periods:[{start, end, price, slot, profile, profile_name, color}]}`, le prix maintenant et les plages des heures qui viennent (1 h à 7 jours). `now` vaut `null` sans tarif |
+| GET 🔒 | `/api/energy/price?hours=24` | `PriceView` : `{currency, now:{price, slot, profile, profile_name, color, day}, periods:[{start, end, price, slot, profile, profile_name, color}], tempo}`, le prix maintenant et les plages des heures qui viennent (1 h à 7 jours). `now` vaut `null` sans tarif. `tempo` (`null` si aucun tarif ne suit les couleurs) : `{today, tomorrow, red_left, white_left}`, couleurs du jour et du lendemain et jours rouges et blancs restants de la saison (du 1er septembre au 31 août) |
+
+Les offres réglementées d'EDF (`base`, `hc`, `tempo`) prennent les prix publiés en open data par la
+CRE (historique du Tarif Bleu résidentiel : `Option_Base.csv`, `Option_HPHC.csv`,
+`Option_Tempo.csv`) : un tarif par date de la CRE, aux prix TTC de la puissance souscrite,
+l'abonnement annuel divisé par 12, le prix de rachat gardé. Ils sont relus chaque semaine et à chaque
+enregistrement du contrat. `BREEZONE_CRE_URL` change l'adresse ; sans accès à internet, ces offres
+sont refusées. Une offre `custom` garde les prix saisis.
+
+Les couleurs Tempo viennent du relais public api-couleur-tempo.fr (données de RTE, sans compte). Elles
+sont lues toutes les 30 minutes tant qu'un tarif suit les couleurs, avec la saison entière la
+première fois. `BREEZONE_TEMPO_URL` change l'adresse ; sans accès à internet (`BREEZONE_WEATHER=0`,
+build de développement), rien n'est demandé.
+
+Chaque jour de `/api/energy/day` (`totals`) et de `/api/energy/days` a un `cost` (`null` si aucun
+tarif ne le couvre) : `{energy, subscription, saved, earned}`. `energy` est l'énergie tirée du réseau,
+chaque quart d'heure à son prix ; `subscription` est la part du jour de l'abonnement du mois ;
+`saved` est ce qu'aurait coûté au réseau la production utilisée sur place ; `earned` est la revente au
+prix de rachat. Sans compteur réseau, l'énergie achetée est la consommation moins la production.
 
 Un tarif est refusé s'il a :
 - aucun profil, ou plus de 10 ;
@@ -468,7 +486,10 @@ marge, aussi longtemps que `for_minutes`. Les étapes de « alors » encore en c
 `Measure` : `{kind:"energy", flow:"export"|"import"|"solar"|"home"}` (W ; `export` = puissance
 injectée au réseau) | `{kind:"device", device_id, field}` | `{kind:"outdoor"}` |
 `{kind:"weather", field:"precipitation"|"wind"|"rain_next_hour"|"humidity"|"tomorrow_min"|"tomorrow_max"|"vigilance"}`
-(mm, km/h, %, %, °C ; relevé Open-Meteo de moins de 3 h ; `humidity` : humidité extérieure). La
+(mm, km/h, %, %, °C ; relevé Open-Meteo de moins de 3 h ; `humidity` : humidité extérieure) |
+`{kind:"price"}` (le prix de l'électricité maintenant, par kWh, d'après le tarif ; aucune valeur sans
+tarif) | `{kind:"tempo", day:"today"|"tomorrow"}` (couleur Tempo : 1 bleu, 2 blanc, 3 rouge ; aucune
+valeur tant qu'elle n'est pas annoncée : « demain rouge » = `tomorrow` `above` 2). La
 météo, la température extérieure et le soleil d'une règle sont ceux de l'installation de la première
 zone qu'elle pilote, sinon qu'elle lit ; à défaut, ceux de la maison. `vigilance` : l'avertissement en cours pour
 le département de la maison, 0 vert, 1 jaune, 2 orange, 3 rouge (vigilance Météo-France relayée par

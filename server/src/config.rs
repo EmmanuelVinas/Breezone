@@ -42,6 +42,13 @@ pub struct Config {
     /// `BREEZONE_WEATHER`, on by default in a release build, off in a development build and the
     /// tests, so that working on the server sends nothing out.
     pub weather: bool,
+    /// Where the colours of the Tempo days are read (`BREEZONE_TEMPO_URL`): the public relay
+    /// api-couleur-tempo.fr when the server may look things up on the internet (`weather`), else
+    /// none.
+    pub tempo_url: Option<String>,
+    /// Where the regulated prices of EDF are read (`BREEZONE_CRE_URL`): the open data of the CRE
+    /// when the server may look things up on the internet, else none.
+    pub cre_url: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -95,6 +102,9 @@ impl Config {
             airzone_hosts: var("BREEZONE_AIRZONE_HOSTS").map(|v| parse_bootstrap(&v)).unwrap_or_default(),
             self_update: flag("BREEZONE_SELF_UPDATE").unwrap_or(true),
             weather: flag("BREEZONE_WEATHER").unwrap_or(!cfg!(debug_assertions)),
+            cre_url: var("BREEZONE_CRE_URL")
+                .or_else(|| flag("BREEZONE_WEATHER").unwrap_or(!cfg!(debug_assertions)).then(|| "https://www.cre.fr/fileadmin/Documents/Open_data/Marches_de_detail".into())),
+            tempo_url: var("BREEZONE_TEMPO_URL").or_else(|| flag("BREEZONE_WEATHER").unwrap_or(!cfg!(debug_assertions)).then(|| "https://www.api-couleur-tempo.fr".into())),
         }
     }
 
@@ -133,6 +143,8 @@ impl Config {
             airzone_hosts: vec![],
             self_update: false,
             weather: false,
+            tempo_url: None,
+            cre_url: None,
         }
     }
 }

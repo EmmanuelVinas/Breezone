@@ -356,6 +356,32 @@ export function recipes(home: Home): Recipe[] {
         ],
       },
     })
+  if (home.prices?.tempo)
+    out.push({
+      title: t("Demain jour rouge : prévenir"),
+      description: t(
+        "Dès que demain est annoncé rouge (Tempo), prévenir pour décaler ce qui peut l'être."
+      ),
+      rule: {
+        ...base(t("Demain jour rouge"), [
+          {
+            kind: "measure",
+            measure: { kind: "tempo", day: "tomorrow" },
+            op: "above",
+            value: 2,
+            for_minutes: 0,
+          },
+        ]),
+        actions: [
+          {
+            kind: "notify",
+            message: t(
+              "Demain est un jour rouge Tempo : l'électricité sera chère de 6 h à 22 h."
+            ),
+          },
+        ],
+      },
+    })
   out.push({
     title: t("Vigilance orange ou rouge : prévenir"),
     description: t(

@@ -9,6 +9,7 @@ use axum::extract::{Path, Query, State};
 use axum::Json;
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Serialize)]
 pub struct TariffVersion {
@@ -46,7 +47,16 @@ pub async fn get(State(state): State<AppState>, user: AuthUser) -> ApiResult<Jso
 
 pub async fn save_contract(State(state): State<AppState>, AdminUser(user): AdminUser, Json(contract): Json<Contract>) -> ApiResult<Json<TariffView>> {
     price::validate_contract(&contract).map_err(ApiError::bad_request)?;
+    // A regulated offer takes the prices of the CRE: read before anything is kept.
+    if crate::cre::is_regulated(&contract.offer) {
+        crate::cre::sync_contract(&state, &contract).await.map_err(|e| {
+            ApiError::bad_gateway(crate::text!("Prix de la CRE illisibles : {0}", "Prices of the CRE not read: {0}", "Precios de la CRE no leídos: {0}", format!("{e:#}")))
+        })?;
+    }
     db::set_contract(&state.db, &contract).await?;
+    if crate::cre::is_regulated(&contract.offer) {
+        db::set_setting(&state.db, "cre.synced_at", &db::now().to_string()).await?;
+    }
     Ok(Json(view(&state, &user).await?))
 }
 
@@ -75,9 +85,9 @@ pub async fn tariffs(state: &AppState) -> ApiResult<Tariffs> {
     Ok(Tariffs::new(list))
 }
 
-/// The colour announced for a day: none until a source of them is set (roadmap E32, Tempo).
-pub fn no_color(_: NaiveDate) -> Option<DayColor> {
-    None
+/// The colours announced from `from` to `until`, for the prices of those days.
+pub async fn colors(state: &AppState, from: NaiveDate, until: NaiveDate) -> ApiResult<HashMap<NaiveDate, DayColor>> {
+    Ok(crate::tempo::colors(&state.db, from, until).await?)
 }
 
 #[derive(Deserialize)]
@@ -91,6 +101,17 @@ fn default_hours() -> i64 {
     24
 }
 
+/// The Tempo days, when a tariff follows their colour.
+#[derive(Serialize)]
+pub struct TempoView {
+    pub today: Option<DayColor>,
+    /// Announced in the morning (`None` before).
+    pub tomorrow: Option<DayColor>,
+    /// Red and white days left in the season (1 September to 31 August).
+    pub red_left: i64,
+    pub white_left: i64,
+}
+
 #[derive(Serialize)]
 pub struct PriceView {
     pub currency: String,
@@ -98,6 +119,8 @@ pub struct PriceView {
     pub now: Option<PriceAt>,
     /// From now on, each stretch at one price.
     pub periods: Vec<Period>,
+    /// `None`: no tariff follows the colour of the days.
+    pub tempo: Option<TempoView>,
 }
 
 /// The price of electricity now, and over the next hours.
@@ -105,10 +128,22 @@ pub async fn now(State(state): State<AppState>, _user: AuthUser, Query(q): Query
     let tz = state.cfg.timezone;
     let tariffs = tariffs(&state).await?;
     let now = db::now();
+    let today = crate::rollup::local_day(now, tz);
+    let start = crate::tempo::season_start(today);
+    let known = colors(&state, start.min(today - chrono::Days::new(1)), today + chrono::Days::new(8)).await?;
+    let color = |d: NaiveDate| known.get(&d).copied();
     let currency = db::contract(&state.db).await?.map_or_else(|| "EUR".into(), |c| c.currency);
+    let followed = crate::tempo::followed(&versions(&state).await?.into_iter().map(|v| v.tariff).collect::<Vec<_>>());
+    let used = |c: DayColor| known.iter().filter(|(d, k)| **k == c && **d >= start && **d <= today).count() as i64;
     Ok(Json(PriceView {
         currency,
-        now: price::price_at(&tariffs, &no_color, tz, now),
-        periods: price::periods(&tariffs, &no_color, tz, now, now + q.hours.clamp(1, 7 * 24) * 3600),
+        now: price::price_at(&tariffs, &color, tz, now),
+        periods: price::periods(&tariffs, &color, tz, now, now + q.hours.clamp(1, 7 * 24) * 3600),
+        tempo: followed.then(|| TempoView {
+            today: color(today),
+            tomorrow: color(today + chrono::Days::new(1)),
+            red_left: (crate::tempo::RED_DAYS - used(DayColor::Red)).max(0),
+            white_left: (crate::tempo::WHITE_DAYS - used(DayColor::White)).max(0),
+        }),
     }))
 }

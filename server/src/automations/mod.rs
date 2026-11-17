@@ -143,6 +143,20 @@ pub enum Measure {
     Weather {
         field: WeatherField,
     },
+    /// The price of electricity now, per kWh (a tariff of Settings › Electricity).
+    Price,
+    /// The colour of a Tempo day: 1 blue, 2 white, 3 red (none until it is announced).
+    Tempo {
+        day: TempoDay,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TempoDay {
+    Today,
+    /// Announced in the morning.
+    Tomorrow,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -558,6 +572,11 @@ pub struct Context {
     pub places: HashMap<i64, ((f64, f64), Option<Report>)>,
     /// The home: the first installation of this server with a city.
     pub home: Option<i64>,
+    /// The price of electricity now (`None`: no tariff), and its currency.
+    pub price: Option<f64>,
+    pub currency: String,
+    /// The colours of today and tomorrow (1 blue, 2 white, 3 red).
+    pub tempo: [Option<f64>; 2],
 }
 
 impl Context {
@@ -582,8 +601,31 @@ impl Context {
                 state.weather.places().await.into_iter().map(|p| (p.installation_id, ((p.lat, p.lon), reports.remove(&p.installation_id)))).collect()
             },
             home: state.weather.place(None).await.map(|p| p.installation_id),
+            price: None,
+            currency: db::contract(&state.db).await?.map_or_else(|| "EUR".into(), |c| c.currency),
+            tempo: [None, None],
         }
+        .with_prices(state)
+        .await?
         .at(None))
+    }
+
+    /// The price now and the colours of today and tomorrow.
+    async fn with_prices(mut self, state: &AppState) -> ApiResult<Context> {
+        let today = crate::rollup::local_day(self.now, self.tz);
+        let known = crate::tempo::colors(&state.db, today - chrono::Days::new(1), today + chrono::Days::new(1)).await?;
+        let color = |d: NaiveDate| known.get(&d).copied();
+        let tariffs = crate::api::price::tariffs(state).await?;
+        self.price = crate::price::price_at(&tariffs, &color, self.tz, self.now).map(|p| p.price);
+        let code = |d: NaiveDate| {
+            color(d).map(|c| match c {
+                crate::price::DayColor::Blue => 1.0,
+                crate::price::DayColor::White => 2.0,
+                crate::price::DayColor::Red => 3.0,
+            })
+        };
+        self.tempo = [code(today), code(today + chrono::Days::new(1))];
+        Ok(self)
     }
 
     /// The home as seen from an installation (its sun, its weather), or from the home.
@@ -639,6 +681,8 @@ impl Context {
                     WeatherField::Humidity => w.humidity,
                 }
             }
+            Measure::Price => self.price,
+            Measure::Tempo { day } => self.tempo[*day as usize],
         }
     }
 
@@ -657,6 +701,8 @@ impl Context {
                 }
                 .into(),
             ),
+            Measure::Price => Some(format!("{}/kWh", if self.currency == "EUR" { "€" } else { self.currency.as_str() })),
+            Measure::Tempo { .. } => None,
         }
     }
 
@@ -862,6 +908,9 @@ mod tests {
             scenes: HashMap::from([(7, "Je pars".to_string())]),
             places: HashMap::new(),
             home: None,
+            price: Some(0.27),
+            currency: "EUR".into(),
+            tempo: [Some(1.0), Some(3.0)],
         }
     }
 
@@ -1294,6 +1343,16 @@ mod tests {
             vigilance: Some(crate::weather::Vigilance { level: 2, events: vec!["wind".into()], area: "Haute-Garonne".into() }),
         });
         assert_eq!(w.reason(&orange).fr, "Vigilance météo : orange (wind)");
+
+        // The price of electricity and the Tempo colours (today blue, tomorrow red in `ctx`).
+        let red = Trigger::Measure { measure: Measure::Tempo { day: TempoDay::Tomorrow }, op: Op::Above, value: 2.0, for_minutes: 0 };
+        assert_eq!(w.describe_trigger(&red).fr, "Couleur Tempo de demain : rouge");
+        assert_eq!(w.read(&Measure::Tempo { day: TempoDay::Tomorrow }), Some(3.0));
+        assert_eq!(w.reason(&red).fr, "Couleur Tempo de demain : rouge");
+        let dear = Trigger::Measure { measure: Measure::Price, op: Op::Above, value: 0.2, for_minutes: 0 };
+        assert_eq!(w.describe_trigger(&dear).fr, "Prix de l'électricité > 0.2 €/kWh");
+        assert_eq!(w.reason(&dear).fr, "Prix de l'électricité : 0.27 €/kWh");
+        assert!(validate(input(json!({"name": "x", "triggers": [{"kind": "measure", "measure": {"kind": "tempo", "day": "tomorrow"}, "op": "above", "value": 2}], "actions": [{"kind": "notify", "message": "x"}]})), &w).is_ok());
     }
 
     #[test]

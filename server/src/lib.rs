@@ -12,6 +12,7 @@ pub mod backup;
 pub mod capabilities;
 pub mod cloud;
 pub mod config;
+pub mod cre;
 pub mod crypto;
 pub mod dashboard;
 pub mod db;
@@ -31,6 +32,7 @@ pub mod rollup;
 pub mod routines;
 pub mod stats;
 pub mod surplus;
+pub mod tempo;
 pub mod timers;
 pub mod tls;
 pub mod traits;
@@ -186,6 +188,8 @@ pub fn spawn_background(state: &AppState) {
     tokio::spawn(surplus::run_loop(state.clone()));
     tokio::spawn(state.updater.clone().run_checks());
     tokio::spawn(state.weather.clone().run());
+    tokio::spawn(tempo::run_loop(state.clone()));
+    tokio::spawn(cre::run_loop(state.clone()));
 }
 
 pub async fn run(cfg: Config) -> anyhow::Result<()> {

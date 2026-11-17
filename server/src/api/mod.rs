@@ -8,7 +8,7 @@ pub(crate) mod energy;
 mod federation;
 pub(crate) mod home;
 mod hvac;
-mod price;
+pub(crate) mod price;
 mod routines;
 mod schedules;
 mod sources;

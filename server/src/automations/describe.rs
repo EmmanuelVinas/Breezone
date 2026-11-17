@@ -72,6 +72,8 @@ pub(super) const FACINGS: [(&str, &str, &str); 8] = [
 /// The colours of the weather warnings, 0 to 3.
 pub(super) const VIGILANCE: [(&str, &str, &str); 4] = [("verte", "green", "verde"), ("jaune", "yellow", "amarilla"), ("orange", "orange", "naranja"), ("rouge", "red", "roja")];
 
+pub(super) const TEMPO_COLOURS: [(&str, &str, &str); 3] = [("bleu", "blue", "azul"), ("blanc", "white", "blanco"), ("rouge", "red", "rojo")];
+
 pub(super) fn colour(level: f64) -> Text {
     named(&VIGILANCE, (level.round().clamp(0.0, 3.0) as u32) + 1)
 }
@@ -127,6 +129,9 @@ impl Context {
                 WeatherField::Vigilance => crate::text!("Vigilance météo", "Weather warning", "Aviso meteorológico"),
                 WeatherField::Humidity => crate::text!("Humidité extérieure", "Outdoor humidity", "Humedad exterior"),
             },
+            Measure::Price => crate::text!("Prix de l'électricité", "Electricity price", "Precio de la electricidad"),
+            Measure::Tempo { day: TempoDay::Today } => crate::text!("Couleur Tempo du jour", "Today's Tempo colour", "Color Tempo de hoy"),
+            Measure::Tempo { day: TempoDay::Tomorrow } => crate::text!("Couleur Tempo de demain", "Tomorrow's Tempo colour", "Color Tempo de mañana"),
             Measure::Device { device_id, field } => {
                 let (name, field) = (self.device_name(*device_id), self.field_label(*device_id, field));
                 crate::text!("{0} · {1}", "{0} · {1}", "{0} · {1}", name.arg(), field.arg())
@@ -138,12 +143,34 @@ impl Context {
     pub(super) fn value_text(&self, m: &Measure, v: f64) -> Text {
         match m {
             Measure::Weather { field: WeatherField::Vigilance } => colour(v),
+            Measure::Tempo { .. } => named(&TEMPO_COLOURS, v.round().clamp(1.0, 3.0) as u32),
+            Measure::Price => {
+                let text = format!("{v:.4}");
+                let text = text.trim_end_matches('0').trim_end_matches('.');
+                Text::plain(format!("{text} {}", self.unit(m).unwrap_or_default()))
+            }
             _ => Text::plain(amount(v, self.unit(m).as_deref())),
         }
     }
 
-    /// "Injection au réseau > 500 W".
+    /// "Injection au réseau > 500 W"; "Couleur Tempo de demain : rouge".
     pub(super) fn comparison(&self, m: &Measure, op: Op, value: f64) -> Text {
+        if let Measure::Tempo { .. } = m {
+            let name = self.measure_label(m);
+            let which = match (op, value.round() as i64) {
+                (Op::Above, 2) => crate::text!("rouge", "red", "rojo"),
+                (Op::Above, 1) => crate::text!("blanc ou rouge", "white or red", "blanco o rojo"),
+                (Op::Below, 2) => crate::text!("bleu", "blue", "azul"),
+                (Op::Below, 3) => crate::text!("bleu ou blanc", "blue or white", "azul o blanco"),
+                _ => {
+                    let v = self.value_text(m, value);
+                    let v = v.arg();
+                    crate::text!("{0} {1}", "{0} {1}", "{0} {1}", op.sign(), v)
+                }
+            };
+            let which = which.arg();
+            return crate::text!("{0} : {1}", "{0}: {1}", "{0}: {1}", name.arg(), which);
+        }
         let (name, threshold) = (self.measure_label(m), self.value_text(m, value));
         let threshold = threshold.arg();
         crate::text!("{0} {1} {2}", "{0} {1} {2}", "{0} {1} {2}", name.arg(), op.sign(), threshold)

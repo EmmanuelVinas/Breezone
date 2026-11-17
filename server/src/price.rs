@@ -35,6 +35,16 @@ pub struct Contract {
     /// ISO 4217 ("EUR").
     #[serde(default = "euro")]
     pub currency: String,
+    /// The off-peak hours, for an "Heures creuses" offer read from the CRE (none: 22:00 to 06:00).
+    #[serde(default)]
+    pub offpeak: Vec<OffPeak>,
+}
+
+/// A stretch of off-peak hours, local time; `from` after `to` goes over midnight.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct OffPeak {
+    pub from: String,
+    pub to: String,
 }
 
 fn custom() -> String {
@@ -131,6 +141,15 @@ pub fn validate_contract(c: &Contract) -> Result<(), String> {
     }
     if c.currency.len() != 3 || !c.currency.chars().all(|ch| ch.is_ascii_uppercase()) {
         return Err("currency: three capital letters (ISO 4217)".into());
+    }
+    if c.offpeak.len() > 3 {
+        return Err("offpeak: 3 stretches at most".into());
+    }
+    for o in &c.offpeak {
+        let on_half_hour = |t: &str| clock(t).is_some_and(|t| t.minute() % 30 == 0);
+        if !on_half_hour(&o.from) || !on_half_hour(&o.to) || o.from == o.to {
+            return Err("offpeak: \"HH:MM\" on the hour or the half hour, from before to".into());
+        }
     }
     Ok(())
 }
@@ -306,6 +325,49 @@ pub fn periods(tariffs: &Tariffs, color: &dyn Fn(NaiveDate) -> Option<DayColor>,
     out
 }
 
+/// What a local day cost, in the currency of the contract (taxes included).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct DayCost {
+    /// The energy drawn from the grid, each kWh at its price.
+    pub energy: f64,
+    /// The share of the subscription of that day (a month's spread over its days).
+    pub subscription: f64,
+    /// What the production used on the spot would have cost from the grid.
+    pub saved: f64,
+    /// What the energy returned to the grid was paid (with a buy-back price).
+    pub earned: f64,
+}
+
+fn days_in_month(day: NaiveDate) -> i64 {
+    let first = day.with_day(1).unwrap_or(day);
+    let next = if first.month() == 12 { NaiveDate::from_ymd_opt(first.year() + 1, 1, 1) } else { NaiveDate::from_ymd_opt(first.year(), first.month() + 1, 1) };
+    next.map_or(30, |n| (n - first).num_days())
+}
+
+/// The cost of a local day from the mean powers of the home over its buckets (`bucket` seconds
+/// each, from `points`): `None` when no tariff covers it.
+pub fn day_cost(tariffs: &Tariffs, color: &dyn Fn(NaiveDate) -> Option<DayColor>, tz: Tz, day: NaiveDate, points: &[crate::energy::CurvePoint], bucket: i64) -> Option<DayCost> {
+    let tariff = tariffs.on(day)?;
+    let mut cost = DayCost { subscription: tariff.subscription / days_in_month(day) as f64, ..Default::default() };
+    let hours = bucket as f64 / 3600.0;
+    for p in points {
+        let f = &p.flows;
+        let Some(at) = price_at(tariffs, color, tz, p.ts + bucket / 2) else { continue };
+        let export = f.grid.map_or(0.0, |g| (-g).max(0.0));
+        let solar = f.solar.map_or(0.0, f64::abs);
+        // Without a grid meter: what the home used beyond its production.
+        let import = f.grid.map(|g| g.max(0.0)).or(f.home.map(|h| (h - solar).max(0.0))).unwrap_or(0.0);
+        let kwh = |w: f64| w * hours / 1000.0;
+        cost.energy += kwh(import) * at.price;
+        cost.saved += kwh((solar - export).max(0.0)) * at.price;
+        if let Some(sold) = tariffs.on(day).and_then(|t| t.export_price) {
+            cost.earned += kwh(export) * sold;
+        }
+    }
+    let round = |v: f64| (v * 10_000.0).round() / 10_000.0;
+    Some(DayCost { energy: round(cost.energy), subscription: round(cost.subscription), saved: round(cost.saved), earned: round(cost.earned) })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -432,5 +494,29 @@ mod tests {
         let list = periods(&tariffs, &no_color, Paris, at("2026-10-25", "00:00"), at("2026-10-26", "00:00"));
         let hours: Vec<i64> = list.iter().map(|p| (p.end - p.start) / 3600).collect();
         assert_eq!(hours, vec![7, 16, 2]);
+    }
+
+    #[test]
+    fn a_day_costs_its_energy_at_the_price_of_each_moment() {
+        use crate::energy::{CurvePoint, Flows};
+        let tariffs = Tariffs::new(vec![(day("2026-01-01"), Tariff { export_price: Some(0.1), ..hc() })]);
+        let from = at("2026-11-17", "00:00");
+        // 1 kW drawn all day; from 12:00 to 14:00 the sun gives 3 kW, 1 kW used, 2 kW returned.
+        let points: Vec<CurvePoint> = (0..96)
+            .map(|i| {
+                let sunny = (48..56).contains(&i);
+                CurvePoint {
+                    ts: from + i * 900,
+                    flows: Flows { grid: Some(if sunny { -2000.0 } else { 1000.0 }), solar: Some(if sunny { 3000.0 } else { 0.0 }), battery: None, home: Some(1000.0) },
+                }
+            })
+            .collect();
+        let c = day_cost(&tariffs, &no_color, Paris, day("2026-11-17"), &points, 900).unwrap();
+        // HC: 8 h at 0.2; HP: 16 h less the 2 sunny ones, at 0.27.
+        assert!((c.energy - (8.0 * 0.2 + 14.0 * 0.27)).abs() < 1e-6, "{c:?}");
+        assert!((c.saved - 2.0 * 0.27).abs() < 1e-6, "{c:?}");
+        assert!((c.earned - 4.0 * 0.1).abs() < 1e-6, "{c:?}");
+        assert!((c.subscription - 15.0 / 30.0).abs() < 1e-4, "November has 30 days: {c:?}");
+        assert!(day_cost(&tariffs, &no_color, Paris, day("2025-06-01"), &points, 900).is_none());
     }
 }

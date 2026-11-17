@@ -278,6 +278,9 @@ pub struct DayEnergy {
     /// What the home used beyond its consumption measures (with a grid meter).
     pub other: Option<f64>,
     pub devices: Vec<DeviceEnergy>,
+    /// What the day cost, with a tariff of the electricity (`price`).
+    #[serde(default)]
+    pub cost: Option<crate::price::DayCost>,
 }
 
 fn day_of(ts: i64, tz: Tz) -> Option<String> {
@@ -330,6 +333,7 @@ pub fn daily(measures: &[Measure], spans: &[Span], tz: Tz, days: &[String]) -> V
                     .iter()
                     .filter_map(|m| devices.get(&m.device_id).map(|e| DeviceEnergy { device_id: m.device_id, energy_in: r3(e.0), energy_out: r3(e.1) }))
                     .collect(),
+                cost: None,
             }
         })
         .collect()

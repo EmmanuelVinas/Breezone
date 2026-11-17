@@ -31,6 +31,11 @@ export function AutomationsSection() {
   })
   const routines = useQuery({ queryKey: ["routines"], queryFn: api.routines })
   const live = useQuery({ queryKey: ["energy-live"], queryFn: api.energyLive })
+  const price = useQuery({
+    queryKey: ["price"],
+    queryFn: () => api.price(24),
+    staleTime: 5 * 60_000,
+  })
   const { installations, ids } = useChosenInstallations()
   const admin = currentUser()?.role === "admin"
   const [editing, setEditing] = useState<{
@@ -71,6 +76,10 @@ export function AutomationsSection() {
       grid: false,
       solar: false,
       consumption: false,
+    },
+    prices: {
+      tariff: !!price.data?.now,
+      tempo: !!price.data?.tempo,
     },
   }
   const installationOf = new Map(

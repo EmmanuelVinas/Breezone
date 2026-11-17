@@ -27,6 +27,7 @@ export type {
   Connection,
   Contract,
   DayColor,
+  OffPeak,
   DayProfile,
   PriceAt,
   PricePeriod,
@@ -36,6 +37,7 @@ export type {
   TariffCalendar,
   TariffVersion,
   TariffView,
+  TempoView,
   DeviceView,
   Installation,
   InstallationUserRights,
@@ -827,6 +829,20 @@ export type DayEnergy = {
   consumers: (Consumer & { energy: number })[]
   other: number | null
   devices: { device_id: number; energy_in: number; energy_out: number }[]
+  /** What the day cost, with a tariff of the electricity (null: none covers it). */
+  cost?: DayCost | null
+}
+
+/** The cost of a day, in the currency of the contract, taxes included. */
+export type DayCost = {
+  /** The energy drawn from the grid, each kWh at its price. */
+  energy: number
+  /** The share of the subscription of that day. */
+  subscription: number
+  /** What the production used on the spot would have cost from the grid. */
+  saved: number
+  /** What the energy returned to the grid was paid. */
+  earned: number
 }
 
 export type EnergyDay = {
@@ -889,6 +905,10 @@ export type AutomationMeasure =
         /** 0 green, 1 yellow, 2 orange, 3 red (Météo-France, through MeteoAlarm). */
         | "vigilance"
     }
+  /** The price of electricity now, per kWh (a tariff of Settings › Electricity). */
+  | { kind: "price" }
+  /** The colour of a Tempo day: 1 blue, 2 white, 3 red. */
+  | { kind: "tempo"; day: "today" | "tomorrow" }
 
 export type AutomationOp = "above" | "below"
 

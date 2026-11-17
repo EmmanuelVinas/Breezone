@@ -140,7 +140,15 @@
         { "name": "supplier", "type": "string | null" },
         { "name": "offer", "type": "string", "doc": "\"custom\": prices set by hand." },
         { "name": "power_kva", "type": "number | null", "doc": "Subscribed power (kVA)." },
-        { "name": "currency", "type": "string", "doc": "ISO 4217 (\"EUR\")." }
+        { "name": "currency", "type": "string", "doc": "ISO 4217 (\"EUR\")." },
+        { "name": "offpeak", "type": "OffPeak[]", "doc": "The off-peak hours of an \"hc\" offer read from the CRE (empty: 22:00 to 06:00)." }
+      ]
+    },
+    "OffPeak": {
+      "doc": "A stretch of off-peak hours, local time; `from` after `to` goes over midnight.",
+      "fields": [
+        { "name": "from", "type": "string" },
+        { "name": "to", "type": "string" }
       ]
     },
     "PriceSlot": {
@@ -228,7 +236,17 @@
       "fields": [
         { "name": "currency", "type": "string" },
         { "name": "now", "type": "PriceAt | null", "doc": "null: no tariff for now." },
-        { "name": "periods", "type": "PricePeriod[]", "doc": "From now on." }
+        { "name": "periods", "type": "PricePeriod[]", "doc": "From now on." },
+        { "name": "tempo", "type": "TempoView | null", "doc": "null: no tariff follows the colour of the days." }
+      ]
+    },
+    "TempoView": {
+      "doc": "The Tempo days, when a tariff follows their colour.",
+      "fields": [
+        { "name": "today", "type": "DayColor | null" },
+        { "name": "tomorrow", "type": "DayColor | null", "doc": "Announced in the morning (null before)." },
+        { "name": "red_left", "type": "number", "doc": "Red days left in the season (1 September to 31 August)." },
+        { "name": "white_left", "type": "number" }
       ]
     }
   }

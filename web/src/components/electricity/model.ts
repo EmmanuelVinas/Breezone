@@ -86,15 +86,9 @@ const profile = (
   slots: PriceSlot[]
 ): DayProfile => ({ id, name, color, slots })
 
-const hcHp = (hc: number, hp: number) => [
-  slot("00:00", "HC", hc),
-  slot("06:00", "HP", hp),
-  slot("22:00", "HC", hc),
-]
-
 const every = (id: string) => Array.from({ length: 7 }, () => id)
 
-/** The offers a contract may start from; prices are indicative, to check on the bill. */
+/** The offers of a contract: EDF's regulated ones (prices of the CRE), or prices of one's own. */
 export type Offer = "base" | "hc" | "tempo" | "custom"
 
 export const OFFER_LABEL: Record<Offer, string> = {
@@ -104,74 +98,17 @@ export const OFFER_LABEL: Record<Offer, string> = {
   custom: t("Personnalisée"),
 }
 
-export function template(offer: Offer): Tariff {
-  switch (offer) {
-    case "base":
-      return {
-        subscription: 16,
-        export_price: null,
-        profiles: [
-          profile("normal", t("Tous les jours"), PROFILE_COLORS[3], [
-            slot("00:00", t("Base"), 0.2016),
-          ]),
-        ],
-        calendar: { day_start: "00:00", weekdays: every("normal"), colors: {} },
-      }
-    case "hc":
-      return {
-        subscription: 16.5,
-        export_price: null,
-        profiles: [
-          profile(
-            "normal",
-            t("Tous les jours"),
-            PROFILE_COLORS[3],
-            hcHp(0.1696, 0.2146)
-          ),
-        ],
-        calendar: { day_start: "00:00", weekdays: every("normal"), colors: {} },
-      }
-    case "tempo":
-      return {
-        subscription: 16.2,
-        export_price: null,
-        profiles: [
-          profile(
-            "blue",
-            t("Jour bleu"),
-            PROFILE_COLORS[0],
-            hcHp(0.1288, 0.1552)
-          ),
-          profile(
-            "white",
-            t("Jour blanc"),
-            PROFILE_COLORS[1],
-            hcHp(0.1447, 0.1792)
-          ),
-          profile(
-            "red",
-            t("Jour rouge"),
-            PROFILE_COLORS[2],
-            hcHp(0.1518, 0.6586)
-          ),
-        ],
-        calendar: {
-          day_start: "06:00",
-          weekdays: every("blue"),
-          colors: { blue: "blue", white: "white", red: "red" },
-        },
-      }
-    case "custom":
-      return {
-        subscription: 0,
-        export_price: null,
-        profiles: [
-          profile("normal", t("Normal"), PROFILE_COLORS[3], [
-            slot("00:00", t("Base"), 0.2),
-          ]),
-        ],
-        calendar: { day_start: "00:00", weekdays: every("normal"), colors: {} },
-      }
+/** Prices of one's own to start from: one price all day long, to change. */
+export function template(): Tariff {
+  return {
+    subscription: 0,
+    export_price: null,
+    profiles: [
+      profile("normal", t("Normal"), PROFILE_COLORS[3], [
+        slot("00:00", t("Base"), 0.2),
+      ]),
+    ],
+    calendar: { day_start: "00:00", weekdays: every("normal"), colors: {} },
   }
 }
 

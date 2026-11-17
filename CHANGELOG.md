@@ -8,6 +8,25 @@ All notable changes are documented here. The format follows
 
 ### Added
 
+- Energy: what the home cost (each quarter of an hour at its price, plus the day's share of the
+  subscription) and what the solar panels earned (production used on the spot, and what was sold at
+  the buy-back price), for the day, week, month or year shown. The price now sits at the top of the
+  page.
+- Tempo: the colour of today and tomorrow, and the red and white days left in the season, read from
+  the public relay api-couleur-tempo.fr (RTE's data, no account) while a tariff follows colours; the
+  prices and costs of each day follow its colour.
+- Electricity, EDF's regulated offers (Base, Off-peak hours, Tempo): the prices come from the open data
+  of the CRE, for the subscribed power, with every past grid on its date (back to 2016), read again
+  every week; the off-peak hours of the home are set in the contract. A custom offer starts from the
+  prices shown.
+- Automations: the price of electricity now (“when the price goes above…”, “if the price is below…”
+  for the off-peak hours) and the colour of today's and tomorrow's Tempo day (“when tomorrow is
+  red”), with a recipe that warns of a red day.
+
+## [0.11.0-beta.28] - 2026-11-17
+
+### Added
+
 - Settings › Electricity (administrators): the contract of the home (country, supplier, subscribed
   power, offer) and its prices, set visually. An offer (Base, Off-peak hours, Tempo, Custom) fills
   the grid with its slots and indicative prices to check on the bill. Each profile of day is a bar

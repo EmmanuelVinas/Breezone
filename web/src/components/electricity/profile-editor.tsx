@@ -58,12 +58,14 @@ function Frieze({
   onSelect,
   onChange,
   currency,
+  readOnly,
 }: {
   profile: DayProfile
   selected: number | null
   onSelect: (i: number) => void
   onChange: (slots: PriceSlot[]) => void
   currency: string
+  readOnly?: boolean
 }) {
   const bar = useRef<HTMLDivElement>(null)
   const color = profile.color ?? PROFILE_COLORS[3]
@@ -95,6 +97,7 @@ function Frieze({
               <button
                 key={i}
                 type="button"
+                disabled={readOnly}
                 onClick={() => onSelect(i)}
                 aria-pressed={selected === i}
                 aria-label={t("{name}, de {from} à {to}, {price}", {
@@ -122,37 +125,42 @@ function Frieze({
             )
           })}
         </div>
-        {profile.slots.slice(1).map((s, j) => {
-          const i = j + 1
-          return (
-            <span
-              key={i}
-              role="slider"
-              tabIndex={0}
-              aria-label={t("Début de « {name} »", { name: s.name })}
-              aria-valuemin={0}
-              aria-valuemax={DAY}
-              aria-valuenow={minutes(s.start)}
-              aria-valuetext={s.start}
-              className="absolute -inset-y-1 z-[2] w-2 -translate-x-1/2 cursor-ew-resize rounded bg-foreground/85 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
-              style={{ left: `${(minutes(s.start) / DAY) * 100}%` }}
-              onPointerDown={(e) => {
-                e.currentTarget.setPointerCapture(e.pointerId)
-              }}
-              onPointerMove={(e) => {
-                if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
-                onChange(moveStart(profile.slots, i, at(e.clientX)))
-              }}
-              onKeyDown={(e) => {
-                const by =
-                  e.key === "ArrowLeft" ? -30 : e.key === "ArrowRight" ? 30 : 0
-                if (!by) return
-                e.preventDefault()
-                onChange(moveStart(profile.slots, i, minutes(s.start) + by))
-              }}
-            />
-          )
-        })}
+        {!readOnly &&
+          profile.slots.slice(1).map((s, j) => {
+            const i = j + 1
+            return (
+              <span
+                key={i}
+                role="slider"
+                tabIndex={0}
+                aria-label={t("Début de « {name} »", { name: s.name })}
+                aria-valuemin={0}
+                aria-valuemax={DAY}
+                aria-valuenow={minutes(s.start)}
+                aria-valuetext={s.start}
+                className="absolute -inset-y-1 z-[2] w-2 -translate-x-1/2 cursor-ew-resize rounded bg-foreground/85 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+                style={{ left: `${(minutes(s.start) / DAY) * 100}%` }}
+                onPointerDown={(e) => {
+                  e.currentTarget.setPointerCapture(e.pointerId)
+                }}
+                onPointerMove={(e) => {
+                  if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
+                  onChange(moveStart(profile.slots, i, at(e.clientX)))
+                }}
+                onKeyDown={(e) => {
+                  const by =
+                    e.key === "ArrowLeft"
+                      ? -30
+                      : e.key === "ArrowRight"
+                        ? 30
+                        : 0
+                  if (!by) return
+                  e.preventDefault()
+                  onChange(moveStart(profile.slots, i, minutes(s.start) + by))
+                }}
+              />
+            )
+          })}
       </div>
       <div className="relative h-4 text-[11px] text-muted-foreground">
         {HOURS.map((h) => (
@@ -178,8 +186,10 @@ export function ProfileEditor({
   onChange,
   onRemove,
   currency,
+  readOnly,
 }: {
   profile: DayProfile
+  readOnly?: boolean
   onChange: (p: DayProfile) => void
   /** `undefined`: it cannot be removed (the last one). */
   onRemove?: () => void
@@ -192,6 +202,27 @@ export function ProfileEditor({
   const setSlot = (i: number, patch: Partial<PriceSlot>) =>
     setSlots(slots.map((s, j) => (j === i ? { ...s, ...patch } : s)))
   const cut = sel !== null ? split(slots, sel) : null
+
+  if (readOnly)
+    return (
+      <div className="grid gap-3 rounded-2xl border p-4">
+        <div className="flex items-center gap-2 font-medium">
+          <span
+            className="size-3 rounded-full"
+            style={{ background: profile.color ?? PROFILE_COLORS[3] }}
+          />
+          {profile.name}
+        </div>
+        <Frieze
+          profile={profile}
+          selected={null}
+          onSelect={() => {}}
+          onChange={() => {}}
+          currency={currency}
+          readOnly
+        />
+      </div>
+    )
 
   return (
     <div className="grid gap-3 rounded-2xl border p-4">

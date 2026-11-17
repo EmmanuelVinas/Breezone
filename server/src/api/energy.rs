@@ -76,12 +76,12 @@ pub async fn day(State(state): State<AppState>, _user: AuthUser, Query(q): Query
     let spans = spans(&state, &measures, from, until).await?;
     let day = date.format("%Y-%m-%d").to_string();
     let count = ((until - from) / BUCKET).max(1) as usize;
-    Ok(Json(DayView {
-        points: energy::curve(&measures, &spans, from, BUCKET, count),
-        totals: energy::daily(&measures, &spans, tz, std::slice::from_ref(&day)).remove(0),
-        date: day,
-        bucket: BUCKET,
-    }))
+    let points = energy::curve(&measures, &spans, from, BUCKET, count);
+    let mut totals = energy::daily(&measures, &spans, tz, std::slice::from_ref(&day)).remove(0);
+    let tariffs = crate::api::price::tariffs(&state).await?;
+    let known = crate::api::price::colors(&state, date - Days::new(1), date).await?;
+    totals.cost = crate::price::day_cost(&tariffs, &|d| known.get(&d).copied(), tz, date, &points, BUCKET);
+    Ok(Json(DayView { points, totals, date: day, bucket: BUCKET }))
 }
 
 #[derive(Deserialize)]
@@ -127,7 +127,17 @@ pub async fn days(State(state): State<AppState>, _user: AuthUser, Query(q): Quer
         let devices = devices::list(&state).await?;
         let measures = measures(&state, &devices).await?;
         let spans = spans(&state, &measures, midnight(computed_from, tz), midnight(last + Days::new(1), tz)).await?;
-        let computed = energy::daily(&measures, &spans, tz, &days);
+        let mut computed = energy::daily(&measures, &spans, tz, &days);
+        // Each day at the prices of its moments.
+        let tariffs = crate::api::price::tariffs(&state).await?;
+        let known = crate::api::price::colors(&state, computed_from - Days::new(1), last).await?;
+        let color = |d: NaiveDate| known.get(&d).copied();
+        for d in computed.iter_mut() {
+            let Ok(date) = NaiveDate::parse_from_str(&d.day, "%Y-%m-%d") else { continue };
+            let (from, until) = (midnight(date, tz), midnight(date + Days::new(1), tz));
+            let points = energy::curve(&measures, &spans, from, BUCKET, ((until - from) / BUCKET).max(1) as usize);
+            d.cost = crate::price::day_cost(&tariffs, &color, tz, date, &points, BUCKET);
+        }
         // The past days are kept: they stay once their detail is deleted.
         let today_label = label(last);
         let mut tx = state.db.begin().await?;

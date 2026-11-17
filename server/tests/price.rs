@@ -94,3 +94,53 @@ async fn administrators_set_the_prices_everyone_reads() {
     let (status, _) = admin.call(Method::DELETE, "/api/energy/tariffs/2024-02-01", None).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
+
+const TEMPO: &str = "DATE_DEBUT;DATE_FIN;P_SOUSCRITE;PART_FIXE_HT;PART_FIXE_TTC;PART_VARIABLE_HCBleu_HT;PART_VARIABLE_HCBleu_TTC;PART_VARIABLE_HPBleu_HT;PART_VARIABLE_HPBleu_TTC;PART_VARIABLE_HCBlanc_HT;PART_VARIABLE_HCBlanc_TTC;PART_VARIABLE_HPBlanc_HT;PART_VARIABLE_HPBlanc_TTC;PART_VARIABLE_HCRouge_HT;PART_VARIABLE_HCRouge_TTC;PART_VARIABLE_HPRouge_HT;PART_VARIABLE_HPRouge_TTC\r\n\
+01/02/2026;31/07/2026;9;174,36;233,44;0,0796;0,1325;0,1035;0,1612;0,0941;0,1499;0,1251;0,1871;0,1004;0,1575;0,5575;0,706\r\n\
+01/08/2026;;9;177;237,3436191;0,0824;0,1356;0,1072;0,1654;0,0974;0,1536;0,1295;0,1921;0,1040;0,1615;0,5773;0,7295\r\n";
+
+#[tokio::test]
+async fn a_regulated_offer_takes_the_prices_of_the_cre() {
+    let cre = axum::Router::new().route("/Option_Tempo.csv", axum::routing::get(|| async { TEMPO }));
+    let cre_port = serve(cre).await;
+    let dir = std::env::temp_dir().join(format!("breezone-cre-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let mut cfg = Config::for_tests(dir);
+    cfg.scan_port = 9;
+    cfg.cre_url = Some(format!("http://127.0.0.1:{cre_port}"));
+    let state = breezone_server::init_state(cfg).await.unwrap();
+    let base = format!("http://127.0.0.1:{}", serve(breezone_server::app(state)).await);
+    let http = reqwest::Client::new();
+    let admin = Client { token: token(&http, &base, "/api/setup", "admin").await, base: base.clone(), http: http.clone() };
+
+    // A power the CRE has no price for: nothing is changed.
+    let (status, v) = admin.call(Method::PUT, "/api/energy/contract", Some(json!({"country": "FR", "offer": "tempo", "power_kva": 7}))).await;
+    assert_eq!(status, StatusCode::BAD_GATEWAY, "{v}");
+    let (_, v) = admin.call(Method::GET, "/api/energy/tariff", None).await;
+    assert!(v["contract"].is_null());
+
+    let (status, v) = admin.call(Method::PUT, "/api/energy/contract", Some(json!({"country": "FR", "supplier": "EDF", "offer": "tempo", "power_kva": 9}))).await;
+    assert_eq!(status, StatusCode::OK, "{v}");
+    let from: Vec<&str> = v["versions"].as_array().unwrap().iter().map(|x| x["valid_from"].as_str().unwrap()).collect();
+    assert_eq!(from, vec!["2026-02-01", "2026-08-01"]);
+    let latest = &v["versions"][1]["tariff"];
+    assert_eq!(latest["subscription"].as_f64(), Some(19.78));
+    assert_eq!(latest["profiles"][2]["slots"][1]["price"].as_f64(), Some(0.7295), "{latest}");
+    assert_eq!(latest["calendar"]["day_start"], "06:00");
+}
+
+#[tokio::test]
+async fn without_internet_a_regulated_offer_is_refused() {
+    let dir = std::env::temp_dir().join(format!("breezone-cre-off-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let mut cfg = Config::for_tests(dir);
+    cfg.scan_port = 9;
+    let state = breezone_server::init_state(cfg).await.unwrap();
+    let base = format!("http://127.0.0.1:{}", serve(breezone_server::app(state)).await);
+    let http = reqwest::Client::new();
+    let admin = Client { token: token(&http, &base, "/api/setup", "admin").await, base: base.clone(), http: http.clone() };
+    let (status, _) = admin.call(Method::PUT, "/api/energy/contract", Some(json!({"offer": "base", "power_kva": 6}))).await;
+    assert_eq!(status, StatusCode::BAD_GATEWAY);
+    let (status, _) = admin.call(Method::PUT, "/api/energy/contract", Some(json!({"offer": "custom", "power_kva": 6, "offpeak": [{"from": "22:15", "to": "06:00"}]}))).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "off-peak hours on the half hour");
+}

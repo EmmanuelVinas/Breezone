@@ -22,7 +22,9 @@ import {
   Download,
   Gauge,
   Home,
+  Euro,
   Leaf,
+  PiggyBank,
   Plug,
   ShieldCheck,
   Sun,
@@ -30,7 +32,13 @@ import {
   Zap,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
-import type { DayEnergy, DeviceView, EnergyLive, MeasureRole } from "@/lib/api"
+import type {
+  DayCost,
+  DayEnergy,
+  DeviceView,
+  EnergyLive,
+  MeasureRole,
+} from "@/lib/api"
 import { api, currentUser } from "@/lib/api"
 import { kwh, number, percent, time, watts } from "@/lib/format"
 import { inverterCounting, isInverter } from "@/lib/solar"
@@ -38,6 +46,8 @@ import { locale, t, tn } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { PageHeader } from "@/components/app-shell"
 import { SurplusCard } from "@/components/surplus"
+import { money } from "@/components/electricity/model"
+import { PriceNow } from "@/components/electricity/electricity-tab"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -161,7 +171,17 @@ function total(days: DayEnergy[]): DayEnergy {
       same.energy_out += d.energy_out
     } else devices.push({ ...d })
   }
+  const costs = days.flatMap((d) => (d.cost ? [d.cost] : []))
+  const add = (k: keyof DayCost) => costs.reduce((a, c) => a + c[k], 0)
   return {
+    cost: costs.length
+      ? {
+          energy: add("energy"),
+          subscription: add("subscription"),
+          saved: add("saved"),
+          earned: add("earned"),
+        }
+      : null,
     day: days[days.length - 1]?.day ?? "",
     imported: field("imported"),
     exported: field("exported"),
@@ -214,8 +234,39 @@ function Kpi({
   )
 }
 
+/** The price of electricity now, with a tariff (Settings › Electricity). */
+function EnergyPrice() {
+  const price = useQuery({
+    queryKey: ["price"],
+    queryFn: () => api.price(24),
+    refetchInterval: 60_000,
+  })
+  const tariff = useQuery({
+    queryKey: ["tariff"],
+    queryFn: api.tariff,
+    staleTime: 5 * 60_000,
+  })
+  if (!price.data?.now) return null
+  return (
+    <div className="mb-6">
+      <PriceNow
+        price={price.data}
+        tariff={tariff.data?.versions.at(-1)?.tariff}
+      />
+    </div>
+  )
+}
+
 function Kpis({ totals, live }: { totals: DayEnergy; live: EnergyLive }) {
   const { roles } = live
+  const contract = useQuery({
+    queryKey: ["tariff"],
+    queryFn: api.tariff,
+    staleTime: 5 * 60_000,
+  })
+  const currency = contract.data?.contract?.currency ?? "EUR"
+  const cost = totals.cost
+  const euros = (v: number) => money(v, currency, 2)
   const selfShare = ratio(totals.self_consumed, totals.production)
   const autonomy =
     roles.grid && (roles.solar || roles.battery)
@@ -276,6 +327,33 @@ function Kpis({ totals, live }: { totals: DayEnergy; live: EnergyLive }) {
           value={percent(autonomy)}
           sub={t("de la consommation couverte")}
           color={COLOR.battery}
+        />
+      )}
+      {cost && (
+        <Kpi
+          icon={Euro}
+          label={t("Coût")}
+          value={euros(cost.energy + cost.subscription)}
+          sub={t("dont {price} d'abonnement", {
+            price: euros(cost.subscription),
+          })}
+          color={COLOR.grid}
+        />
+      )}
+      {cost && roles.solar && (
+        <Kpi
+          icon={PiggyBank}
+          label={t("Gagné grâce au solaire")}
+          value={euros(cost.saved + cost.earned)}
+          sub={
+            cost.earned > 0
+              ? t("{saved} économisés · {earned} de revente", {
+                  saved: euros(cost.saved),
+                  earned: euros(cost.earned),
+                })
+              : t("électricité non achetée")
+          }
+          color={COLOR.solar}
         />
       )}
       {roles.battery && (
@@ -1256,6 +1334,7 @@ export function EnergyPage() {
           ) : (
             <Skeleton className="mb-6 h-24 w-full rounded-3xl" />
           )}
+          <EnergyPrice />
           <FlowCard
             live={l}
             solarSub={

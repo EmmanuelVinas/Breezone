@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   CalendarPlus,
@@ -12,11 +12,14 @@ import {
 import { toast } from "sonner"
 import type {
   Contract,
+  DayColor,
+  OffPeak,
   DayProfile,
   PriceView,
   Tariff,
   TariffCalendar,
   TariffView,
+  TempoView,
 } from "@/lib/api"
 import { api } from "@/lib/api"
 import { DAY_LABEL, errorText, time } from "@/lib/format"
@@ -63,11 +66,20 @@ const COUNTRIES: [string, string][] = [
 ]
 const POWERS = [3, 6, 9, 12, 15, 18, 24, 30, 36]
 const OFFERS: Offer[] = ["base", "hc", "tempo", "custom"]
+/** Offers whose prices are read from the CRE (EDF's regulated tariff). */
+const REGULATED: Offer[] = ["base", "hc", "tempo"]
 const COLORS = [
   ["blue", t("Bleu")],
   ["white", t("Blanc")],
   ["red", t("Rouge")],
 ] as const
+
+/** A local day ("YYYY-MM-DD") moved by some days. */
+function shiftDay(day: string, by: number) {
+  const d = new Date(`${day}T12:00:00`)
+  d.setDate(d.getDate() + by)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+}
 
 function dayText(day: string) {
   return new Date(`${day}T12:00:00`).toLocaleDateString(locale(), {
@@ -97,8 +109,60 @@ function Field({
   )
 }
 
+const TEMPO_COLOR: Record<DayColor, string> = {
+  blue: "#3b82f6",
+  white: "#e5e7eb",
+  red: "#ef4444",
+}
+const TEMPO_LABEL: Record<DayColor, string> = {
+  blue: t("Bleu"),
+  white: t("Blanc"),
+  red: t("Rouge"),
+}
+
+/** Today's and tomorrow's colours, and the red and white days left. */
+function TempoTiles({ tempo }: { tempo: TempoView }) {
+  const tile = (label: string, value: ReactNode, sub?: string) => (
+    <div className="rounded-2xl bg-muted/60 px-3 py-2">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="font-semibold">{value}</div>
+      {sub && <div className="text-xs text-muted-foreground">{sub}</div>}
+    </div>
+  )
+  const color = (c: DayColor | null, unknown: string) =>
+    c ? (
+      <span className="inline-flex items-center gap-1.5">
+        <span
+          className="size-2.5 rounded-full"
+          style={{ background: TEMPO_COLOR[c] }}
+        />
+        {TEMPO_LABEL[c]}
+      </span>
+    ) : (
+      <span className="text-muted-foreground">{unknown}</span>
+    )
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {tile(t("Aujourd'hui"), color(tempo.today, t("inconnu")))}
+      {tile(
+        t("Demain"),
+        color(tempo.tomorrow, t("pas encore annoncé")),
+        tempo.tomorrow ? undefined : t("annoncé dans la matinée")
+      )}
+      {tile(t("Jours rouges restants"), tempo.red_left, t("sur 22"))}
+      {tile(t("Jours blancs restants"), tempo.white_left, t("sur 43"))}
+    </div>
+  )
+}
+
 /** The price now, and the stretches of the next 24 hours as a bar. */
-function PriceNow({ price, tariff }: { price: PriceView; tariff?: Tariff }) {
+export function PriceNow({
+  price,
+  tariff,
+}: {
+  price: PriceView
+  tariff?: Tariff
+}) {
   const now = price.now
   if (!now) return null
   const color = (id: string) =>
@@ -139,6 +203,7 @@ function PriceNow({ price, tariff }: { price: PriceView; tariff?: Tariff }) {
             </div>
           </div>
         </div>
+        {price.tempo && <TempoTiles tempo={price.tempo} />}
         {periods.length > 0 && (
           <div className="grid gap-1">
             <div className="text-xs text-muted-foreground">
@@ -309,6 +374,7 @@ export function ElectricityTab() {
     null
   )
   const [newFrom, setNewFrom] = useState(today())
+  const [allVersions, setAllVersions] = useState(false)
 
   const saved = view.data
   const versions = saved?.versions ?? []
@@ -322,7 +388,10 @@ export function ElectricityTab() {
       offer: "custom",
       power_kva: 9,
       currency: "EUR",
+      offpeak: [],
     }
+  // A regulated offer takes the prices of the CRE: only the buy-back price is one's own.
+  const regulated = REGULATED.includes(c.offer as Offer)
   const dirty = contract !== null || edit !== null
   // No offer stands out before a contract is set.
   const chosen = contract || saved?.contract ? offerOf(c) : null
@@ -334,8 +403,15 @@ export function ElectricityTab() {
   const save = useMutation({
     mutationFn: async () => {
       let v: TariffView | undefined
+      if (edit && regulated) {
+        // The buy-back price, on every grid (the CRE's are read again with it).
+        for (const x of versions)
+          v = await api.saveTariff(x.valid_from, {
+            ...x.tariff,
+            export_price: edit.tariff.export_price,
+          })
+      } else if (edit) v = await api.saveTariff(edit.from, edit.tariff)
       if (contract) v = await api.saveContract(contract)
-      if (edit) v = await api.saveTariff(edit.from, edit.tariff)
       return v
     },
     onSuccess: (v) => {
@@ -360,15 +436,30 @@ export function ElectricityTab() {
   const setTariff = (tariff: Tariff) =>
     setEdit({ from: shown?.from ?? today(), tariff })
   const chooseOffer = (offer: Offer) => {
-    setContract({
-      ...c,
-      offer,
-      supplier: offer === "custom" ? c.supplier : (c.supplier ?? "EDF"),
-    })
-    setEdit({ from: shown?.from ?? today(), tariff: template(offer) })
+    if (offer === "custom") {
+      // Prices of one's own, from today: those shown, to change.
+      setContract({ ...c, offer })
+      setEdit({
+        from: today(),
+        tariff: latest ? structuredClone(latest.tariff) : template(),
+      })
+    } else {
+      setContract({ ...c, offer, supplier: c.supplier ?? "EDF" })
+      setEdit(null)
+    }
   }
   const tariff = shown?.tariff
-  const wrong = tariff ? problem(tariff) : null
+  const wrong = regulated
+    ? c.power_kva
+      ? null
+      : t("Choisissez la puissance souscrite.")
+    : tariff
+      ? problem(tariff)
+      : null
+  const offpeak = c.offpeak.length
+    ? c.offpeak
+    : [{ from: "22:00", to: "06:00" }]
+  const setOffpeak = (list: OffPeak[]) => setContract({ ...c, offpeak: list })
 
   return (
     <div className="grid gap-6">
@@ -454,11 +545,84 @@ export function ElectricityTab() {
               ))}
             </div>
             <p className="text-sm text-muted-foreground">
-              {t(
-                "Choisir une offre remplit la grille avec ses plages et des prix indicatifs : vérifiez-les sur votre facture avant d'enregistrer."
-              )}
+              {regulated
+                ? t(
+                    "Prix du tarif réglementé d'EDF publiés par la CRE (TTC), pour votre puissance, relus chaque semaine : une nouvelle grille s'ajoute à sa date."
+                  )
+                : t(
+                    "Des prix à vous, réglés ci-dessous. « Personnalisée » part des prix affichés."
+                  )}
             </p>
           </div>
+          {c.offer === "hc" && (
+            <div className="grid gap-2">
+              <Label>{t("Heures creuses")}</Label>
+              <p className="text-sm text-muted-foreground">
+                {t(
+                  "Fixées par le gestionnaire du réseau pour chaque logement : elles sont sur votre facture."
+                )}
+              </p>
+              {offpeak.map((o, i) => (
+                <div key={i} className="flex flex-wrap items-center gap-2">
+                  <Input
+                    type="time"
+                    step={1800}
+                    className="w-28"
+                    aria-label={t("Début")}
+                    value={o.from}
+                    onChange={(e) =>
+                      e.target.value &&
+                      setOffpeak(
+                        offpeak.map((x, j) =>
+                          j === i ? { ...x, from: e.target.value } : x
+                        )
+                      )
+                    }
+                  />
+                  <span className="text-muted-foreground">→</span>
+                  <Input
+                    type="time"
+                    step={1800}
+                    className="w-28"
+                    aria-label={t("Fin")}
+                    value={o.to}
+                    onChange={(e) =>
+                      e.target.value &&
+                      setOffpeak(
+                        offpeak.map((x, j) =>
+                          j === i ? { ...x, to: e.target.value } : x
+                        )
+                      )
+                    }
+                  />
+                  {offpeak.length > 1 && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={t("Retirer cette plage")}
+                      onClick={() =>
+                        setOffpeak(offpeak.filter((_, j) => j !== i))
+                      }
+                    >
+                      <Trash2 />
+                    </Button>
+                  )}
+                </div>
+              ))}
+              {offpeak.length < 3 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="justify-self-start"
+                  onClick={() =>
+                    setOffpeak([...offpeak, { from: "12:00", to: "14:00" }])
+                  }
+                >
+                  <Plus /> {t("Ajouter une plage")}
+                </Button>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -497,13 +661,21 @@ export function ElectricityTab() {
                   })}
                   htmlFor="subscription"
                 >
-                  <PriceInput
-                    id="subscription"
-                    value={tariff.subscription}
-                    onChange={(v) =>
-                      v !== null && setTariff({ ...tariff, subscription: v })
-                    }
-                  />
+                  {regulated ? (
+                    <Input
+                      id="subscription"
+                      readOnly
+                      value={money(tariff.subscription, c.currency, 2)}
+                    />
+                  ) : (
+                    <PriceInput
+                      id="subscription"
+                      value={tariff.subscription}
+                      onChange={(v) =>
+                        v !== null && setTariff({ ...tariff, subscription: v })
+                      }
+                    />
+                  )}
                 </Field>
                 <Field
                   label={t("Rachat du surplus ({currency} / kWh, facultatif)", {
@@ -521,34 +693,37 @@ export function ElectricityTab() {
               <div className="grid gap-3">
                 <div className="flex items-center justify-between gap-3">
                   <Label>{t("Profils de jour")}</Label>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={tariff.profiles.length >= 10}
-                    onClick={() => {
-                      const base = tariff.profiles[0]
-                      const p: DayProfile = {
-                        ...base,
-                        id: newProfileId(tariff.profiles),
-                        name: t("Nouveau profil"),
-                        color:
-                          PROFILE_COLORS[
-                            tariff.profiles.length % PROFILE_COLORS.length
-                          ],
-                      }
-                      setTariff({
-                        ...tariff,
-                        profiles: [...tariff.profiles, p],
-                      })
-                    }}
-                  >
-                    <Plus /> {t("Ajouter un profil")}
-                  </Button>
+                  {!regulated && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={tariff.profiles.length >= 10}
+                      onClick={() => {
+                        const base = tariff.profiles[0]
+                        const p: DayProfile = {
+                          ...base,
+                          id: newProfileId(tariff.profiles),
+                          name: t("Nouveau profil"),
+                          color:
+                            PROFILE_COLORS[
+                              tariff.profiles.length % PROFILE_COLORS.length
+                            ],
+                        }
+                        setTariff({
+                          ...tariff,
+                          profiles: [...tariff.profiles, p],
+                        })
+                      }}
+                    >
+                      <Plus /> {t("Ajouter un profil")}
+                    </Button>
+                  )}
                 </div>
                 {tariff.profiles.map((p, i) => (
                   <ProfileEditor
                     key={p.id}
                     profile={p}
+                    readOnly={regulated}
                     currency={c.currency}
                     onChange={(next) =>
                       setTariff({
@@ -591,10 +766,12 @@ export function ElectricityTab() {
             </CardContent>
           </Card>
 
-          <CalendarCard
-            tariff={tariff}
-            onChange={(calendar) => setTariff({ ...tariff, calendar })}
-          />
+          {!regulated && (
+            <CalendarCard
+              tariff={tariff}
+              onChange={(calendar) => setTariff({ ...tariff, calendar })}
+            />
+          )}
         </>
       )}
 
@@ -616,7 +793,10 @@ export function ElectricityTab() {
             disabled={save.isPending || !!wrong}
             onClick={() => save.mutate()}
           >
-            <Save /> {t("Enregistrer")}
+            <Save />{" "}
+            {save.isPending && regulated && contract
+              ? t("Lecture des prix de la CRE…")
+              : t("Enregistrer")}
           </Button>
         </div>
       )}
@@ -633,70 +813,90 @@ export function ElectricityTab() {
         <CardContent className="grid gap-4">
           {versions.length > 0 && (
             <ul className="grid">
-              {[...versions].reverse().map((v, i) => {
-                const until = versions[versions.length - i]?.valid_from
-                const current = shown?.from === v.valid_from
-                return (
-                  <li
-                    key={v.valid_from}
-                    className="flex flex-wrap items-center gap-3 border-b py-2.5 last:border-b-0"
-                  >
-                    <History
-                      className="size-4 text-muted-foreground"
-                      aria-hidden
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="font-medium">
-                        {until
-                          ? t("Du {from} au {until}", {
-                              from: dayText(v.valid_from),
-                              until: dayText(until),
-                            })
-                          : t("Depuis le {from}", {
-                              from: dayText(v.valid_from),
-                            })}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        {v.tariff.profiles.map((p) => p.name).join(", ")} ·{" "}
-                        {t("abonnement {price} par mois", {
-                          price: money(v.tariff.subscription, c.currency, 2),
-                        })}
-                      </div>
-                    </div>
-                    {i === 0 && (
-                      <Badge variant="secondary">{t("en cours")}</Badge>
-                    )}
-                    <Button
-                      variant={current ? "secondary" : "outline"}
-                      size="sm"
-                      disabled={current}
-                      onClick={() =>
-                        setEdit({ from: v.valid_from, tariff: v.tariff })
-                      }
+              {[...versions]
+                .reverse()
+                .slice(0, allVersions ? undefined : 5)
+                .map((v, i) => {
+                  const next = versions[versions.length - i]?.valid_from
+                  const until = next && shiftDay(next, -1)
+                  const current = shown?.from === v.valid_from
+                  return (
+                    <li
+                      key={v.valid_from}
+                      className="flex flex-wrap items-center gap-3 border-b py-2.5 last:border-b-0"
                     >
-                      {current ? t("Affichés") : t("Voir et modifier")}
-                    </Button>
-                    <Confirm
-                      title={t("Supprimer ces prix ?")}
-                      description={t(
-                        "Les jours qu'ils couvraient prendront les prix d'avant."
+                      <History
+                        className="size-4 text-muted-foreground"
+                        aria-hidden
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium">
+                          {until
+                            ? t("Du {from} au {until}", {
+                                from: dayText(v.valid_from),
+                                until: dayText(until),
+                              })
+                            : t("Depuis le {from}", {
+                                from: dayText(v.valid_from),
+                              })}
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          {v.tariff.profiles.map((p) => p.name).join(", ")} ·{" "}
+                          {t("abonnement {price} par mois", {
+                            price: money(v.tariff.subscription, c.currency, 2),
+                          })}
+                        </div>
+                      </div>
+                      {i === 0 && (
+                        <Badge variant="secondary">{t("en cours")}</Badge>
                       )}
-                      onConfirm={() => remove.mutate(v.valid_from)}
-                    >
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={t("Supprimer ces prix")}
-                      >
-                        <Trash2 />
-                      </Button>
-                    </Confirm>
-                  </li>
-                )
-              })}
+                      {!regulated && (
+                        <Button
+                          variant={current ? "secondary" : "outline"}
+                          size="sm"
+                          disabled={current}
+                          onClick={() =>
+                            setEdit({ from: v.valid_from, tariff: v.tariff })
+                          }
+                        >
+                          {current ? t("Affichés") : t("Voir et modifier")}
+                        </Button>
+                      )}
+                      {!regulated && (
+                        <Confirm
+                          title={t("Supprimer ces prix ?")}
+                          description={t(
+                            "Les jours qu'ils couvraient prendront les prix d'avant."
+                          )}
+                          onConfirm={() => remove.mutate(v.valid_from)}
+                        >
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label={t("Supprimer ces prix")}
+                          >
+                            <Trash2 />
+                          </Button>
+                        </Confirm>
+                      )}
+                    </li>
+                  )
+                })}
             </ul>
           )}
-          {tariff && (
+          {versions.length > 5 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="justify-self-start"
+              onClick={() => setAllVersions(!allVersions)}
+            >
+              {allVersions
+                ? t("Afficher les plus récents")
+                : t("Tout afficher ({n})", { n: versions.length })}
+            </Button>
+          )}
+          {tariff && !regulated && (
             <div className="flex flex-wrap items-end gap-3">
               <Field label={t("Nouveaux prix à partir du")} htmlFor="new-from">
                 <Input

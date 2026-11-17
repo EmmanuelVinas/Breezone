@@ -1680,6 +1680,46 @@ const en: Record<string, string> = {
   "Touchez une plage pour son nom et son prix, glissez une limite pour la déplacer (par demi-heure).":
     "Tap a slot for its name and price, drag a limit to move it (by half hour).",
   Électricité: "Electricity",
+  Coût: "Cost",
+  "dont {price} d'abonnement": "of which {price} of subscription",
+  "Gagné grâce au solaire": "Earned thanks to solar",
+  "{saved} économisés · {earned} de revente":
+    "{saved} saved · {earned} from resale",
+  "électricité non achetée": "electricity not bought",
+  Demain: "Tomorrow",
+  "pas encore annoncé": "not announced yet",
+  "annoncé dans la matinée": "announced in the morning",
+  "Jours rouges restants": "Red days left",
+  "sur 22": "out of 22",
+  "Jours blancs restants": "White days left",
+  "sur 43": "out of 43",
+  "est rouge": "is red",
+  "est blanc ou rouge": "is white or red",
+  "est bleu": "is blue",
+  "est bleu ou blanc": "is blue or white",
+  "Prix de l'électricité": "Electricity price",
+  "Couleur Tempo du jour": "Today's Tempo colour",
+  "Couleur Tempo de demain": "Tomorrow's Tempo colour",
+  "Demain jour rouge : prévenir": "Tomorrow a red day: notify",
+  "Dès que demain est annoncé rouge (Tempo), prévenir pour décaler ce qui peut l'être.":
+    "As soon as tomorrow is announced red (Tempo), notify to shift what can be.",
+  "Demain jour rouge": "Tomorrow a red day",
+  "Demain est un jour rouge Tempo : l'électricité sera chère de 6 h à 22 h.":
+    "Tomorrow is a Tempo red day: electricity will be expensive from 6 am to 10 pm.",
+  "Choisissez la puissance souscrite.": "Choose the subscribed power.",
+  "Prix du tarif réglementé d'EDF publiés par la CRE (TTC), pour votre puissance, relus chaque semaine : une nouvelle grille s'ajoute à sa date.":
+    "Prices of EDF's regulated tariff published by the CRE (taxes included), for your power, read again every week: a new grid is added on its date.",
+  "Des prix à vous, réglés ci-dessous. « Personnalisée » part des prix affichés.":
+    "Prices of your own, set below. “Custom” starts from the prices shown.",
+  "Fixées par le gestionnaire du réseau pour chaque logement : elles sont sur votre facture.":
+    "Set by the grid operator for each home: they are on your bill.",
+  Début: "Start",
+  Fin: "End",
+  "Retirer cette plage": "Remove this stretch",
+  "Ajouter une plage": "Add a stretch",
+  "Lecture des prix de la CRE…": "Reading the prices of the CRE…",
+  "Afficher les plus récents": "Show the latest",
+  "Tout afficher ({n})": "Show all ({n})",
 }
 
 export default en

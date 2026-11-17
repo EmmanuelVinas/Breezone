@@ -41,6 +41,8 @@ const APPLIED: &[(&str, &str)] = &[
     ("0034_automation_over.sql", "051801a2c9addc39b59bb141ea2f009e170281f94498ebaf36111028a9842852"),
     ("0035_dashboards.sql", "619155a3d90b18139c6433dce69d6749843b713dc3a23a7480b9f258b64aff11"),
     ("0036_electricity_price.sql", "525f40b62d7fd06dfdb8f35cf95d1e4f21e2d6023c9824572c284d42dce064d8"),
+    ("0037_day_colors.sql", "4d3902c62b6347ade841b4edb1eebca80ab7892dceac8864fbb1c66f7576a3da"),
+    ("0038_contract_offpeak.sql", "f4c466e78e514327b84e1d870f620337ebda487af04cf20d535b82b321424d48"),
 ];
 
 #[test]

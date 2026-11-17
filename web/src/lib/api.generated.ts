@@ -48,6 +48,8 @@ export type Contract = {
   power_kva: number | null
   /** ISO 4217 ("EUR"). */
   currency: string
+  /** The off-peak hours of an "hc" offer read from the CRE (empty: 22:00 to 06:00). */
+  offpeak: OffPeak[]
 }
 
 /** The prices of a kind of day ("normal", "red day"…), slot by slot. */
@@ -132,6 +134,12 @@ export type NodeRef = {
   state: NodeState
 }
 
+/** A stretch of off-peak hours, local time; `from` after `to` goes over midnight. */
+export type OffPeak = {
+  from: string
+  to: string
+}
+
 /** The price at a moment, and where it comes from. */
 export type PriceAt = {
   /** Per kWh. */
@@ -173,6 +181,8 @@ export type PriceView = {
   now: PriceAt | null
   /** From now on. */
   periods: PricePeriod[]
+  /** null: no tariff follows the colour of the days. */
+  tempo: TempoView | null
 }
 
 /** A room of the home. */
@@ -220,6 +230,16 @@ export type TariffView = {
   versions: TariffVersion[]
   /** This user may change them. */
   can_edit: boolean
+}
+
+/** The Tempo days, when a tariff follows their colour. */
+export type TempoView = {
+  today: DayColor | null
+  /** Announced in the morning (null before). */
+  tomorrow: DayColor | null
+  /** Red days left in the season (1 September to 31 August). */
+  red_left: number
+  white_left: number
 }
 
 /** A zone of an installation. */

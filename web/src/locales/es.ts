@@ -1698,6 +1698,46 @@ const es: Record<string, string> = {
   "Touchez une plage pour son nom et son prix, glissez une limite pour la déplacer (par demi-heure).":
     "Toque una franja para su nombre y precio, arrastre un límite para moverlo (por media hora).",
   Électricité: "Electricidad",
+  Coût: "Coste",
+  "dont {price} d'abonnement": "de los cuales {price} de suscripción",
+  "Gagné grâce au solaire": "Ganado gracias al solar",
+  "{saved} économisés · {earned} de revente":
+    "{saved} ahorrados · {earned} de reventa",
+  "électricité non achetée": "electricidad no comprada",
+  Demain: "Mañana",
+  "pas encore annoncé": "aún no anunciado",
+  "annoncé dans la matinée": "anunciado por la mañana",
+  "Jours rouges restants": "Días rojos restantes",
+  "sur 22": "de 22",
+  "Jours blancs restants": "Días blancos restantes",
+  "sur 43": "de 43",
+  "est rouge": "es rojo",
+  "est blanc ou rouge": "es blanco o rojo",
+  "est bleu": "es azul",
+  "est bleu ou blanc": "es azul o blanco",
+  "Prix de l'électricité": "Precio de la electricidad",
+  "Couleur Tempo du jour": "Color Tempo de hoy",
+  "Couleur Tempo de demain": "Color Tempo de mañana",
+  "Demain jour rouge : prévenir": "Mañana día rojo: avisar",
+  "Dès que demain est annoncé rouge (Tempo), prévenir pour décaler ce qui peut l'être.":
+    "En cuanto mañana se anuncie rojo (Tempo), avisar para desplazar lo que se pueda.",
+  "Demain jour rouge": "Mañana día rojo",
+  "Demain est un jour rouge Tempo : l'électricité sera chère de 6 h à 22 h.":
+    "Mañana es un día rojo Tempo: la electricidad será cara de 6 h a 22 h.",
+  "Choisissez la puissance souscrite.": "Elija la potencia contratada.",
+  "Prix du tarif réglementé d'EDF publiés par la CRE (TTC), pour votre puissance, relus chaque semaine : une nouvelle grille s'ajoute à sa date.":
+    "Precios de la tarifa regulada de EDF publicados por la CRE (con impuestos), para su potencia, releídos cada semana: una nueva tabla se añade en su fecha.",
+  "Des prix à vous, réglés ci-dessous. « Personnalisée » part des prix affichés.":
+    "Precios propios, ajustados abajo. «Personalizada» parte de los precios mostrados.",
+  "Fixées par le gestionnaire du réseau pour chaque logement : elles sont sur votre facture.":
+    "Fijadas por el gestor de la red para cada vivienda: figuran en su factura.",
+  Début: "Inicio",
+  Fin: "Fin",
+  "Retirer cette plage": "Quitar esta franja",
+  "Ajouter une plage": "Añadir una franja",
+  "Lecture des prix de la CRE…": "Leyendo los precios de la CRE…",
+  "Afficher les plus récents": "Mostrar los más recientes",
+  "Tout afficher ({n})": "Mostrar todo ({n})",
 }
 
 export default es
