@@ -4,7 +4,9 @@
 use axum::routing::get;
 use axum::Json;
 use breezone_server::config::Config;
+use breezone_server::mock::{self, MockState};
 use serde_json::{json, Value};
+use std::sync::{Arc, Mutex};
 
 async fn serve(router: axum::Router) -> u16 {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -44,19 +46,31 @@ async fn a_red_day_is_priced_as_red() {
     let http = reqwest::Client::new();
     let v: Value = http.post(format!("{base}/api/setup")).json(&json!({"username":"admin","password":"motdepasse1"})).send().await.unwrap().json().await.unwrap();
     let token = v["access_token"].as_str().unwrap().to_string();
+    let ws = serve(mock::router(Arc::new(Mutex::new(mock::preset("maison"))) as MockState)).await;
+    let v: Value = http
+        .post(format!("{base}/api/installations"))
+        .bearer_auth(&token)
+        .json(&json!({"name": "Maison", "host": "127.0.0.1", "port": ws}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let e = format!("{base}/api/installations/{}/electricity", v["id"]);
     let flat = |id: &str, price: f64| json!({"id": id, "name": id, "slots": [{"start": "00:00", "name": "Base", "price": price}]});
     let tariff = json!({
         "subscription": 16,
         "profiles": [flat("blue", 0.15), flat("red", 0.7)],
         "calendar": {"weekdays": ["blue","blue","blue","blue","blue","blue","blue"], "colors": {"blue": "blue", "red": "red"}}
     });
-    let r = http.put(format!("{base}/api/energy/tariffs/2020-01-01")).bearer_auth(&token).json(&tariff).send().await.unwrap();
+    let r = http.put(format!("{e}/prices/2020-01-01")).bearer_auth(&token).json(&tariff).send().await.unwrap();
     assert!(r.status().is_success(), "{}", r.text().await.unwrap());
-    let price: Value = http.get(format!("{base}/api/energy/price")).bearer_auth(&token).send().await.unwrap().json().await.unwrap();
+    let price: Value = http.get(format!("{e}/price")).bearer_auth(&token).send().await.unwrap().json().await.unwrap();
     assert_eq!(price["now"]["profile"], "blue", "no colour known yet: the day of the week: {price}");
 
     breezone_server::tempo::refresh(&state).await.unwrap();
-    let price: Value = http.get(format!("{base}/api/energy/price")).bearer_auth(&token).send().await.unwrap().json().await.unwrap();
+    let price: Value = http.get(format!("{e}/price")).bearer_auth(&token).send().await.unwrap().json().await.unwrap();
     assert_eq!((price["now"]["profile"].as_str(), price["now"]["price"].as_f64()), (Some("red"), Some(0.7)), "{price}");
     assert_eq!(price["tempo"]["today"], "red");
     assert!(price["tempo"]["tomorrow"].is_null(), "not announced yet: {price}");

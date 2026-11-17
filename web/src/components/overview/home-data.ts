@@ -1,6 +1,7 @@
 import { useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/api"
+import { usePrice } from "@/components/electricity/hooks"
 import {
   useChosenInstallation,
   useModulesHere,
@@ -49,11 +50,7 @@ export function useHomeData() {
     queryFn: api.traits,
     staleTime: Infinity,
   })
-  const price = useQuery({
-    queryKey: ["price"],
-    queryFn: () => api.price(24),
-    refetchInterval: 60_000,
-  })
+  const price = usePrice()
 
   // The devices of this installation, and those of the modules of this server.
   const mine = useMemo(
@@ -66,8 +63,8 @@ export function useHomeData() {
   // The energy of the home is measured by modules: an installation without them has none.
   const energyHere = mine.some((d) => d.role !== null)
   const roles = energyHere ? live.data?.roles : NO_ROLES
-  // The price of this server's electricity, for an installation of this server.
-  const priced = modulesHere && !!price.data?.now
+  // The price of the electricity of this installation (its own contract).
+  const priced = !!price.data?.now
   const surplusHere = (surplus.data?.loads ?? []).some((l) =>
     mine.some((d) => d.id === l.device_id)
   )

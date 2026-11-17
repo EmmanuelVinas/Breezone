@@ -193,8 +193,8 @@ Conventions :
 
 ### Prix de l'électricité
 
-Le contrat de la maison est unique pour ce serveur, comme le compteur que lisent ses modules. Ses
-tarifs sont datés : chacun s'applique à partir d'un jour local (`valid_from`), et changer les prix en
+Chaque installation (un lieu : la maison, un bureau…) a son contrat d'électricité et ses prix ; il faut
+pouvoir la voir pour les lire, l'administrer pour les changer. Ses tarifs sont datés : chacun s'applique à partir d'un jour local (`valid_from`), et changer les prix en
 ajoute un, si bien que le passé garde les siens. Les prix sont ceux de la facture, taxes comprises,
 par kWh.
 
@@ -210,11 +210,11 @@ Un tarif contient l'abonnement (par mois), le prix de rachat facultatif (`export
 
 | Méthode | Chemin | Description |
 |---------|--------|-------------|
-| GET 🔒 | `/api/energy/tariff` | `TariffView` : `{contract, versions:[{valid_from, tariff}], can_edit}` (`contract` vaut `null` tant qu'il n'est pas réglé) |
-| PUT 👑 | `/api/energy/contract` | `{country?, supplier?, offer?="custom", power_kva?, currency?="EUR", offpeak?:[{from, to}]}` → `TariffView`. `offer` `base`, `hc` ou `tempo` : les tarifs sont remplacés par ceux de la CRE pour `power_kva` (502 si elle est injoignable ou n'a pas de prix pour cette puissance) ; `offpeak` (heures creuses, à l'heure ou à la demi-heure ; 22:00 → 06:00 par défaut) découpe les prix de l'offre `hc` |
-| PUT 👑 | `/api/energy/tariffs/{YYYY-MM-DD}` | `Tariff` : `{subscription, export_price?, profiles:[{id, name, color?, slots:[{start, name, price}]}], calendar:{day_start?="00:00", weekdays:[7 profils], colors?:{blue?, white?, red?}}}`, le tarif à partir de ce jour (créé ou remplacé) → `TariffView` |
-| DELETE 👑 | `/api/energy/tariffs/{YYYY-MM-DD}` | → `TariffView` ; 404 s'il n'y en a pas |
-| GET 🔒 | `/api/energy/price?hours=24` | `PriceView` : `{currency, now:{price, slot, profile, profile_name, color, day}, periods:[{start, end, price, slot, profile, profile_name, color}], tempo}`, le prix maintenant et les plages des heures qui viennent (1 h à 7 jours). `now` vaut `null` sans tarif. `tempo` (`null` si aucun tarif ne suit les couleurs) : `{today, tomorrow, red_left, white_left}`, couleurs du jour et du lendemain et jours rouges et blancs restants de la saison (du 1er septembre au 31 août) |
+| GET 🔒 | `/api/installations/{id}/electricity` | `TariffView` : `{contract, versions:[{valid_from, tariff}], can_edit}` (`contract` vaut `null` tant qu'il n'est pas réglé) |
+| PUT 🛠 | `/api/installations/{id}/electricity/contract` | `{country?, supplier?, offer?="custom", power_kva?, currency?="EUR", offpeak?:[{from, to}]}` → `TariffView`. `offer` `base`, `hc` ou `tempo` : les tarifs sont remplacés par ceux de la CRE pour `power_kva` (502 si elle est injoignable ou n'a pas de prix pour cette puissance) ; `offpeak` (heures creuses, à l'heure ou à la demi-heure ; 22:00 → 06:00 par défaut) découpe les prix de l'offre `hc` |
+| PUT 🛠 | `/api/installations/{id}/electricity/prices/{YYYY-MM-DD}` | `Tariff` : `{subscription, export_price?, profiles:[{id, name, color?, slots:[{start, name, price}]}], calendar:{day_start?="00:00", weekdays:[7 profils], colors?:{blue?, white?, red?}}}`, le tarif à partir de ce jour (créé ou remplacé) → `TariffView` |
+| DELETE 🛠 | `/api/installations/{id}/electricity/prices/{YYYY-MM-DD}` | → `TariffView` ; 404 s'il n'y en a pas |
+| GET 🔒 | `/api/installations/{id}/electricity/price?hours=24` | `PriceView` : `{currency, now:{price, slot, profile, profile_name, color, day}, periods:[{start, end, price, slot, profile, profile_name, color}], tempo}`, le prix maintenant et les plages des heures qui viennent (1 h à 7 jours). `now` vaut `null` sans tarif. `tempo` (`null` si aucun tarif ne suit les couleurs) : `{today, tomorrow, red_left, white_left}`, couleurs du jour et du lendemain et jours rouges et blancs restants de la saison (du 1er septembre au 31 août) |
 
 Les offres réglementées d'EDF (`base`, `hc`, `tempo`) prennent les prix publiés en open data par la
 CRE (historique du Tarif Bleu résidentiel : `Option_Base.csv`, `Option_HPHC.csv`,
@@ -228,7 +228,9 @@ sont lues toutes les 30 minutes tant qu'un tarif suit les couleurs, avec la sais
 première fois. `BREEZONE_TEMPO_URL` change l'adresse ; sans accès à internet (`BREEZONE_WEATHER=0`,
 build de développement), rien n'est demandé.
 
-Chaque jour de `/api/energy/day` (`totals`) et de `/api/energy/days` a un `cost` (`null` si aucun
+Chaque jour de `/api/energy/day` (`totals`) et de `/api/energy/days` a un `cost`, aux prix de
+l'installation `installation_id` (paramètre facultatif ; par défaut la première installation de ce
+serveur) (`null` si aucun
 tarif ne le couvre) : `{energy, subscription, saved, earned}`. `energy` est l'énergie tirée du réseau,
 chaque quart d'heure à son prix ; `subscription` est la part du jour de l'abonnement du mois ;
 `saved` est ce qu'aurait coûté au réseau la production utilisée sur place ; `earned` est la revente au

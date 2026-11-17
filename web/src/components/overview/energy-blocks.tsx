@@ -1,6 +1,7 @@
 import { createContext, useContext, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/api"
+import { useChosenInstallation } from "@/lib/selected-installation"
 import { tn } from "@/lib/i18n"
 import { SurplusCard } from "@/components/surplus"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -44,6 +45,8 @@ function usePeriod(config: Record<string, unknown>) {
 /** The energy of a period: what was measured each day, or along the day shown. */
 export function useEnergy(period: Period, date: string) {
   const today = isoDay(new Date())
+  // The costs at the prices of the installation chosen.
+  const installation = useChosenInstallation()?.id
   const live = useQuery({
     queryKey: ["energy-live"],
     queryFn: api.energyLive,
@@ -52,13 +55,13 @@ export function useEnergy(period: Period, date: string) {
   const count =
     period === "years" ? PERIOD_DAYS.years : period === "year" ? 365 : 30
   const days = useQuery({
-    queryKey: ["energy-days", count],
-    queryFn: () => api.energyDays(count),
+    queryKey: ["energy-days", count, installation],
+    queryFn: () => api.energyDays(count, installation),
     refetchInterval: 60_000,
   })
   const day = useQuery({
-    queryKey: ["energy-day", date],
-    queryFn: () => api.energyDay(date),
+    queryKey: ["energy-day", date, installation],
+    queryFn: () => api.energyDay(date, installation),
     enabled: period === "day",
     refetchInterval: date === today ? 60_000 : false,
   })

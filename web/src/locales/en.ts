@@ -1735,6 +1735,11 @@ const en: Record<string, string> = {
   "Montants en euros": "Amounts in euros",
   "Le coût, les gains du solaire et ce que vaut chaque énergie, avec un tarif (Réglages › Électricité).":
     "The cost, the solar gains and what each energy is worth, with a tariff (Settings › Electricity).",
+  "Choisissez une installation : chacune a son contrat d'électricité.":
+    "Choose an installation: each has its own electricity contract.",
+  "Contrat de {name}": "Contract of {name}",
+  "Chaque installation a le sien : changez d'installation pour régler celui d'un autre lieu. Prix TTC, comme sur la facture.":
+    "Each installation has its own: switch installation to set that of another place. Prices including taxes, as on the bill.",
 }
 
 export default en

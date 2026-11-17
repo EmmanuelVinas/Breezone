@@ -44,6 +44,8 @@ import { inverterCounting, isInverter } from "@/lib/solar"
 import { locale, t, tn } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { Sparkline } from "@/components/sparkline"
+import { useTariff } from "@/components/electricity/hooks"
+import { useChosenInstallation } from "@/lib/selected-installation"
 import { money } from "@/components/electricity/model"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -261,11 +263,7 @@ export function Kpis({
   curves?: KpiCurves
 }) {
   const { roles } = live
-  const contract = useQuery({
-    queryKey: ["tariff"],
-    queryFn: api.tariff,
-    staleTime: 5 * 60_000,
-  })
+  const contract = useTariff()
   const currency = contract.data?.contract?.currency ?? "EUR"
   const cost = showMoney ? totals.cost : null
   const euros = (v: number) => money(v, currency, 2)
@@ -618,9 +616,10 @@ export function DayCurve({
   onDate: (d: string) => void
   live: EnergyLive
 }) {
+  const installation = useChosenInstallation()?.id
   const day = useQuery({
-    queryKey: ["energy-day", date],
-    queryFn: () => api.energyDay(date),
+    queryKey: ["energy-day", date, installation],
+    queryFn: () => api.energyDay(date, installation),
     refetchInterval: date === today ? 60_000 : false,
   })
   const kw = (v: number | null) => (v === null ? null : v / 1000)

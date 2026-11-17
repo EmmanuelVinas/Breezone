@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils"
 import { Sparkline } from "@/components/sparkline"
 import { WeatherCard } from "@/components/weather-card"
 import { PriceNow } from "@/components/electricity/electricity-tab"
+import { usePrice, useTariff } from "@/components/electricity/hooks"
 import { ZoneCard } from "@/components/zone-card"
 import { LightCard } from "@/pages/lights"
 import { ShutterCard } from "@/pages/shutters"
@@ -609,16 +610,8 @@ function SurplusBlock() {
 
 /** The price of electricity now, the next hours, and the Tempo days. */
 function PriceBlock() {
-  const price = useQuery({
-    queryKey: ["price"],
-    queryFn: () => api.price(24),
-    refetchInterval: 60_000,
-  })
-  const tariff = useQuery({
-    queryKey: ["tariff"],
-    queryFn: api.tariff,
-    staleTime: 5 * 60_000,
-  })
+  const price = usePrice()
+  const tariff = useTariff()
   if (!price.data?.now) return null
   return (
     <PriceNow

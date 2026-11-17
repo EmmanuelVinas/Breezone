@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.30] - 2026-11-17
+
 ### Added
 
 - Overview: a block with the price of electricity now, the next 24 hours and the Tempo days, for
@@ -20,6 +22,14 @@ All notable changes are documented here. The format follows
 ### Changed
 
 - Edit mode: the blocks are outlined with a dashed line.
+
+### Fixed
+
+- Electricity: each installation (the home, an office…) has its own contract and prices, set in
+  Settings › Electricity for the installation chosen; the energy costs, the price block and the
+  automations follow them. What was set goes to the first installation of the server.
+- Tempo: the colours of the days are read as soon as a contract follows them, instead of up to half
+  an hour later.
 
 ## [0.11.0-beta.29] - 2026-11-17
 

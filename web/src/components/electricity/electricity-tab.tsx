@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   CalendarPlus,
   Euro,
@@ -22,6 +22,8 @@ import type {
   TempoView,
 } from "@/lib/api"
 import { api } from "@/lib/api"
+import { useChosenInstallation } from "@/lib/selected-installation"
+import { usePrice, useTariff } from "./hooks"
 import { DAY_LABEL, errorText, time } from "@/lib/format"
 import { locale, t } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
@@ -365,12 +367,11 @@ function CalendarCard({
 /** Settings › Electricity: the contract of the home and its prices, dated. */
 export function ElectricityTab() {
   const qc = useQueryClient()
-  const view = useQuery({ queryKey: ["tariff"], queryFn: api.tariff })
-  const price = useQuery({
-    queryKey: ["price"],
-    queryFn: () => api.price(24),
-    refetchInterval: 60_000,
-  })
+  // The contract of the installation chosen: each place has its own.
+  const installation = useChosenInstallation()
+  const id = installation?.id ?? 0
+  const view = useTariff()
+  const price = usePrice()
   // What is being changed: the contract, and the tariff from `from` on (null: as saved).
   const [contract, setContract] = useState<Contract | null>(null)
   const [edit, setEdit] = useState<{ from: string; tariff: Tariff } | null>(
@@ -400,8 +401,10 @@ export function ElectricityTab() {
   const chosen = contract || saved?.contract ? offerOf(c) : null
 
   const done = (v: TariffView) => {
-    qc.setQueryData(["tariff"], v)
-    qc.invalidateQueries({ queryKey: ["price"] })
+    qc.setQueryData(["tariff", id], v)
+    qc.invalidateQueries({ queryKey: ["price", id] })
+    qc.invalidateQueries({ queryKey: ["energy-days"] })
+    qc.invalidateQueries({ queryKey: ["energy-day"] })
   }
   const save = useMutation({
     mutationFn: async () => {
@@ -409,12 +412,12 @@ export function ElectricityTab() {
       if (edit && regulated) {
         // The buy-back price, on every grid (the CRE's are read again with it).
         for (const x of versions)
-          v = await api.saveTariff(x.valid_from, {
+          v = await api.saveTariff(id, x.valid_from, {
             ...x.tariff,
             export_price: edit.tariff.export_price,
           })
-      } else if (edit) v = await api.saveTariff(edit.from, edit.tariff)
-      if (contract) v = await api.saveContract(contract)
+      } else if (edit) v = await api.saveTariff(id, edit.from, edit.tariff)
+      if (contract) v = await api.saveContract(id, contract)
       return v
     },
     onSuccess: (v) => {
@@ -426,7 +429,7 @@ export function ElectricityTab() {
     onError: (e) => toast.error(errorText(e)),
   })
   const remove = useMutation({
-    mutationFn: (from: string) => api.deleteTariff(from),
+    mutationFn: (from: string) => api.deleteTariff(id, from),
     onSuccess: (v) => {
       done(v)
       setEdit(null)
@@ -434,6 +437,14 @@ export function ElectricityTab() {
     onError: (e) => toast.error(errorText(e)),
   })
 
+  if (!installation)
+    return (
+      <p className="text-sm text-muted-foreground">
+        {t(
+          "Choisissez une installation : chacune a son contrat d'électricité."
+        )}
+      </p>
+    )
   if (view.isLoading) return <Skeleton className="h-96 w-full rounded-3xl" />
 
   const setTariff = (tariff: Tariff) =>
@@ -470,10 +481,12 @@ export function ElectricityTab() {
 
       <Card className="rounded-3xl">
         <CardHeader>
-          <CardTitle>{t("Contrat")}</CardTitle>
+          <CardTitle>
+            {t("Contrat de {name}", { name: installation.name })}
+          </CardTitle>
           <CardDescription>
             {t(
-              "Un par serveur, comme le compteur que lisent ses modules. Prix TTC, comme sur la facture."
+              "Chaque installation a le sien : changez d'installation pour régler celui d'un autre lieu. Prix TTC, comme sur la facture."
             )}
           </CardDescription>
         </CardHeader>

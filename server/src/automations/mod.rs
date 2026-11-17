@@ -602,7 +602,10 @@ impl Context {
             },
             home: state.weather.place(None).await.map(|p| p.installation_id),
             price: None,
-            currency: db::contract(&state.db).await?.map_or_else(|| "EUR".into(), |c| c.currency),
+            currency: match db::home_installation(&state.db).await? {
+                Some(home) => db::contract(&state.db, home).await?.map_or_else(|| "EUR".into(), |c| c.currency),
+                None => "EUR".into(),
+            },
             tempo: [None, None],
         }
         .with_prices(state)
@@ -615,7 +618,8 @@ impl Context {
         let today = crate::rollup::local_day(self.now, self.tz);
         let known = crate::tempo::colors(&state.db, today - chrono::Days::new(1), today + chrono::Days::new(1)).await?;
         let color = |d: NaiveDate| known.get(&d).copied();
-        let tariffs = crate::api::price::tariffs(state).await?;
+        // The prices of the home (the first installation of this server).
+        let tariffs = crate::api::price::tariffs(state, None).await?;
         self.price = crate::price::price_at(&tariffs, &color, self.tz, self.now).map(|p| p.price);
         let code = |d: NaiveDate| {
             color(d).map(|c| match c {

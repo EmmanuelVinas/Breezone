@@ -142,27 +142,31 @@ pub fn tariffs(offer: &str, text: &str, power: f64, offpeak: &[OffPeak], export_
     Ok(grids(text, power)?.iter().filter_map(|g| Some((g.from, tariff(g)?))).collect())
 }
 
-/// Reads the prices of the contract's offer from the CRE and replaces the tariffs with them.
-/// Nothing for an offer of one's own. Returns how many tariffs there are.
+/// Reads the prices of each contract on a regulated offer from the CRE and replaces the tariffs
+/// of its installation with them. Returns how many tariffs there are.
 pub async fn sync(state: &AppState) -> anyhow::Result<usize> {
-    let Some(contract) = db::contract(&state.db).await? else { return Ok(0) };
-    sync_contract(state, &contract).await
+    let mut n = 0;
+    for (id, contract) in db::contracts(&state.db).await? {
+        n += sync_contract(state, id, &contract).await?;
+    }
+    Ok(n)
 }
 
-pub async fn sync_contract(state: &AppState, contract: &Contract) -> anyhow::Result<usize> {
+/// The prices of the CRE for the contract of an installation (nothing for an offer of one's own).
+pub async fn sync_contract(state: &AppState, installation_id: i64, contract: &Contract) -> anyhow::Result<usize> {
     let Some(name) = file(&contract.offer) else { return Ok(0) };
     let power = contract.power_kva.ok_or_else(|| anyhow!("the subscribed power is needed for the prices of the CRE"))?;
     let base = state.cfg.cre_url.clone().ok_or_else(|| anyhow!("this server does not look things up on the internet (BREEZONE_WEATHER)"))?;
     let http = reqwest::Client::builder().timeout(Duration::from_secs(20)).user_agent("Breezone").build()?;
     let text = http.get(format!("{}/{name}", base.trim_end_matches('/'))).send().await?.error_for_status()?.text().await?;
     // What the surplus is bought at is not the CRE's: kept from the tariffs there were.
-    let export = db::tariffs(&state.db).await?.last().and_then(|(_, json)| serde_json::from_str::<Tariff>(json).ok()).and_then(|t| t.export_price);
+    let export = db::tariffs(&state.db, installation_id).await?.last().and_then(|(_, json)| serde_json::from_str::<Tariff>(json).ok()).and_then(|t| t.export_price);
     let list = tariffs(&contract.offer, &text, power, &contract.offpeak, export)?;
     if list.is_empty() {
         bail!("the CRE has no prices for {power} kVA in this offer");
     }
     let rows: Vec<(String, String)> = list.iter().map(|(from, t)| (from.format("%Y-%m-%d").to_string(), serde_json::to_string(t).unwrap_or_default())).collect();
-    db::replace_tariffs(&state.db, &rows).await?;
+    db::replace_tariffs(&state.db, installation_id, &rows).await?;
     Ok(rows.len())
 }
 

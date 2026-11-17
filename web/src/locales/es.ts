@@ -1753,6 +1753,11 @@ const es: Record<string, string> = {
   "Montants en euros": "Importes en euros",
   "Le coût, les gains du solaire et ce que vaut chaque énergie, avec un tarif (Réglages › Électricité).":
     "El coste, las ganancias solares y lo que vale cada energía, con una tarifa (Ajustes › Electricidad).",
+  "Choisissez une installation : chacune a son contrat d'électricité.":
+    "Elija una instalación: cada una tiene su contrato de electricidad.",
+  "Contrat de {name}": "Contrato de {name}",
+  "Chaque installation a le sien : changez d'installation pour régler celui d'un autre lieu. Prix TTC, comme sur la facture.":
+    "Cada instalación tiene el suyo: cambie de instalación para ajustar el de otro lugar. Precios con impuestos, como en la factura.",
 }
 
 export default es

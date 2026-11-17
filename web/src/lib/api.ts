@@ -1261,22 +1261,53 @@ export const api = {
       params,
     }),
   energyLive: () => request<EnergyLive>("GET", "/api/energy/live"),
-  energyDay: (date?: string) =>
-    request<EnergyDay>("GET", `/api/energy/day${date ? `?date=${date}` : ""}`),
-  /** The electricity contract of the home and its dated tariffs. */
-  tariff: () => request<TariffView>("GET", "/api/energy/tariff"),
-  saveContract: (contract: Contract) =>
-    request<TariffView>("PUT", "/api/energy/contract", contract),
-  /** The tariff from a local day on ("YYYY-MM-DD"). */
-  saveTariff: (validFrom: string, tariff: Tariff) =>
-    request<TariffView>("PUT", `/api/energy/tariffs/${validFrom}`, tariff),
-  deleteTariff: (validFrom: string) =>
-    request<TariffView>("DELETE", `/api/energy/tariffs/${validFrom}`),
-  /** The price now, and the stretches of the next `hours`. */
-  price: (hours = 24) =>
-    request<PriceView>("GET", `/api/energy/price?hours=${hours}`),
-  energyDays: (days: number) =>
-    request<DayEnergy[]>("GET", `/api/energy/days?days=${days}`),
+  /** The energy of a local day; its cost at the prices of `installationId` (the home by default). */
+  energyDay: (date?: string, installationId?: number) => {
+    const q = new URLSearchParams()
+    if (date) q.set("date", date)
+    if (installationId) q.set("installation_id", String(installationId))
+    const query = q.toString()
+    return request<EnergyDay>(
+      "GET",
+      `/api/energy/day${query ? `?${query}` : ""}`
+    )
+  },
+  /** The electricity contract of an installation and its dated prices. */
+  tariff: (installationId: number) =>
+    request<TariffView>(
+      "GET",
+      `/api/installations/${installationId}/electricity`
+    ),
+  saveContract: (installationId: number, contract: Contract) =>
+    request<TariffView>(
+      "PUT",
+      `/api/installations/${installationId}/electricity/contract`,
+      contract
+    ),
+  /** The prices from a local day on ("YYYY-MM-DD"). */
+  saveTariff: (installationId: number, validFrom: string, tariff: Tariff) =>
+    request<TariffView>(
+      "PUT",
+      `/api/installations/${installationId}/electricity/prices/${validFrom}`,
+      tariff
+    ),
+  deleteTariff: (installationId: number, validFrom: string) =>
+    request<TariffView>(
+      "DELETE",
+      `/api/installations/${installationId}/electricity/prices/${validFrom}`
+    ),
+  /** The price now at an installation, and the stretches of the next `hours`. */
+  price: (installationId: number, hours = 24) =>
+    request<PriceView>(
+      "GET",
+      `/api/installations/${installationId}/electricity/price?hours=${hours}`
+    ),
+  /** The energy day by day; the costs at the prices of `installationId` (the home by default). */
+  energyDays: (days: number, installationId?: number) =>
+    request<DayEnergy[]>(
+      "GET",
+      `/api/energy/days?days=${days}${installationId ? `&installation_id=${installationId}` : ""}`
+    ),
   /** The weather of the home and the sun of today. */
   /** The weather of an installation (by default the home). */
   weather: (installationId?: number) =>

@@ -42,8 +42,8 @@ const TABLES: &[Table] = &[
     Table { name: "timers", filter: "1", without: &[] },
     Table { name: "automations", filter: "1", without: &["last_run_at", "last_reason"] },
     Table { name: "surplus_loads", filter: "1", without: &[] },
-    Table { name: "electricity_contract", filter: "1", without: &[] },
-    Table { name: "electricity_tariffs", filter: "1", without: &[] },
+    Table { name: "electricity_contracts", filter: LOCAL, without: &[] },
+    Table { name: "electricity_prices", filter: LOCAL, without: &[] },
     // The overviews the administrators set (those of each user go with users matched by name).
     Table { name: "dashboards", filter: "user_id IS NULL AND installation_id IN (SELECT id FROM installations WHERE node_id IS NULL)", without: &[] },
 ];

@@ -81,7 +81,7 @@ async fn store(db: &db::Db, days: &[Day]) -> sqlx::Result<usize> {
 /// Reads today's and tomorrow's colours, and the season's when it is missing.
 pub async fn refresh(state: &AppState) -> anyhow::Result<()> {
     let Some(base) = state.cfg.tempo_url.clone() else { return Ok(()) };
-    let tariffs: Vec<Tariff> = db::tariffs(&state.db).await?.into_iter().filter_map(|(_, json)| serde_json::from_str(&json).ok()).collect();
+    let tariffs: Vec<Tariff> = db::all_tariffs(&state.db).await?.into_iter().filter_map(|json| serde_json::from_str(&json).ok()).collect();
     if !followed(&tariffs) {
         return Ok(());
     }

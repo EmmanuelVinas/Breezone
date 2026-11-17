@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
+import { usePrice } from "@/components/electricity/hooks"
 import { BookOpen, Plus } from "lucide-react"
 import type {
   Automation,
@@ -31,11 +32,7 @@ export function AutomationsSection() {
   })
   const routines = useQuery({ queryKey: ["routines"], queryFn: api.routines })
   const live = useQuery({ queryKey: ["energy-live"], queryFn: api.energyLive })
-  const price = useQuery({
-    queryKey: ["price"],
-    queryFn: () => api.price(24),
-    staleTime: 5 * 60_000,
-  })
+  const price = usePrice()
   const { installations, ids } = useChosenInstallations()
   const admin = currentUser()?.role === "admin"
   const [editing, setEditing] = useState<{

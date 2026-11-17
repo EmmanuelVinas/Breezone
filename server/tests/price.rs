@@ -2,8 +2,10 @@
 //! reads.
 
 use breezone_server::config::Config;
+use breezone_server::mock::{self, MockState};
 use reqwest::{Method, StatusCode};
 use serde_json::{json, Value};
+use std::sync::{Arc, Mutex};
 
 async fn serve(router: axum::Router) -> u16 {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -30,6 +32,13 @@ impl Client {
     }
 }
 
+/// An installation (a simulated WebServer): the contract and the prices are its own.
+async fn installation(admin: &Client) -> i64 {
+    let ws = serve(mock::router(Arc::new(Mutex::new(mock::preset("maison"))) as MockState)).await;
+    let (_, v) = admin.call(Method::POST, "/api/installations", Some(json!({"name": "Maison", "host": "127.0.0.1", "port": ws}))).await;
+    v["id"].as_i64().unwrap_or_else(|| panic!("{v}"))
+}
+
 async fn token(http: &reqwest::Client, base: &str, path: &str, user: &str) -> String {
     let v: Value = http.post(format!("{base}{path}")).json(&json!({"username": user, "password": "motdepasse1"})).send().await.unwrap().json().await.unwrap();
     v["access_token"].as_str().unwrap_or_else(|| panic!("{v}")).to_string()
@@ -54,45 +63,62 @@ async fn administrators_set_the_prices_everyone_reads() {
     let base = format!("http://127.0.0.1:{}", serve(breezone_server::app(state)).await);
     let http = reqwest::Client::new();
     let admin = Client { token: token(&http, &base, "/api/setup", "admin").await, base: base.clone(), http: http.clone() };
-    admin.call(Method::POST, "/api/users", Some(json!({"username": "camille", "password": "motdepasse1", "role": "user", "access": []}))).await;
+    let home = installation(&admin).await;
+    let e = format!("/api/installations/{home}/electricity");
+    admin
+        .call(
+            Method::POST,
+            "/api/users",
+            Some(json!({"username": "camille", "password": "motdepasse1", "role": "user", "access": [{"installation_id": home, "permission": "read"}]})),
+        )
+        .await;
     let user = Client { token: token(&http, &base, "/api/auth/login", "camille").await, base: base.clone(), http: http.clone() };
 
-    let (status, v) = user.call(Method::GET, "/api/energy/price", None).await;
+    let (status, v) = user.call(Method::GET, &format!("{e}/price"), None).await;
     assert_eq!(status, StatusCode::OK);
     assert!(v["now"].is_null() && v["periods"] == json!([]), "no tariff yet: {v}");
 
     let contract = json!({"country": "FR", "supplier": "EDF", "offer": "custom", "power_kva": 9, "currency": "EUR"});
-    let (status, _) = user.call(Method::PUT, "/api/energy/contract", Some(contract.clone())).await;
+    let (status, _) = user.call(Method::PUT, &format!("{e}/contract"), Some(contract.clone())).await;
     assert_eq!(status, StatusCode::FORBIDDEN, "only an administrator sets the contract");
-    let (status, v) = admin.call(Method::PUT, "/api/energy/contract", Some(contract)).await;
+    let (status, v) = admin.call(Method::PUT, &format!("{e}/contract"), Some(contract)).await;
     assert_eq!(status, StatusCode::OK, "{v}");
     assert_eq!(v["contract"]["supplier"], "EDF");
 
-    let (status, v) = admin.call(Method::PUT, "/api/energy/tariffs/2020-01-01", Some(flat(0.25))).await;
+    let (status, v) = admin.call(Method::PUT, &format!("{e}/prices/2020-01-01"), Some(flat(0.25))).await;
     assert_eq!(status, StatusCode::OK, "{v}");
-    let (status, v) = admin.call(Method::PUT, "/api/energy/tariffs/2020-01-01", Some(json!({"subscription": 1, "profiles": [], "calendar": {"weekdays": []}}))).await;
+    let (status, v) = admin.call(Method::PUT, &format!("{e}/prices/2020-01-01"), Some(json!({"subscription": 1, "profiles": [], "calendar": {"weekdays": []}}))).await;
     assert_eq!(status, StatusCode::BAD_REQUEST, "a tariff without profiles: {v}");
-    let (status, _) = admin.call(Method::PUT, "/api/energy/tariffs/demain", Some(flat(0.25))).await;
+    let (status, _) = admin.call(Method::PUT, &format!("{e}/prices/demain"), Some(flat(0.25))).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
 
     // A dearer tariff from a day already past: the price now is its own.
-    admin.call(Method::PUT, "/api/energy/tariffs/2024-02-01", Some(flat(0.3))).await;
-    let (_, v) = user.call(Method::GET, "/api/energy/tariff", None).await;
+    admin.call(Method::PUT, &format!("{e}/prices/2024-02-01"), Some(flat(0.3))).await;
+    let (_, v) = user.call(Method::GET, &e, None).await;
     assert_eq!(v["can_edit"], false);
     let from: Vec<&str> = v["versions"].as_array().unwrap().iter().map(|x| x["valid_from"].as_str().unwrap()).collect();
     assert_eq!(from, vec!["2020-01-01", "2024-02-01"]);
-    let (_, v) = user.call(Method::GET, "/api/energy/price?hours=12", None).await;
+    let (_, v) = user.call(Method::GET, &format!("{e}/price?hours=12"), None).await;
     assert_eq!((v["now"]["price"].as_f64(), v["now"]["slot"].as_str(), v["currency"].as_str()), (Some(0.3), Some("Base"), Some("EUR")), "{v}");
     let periods = v["periods"].as_array().unwrap();
     assert_eq!(periods.len(), 1, "one price all along: {v}");
     assert_eq!(periods[0]["end"].as_i64().unwrap() - periods[0]["start"].as_i64().unwrap(), 12 * 3600);
 
-    let (status, _) = admin.call(Method::DELETE, "/api/energy/tariffs/2024-02-01", None).await;
+    let (status, _) = admin.call(Method::DELETE, &format!("{e}/prices/2024-02-01"), None).await;
     assert_eq!(status, StatusCode::OK);
-    let (_, v) = user.call(Method::GET, "/api/energy/price", None).await;
+    let (_, v) = user.call(Method::GET, &format!("{e}/price"), None).await;
     assert_eq!(v["now"]["price"].as_f64(), Some(0.25), "back to the older one");
-    let (status, _) = admin.call(Method::DELETE, "/api/energy/tariffs/2024-02-01", None).await;
+    let (status, _) = admin.call(Method::DELETE, &format!("{e}/prices/2024-02-01"), None).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // Another place has a contract of its own: none yet.
+    let office = installation(&admin).await;
+    let (_, v) = admin.call(Method::GET, &format!("/api/installations/{office}/electricity"), None).await;
+    assert!(v["contract"].is_null() && v["versions"] == json!([]), "{v}");
+    let (_, v) = admin.call(Method::GET, &format!("/api/installations/{office}/electricity/price"), None).await;
+    assert!(v["now"].is_null(), "{v}");
+    let (status, _) = user.call(Method::GET, &format!("/api/installations/{office}/electricity"), None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "not an installation of this user");
 }
 
 const TEMPO: &str = "DATE_DEBUT;DATE_FIN;P_SOUSCRITE;PART_FIXE_HT;PART_FIXE_TTC;PART_VARIABLE_HCBleu_HT;PART_VARIABLE_HCBleu_TTC;PART_VARIABLE_HPBleu_HT;PART_VARIABLE_HPBleu_TTC;PART_VARIABLE_HCBlanc_HT;PART_VARIABLE_HCBlanc_TTC;PART_VARIABLE_HPBlanc_HT;PART_VARIABLE_HPBlanc_TTC;PART_VARIABLE_HCRouge_HT;PART_VARIABLE_HCRouge_TTC;PART_VARIABLE_HPRouge_HT;PART_VARIABLE_HPRouge_TTC\r\n\
@@ -112,14 +138,16 @@ async fn a_regulated_offer_takes_the_prices_of_the_cre() {
     let base = format!("http://127.0.0.1:{}", serve(breezone_server::app(state)).await);
     let http = reqwest::Client::new();
     let admin = Client { token: token(&http, &base, "/api/setup", "admin").await, base: base.clone(), http: http.clone() };
+    let home = installation(&admin).await;
+    let e = format!("/api/installations/{home}/electricity");
 
     // A power the CRE has no price for: nothing is changed.
-    let (status, v) = admin.call(Method::PUT, "/api/energy/contract", Some(json!({"country": "FR", "offer": "tempo", "power_kva": 7}))).await;
+    let (status, v) = admin.call(Method::PUT, &format!("{e}/contract"), Some(json!({"country": "FR", "offer": "tempo", "power_kva": 7}))).await;
     assert_eq!(status, StatusCode::BAD_GATEWAY, "{v}");
-    let (_, v) = admin.call(Method::GET, "/api/energy/tariff", None).await;
+    let (_, v) = admin.call(Method::GET, &e, None).await;
     assert!(v["contract"].is_null());
 
-    let (status, v) = admin.call(Method::PUT, "/api/energy/contract", Some(json!({"country": "FR", "supplier": "EDF", "offer": "tempo", "power_kva": 9}))).await;
+    let (status, v) = admin.call(Method::PUT, &format!("{e}/contract"), Some(json!({"country": "FR", "supplier": "EDF", "offer": "tempo", "power_kva": 9}))).await;
     assert_eq!(status, StatusCode::OK, "{v}");
     let from: Vec<&str> = v["versions"].as_array().unwrap().iter().map(|x| x["valid_from"].as_str().unwrap()).collect();
     assert_eq!(from, vec!["2026-02-01", "2026-08-01"]);
@@ -139,8 +167,10 @@ async fn without_internet_a_regulated_offer_is_refused() {
     let base = format!("http://127.0.0.1:{}", serve(breezone_server::app(state)).await);
     let http = reqwest::Client::new();
     let admin = Client { token: token(&http, &base, "/api/setup", "admin").await, base: base.clone(), http: http.clone() };
-    let (status, _) = admin.call(Method::PUT, "/api/energy/contract", Some(json!({"offer": "base", "power_kva": 6}))).await;
+    let home = installation(&admin).await;
+    let e = format!("/api/installations/{home}/electricity");
+    let (status, _) = admin.call(Method::PUT, &format!("{e}/contract"), Some(json!({"offer": "base", "power_kva": 6}))).await;
     assert_eq!(status, StatusCode::BAD_GATEWAY);
-    let (status, _) = admin.call(Method::PUT, "/api/energy/contract", Some(json!({"offer": "custom", "power_kva": 6, "offpeak": [{"from": "22:15", "to": "06:00"}]}))).await;
+    let (status, _) = admin.call(Method::PUT, &format!("{e}/contract"), Some(json!({"offer": "custom", "power_kva": 6, "offpeak": [{"from": "22:15", "to": "06:00"}]}))).await;
     assert_eq!(status, StatusCode::BAD_REQUEST, "off-peak hours on the half hour");
 }

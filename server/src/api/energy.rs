@@ -48,6 +48,8 @@ async fn spans(state: &AppState, measures: &[Measure], since: i64, until: i64) -
 pub struct DayQuery {
     /// "YYYY-MM-DD", today by default.
     pub date: Option<String>,
+    /// Whose prices the costs are at (the home by default).
+    pub installation_id: Option<i64>,
 }
 
 /// Length of a point of the curve of a day.
@@ -78,7 +80,7 @@ pub async fn day(State(state): State<AppState>, _user: AuthUser, Query(q): Query
     let count = ((until - from) / BUCKET).max(1) as usize;
     let points = energy::curve(&measures, &spans, from, BUCKET, count);
     let mut totals = energy::daily(&measures, &spans, tz, std::slice::from_ref(&day)).remove(0);
-    let tariffs = crate::api::price::tariffs(&state).await?;
+    let tariffs = crate::api::price::tariffs(&state, q.installation_id).await?;
     let known = crate::api::price::colors(&state, date - Days::new(1), date).await?;
     totals.cost = crate::price::day_cost(&tariffs, &|d| known.get(&d).copied(), tz, date, &points, BUCKET);
     Ok(Json(DayView { points, totals, date: day, bucket: BUCKET }))
@@ -88,6 +90,8 @@ pub async fn day(State(state): State<AppState>, _user: AuthUser, Query(q): Query
 pub struct DaysQuery {
     #[serde(default = "default_days")]
     pub days: u64,
+    /// Whose prices the costs are at (the home by default).
+    pub installation_id: Option<i64>,
 }
 
 fn default_days() -> u64 {
@@ -129,7 +133,7 @@ pub async fn days(State(state): State<AppState>, _user: AuthUser, Query(q): Quer
         let spans = spans(&state, &measures, midnight(computed_from, tz), midnight(last + Days::new(1), tz)).await?;
         let mut computed = energy::daily(&measures, &spans, tz, &days);
         // Each day at the prices of its moments.
-        let tariffs = crate::api::price::tariffs(&state).await?;
+        let tariffs = crate::api::price::tariffs(&state, q.installation_id).await?;
         let known = crate::api::price::colors(&state, computed_from - Days::new(1), last).await?;
         let color = |d: NaiveDate| known.get(&d).copied();
         for d in computed.iter_mut() {

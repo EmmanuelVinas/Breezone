@@ -1,6 +1,7 @@
-//! The price of electricity: the contract of the home, its tariffs, and the price now.
+//! The price of electricity of an installation: its contract, its tariffs, and the price now.
 
-use crate::auth::{AdminUser, AuthUser};
+use crate::access::Access;
+use crate::auth::AuthUser;
 use crate::db;
 use crate::error::{ApiError, ApiResult};
 use crate::price::{self, Contract, DayColor, Period, PriceAt, Tariff, Tariffs};
@@ -33,53 +34,81 @@ fn day(text: &str) -> ApiResult<NaiveDate> {
 }
 
 /// The stored tariffs this version reads (one written by a newer version is left out).
-async fn versions(state: &AppState) -> ApiResult<Vec<TariffVersion>> {
-    Ok(db::tariffs(&state.db).await?.into_iter().filter_map(|(valid_from, json)| serde_json::from_str(&json).ok().map(|tariff| TariffVersion { valid_from, tariff })).collect())
+async fn versions(state: &AppState, id: i64) -> ApiResult<Vec<TariffVersion>> {
+    Ok(db::tariffs(&state.db, id).await?.into_iter().filter_map(|(valid_from, json)| serde_json::from_str(&json).ok().map(|tariff| TariffVersion { valid_from, tariff })).collect())
 }
 
-async fn view(state: &AppState, user: &AuthUser) -> ApiResult<TariffView> {
-    Ok(TariffView { contract: db::contract(&state.db).await?, versions: versions(state).await?, can_edit: user.is_admin() })
+async fn view(state: &AppState, access: &Access, id: i64) -> ApiResult<TariffView> {
+    Ok(TariffView { contract: db::contract(&state.db, id).await?, versions: versions(state, id).await?, can_edit: access.manages(id) })
 }
 
-pub async fn get(State(state): State<AppState>, user: AuthUser) -> ApiResult<Json<TariffView>> {
-    Ok(Json(view(&state, &user).await?))
+pub async fn get(State(state): State<AppState>, user: AuthUser, Path(id): Path<i64>) -> ApiResult<Json<TariffView>> {
+    let access = Access::of(&state.db, &user).await?;
+    access.view(id)?;
+    Ok(Json(view(&state, &access, id).await?))
 }
 
-pub async fn save_contract(State(state): State<AppState>, AdminUser(user): AdminUser, Json(contract): Json<Contract>) -> ApiResult<Json<TariffView>> {
+/// The administrators of the installation.
+async fn manager(state: &AppState, user: &AuthUser, id: i64) -> ApiResult<Access> {
+    let access = Access::of(&state.db, user).await?;
+    access.manage(id)?;
+    Ok(access)
+}
+
+/// The colours of the Tempo days, read soon after a tariff starts following them.
+fn read_colors(state: &AppState) {
+    let state = state.clone();
+    tokio::spawn(async move {
+        if let Err(e) = crate::tempo::refresh(&state).await {
+            tracing::warn!("Tempo colours not read: {e:#}");
+        }
+    });
+}
+
+pub async fn save_contract(State(state): State<AppState>, user: AuthUser, Path(id): Path<i64>, Json(contract): Json<Contract>) -> ApiResult<Json<TariffView>> {
+    let access = manager(&state, &user, id).await?;
     price::validate_contract(&contract).map_err(ApiError::bad_request)?;
     // A regulated offer takes the prices of the CRE: read before anything is kept.
     if crate::cre::is_regulated(&contract.offer) {
-        crate::cre::sync_contract(&state, &contract).await.map_err(|e| {
+        crate::cre::sync_contract(&state, id, &contract).await.map_err(|e| {
             ApiError::bad_gateway(crate::text!("Prix de la CRE illisibles : {0}", "Prices of the CRE not read: {0}", "Precios de la CRE no leídos: {0}", format!("{e:#}")))
         })?;
     }
-    db::set_contract(&state.db, &contract).await?;
-    if crate::cre::is_regulated(&contract.offer) {
-        db::set_setting(&state.db, "cre.synced_at", &db::now().to_string()).await?;
-    }
-    Ok(Json(view(&state, &user).await?))
+    db::set_contract(&state.db, id, &contract).await?;
+    read_colors(&state);
+    Ok(Json(view(&state, &access, id).await?))
 }
 
 /// The tariff from a day on (a new one, or the one of that day changed).
-pub async fn save_tariff(State(state): State<AppState>, AdminUser(user): AdminUser, Path(from): Path<String>, Json(tariff): Json<Tariff>) -> ApiResult<Json<TariffView>> {
+pub async fn save_tariff(State(state): State<AppState>, user: AuthUser, Path((id, from)): Path<(i64, String)>, Json(tariff): Json<Tariff>) -> ApiResult<Json<TariffView>> {
+    let access = manager(&state, &user, id).await?;
     day(&from)?;
     price::validate(&tariff).map_err(ApiError::bad_request)?;
     let json = serde_json::to_string(&tariff).map_err(|e| ApiError::internal(e.to_string()))?;
-    db::set_tariff(&state.db, &from, &json).await?;
-    Ok(Json(view(&state, &user).await?))
+    db::set_tariff(&state.db, id, &from, &json).await?;
+    read_colors(&state);
+    Ok(Json(view(&state, &access, id).await?))
 }
 
-pub async fn delete_tariff(State(state): State<AppState>, AdminUser(user): AdminUser, Path(from): Path<String>) -> ApiResult<Json<TariffView>> {
-    if !db::delete_tariff(&state.db, &from).await? {
+pub async fn delete_tariff(State(state): State<AppState>, user: AuthUser, Path((id, from)): Path<(i64, String)>) -> ApiResult<Json<TariffView>> {
+    let access = manager(&state, &user, id).await?;
+    if !db::delete_tariff(&state.db, id, &from).await? {
         return Err(ApiError::not_found("no tariff from that day"));
     }
-    Ok(Json(view(&state, &user).await?))
+    Ok(Json(view(&state, &access, id).await?))
 }
 
-/// The tariffs as the computations use them.
-pub async fn tariffs(state: &AppState) -> ApiResult<Tariffs> {
+/// The tariffs of an installation as the computations use them (`None`: the home, the first
+/// installation of this server; no installation, no tariff).
+pub async fn tariffs(state: &AppState, installation_id: Option<i64>) -> ApiResult<Tariffs> {
+    let Some(id) = (match installation_id {
+        Some(id) => Some(id),
+        None => db::home_installation(&state.db).await?,
+    }) else {
+        return Ok(Tariffs::default());
+    };
     let mut list = vec![];
-    for v in versions(state).await? {
+    for v in versions(state, id).await? {
         list.push((day(&v.valid_from)?, v.tariff));
     }
     Ok(Tariffs::new(list))
@@ -124,16 +153,17 @@ pub struct PriceView {
 }
 
 /// The price of electricity now, and over the next hours.
-pub async fn now(State(state): State<AppState>, _user: AuthUser, Query(q): Query<PriceQuery>) -> ApiResult<Json<PriceView>> {
+pub async fn now(State(state): State<AppState>, user: AuthUser, Path(id): Path<i64>, Query(q): Query<PriceQuery>) -> ApiResult<Json<PriceView>> {
+    Access::of(&state.db, &user).await?.view(id)?;
     let tz = state.cfg.timezone;
-    let tariffs = tariffs(&state).await?;
+    let tariffs = tariffs(&state, Some(id)).await?;
     let now = db::now();
     let today = crate::rollup::local_day(now, tz);
     let start = crate::tempo::season_start(today);
     let known = colors(&state, start.min(today - chrono::Days::new(1)), today + chrono::Days::new(8)).await?;
     let color = |d: NaiveDate| known.get(&d).copied();
-    let currency = db::contract(&state.db).await?.map_or_else(|| "EUR".into(), |c| c.currency);
-    let followed = crate::tempo::followed(&versions(&state).await?.into_iter().map(|v| v.tariff).collect::<Vec<_>>());
+    let currency = db::contract(&state.db, id).await?.map_or_else(|| "EUR".into(), |c| c.currency);
+    let followed = crate::tempo::followed(&versions(&state, id).await?.into_iter().map(|v| v.tariff).collect::<Vec<_>>());
     let used = |c: DayColor| known.iter().filter(|(d, k)| **k == c && **d >= start && **d <= today).count() as i64;
     Ok(Json(PriceView {
         currency,
