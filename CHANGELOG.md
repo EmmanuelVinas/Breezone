@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.31] - 2026-11-17
+
 ### Added
 
 - Fine-grained rights: the devices of the modules (Shelly, Hue, shutters, ventilation…) are given to
