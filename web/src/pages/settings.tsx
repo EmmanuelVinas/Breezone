@@ -34,6 +34,7 @@ import { InstallationDialog } from "@/components/installation-dialog"
 import { UpdateTab } from "@/components/update-tab"
 import { ConfigTransfer } from "@/components/config-transfer"
 import { RoomsTab } from "@/components/rooms-tab"
+import { ElectricityTab } from "@/components/electricity/electricity-tab"
 import { ModulesTab } from "@/components/modules-tab"
 import { ConnectionDot } from "@/components/connection-badge"
 import { Confirm } from "@/components/confirm"
@@ -1220,6 +1221,7 @@ export function SettingsPage() {
     ...(admin ? [{ id: "users", label: t("Utilisateurs") }] : []),
     ...(admin ? [{ id: "modules", label: t("Modules") }] : []),
     ...(admin ? [{ id: "rooms", label: t("Pièces") }] : []),
+    ...(admin ? [{ id: "electricity", label: t("Électricité") }] : []),
     ...(admin ? [{ id: "breezone", label: "Breezone" }] : []),
     { id: "devices", label: t("Appareils") },
     { id: "account", label: t("Mon compte") },
@@ -1284,6 +1286,11 @@ export function SettingsPage() {
         {admin && (
           <TabsContent value="rooms">
             <RoomsTab />
+          </TabsContent>
+        )}
+        {admin && (
+          <TabsContent value="electricity">
+            <ElectricityTab />
           </TabsContent>
         )}
         {admin && (

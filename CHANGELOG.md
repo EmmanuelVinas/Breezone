@@ -6,6 +6,16 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Settings › Electricity (administrators): the contract of the home (country, supplier, subscribed
+  power, offer) and its prices, set visually. An offer (Base, Off-peak hours, Tempo, Custom) fills
+  the grid with its slots and indicative prices to check on the bill. Each profile of day is a bar
+  of 24 hours: tap a slot for its name and price, drag a limit (by half hour), split or merge. The
+  calendar picks a profile per day of the week, or per announced colour, and when the day starts.
+  New prices start on a chosen day; the history lists them. The price now and the next 24 hours sit
+  at the top.
+
 ## [0.11.0-beta.27] - 2026-11-17
 
 ### Changed
