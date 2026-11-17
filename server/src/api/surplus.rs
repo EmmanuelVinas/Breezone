@@ -76,7 +76,8 @@ async fn view(state: &AppState) -> ApiResult<SurplusView> {
     Ok(SurplusView { meter: looked.then_some(snapshot.meter), export: snapshot.export, loads, candidates })
 }
 
-pub async fn get(State(state): State<AppState>, _user: AuthUser) -> ApiResult<Json<SurplusView>> {
+pub async fn get(State(state): State<AppState>, user: AuthUser) -> ApiResult<Json<SurplusView>> {
+    crate::api::energy::reads_energy(&state, &user).await?;
     Ok(Json(view(&state).await?))
 }
 

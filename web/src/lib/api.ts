@@ -427,6 +427,19 @@ export const ALL_RIGHTS: UserRights = {
 export type UserDetails = User & {
   created_at: number
   access: AccessEntry[]
+  /** What they may see and drive among the devices of the modules. */
+  devices: DeviceGrant[]
+}
+
+/**
+ * A grant on the devices of the modules (Shelly, Hue, shutters…): all of them, a room, a type
+ * (`deviceType` id) or one device; the most a grant gives wins.
+ */
+export type DeviceGrant = {
+  scope: "all" | "room" | "type" | "device"
+  /** The room id, the type or the device id; empty for "all". */
+  ref: string
+  permission: "read" | "control"
 }
 
 export type Me = User & {
@@ -1455,13 +1468,15 @@ export const api = {
     username: string,
     password: string,
     role: string,
-    access: AccessEntry[] = []
+    access: AccessEntry[] = [],
+    devices: DeviceGrant[] = []
   ) =>
     request<UserDetails>("POST", "/api/users", {
       username,
       password,
       role,
       access,
+      devices,
     }),
   updateUser: (
     id: number,
@@ -1469,6 +1484,7 @@ export const api = {
       role?: string
       password?: string
       access?: AccessEntry[]
+      devices?: DeviceGrant[]
     }
   ) => request<UserDetails>("PUT", `/api/users/${id}`, data),
   deleteUser: (id: number) => request<void>("DELETE", `/api/users/${id}`),

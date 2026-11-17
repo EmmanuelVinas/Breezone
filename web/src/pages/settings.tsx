@@ -21,6 +21,7 @@ import {
 import { toast } from "sonner"
 import type {
   AccessEntry,
+  DeviceGrant,
   Found,
   InstallationConfig,
   SyncReport,
@@ -34,6 +35,10 @@ import { InstallationDialog } from "@/components/installation-dialog"
 import { UpdateTab } from "@/components/update-tab"
 import { ConfigTransfer } from "@/components/config-transfer"
 import { RoomsTab } from "@/components/rooms-tab"
+import {
+  DeviceAccessEditor,
+  deviceAccessSummary,
+} from "@/components/device-access-editor"
 import { ElectricityTab } from "@/components/electricity/electricity-tab"
 import { ModulesTab } from "@/components/modules-tab"
 import { ConnectionDot } from "@/components/connection-badge"
@@ -723,10 +728,12 @@ function UsersTab() {
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({ username: "", password: "", role: "user" })
   const [newAccess, setNewAccess] = useState<AccessEntry[]>([])
+  const [newDevices, setNewDevices] = useState<DeviceGrant[]>([])
   const [editing, setEditing] = useState<{
     id: number
     username: string
     access: AccessEntry[]
+    devices: DeviceGrant[]
   } | null>(null)
   const [reset, setReset] = useState<{ id: number; username: string } | null>(
     null
@@ -739,13 +746,15 @@ function UsersTab() {
         form.username,
         form.password,
         form.role,
-        form.role === "user" ? newAccess : []
+        form.role === "user" ? newAccess : [],
+        form.role === "user" ? newDevices : []
       ),
     onSuccess: () => {
       toast.success(t("Utilisateur créé"))
       setOpen(false)
       setForm({ username: "", password: "", role: "user" })
       setNewAccess([])
+      setNewDevices([])
       refresh()
     },
     onError: (e) => toast.error(errorText(e)),
@@ -760,6 +769,7 @@ function UsersTab() {
         role?: string
         password?: string
         access?: AccessEntry[]
+        devices?: DeviceGrant[]
       }
     }) => api.updateUser(id, data),
     onSuccess: () => {
@@ -783,7 +793,7 @@ function UsersTab() {
         <CardTitle>{t("Utilisateurs")}</CardTitle>
         <CardDescription>
           {t(
-            "Les administrateurs voient et pilotent tout, et configurent le serveur. Un utilisateur ne voit que les installations que vous lui donnez, en lecture seule ou avec le pilotage, et vous choisissez ce qu'il peut y modifier."
+            "Les administrateurs voient et pilotent tout, et configurent le serveur. Un utilisateur ne voit que ce que vous lui donnez : des installations, et des appareils des modules (tous, par type, par pièce ou un à un), en lecture seule ou avec le pilotage."
           )}
         </CardDescription>
       </CardHeader>
@@ -808,7 +818,10 @@ function UsersTab() {
               <div className="text-xs text-muted-foreground">
                 {u.role === "admin"
                   ? t("Toutes les installations")
-                  : accessSummary(u.access)}{" "}
+                  : [
+                      accessSummary(u.access),
+                      deviceAccessSummary(u.devices),
+                    ].join(" · ")}{" "}
                 · {t("créé le {date}", { date: dateTime(u.created_at) })}
               </div>
             </div>
@@ -821,6 +834,7 @@ function UsersTab() {
                     id: u.id,
                     username: u.username,
                     access: u.access,
+                    devices: u.devices,
                   })
                 }
               >
@@ -870,7 +884,7 @@ function UsersTab() {
       </CardFooter>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t("Nouvel utilisateur")}</DialogTitle>
           </DialogHeader>
@@ -913,6 +927,11 @@ function UsersTab() {
               <div className="grid gap-2">
                 <Label>{t("Installations")}</Label>
                 <AccessEditor value={newAccess} onChange={setNewAccess} />
+                <Label className="mt-2">{t("Appareils des modules")}</Label>
+                <DeviceAccessEditor
+                  value={newDevices}
+                  onChange={setNewDevices}
+                />
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
@@ -959,6 +978,13 @@ function UsersTab() {
                   onChange={(access) => setEditing({ ...editing, access })}
                 />
               </div>
+              <div className="grid gap-2">
+                <Label>{t("Appareils des modules")}</Label>
+                <DeviceAccessEditor
+                  value={editing.devices}
+                  onChange={(devices) => setEditing({ ...editing, devices })}
+                />
+              </div>
             </div>
           )}
           <DialogFooter>
@@ -970,7 +996,7 @@ function UsersTab() {
                 editing &&
                 update.mutate({
                   id: editing.id,
-                  data: { access: editing.access },
+                  data: { access: editing.access, devices: editing.devices },
                 })
               }
               disabled={update.isPending}

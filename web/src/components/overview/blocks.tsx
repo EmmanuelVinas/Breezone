@@ -507,9 +507,9 @@ function EnergyBlock({ flow }: { flow: EnergyFlow }) {
     .map((p): [number, number | null] => [p.ts, p[flow]])
     .filter((p): p is [number, number] => p[1] !== null)
   return (
-    <Card className="h-full overflow-hidden rounded-3xl pb-0">
-      <CardContent className="flex h-full flex-col gap-1 px-0">
-        <div className="grid gap-1 px-6">
+    <Card className="h-full rounded-3xl">
+      <CardContent className="flex h-full flex-col gap-1">
+        <div className="grid gap-1">
           <span
             className={cn(
               "text-sm",
@@ -528,7 +528,7 @@ function EnergyBlock({ flow }: { flow: EnergyFlow }) {
         {points.length > 1 && (
           <Sparkline
             points={points}
-            className={cn("mt-auto h-14", color)}
+            className={cn("mt-auto h-14 pt-2", color)}
             label={t("Aujourd'hui")}
           />
         )}

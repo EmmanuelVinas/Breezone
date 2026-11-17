@@ -174,15 +174,17 @@ pub async fn delete_room(State(state): State<AppState>, _admin: AdminUser, Path(
 pub async fn act(State(state): State<AppState>, user: AuthUser, Path(id): Path<i64>, Json(input): Json<ActionInput>) -> ApiResult<Json<DeviceView>> {
     let access = Access::of(&state.db, &user).await?;
     let view = devices::get(&state, id).await?.ok_or_else(|| ApiError::not_found("device not found"))?;
-    if let Some(i) = view.installation_id {
-        access.view(i)?;
+    match view.installation_id {
+        Some(i) => access.view(i)?,
+        // Not revealed to whom it was not given.
+        None if !access.can_view_module(&devices::module_device(&view)) => return Err(ApiError::not_found("device not found")),
+        None => {}
     }
     devices::check_action(&view, &input)?;
     match view.installation_id {
         Some(inst) => access.control(inst)?,
-        // Devices of other sources: administrators, until rights per type of device.
-        None if !access.is_admin() => return Err(ApiError::forbidden("administrators only")),
-        None => {}
+        // A device of a module: given to the user by itself, its room or its type.
+        None => access.control_module(&devices::module_device(&view))?,
     }
     devices::apply(&state, &view, &input, &user.username).await?;
     viewed_by(&state, &access, id).await

@@ -184,8 +184,8 @@ async fn a_shelly_source_provides_devices_driven_through_their_traits() {
     assert_eq!(d["role"], "battery");
     assert_eq!(d["measures"]["device_id"], Value::Null);
 
-    // A user sees the devices but neither drives them nor manages the sources (for now).
-    server.call("POST", "/api/users", t, Some(json!({"username":"bob","password":"motdepasse1","role":"user"}))).await;
+    // A user given the devices read-only sees them but neither drives them nor manages the sources.
+    server.call("POST", "/api/users", t, Some(json!({"username":"bob","password":"motdepasse1","role":"user","devices":[{"scope":"all","permission":"read"}]}))).await;
     let (_, v) = server.call("POST", "/api/auth/login", None, Some(json!({"username":"bob","password":"motdepasse1"}))).await;
     let bob = v["access_token"].as_str().unwrap().to_string();
     let (_, seen) = server.call("GET", "/api/devices", Some(&bob), None).await;
@@ -845,8 +845,8 @@ async fn a_routine_drives_the_devices_of_the_modules() {
     breezone_server::timers::run_due(&server.state).await;
     assert!(*relay.lock().unwrap(), "the timer drove the relay");
 
-    // A user sees the routine (they see the devices) but does not run or change it.
-    server.call("POST", "/api/users", t, Some(json!({"username":"bob","password":"motdepasse1","role":"user"}))).await;
+    // A user given the devices read-only sees the routine but does not run or change it.
+    server.call("POST", "/api/users", t, Some(json!({"username":"bob","password":"motdepasse1","role":"user","devices":[{"scope":"all","permission":"read"}]}))).await;
     let (_, v) = server.call("POST", "/api/auth/login", None, Some(json!({"username":"bob","password":"motdepasse1"}))).await;
     let bob = v["access_token"].as_str().unwrap().to_string();
     let (_, seen) = server.call("GET", "/api/routines", Some(&bob), None).await;

@@ -170,17 +170,62 @@ pub async fn get(state: &AppState, id: i64) -> ApiResult<Option<DeviceView>> {
     Ok(Some(view(d, zone.as_ref(), from_source.as_ref())))
 }
 
-/// The devices as a user sees them: those of the installations they see, each saying whether they
-/// may drive it. The devices of the modules are seen by everyone and driven by administrators,
-/// until rights per type of device.
+/// The type of a device, as the clients group them (`deviceType` of the web, keep them alike): one
+/// of [`TYPES`].
+pub fn type_of(kind: &str, traits: &[String]) -> &'static str {
+    let has = |prefix: &str| kind.starts_with(prefix) || traits.iter().any(|t| t.starts_with(prefix));
+    match kind {
+        "shutter" => return "shutter",
+        "window" => return "window",
+        "door" => return "door",
+        _ => {}
+    }
+    if has("climate.") {
+        "climate"
+    } else if has("ev.charger") {
+        "charger"
+    } else if has("light") {
+        "light"
+    } else if has("cover.") {
+        "shutter"
+    } else if has("ventilation.unit") {
+        "ventilation"
+    } else if has("ventilation.room") {
+        "room-air"
+    } else if has("switch.") {
+        "switch"
+    } else if has("solar.") {
+        "solar"
+    } else if has("energy.") {
+        "energy"
+    } else if kind == "remote" || has("button") {
+        "remote"
+    } else {
+        "other"
+    }
+}
+
+/// The types a grant may name.
+pub const TYPES: &[&str] = &["climate", "charger", "light", "shutter", "window", "door", "ventilation", "room-air", "switch", "solar", "energy", "remote", "other"];
+
+/// A device of a module, as an access to it is judged.
+pub fn module_device(d: &DeviceView) -> crate::access::ModuleDevice {
+    crate::access::ModuleDevice { id: d.id, room_id: d.room_id, kind: type_of(&d.kind, &d.traits) }
+}
+
+/// The devices as a user sees them: those of the installations they see, and the devices of the
+/// modules they were given, each saying whether they may drive it.
 pub fn for_user(devices: Vec<DeviceView>, access: &crate::access::Access) -> Vec<DeviceView> {
     devices
         .into_iter()
-        .filter(|d| d.installation_id.is_none_or(|i| access.can_view(i)))
+        .filter(|d| match d.installation_id {
+            Some(i) => access.can_view(i),
+            None => access.can_view_module(&module_device(d)),
+        })
         .map(|mut d| {
             d.can_control = match d.installation_id {
                 Some(i) => access.can_control(i),
-                None => access.is_admin(),
+                None => access.can_control_module(&module_device(&d)),
             };
             d
         })

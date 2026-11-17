@@ -6,7 +6,7 @@
 //! Fixed-time schedules are not routines: they are the schedules of the Airzone app, run by
 //! Airzone and edited from Breezone (see `airzone_schedules`).
 
-use crate::db::{self, Db, RoutineRow};
+use crate::db::{self, RoutineRow};
 use crate::devices::{self, ActionInput};
 use crate::error::{ApiError, ApiResult};
 use crate::hub::{Hub, ZoneCommand};
@@ -80,29 +80,35 @@ pub fn installation_of(actions: &[RoutineAction]) -> Option<i64> {
     actions.iter().all(|a| a.installation_id() == Some(first)).then_some(first)
 }
 
-/// What an action needs the right to drive: an installation, or the devices of the modules
-/// (administrators, until rights per type of device).
+/// What an action needs the right to drive: an installation, a device of a module, or (a device
+/// no longer there) an administrator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Scope {
     Installation(i64),
-    Modules,
+    Module(crate::access::ModuleDevice),
+    Gone,
 }
 
-/// The installation of each device (`None`: a device of a module).
-pub struct DeviceScopes(HashMap<i64, Option<i64>>);
+/// Where each device belongs: its installation, or (a device of a module) its room and type.
+pub struct DeviceScopes(HashMap<i64, Scope>);
 
 impl DeviceScopes {
-    pub async fn load(db: &Db) -> sqlx::Result<DeviceScopes> {
-        Ok(DeviceScopes(db::list_devices(db).await?.into_iter().map(|d| (d.id, d.installation_id)).collect()))
+    pub async fn load(state: &crate::AppState) -> crate::error::ApiResult<DeviceScopes> {
+        Ok(DeviceScopes(
+            crate::devices::list(state)
+                .await?
+                .iter()
+                .map(|d| (d.id, d.installation_id.map_or_else(|| Scope::Module(crate::devices::module_device(d)), Scope::Installation)))
+                .collect(),
+        ))
     }
 
-    /// A device no longer there needs what a device of a module needs.
     pub fn of(&self, actions: &[RoutineAction]) -> Vec<Scope> {
         actions
             .iter()
             .map(|a| match a {
                 RoutineAction::Zone(z) => Scope::Installation(z.installation_id),
-                RoutineAction::Device(d) => self.0.get(&d.device_id).copied().flatten().map_or(Scope::Modules, Scope::Installation),
+                RoutineAction::Device(d) => self.0.get(&d.device_id).copied().unwrap_or(Scope::Gone),
             })
             .collect()
     }
@@ -318,9 +324,10 @@ mod tests {
     }
 
     #[test]
-    fn a_device_of_a_module_needs_the_modules_scope() {
-        let scopes = DeviceScopes(HashMap::from([(7, None), (8, Some(3))]));
+    fn a_device_of_a_module_needs_the_right_to_drive_it() {
+        let lamp = crate::access::ModuleDevice { id: 7, room_id: Some(2), kind: "light" };
+        let scopes = DeviceScopes(HashMap::from([(7, Scope::Module(lamp)), (8, Scope::Installation(3))]));
         let device = |id| RoutineAction::Device(DeviceAction { device_id: id, trait_name: "light".into(), action: "set".into(), params: Map::new(), delay_minutes: None });
-        assert_eq!(scopes.of(&[zone(None), device(7), device(8), device(99)]), vec![Scope::Installation(1), Scope::Modules, Scope::Installation(3), Scope::Modules]);
+        assert_eq!(scopes.of(&[zone(None), device(7), device(8), device(99)]), vec![Scope::Installation(1), Scope::Module(lamp), Scope::Installation(3), Scope::Gone]);
     }
 }

@@ -21,22 +21,27 @@ async fn scene_scopes(state: &AppState, rule: &Automation) -> ApiResult<Vec<rout
             out.extend(routines::to_view(&row).actions);
         }
     }
-    Ok(routines::DeviceScopes::load(&state.db).await?.of(&out))
+    Ok(routines::DeviceScopes::load(state).await?.of(&out))
 }
 
-/// A user sees a rule when they see every installation it reads or drives.
+/// A user sees a rule when they see every installation and device of a module it reads or drives.
 async fn sees(state: &AppState, access: &Access, rule: &Automation, ctx: &Context) -> ApiResult<bool> {
-    let devices = rule.read_devices().into_iter().chain(rule.driven_devices());
-    let installations = devices.filter_map(|id| ctx.device(id)?.installation_id).collect::<Vec<_>>();
-    Ok(installations.into_iter().all(|i| access.can_view(i)) && access.sees_scopes(&scene_scopes(state, rule).await?))
+    let seen = rule.read_devices().into_iter().chain(rule.driven_devices()).filter_map(|id| ctx.device(id)).all(|d| match d.installation_id {
+        Some(i) => access.can_view(i),
+        None => access.can_view_module(&crate::devices::module_device(d)),
+    });
+    Ok(seen && access.sees_scopes(&scene_scopes(state, rule).await?))
 }
 
-/// Driving what the rule drives: the zones of an installation need the right to drive it, the
-/// devices of the modules an administrator (until rights per type of device).
+/// Driving what the rule drives: the zones of an installation need the right to drive it, a device
+/// of a module the right to drive it (one no longer there: an administrator).
 async fn check_control(state: &AppState, access: &Access, rule: &Automation, ctx: &Context) -> ApiResult<()> {
     for id in rule.driven_devices() {
-        match ctx.device(id).and_then(|d| d.installation_id) {
-            Some(i) => access.control(i)?,
+        match ctx.device(id) {
+            Some(d) => match d.installation_id {
+                Some(i) => access.control(i)?,
+                None => access.control_module(&crate::devices::module_device(d))?,
+            },
             None if !access.is_admin() => return Err(ApiError::forbidden("administrators only")),
             None => {}
         }

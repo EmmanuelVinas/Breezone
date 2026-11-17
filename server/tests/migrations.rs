@@ -45,6 +45,7 @@ const APPLIED: &[(&str, &str)] = &[
     ("0038_contract_offpeak.sql", "f4c466e78e514327b84e1d870f620337ebda487af04cf20d535b82b321424d48"),
     ("0039_dashboard_pages.sql", "976f99dee26edd7f839bb1bf0e4b9c21f36a6e4175f850f3c9496f4152689f83"),
     ("0040_contract_per_installation.sql", "50af7fe6c4d18eb426368985a0a89187bccbb475491699b656dbdafd0ce5d8fc"),
+    ("0041_device_access.sql", "23c10add7c4c8bcd5b340ee30c97b5e6934878e82e2fafc14e1e4f5833b184b5"),
 ];
 
 #[test]

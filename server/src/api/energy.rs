@@ -15,6 +15,17 @@ use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 
+/// The energy of the home: for the users given its measures (type "energy" or "solar"), or all the
+/// devices of the modules.
+pub(crate) async fn reads_energy(state: &AppState, user: &AuthUser) -> ApiResult<()> {
+    let access = Access::of(&state.db, user).await?;
+    if access.sees_type("energy") || access.sees_type("solar") {
+        Ok(())
+    } else {
+        Err(ApiError::forbidden("vous n'avez pas accès à l'énergie de la maison"))
+    }
+}
+
 /// Every point of the history stands for this long at most (then the device was not read).
 fn max_span(state: &AppState) -> i64 {
     state.cfg.history_interval_secs * 2
@@ -27,7 +38,8 @@ async fn measures(state: &AppState, devices: &[DeviceView]) -> ApiResult<Vec<Mea
 }
 
 /// The home now, from the last reading of its measures (every few seconds).
-pub async fn live(State(state): State<AppState>, _user: AuthUser) -> ApiResult<Json<energy::LiveView>> {
+pub async fn live(State(state): State<AppState>, user: AuthUser) -> ApiResult<Json<energy::LiveView>> {
+    reads_energy(&state, &user).await?;
     let devices = devices::list(&state).await?;
     Ok(Json(energy::live_of(&state.db, &devices).await?))
 }
@@ -65,7 +77,8 @@ pub struct DayView {
 }
 
 /// The power of the home along a local day (a point every 15 minutes), and its energy.
-pub async fn day(State(state): State<AppState>, _user: AuthUser, Query(q): Query<DayQuery>) -> ApiResult<Json<DayView>> {
+pub async fn day(State(state): State<AppState>, user: AuthUser, Query(q): Query<DayQuery>) -> ApiResult<Json<DayView>> {
+    reads_energy(&state, &user).await?;
     let tz = state.cfg.timezone;
     let date = match q.date.as_deref() {
         Some(d) => NaiveDate::parse_from_str(d, "%Y-%m-%d").map_err(|_| ApiError::bad_request("date: YYYY-MM-DD expected"))?,
@@ -101,7 +114,8 @@ fn default_days() -> u64 {
 /// The energy of the home day by day (local days, oldest first, today included). The days whose
 /// detail is still kept are computed (and kept in `energy_days`); older ones come from what was
 /// kept, so that the page goes back years.
-pub async fn days(State(state): State<AppState>, _user: AuthUser, Query(q): Query<DaysQuery>) -> ApiResult<Json<Vec<DayEnergy>>> {
+pub async fn days(State(state): State<AppState>, user: AuthUser, Query(q): Query<DaysQuery>) -> ApiResult<Json<Vec<DayEnergy>>> {
+    reads_energy(&state, &user).await?;
     let tz = state.cfg.timezone;
     let n = q.days.clamp(1, 5 * 366);
     let last = today(tz);
@@ -165,7 +179,8 @@ pub struct RangeView {
 }
 
 /// How far back the energy of the home goes.
-pub async fn range(State(state): State<AppState>, _user: AuthUser) -> ApiResult<Json<RangeView>> {
+pub async fn range(State(state): State<AppState>, user: AuthUser) -> ApiResult<Json<RangeView>> {
+    reads_energy(&state, &user).await?;
     let tz = state.cfg.timezone;
     let devices = devices::list(&state).await?;
     let measures = measures(&state, &devices).await?;

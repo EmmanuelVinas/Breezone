@@ -970,7 +970,8 @@ function SourceDetail({
 /** Airzone, built in: its installations and the Airzone account (given by the settings page). */
 function AirzoneDetail({ children }: { children: ReactNode }) {
   const status = useQuery({ queryKey: ["status"], queryFn: api.status })
-  const installations = status.data ?? []
+  // Installations shared by another Breezone server are not reached by this module.
+  const installations = (status.data ?? []).filter((i) => !i.node)
   const zones = installations.reduce((n, i) => n + i.zones.length, 0)
   return (
     <>

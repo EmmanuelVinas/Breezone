@@ -8,8 +8,6 @@ const es: Record<string, string> = {
     "«{name}»: {failed} acción(es) fallida(s)",
   "« {name} » activée chez Airzone": "«{name}» activada en Airzone",
   "« {name} » désactivée chez Airzone": "«{name}» desactivada en Airzone",
-  "« {name} » doit encore accepter votre demande : sur ce serveur-là, Réglages › Serveurs › Accepter. Ses installations apparaîtront ensuite ici.":
-    "«{name}» aún debe aceptar su solicitud: en ese servidor, Ajustes › Servidores › Aceptar. Sus instalaciones aparecerán después aquí.",
   "« {name} » est pilotée par ce serveur ({local})":
     "«{name}» la controla este servidor ({local})",
   "« {name} » est reliée": "«{name}» está vinculada",
@@ -62,8 +60,6 @@ const es: Record<string, string> = {
   "à {time}": "a las {time}",
   "À faire quand l'autre serveur a un certificat valide. S'il n'en a pas, la connexion sera de nouveau refusée.":
     "Hágalo cuando el otro servidor tenga un certificado válido. Si no lo tiene, la conexión volverá a ser rechazada.",
-  "À gauche, votre compte Airzone ; à droite, comment ce serveur joint chaque installation : sur son propre réseau, ou par le serveur Breezone d'un autre site.":
-    "A la izquierda, su cuenta de Airzone; a la derecha, cómo llega este servidor a cada instalación: en su propia red o a través del servidor Breezone de otro sitio.",
   "à l'instant": "ahora mismo",
   "À quelle installation de votre compte Airzone correspond-elle ?":
     "¿A qué instalación de su cuenta de Airzone corresponde?",
@@ -141,7 +137,6 @@ const es: Record<string, string> = {
     "Ninguna escena. Ejemplo: «Me voy» — apagarlo todo salvo el dormitorio, que se apaga después de 1 h.",
   Auto: "Auto",
   "Automatique ({name})": "Automático ({name})",
-  "Autre serveur Breezone": "Otro servidor Breezone",
   Baisser: "Bajar",
   "Bienvenue 👋": "Bienvenido 👋",
   "Breezone pilote vos installations Airzone en local, sans abonnement ni cloud.":
@@ -156,8 +151,6 @@ const es: Record<string, string> = {
   "Ce qui se déclenche tout seul : à heure fixe avec les programmations Airzone, ou quand quelque chose se produit avec les automatismes de Breezone.":
     "Lo que se activa solo: a una hora fija con las programaciones de Airzone, o cuando ocurre algo con los automatismos de Breezone.",
   "Ce serveur": "Este servidor",
-  "Ce serveur le pilote directement (adresse IP).":
-    "Este servidor lo controla directamente (dirección IP).",
   "Ce serveur n'est partagé avec aucun autre.":
     "Este servidor no se comparte con ningún otro.",
   "Ce serveur propose un partage réciproque. Il verra les installations cochées dès qu'il aura accepté votre demande ; vous pourrez révoquer ce partage dans Réglages › Serveurs.":
@@ -268,8 +261,6 @@ const es: Record<string, string> = {
   "du {date}": "del {date}",
   "E-mail Airzone": "Correo de Airzone",
   Échec: "Fallo",
-  "Elle est sur un autre site, avec son propre serveur":
-    "Está en otro sitio, con su propio servidor",
   "Émis par": "Emitido por",
   "Empreinte SHA-256": "Huella SHA-256",
   "En attente": "En espera",
@@ -551,8 +542,6 @@ const es: Record<string, string> = {
   Sur: "En",
   "Sur l'autre serveur Breezone : Réglages › Serveurs › Ajouter, puis collez ce jeton (ou scannez le QR code avec l'application). Il est utilisable une seule fois, pendant 15 minutes, et ne contient aucune clé d'accès. Vous devrez ensuite accepter la demande ici, dans « À qui ce serveur est partagé ».":
     "En el otro servidor Breezone: Ajustes › Servidores › Añadir, y pegue este token (o escanee el código QR con la aplicación). Solo se puede usar una vez, durante 15 minutos, y no contiene ninguna clave de acceso. Después tendrá que aceptar la solicitud aquí, en «Con quién se comparte este servidor».",
-  "Sur le serveur Breezone de ce site : Réglages › Serveurs › Nouveau partage, puis ajoutez son jeton ici. Ses installations sont reliées automatiquement (même WebServer).":
-    "En el servidor Breezone de ese sitio: Ajustes › Servidores › Nuevo uso compartido, y añada aquí su token. Sus instalaciones se vinculan automáticamente (mismo WebServer).",
   "Sur le serveur de l'autre site : Réglages › Serveurs › Nouveau partage. Collez ici le jeton obtenu (valable 15 minutes, une seule fois), puis acceptez la demande sur ce serveur-là. Ses installations apparaîtront alors ici. Les deux serveurs se reconnaissent ensuite par une signature : aucune clé ne circule.":
     "En el servidor del otro sitio: Ajustes › Servidores › Nuevo uso compartido. Pegue aquí el token obtenido (válido 15 minutos, una sola vez) y acepte la solicitud en ese servidor. Sus instalaciones aparecerán entonces aquí. Después ambos servidores se reconocen mediante una firma: no circula ninguna clave.",
   "Synchro quotidienne": "Sincronización diaria",
@@ -587,8 +576,6 @@ const es: Record<string, string> = {
     "Otro servidor Breezone podrá mostrar (y controlar, si lo permite) las instalaciones elegidas. Solo se pueden compartir las instalaciones unidas directamente a este servidor.",
   "Une action plus tard sur une zone, un groupe ou toute une installation.":
     "Una acción más tarde en una zona, un grupo o toda una instalación.",
-  "Une installation d'un autre site, pilotée par le serveur Breezone de ce site (jeton d'invitation).":
-    "Una instalación de otro sitio, controlada por el servidor Breezone de ese sitio (token de invitación).",
   Utilisateur: "Usuario",
   "Utilisateur créé": "Usuario creado",
   "Utilisateur modifié": "Usuario modificado",
@@ -603,10 +590,7 @@ const es: Record<string, string> = {
     "Verificación HTTPS habitual restablecida",
   "via {name}": "vía {name}",
   "Via {name}": "Vía {name}",
-  "Via le serveur « {name} »": "A través del servidor «{name}»",
   "Via un autre serveur": "A través de otro servidor",
-  "via un autre serveur": "a través de otro servidor",
-  "Via un autre serveur Breezone": "A través de otro servidor Breezone",
   "via un autre serveur Breezone": "a través de otro servidor Breezone",
   "Vide = l'adresse publique de ce serveur. HTTP n'est accepté que vers une adresse locale.":
     "Vacío = la dirección pública de este servidor. HTTP solo se acepta hacia una dirección local.",
@@ -620,7 +604,6 @@ const es: Record<string, string> = {
     "Seguirá conectado en este dispositivo.",
   "vue {when}": "vista {when}",
   "WebServer joignable": "WebServer accesible",
-  "WebServer sur ce réseau": "WebServer en esta red",
   "WebServers sur le réseau de ce serveur":
     "WebServers en la red de este servidor",
   Zone: "Zona",
@@ -1758,6 +1741,26 @@ const es: Record<string, string> = {
   "Contrat de {name}": "Contrato de {name}",
   "Chaque installation a le sien : changez d'installation pour régler celui d'un autre lieu. Prix TTC, comme sur la facture.":
     "Cada instalación tiene el suyo: cambie de instalación para ajustar el de otro lugar. Precios con impuestos, como en la factura.",
+  "Aucun appareil de module sur ce serveur.":
+    "Ningún dispositivo de módulo en este servidor.",
+  "Tous les appareils des modules": "Todos los dispositivos de los módulos",
+  "Appareil par appareil": "Dispositivo por dispositivo",
+  "Le plus large l'emporte : « Lumières en pilotage » et « Salon en lecture seule » laissent piloter les lumières du salon. Les noms, les pièces et les réglages des appareils restent aux administrateurs. L'énergie de la maison est visible avec les types Énergie ou Solaire.":
+    "Gana el más amplio: «Luces con control» y «Salón solo lectura» permiten controlar las luces del salón. Los nombres, las habitaciones y los ajustes de los dispositivos quedan para los administradores. La energía de la casa es visible con los tipos Energía o Solar.",
+  "aucun appareil de module": "ningún dispositivo de módulo",
+  "tous les appareils en pilotage": "todos los dispositivos con control",
+  "tous les appareils en lecture": "todos los dispositivos solo lectura",
+  "{n} type": "{n} tipo",
+  "{n} types": "{n} tipos",
+  "Les administrateurs voient et pilotent tout, et configurent le serveur. Un utilisateur ne voit que ce que vous lui donnez : des installations, et des appareils des modules (tous, par type, par pièce ou un à un), en lecture seule ou avec le pilotage.":
+    "Los administradores ven y controlan todo, y configuran el servidor. Un usuario solo ve lo que usted le da: instalaciones y dispositivos de los módulos (todos, por tipo, por habitación o uno a uno), solo lectura o con control.",
+  "Appareils des modules": "Dispositivos de los módulos",
+  Afficher: "Mostrar",
+  "Partagée par « {name} »": "Compartida por «{name}»",
+  "{name} est pilotée par le serveur de son site.":
+    "{name} la controla el servidor de su sitio.",
+  "À gauche, votre compte Airzone ; à droite, le WebServer par lequel ce serveur joint chaque installation, sur son réseau.":
+    "A la izquierda, su cuenta Airzone; a la derecha, el WebServer por el que este servidor llega a cada instalación, en su red.",
 }
 
 export default es

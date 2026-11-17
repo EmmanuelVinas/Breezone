@@ -202,6 +202,8 @@ pub struct UserDetails {
     pub created_at: i64,
     /// Installations a user (role "user") can see; administrators see everything.
     pub access: Vec<AccessEntry>,
+    /// What they may see and drive among the devices of the modules.
+    pub devices: Vec<db::DeviceGrant>,
 }
 
 /// One installation given to a user.
@@ -220,7 +222,7 @@ async fn access_entries(state: &AppState, user_id: i64) -> ApiResult<Vec<AccessE
 }
 
 async fn user_details(state: &AppState, u: &db::User) -> ApiResult<UserDetails> {
-    Ok(UserDetails { user: u.into(), created_at: u.created_at, access: access_entries(state, u.id).await? })
+    Ok(UserDetails { user: u.into(), created_at: u.created_at, access: access_entries(state, u.id).await?, devices: db::user_device_access(&state.db, u.id).await? })
 }
 
 /// Checks and stores the installations given to a user.
@@ -242,6 +244,49 @@ async fn save_access(state: &AppState, user_id: i64, entries: &[AccessEntry]) ->
     Ok(())
 }
 
+/// Checks what a user would be given among the devices of the modules: one grant per scope, the
+/// most it gives.
+async fn checked_device_access(state: &AppState, grants: &[db::DeviceGrant]) -> ApiResult<Vec<db::DeviceGrant>> {
+    let devices = db::list_devices(&state.db).await?;
+    let rooms = db::list_rooms(&state.db).await?;
+    let mut clean: Vec<db::DeviceGrant> = vec![];
+    for g in grants {
+        if !["read", "control"].contains(&g.permission.as_str()) {
+            return Err(ApiError::bad_request("droit attendu : read ou control"));
+        }
+        let known = match g.scope.as_str() {
+            "all" => g.reference.is_empty(),
+            "room" => rooms.iter().any(|r| r.id.to_string() == g.reference),
+            "type" => crate::devices::TYPES.contains(&g.reference.as_str()),
+            "device" => devices.iter().any(|d| d.installation_id.is_none() && d.id.to_string() == g.reference),
+            _ => false,
+        };
+        if !known {
+            return Err(ApiError::bad_request(crate::text!(
+                "accès aux appareils invalide : {0} {1}",
+                "invalid access to devices: {0} {1}",
+                "acceso a dispositivos no válido: {0} {1}",
+                g.scope,
+                g.reference
+            )));
+        }
+        // One grant per scope: the most it gives.
+        match clean.iter_mut().find(|c| c.scope == g.scope && c.reference == g.reference) {
+            Some(c) if g.permission == "control" => c.permission = "control".into(),
+            Some(_) => {}
+            None => clean.push(g.clone()),
+        }
+    }
+    Ok(clean)
+}
+
+async fn save_device_access(state: &AppState, user_id: i64, grants: &[db::DeviceGrant]) -> ApiResult<()> {
+    let clean = checked_device_access(state, grants).await?;
+    db::set_user_device_access(&state.db, user_id, &clean).await?;
+    state.hub.access_changed(user_id);
+    Ok(())
+}
+
 pub async fn list_users(State(state): State<AppState>, _admin: AdminUser) -> ApiResult<Json<Vec<UserDetails>>> {
     let mut out = vec![];
     for u in db::list_users(&state.db).await? {
@@ -259,6 +304,9 @@ pub struct NewUser {
     /// Installations given to the user (none by default).
     #[serde(default)]
     pub access: Vec<AccessEntry>,
+    /// Devices of the modules given to the user (none by default).
+    #[serde(default)]
+    pub devices: Vec<db::DeviceGrant>,
 }
 
 fn default_role() -> String {
@@ -277,9 +325,12 @@ pub async fn create_user(State(state): State<AppState>, AdminUser(admin): AdminU
     auth::validate_username(username)?;
     auth::validate_password(&req.password)?;
     check_role(&req.role)?;
+    // Checked before the user exists: a refusal leaves nothing behind.
+    checked_device_access(&state, &req.devices).await?;
     let hash = auth::hash_password(req.password).await?;
     let user = db::insert_user(&state.db, username, &hash, &req.role).await?;
     save_access(&state, user.id, &req.access).await?;
+    save_device_access(&state, user.id, &req.devices).await?;
     let user = db::user_by_id(&state.db, user.id).await?.ok_or_else(|| ApiError::not_found("user not found"))?;
     state
         .hub
@@ -304,6 +355,9 @@ pub struct UserUpdate {
     /// Replaces the installations given to the user (unchanged if absent).
     #[serde(default)]
     pub access: Option<Vec<AccessEntry>>,
+    /// Replaces the devices of the modules given to the user (unchanged if absent).
+    #[serde(default)]
+    pub devices: Option<Vec<db::DeviceGrant>>,
 }
 
 pub async fn update_user(State(state): State<AppState>, AdminUser(admin): AdminUser, Path(id): Path<i64>, Json(req): Json<UserUpdate>) -> ApiResult<Json<UserDetails>> {
@@ -317,6 +371,9 @@ pub async fn update_user(State(state): State<AppState>, AdminUser(admin): AdminU
     }
     if let Some(access) = &req.access {
         save_access(&state, id, access).await?;
+    }
+    if let Some(devices) = &req.devices {
+        save_device_access(&state, id, devices).await?;
     }
     if let Some(password) = req.password {
         auth::validate_password(&password)?;

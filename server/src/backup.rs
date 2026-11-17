@@ -77,6 +77,7 @@ pub async fn export(db: &Db, version: &str) -> sqlx::Result<Value> {
     let users = rows(&mut conn, "users", &["id".into(), "username".into(), "role".into(), "language".into(), "created_at".into()], "1").await?;
     let access_cols = columns(&mut conn, "user_installations").await?;
     let access = rows(&mut conn, "user_installations", &access_cols, LOCAL).await?;
+    let device_access = rows(&mut conn, "user_device_access", &["user_id".into(), "scope".into(), "ref".into(), "permission".into()], "1").await?;
     let mut settings = Map::new();
     for key in SETTINGS {
         if let Some(v) = db::get_setting(db, key).await? {
@@ -92,6 +93,7 @@ pub async fn export(db: &Db, version: &str) -> sqlx::Result<Value> {
         "tables": tables,
         "users": users,
         "user_installations": access,
+        "user_device_access": device_access,
         "settings": settings,
     }))
 }
@@ -288,6 +290,23 @@ async fn replace_in(conn: &mut SqliteConnection, file: &Value, importer: i64, in
         })
         .collect();
     insert(conn, "user_installations", &access, &[]).await?;
+    // What the users were given among the devices of the modules (a file of an older version has
+    // none: what they have is kept).
+    if file.get("user_device_access").is_some() {
+        for id in user_ids.values() {
+            sqlx::query("DELETE FROM user_device_access WHERE user_id = ?").bind(id).execute(&mut *conn).await?;
+        }
+        let devices: Vec<Value> = list(file, &["user_device_access"])?
+            .iter()
+            .filter_map(|a| {
+                let user = user_ids.get(&a.get("user_id")?.as_i64()?)?;
+                let mut a = a.clone();
+                a["user_id"] = json!(user);
+                Some(a)
+            })
+            .collect();
+        insert(conn, "user_device_access", &devices, &[]).await?;
+    }
 
     let settings = file.get("settings").and_then(Value::as_object).cloned().unwrap_or_default();
     for key in SETTINGS {

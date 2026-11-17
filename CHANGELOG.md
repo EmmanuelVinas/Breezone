@@ -6,6 +6,23 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Fine-grained rights: the devices of the modules (Shelly, Hue, shutters, ventilation…) are given to
+  a user apart from the installations — all of them, those of a room, of a type or one by one,
+  read-only or with control (the widest wins), in Settings › Users › Access and rights. A device not
+  given is not shown; a device given read-only is not driven, nor by a scene or an automation. The
+  energy of the home needs the Energy or Solar type. Kept in the configuration backup.
+
+### Changed
+
+- A new user is given no device of a module by default (as for the installations); the users there
+  were keep seeing them all, read-only.
+- Overview: the curve of an energy block stays inside its card instead of being cut by its corners.
+- Modules › Airzone shows only the installations this server reaches on its own network: one shared
+  by another Breezone server is shown as such, with a link to Settings › Servers, and is no longer
+  counted, edited or added from there.
+
 ## [0.11.0-beta.30] - 2026-11-17
 
 ### Added

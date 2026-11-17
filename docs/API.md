@@ -67,9 +67,19 @@ serveur).
 
 | Méthode | Chemin | Description |
 |---------|--------|-------------|
-| GET | `/api/users` | Liste, avec `access:[{installation_id, permission:"read"\|"control"\|"admin", rights:{zones, routines, schedules}}]` |
-| POST | `/api/users` | `{username, password, role: "admin"\|"user", access?}` (`rights` d'une entrée : tout autorisé par défaut) |
-| PUT | `/api/users/{id}` | `{role?, password?, access?}` — un nouveau mot de passe déconnecte l'utilisateur partout ; `access` remplace les installations données et leurs droits |
+| GET | `/api/users` | Liste, avec `access:[{installation_id, permission:"read"\|"control"\|"admin", rights:{zones, routines, schedules}}]` et `devices:[{scope:"all"\|"room"\|"type"\|"device", ref, permission:"read"\|"control"}]` |
+| POST | `/api/users` | `{username, password, role: "admin"\|"user", access?, devices?}` (`rights` d'une entrée : tout autorisé par défaut ; rien n'est donné par défaut) |
+| PUT | `/api/users/{id}` | `{role?, password?, access?, devices?}` — un nouveau mot de passe déconnecte l'utilisateur partout ; `access` remplace les installations données et leurs droits, `devices` les appareils des modules donnés |
+
+Les **appareils des modules** (ceux d'aucune installation : Shelly, Hue, volets, VMC…) se donnent à
+part, en lecture ou en pilotage : tous (`all`, `ref` vide), ceux d'une pièce (`room`, son id), d'un
+type (`type` : `climate`, `charger`, `light`, `shutter`, `window`, `door`, `ventilation`,
+`room-air`, `switch`, `solar`, `energy`, `remote`, `other`) ou un appareil (`device`, son id). Le
+plus large l'emporte. Un appareil non donné n'apparaît pas dans `/api/devices` et répond 404 ; donné
+en lecture, `can_control` est faux et le piloter répond 403. Leurs noms, pièces et rôles restent aux
+administrateurs. L'énergie de la maison (`/api/energy/*`, `/api/surplus`) demande les types `energy`
+ou `solar` (ou tous les appareils) ; sinon 403. Les comptes d'avant cette version gardent tous les
+appareils en lecture seule.
 | DELETE | `/api/users/{id}` | Impossible pour soi-même ou le dernier administrateur |
 
 Un administrateur voit et pilote toutes les installations. Un utilisateur (`role: "user"`) ne voit

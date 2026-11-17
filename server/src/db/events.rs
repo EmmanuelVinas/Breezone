@@ -78,6 +78,41 @@ pub async fn user_access(db: &Db, user_id: i64) -> sqlx::Result<Vec<Grant>> {
         .collect())
 }
 
+/// What a user may see and drive among the devices of the modules.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DeviceGrant {
+    /// "all" | "room" | "type" | "device"
+    pub scope: String,
+    /// The room id, the type ("light", "shutter"…) or the device id; empty for "all".
+    #[serde(default, rename = "ref")]
+    pub reference: String,
+    /// "read" | "control"
+    pub permission: String,
+}
+
+pub async fn user_device_access(db: &Db, user_id: i64) -> sqlx::Result<Vec<DeviceGrant>> {
+    let rows: Vec<(String, String, String)> =
+        sqlx::query_as("SELECT scope, ref, permission FROM user_device_access WHERE user_id = ? ORDER BY scope, ref").bind(user_id).fetch_all(db).await?;
+    Ok(rows.into_iter().map(|(scope, reference, permission)| DeviceGrant { scope, reference, permission }).collect())
+}
+
+/// Replaces what a user may see and drive among the devices of the modules.
+pub async fn set_user_device_access(db: &Db, user_id: i64, grants: &[DeviceGrant]) -> sqlx::Result<()> {
+    let mut tx = db.begin().await?;
+    sqlx::query("DELETE FROM user_device_access WHERE user_id = ?").bind(user_id).execute(&mut *tx).await?;
+    for g in grants {
+        sqlx::query("INSERT OR REPLACE INTO user_device_access (user_id, scope, ref, permission) VALUES (?, ?, ?, ?)")
+            .bind(user_id)
+            .bind(&g.scope)
+            .bind(&g.reference)
+            .bind(&g.permission)
+            .execute(&mut *tx)
+            .await?;
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
 /// Replaces the installations a user can see.
 pub async fn set_user_access(db: &Db, user_id: i64, access: &[Grant]) -> sqlx::Result<()> {
     let mut tx = db.begin().await?;

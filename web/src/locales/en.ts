@@ -8,8 +8,6 @@ const en: Record<string, string> = {
     "“{name}”: {failed} action(s) failed",
   "« {name} » activée chez Airzone": "“{name}” enabled on Airzone",
   "« {name} » désactivée chez Airzone": "“{name}” disabled on Airzone",
-  "« {name} » doit encore accepter votre demande : sur ce serveur-là, Réglages › Serveurs › Accepter. Ses installations apparaîtront ensuite ici.":
-    "“{name}” still has to accept your request: on that server, Settings › Servers › Accept. Its installations will then show here.",
   "« {name} » est pilotée par ce serveur ({local})":
     "“{name}” is driven by this server ({local})",
   "« {name} » est reliée": "“{name}” is linked",
@@ -62,8 +60,6 @@ const en: Record<string, string> = {
   "à {time}": "at {time}",
   "À faire quand l'autre serveur a un certificat valide. S'il n'en a pas, la connexion sera de nouveau refusée.":
     "To do once the other server has a valid certificate. If it has none, the connection will be refused again.",
-  "À gauche, votre compte Airzone ; à droite, comment ce serveur joint chaque installation : sur son propre réseau, ou par le serveur Breezone d'un autre site.":
-    "On the left, your Airzone account; on the right, how this server reaches each installation: on its own network, or through the Breezone server of another site.",
   "à l'instant": "just now",
   "À quelle installation de votre compte Airzone correspond-elle ?":
     "Which installation of your Airzone account is it?",
@@ -139,7 +135,6 @@ const en: Record<string, string> = {
     "No scene. Example: “Leaving” — switch everything off except the bedroom, which goes off after 1 h.",
   Auto: "Auto",
   "Automatique ({name})": "Automatic ({name})",
-  "Autre serveur Breezone": "Another Breezone server",
   Baisser: "Lower",
   "Bienvenue 👋": "Welcome 👋",
   "Breezone pilote vos installations Airzone en local, sans abonnement ni cloud.":
@@ -154,8 +149,6 @@ const en: Record<string, string> = {
   "Ce qui se déclenche tout seul : à heure fixe avec les programmations Airzone, ou quand quelque chose se produit avec les automatismes de Breezone.":
     "What runs by itself: at a fixed time with the Airzone schedules, or when something happens with Breezone's automations.",
   "Ce serveur": "This server",
-  "Ce serveur le pilote directement (adresse IP).":
-    "This server drives it directly (IP address).",
   "Ce serveur n'est partagé avec aucun autre.":
     "This server is not shared with any other.",
   "Ce serveur propose un partage réciproque. Il verra les installations cochées dès qu'il aura accepté votre demande ; vous pourrez révoquer ce partage dans Réglages › Serveurs.":
@@ -264,8 +257,6 @@ const en: Record<string, string> = {
   "du {date}": "from {date}",
   "E-mail Airzone": "Airzone e-mail",
   Échec: "Failed",
-  "Elle est sur un autre site, avec son propre serveur":
-    "It is on another site, with its own server",
   "Émis par": "Issued by",
   "Empreinte SHA-256": "SHA-256 fingerprint",
   "En attente": "Waiting",
@@ -546,8 +537,6 @@ const en: Record<string, string> = {
   Sur: "On",
   "Sur l'autre serveur Breezone : Réglages › Serveurs › Ajouter, puis collez ce jeton (ou scannez le QR code avec l'application). Il est utilisable une seule fois, pendant 15 minutes, et ne contient aucune clé d'accès. Vous devrez ensuite accepter la demande ici, dans « À qui ce serveur est partagé ».":
     "On the other Breezone server: Settings › Servers › Add, then paste this token (or scan the QR code with the app). It can be used only once, for 15 minutes, and holds no access key. You will then have to accept the request here, in “Who this server is shared with”.",
-  "Sur le serveur Breezone de ce site : Réglages › Serveurs › Nouveau partage, puis ajoutez son jeton ici. Ses installations sont reliées automatiquement (même WebServer).":
-    "On the Breezone server of that site: Settings › Servers › New share, then add its token here. Its installations are linked automatically (same WebServer).",
   "Sur le serveur de l'autre site : Réglages › Serveurs › Nouveau partage. Collez ici le jeton obtenu (valable 15 minutes, une seule fois), puis acceptez la demande sur ce serveur-là. Ses installations apparaîtront alors ici. Les deux serveurs se reconnaissent ensuite par une signature : aucune clé ne circule.":
     "On the server of the other site: Settings › Servers › New share. Paste the token here (valid 15 minutes, once), then accept the request on that server. Its installations will then show here. Both servers then recognise each other by a signature: no key travels.",
   "Synchro quotidienne": "Daily sync",
@@ -582,8 +571,6 @@ const en: Record<string, string> = {
     "Another Breezone server will be able to show (and drive, if you allow it) the chosen installations. Only installations joined directly by this server can be shared.",
   "Une action plus tard sur une zone, un groupe ou toute une installation.":
     "An action later on a zone, a group or a whole installation.",
-  "Une installation d'un autre site, pilotée par le serveur Breezone de ce site (jeton d'invitation).":
-    "An installation of another site, driven by the Breezone server of that site (invitation token).",
   Utilisateur: "User",
   "Utilisateur créé": "User created",
   "Utilisateur modifié": "User changed",
@@ -597,10 +584,7 @@ const en: Record<string, string> = {
   "Vérification HTTPS habituelle rétablie": "Usual HTTPS check restored",
   "via {name}": "via {name}",
   "Via {name}": "Via {name}",
-  "Via le serveur « {name} »": "Through server “{name}”",
   "Via un autre serveur": "Through another server",
-  "via un autre serveur": "through another server",
-  "Via un autre serveur Breezone": "Through another Breezone server",
   "via un autre serveur Breezone": "through another Breezone server",
   "Vide = l'adresse publique de ce serveur. HTTP n'est accepté que vers une adresse locale.":
     "Empty = the public address of this server. HTTP is only accepted towards a local address.",
@@ -614,7 +598,6 @@ const en: Record<string, string> = {
     "You will stay signed in on this device.",
   "vue {when}": "seen {when}",
   "WebServer joignable": "WebServer reachable",
-  "WebServer sur ce réseau": "WebServer on this network",
   "WebServers sur le réseau de ce serveur":
     "WebServers on this server's network",
   Zone: "Zone",
@@ -1740,6 +1723,26 @@ const en: Record<string, string> = {
   "Contrat de {name}": "Contract of {name}",
   "Chaque installation a le sien : changez d'installation pour régler celui d'un autre lieu. Prix TTC, comme sur la facture.":
     "Each installation has its own: switch installation to set that of another place. Prices including taxes, as on the bill.",
+  "Aucun appareil de module sur ce serveur.":
+    "No device of a module on this server.",
+  "Tous les appareils des modules": "All the devices of the modules",
+  "Appareil par appareil": "Device by device",
+  "Le plus large l'emporte : « Lumières en pilotage » et « Salon en lecture seule » laissent piloter les lumières du salon. Les noms, les pièces et les réglages des appareils restent aux administrateurs. L'énergie de la maison est visible avec les types Énergie ou Solaire.":
+    "The widest wins: “Lights with control” and “Living room read-only” let one drive the living room lights. Names, rooms and settings of the devices stay with the administrators. The energy of the home is visible with the Energy or Solar types.",
+  "aucun appareil de module": "no device of a module",
+  "tous les appareils en pilotage": "all the devices with control",
+  "tous les appareils en lecture": "all the devices read-only",
+  "{n} type": "{n} type",
+  "{n} types": "{n} types",
+  "Les administrateurs voient et pilotent tout, et configurent le serveur. Un utilisateur ne voit que ce que vous lui donnez : des installations, et des appareils des modules (tous, par type, par pièce ou un à un), en lecture seule ou avec le pilotage.":
+    "Administrators see and drive everything, and set up the server. A user only sees what you give them: installations, and devices of the modules (all, by type, by room or one by one), read-only or with control.",
+  "Appareils des modules": "Devices of the modules",
+  Afficher: "Show",
+  "Partagée par « {name} »": "Shared by “{name}”",
+  "{name} est pilotée par le serveur de son site.":
+    "{name} is driven by its own site's server.",
+  "À gauche, votre compte Airzone ; à droite, le WebServer par lequel ce serveur joint chaque installation, sur son réseau.":
+    "On the left, your Airzone account; on the right, the WebServer through which this server reaches each installation on its network.",
 }
 
 export default en
