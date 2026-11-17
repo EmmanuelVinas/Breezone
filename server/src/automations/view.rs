@@ -285,6 +285,20 @@ impl Context {
                 }
                 Ok(())
             }
+            Step::Group { device_type, room_id, trait_name, action, params } => {
+                if !devices::TYPES.contains(&device_type.as_str()) {
+                    return Err(ApiError::bad_request("unknown device type"));
+                }
+                if room_id.is_some_and(|r| !self.rooms.contains_key(&r)) {
+                    return Err(ApiError::bad_request(crate::text!("pièce introuvable", "unknown room", "estancia desconocida")));
+                }
+                let members = self.members(device_type, *room_id, trait_name);
+                if members.is_empty() {
+                    return Err(ApiError::bad_request(crate::text!("aucun appareil dans ce groupe", "no device in this group", "ningún dispositivo en este grupo")));
+                }
+                let input = ActionInput { trait_name: trait_name.clone(), action: action.clone(), params: params.clone() };
+                members.into_iter().try_for_each(|d| devices::check_action(d, &input))
+            }
             Step::Wait { seconds } => Self::check_wait(*seconds, 1),
             Step::WaitUntil { condition, for_seconds, timeout_seconds, .. } => {
                 Self::check_wait(*timeout_seconds, 1)?;
@@ -314,7 +328,7 @@ impl Context {
         }
         for (i, s) in steps.iter().enumerate() {
             self.check_step(s)?;
-            if *s == Step::Restore && !before.iter().chain(&steps[..i]).any(|p| matches!(p, Step::Device { .. })) {
+            if *s == Step::Restore && !before.iter().chain(&steps[..i]).any(|p| matches!(p, Step::Device { .. } | Step::Group { .. })) {
                 return Err(ApiError::bad_request(crate::text!(
                     "« remettre comme avant » vient après une action sur un appareil",
                     "“put back as before” comes after an action on a device",

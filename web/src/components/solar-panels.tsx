@@ -9,12 +9,14 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
-import { SolarPanel } from "lucide-react"
+import { ChevronLeft, ChevronRight, SolarPanel } from "lucide-react"
 import type { DeviceView } from "@/lib/api"
 import { api } from "@/lib/api"
 import { kwh, number, stateNumber, time, watts } from "@/lib/format"
 import { t, tn } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
+import { dayLabel, shiftDay } from "@/components/energy/sections"
+import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
@@ -171,16 +173,15 @@ function dayBounds(day: string) {
 
 const BUCKET = 900
 
-/** The power of each panel along a local day, a point every 15 minutes. */
+/** The power of each panel along a local day, a point every 15 minutes, from today backwards. */
 function PanelsCurve({
   panels,
-  date,
   today,
 }: {
   panels: DeviceView[]
-  date: string
   today: string
 }) {
+  const [date, setDate] = useState(today)
   const [from, until] = dayBounds(date)
   const [hidden, setHidden] = useState<ReadonlySet<number>>(new Set())
   const histories = useQueries({
@@ -227,11 +228,34 @@ function PanelsCurve({
     })
   return (
     <Card className="rounded-3xl">
-      <CardHeader>
-        <CardTitle>{t("Production par panneau")}</CardTitle>
-        <CardDescription>
-          {t("Puissance de chaque panneau toutes les 15 minutes")}
-        </CardDescription>
+      <CardHeader className="flex flex-row items-start justify-between gap-4">
+        <div>
+          <CardTitle>{t("Production par panneau")}</CardTitle>
+          <CardDescription className="first-letter:uppercase">
+            {date === today
+              ? t("Puissance de chaque panneau toutes les 15 minutes")
+              : dayLabel(date, "long")}
+          </CardDescription>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label={t("Jour précédent")}
+            onClick={() => setDate(shiftDay(date, -1))}
+          >
+            <ChevronLeft />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label={t("Jour suivant")}
+            disabled={date >= today}
+            onClick={() => setDate(shiftDay(date, 1))}
+          >
+            <ChevronRight />
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex flex-wrap gap-2">
@@ -360,12 +384,10 @@ function PanelsCurve({
 /** The solar part of the energy page: each inverter with its panels, and their curves for a day. */
 export function SolarPanels({
   devices,
-  date,
   today,
   withCurve,
 }: {
   devices: DeviceView[]
-  date: string
   today: string
   withCurve: boolean
 }) {
@@ -382,7 +404,7 @@ export function SolarPanels({
         />
       ))}
       {withCurve && panels.length > 0 && (
-        <PanelsCurve panels={panels} date={date} today={today} />
+        <PanelsCurve panels={panels} today={today} />
       )}
     </div>
   )

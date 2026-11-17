@@ -989,6 +989,16 @@ export type AutomationStep =
       action: string
       params: Record<string, unknown>
     }
+  /** The same action on every device of a module of a type, in a room or anywhere (found at
+   * each run: a device added later follows). */
+  | {
+      kind: "group"
+      device_type: string
+      room_id?: number | null
+      trait: string
+      action: string
+      params: Record<string, unknown>
+    }
   | { kind: "scene"; routine_id: number }
   | { kind: "wait"; seconds: number }
   | {

@@ -366,6 +366,19 @@ pub enum Step {
         #[serde(default)]
         params: Map<String, Value>,
     },
+    /// The same action on every device of a module of a type, in a room or anywhere: found when the
+    /// rule runs, so that a device added later follows.
+    Group {
+        /// See `devices::TYPES`.
+        device_type: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        room_id: Option<i64>,
+        #[serde(rename = "trait")]
+        trait_name: String,
+        action: String,
+        #[serde(default)]
+        params: Map<String, Value>,
+    },
     Scene {
         routine_id: i64,
     },
@@ -512,6 +525,16 @@ impl Automation {
         self.driven_devices().into_iter().chain(self.read_devices()).find_map(|id| ctx.device(id)?.installation_id)
     }
 
+    /// The groups the rule drives: (type, room).
+    pub fn driven_groups(&self) -> Vec<(&str, Option<i64>)> {
+        self.steps()
+            .filter_map(|s| match s {
+                Step::Group { device_type, room_id, .. } => Some((device_type.as_str(), *room_id)),
+                _ => None,
+            })
+            .collect()
+    }
+
     pub fn scenes(&self) -> Vec<i64> {
         self.steps()
             .filter_map(|s| match s {
@@ -567,6 +590,8 @@ pub struct Context {
     pub coords: Option<(f64, f64)>,
     /// Scenes, by id.
     pub scenes: HashMap<i64, String>,
+    /// Rooms, by id.
+    pub rooms: HashMap<i64, String>,
     /// Where each located installation is, and its weather; `outdoor`, `weather` and `coords` are
     /// those of the place a rule is looked at for (see [`Context::at`]).
     pub places: HashMap<i64, ((f64, f64), Option<Report>)>,
@@ -596,6 +621,7 @@ impl Context {
             },
             coords: None,
             scenes: db::list_routines(&state.db).await?.into_iter().map(|r| (r.id, r.name)).collect(),
+            rooms: db::list_rooms(&state.db).await?.into_iter().map(|r| (r.id, r.name)).collect(),
             places: {
                 let mut reports = state.weather.reports().await;
                 state.weather.places().await.into_iter().map(|p| (p.installation_id, ((p.lat, p.lon), reports.remove(&p.installation_id)))).collect()
@@ -646,6 +672,34 @@ impl Context {
 
     pub fn device(&self, id: i64) -> Option<&DeviceView> {
         self.devices.iter().find(|d| d.id == id)
+    }
+
+    /// The devices of the modules of a group that have this trait.
+    pub fn members(&self, device_type: &str, room_id: Option<i64>, trait_name: &str) -> Vec<&DeviceView> {
+        self.devices
+            .iter()
+            .filter(|d| {
+                d.installation_id.is_none()
+                    && devices::type_of(&d.kind, &d.traits) == device_type
+                    && room_id.is_none_or(|r| d.room_id == Some(r))
+                    && d.traits.iter().any(|t| t.split_once('@').is_some_and(|(n, _)| n == trait_name))
+            })
+            .collect()
+    }
+
+    /// The steps with each group replaced by the action on each of its devices.
+    pub fn expand(&self, steps: &[Step]) -> Vec<Step> {
+        steps
+            .iter()
+            .flat_map(|s| match s {
+                Step::Group { device_type, room_id, trait_name, action, params } => self
+                    .members(device_type, *room_id, trait_name)
+                    .into_iter()
+                    .map(|d| Step::Device { device_id: d.id, trait_name: trait_name.clone(), action: action.clone(), params: params.clone() })
+                    .collect(),
+                other => vec![other.clone()],
+            })
+            .collect()
     }
 
     /// A field of the state of a device, as the catalog of traits describes it.
@@ -910,6 +964,7 @@ mod tests {
             // Toulouse.
             coords: Some((43.6045, 1.444)),
             scenes: HashMap::from([(7, "Je pars".to_string())]),
+            rooms: HashMap::new(),
             places: HashMap::new(),
             home: None,
             price: Some(0.27),

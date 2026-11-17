@@ -22,6 +22,37 @@ pub(super) fn amount(v: f64, unit: Option<&str>) -> String {
     }
 }
 
+/// A type of device, as the clients name it (`devices::TYPES`).
+pub(super) fn type_label(kind: &str) -> Text {
+    match kind {
+        "climate" => crate::text!("Climatisation", "Air conditioning", "Climatización"),
+        "charger" => crate::text!("Recharge", "Charging", "Recarga"),
+        "light" => crate::text!("Lumières", "Lights", "Luces"),
+        "shutter" => crate::text!("Volets", "Shutters", "Persianas"),
+        "window" => crate::text!("Fenêtres", "Windows", "Ventanas"),
+        "door" => crate::text!("Portes", "Doors", "Puertas"),
+        "ventilation" => crate::text!("Ventilation", "Ventilation", "Ventilación"),
+        "room-air" => crate::text!("Ventilation des pièces", "Room ventilation", "Ventilación de las estancias"),
+        "switch" => crate::text!("Prises et relais", "Plugs and relays", "Enchufes y relés"),
+        "solar" => crate::text!("Solaire", "Solar", "Solar"),
+        "energy" => crate::text!("Énergie", "Energy", "Energía"),
+        "remote" => crate::text!("Télécommandes", "Remotes", "Mandos"),
+        _ => crate::text!("Autres", "Others", "Otros"),
+    }
+}
+
+/// A shutter sent to a position: "Fermer" at 0 %, "Ouvrir" at 100 %, "Ouvrir à 40 %" between.
+pub(super) fn cover_position(position: f64) -> Text {
+    if position <= 0.0 {
+        crate::text!("Fermer", "Close", "Cerrar")
+    } else if position >= 100.0 {
+        crate::text!("Ouvrir", "Open", "Abrir")
+    } else {
+        let at = amount(position, Some("%"));
+        crate::text!("Ouvrir à {0}", "Open to {0}", "Abrir al {0}", at)
+    }
+}
+
 pub(super) fn yes_no(b: bool) -> Text {
     if b {
         crate::text!("oui", "yes", "sí")
@@ -296,6 +327,17 @@ impl Context {
                 None => crate::text!("scène supprimée", "deleted scene", "escena eliminada"),
             },
             Step::Device { device_id, trait_name, action, params } => self.describe_device_action(*device_id, trait_name, action, params),
+            Step::Group { device_type, room_id, trait_name, action, params } => {
+                let members = self.members(device_type, *room_id, trait_name);
+                let what = self.describe_action(members.first().map_or(0, |d| d.id), trait_name, action, params);
+                let kind = type_label(device_type);
+                let group =
+                    match room_id.map(|r| self.rooms.get(&r).map_or_else(|| crate::text!("pièce supprimée", "deleted room", "estancia eliminada"), |n| Text::plain(n.clone()))) {
+                        Some(room) => crate::text!("{0} · {1}", "{0} · {1}", "{0} · {1}", kind.arg(), room.arg()),
+                        None => crate::text!("{0} · toute la maison", "{0} · whole home", "{0} · toda la casa", kind.arg()),
+                    };
+                crate::text!("{0} ({1}) : {2}", "{0} ({1}): {2}", "{0} ({1}): {2}", group.arg(), members.len(), what.arg())
+            }
             Step::Wait { seconds } => crate::text!("attendre {0}", "wait {0}", "esperar {0}", duration(*seconds)),
             Step::WaitUntil { condition, for_seconds, timeout_seconds, on_timeout } => {
                 let what = self.describe_condition(condition);
@@ -327,6 +369,16 @@ impl Context {
         if (trait_name, action) == ("climate.zone", "set") {
             if let Ok(cmd) = serde_json::from_value::<ZoneCommand>(Value::Object(params.clone())) {
                 return cmd.describe();
+            }
+        }
+        if (trait_name, action) == ("cover.position", "set") {
+            if let Some(text) = params.get("position").and_then(Value::as_f64).map(cover_position) {
+                return text;
+            }
+        }
+        if (trait_name, action) == ("switch.relay", "set") {
+            if let (Some(on), 1) = (params.get("on").and_then(Value::as_bool), params.len()) {
+                return if on { crate::text!("Allumer", "Switch on", "Encender") } else { crate::text!("Éteindre", "Switch off", "Apagar") };
             }
         }
         let described = self.device(device_id).and_then(|d| {
@@ -407,5 +459,17 @@ impl Context {
             .collect();
         let list = join(&parts, ", ");
         crate::text!("conditions non remplies : {0}", "conditions not met: {0}", "condiciones no cumplidas: {0}", list.arg())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::cover_position;
+
+    #[test]
+    fn a_shutter_closes_opens_or_opens_to_a_position() {
+        assert_eq!(cover_position(0.0).fr, "Fermer");
+        assert_eq!(cover_position(100.0).en, "Open");
+        assert_eq!(cover_position(40.0).fr, "Ouvrir à 40 %");
     }
 }

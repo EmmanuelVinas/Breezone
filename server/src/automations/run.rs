@@ -268,6 +268,33 @@ pub(super) async fn apply(state: &AppState, ctx: &Context, device_id: i64, input
     devices::apply(state, view, input, actor).await
 }
 
+/// Drives a device, remembering what it was before so that "put back" can undo it.
+#[allow(clippy::too_many_arguments)]
+async fn drive(state: &AppState, ctx: &Context, p: &mut Progress, device_id: i64, trait_name: &str, action: &str, params: &Map<String, Value>, who: &str) -> ApiResult<()> {
+    let keys: Vec<String> = params.keys().cloned().collect();
+    match p.touched.iter_mut().find(|t| t.device_id == device_id && t.trait_name == trait_name) {
+        Some(t) => {
+            t.action = action.to_string();
+            t.set.extend(params.clone());
+            for k in keys {
+                if !t.keys.contains(&k) {
+                    t.keys.push(k);
+                }
+            }
+        }
+        None => p.touched.push(Touched {
+            device_id,
+            trait_name: trait_name.to_string(),
+            action: action.to_string(),
+            keys,
+            before: ctx.device(device_id).and_then(|d| d.state.as_object().cloned()).unwrap_or_default(),
+            set: params.clone(),
+        }),
+    }
+    let input = ActionInput { trait_name: trait_name.to_string(), action: action.to_string(), params: params.clone() };
+    apply(state, ctx, device_id, &input, who).await
+}
+
 pub(super) fn done(what: Text, r: ApiResult<()>) -> StepDone {
     StepDone { what, ok: r.is_ok(), error: r.err().map(|e| e.message) }
 }
@@ -310,28 +337,24 @@ pub(super) async fn execute(state: &AppState, row: &AutomationRow, steps: &[Step
         let what = ctx.describe_step(step);
         match step {
             Step::Device { device_id, trait_name, action, params } => {
-                let keys: Vec<String> = params.keys().cloned().collect();
-                match p.touched.iter_mut().find(|t| t.device_id == *device_id && t.trait_name == *trait_name) {
-                    Some(t) => {
-                        t.action = action.clone();
-                        t.set.extend(params.clone());
-                        for k in keys {
-                            if !t.keys.contains(&k) {
-                                t.keys.push(k);
-                            }
-                        }
+                let r = drive(state, &ctx, p, *device_id, trait_name, action, params, &who).await;
+                p.out.push(done(what, r));
+            }
+            Step::Group { device_type, room_id, trait_name, action, params } => {
+                let members: Vec<i64> = ctx.members(device_type, *room_id, trait_name).iter().map(|d| d.id).collect();
+                let mut r = if members.is_empty() {
+                    Err(ApiError::not_found(crate::text!("aucun appareil dans ce groupe", "no device in this group", "ningún dispositivo en este grupo")))
+                } else {
+                    Ok(())
+                };
+                // Every device is driven, even after one fails; the first failure is told.
+                for id in members {
+                    let one = drive(state, &ctx, p, id, trait_name, action, params, &who).await;
+                    if r.is_ok() {
+                        r = one;
                     }
-                    None => p.touched.push(Touched {
-                        device_id: *device_id,
-                        trait_name: trait_name.clone(),
-                        action: action.clone(),
-                        keys,
-                        before: ctx.device(*device_id).and_then(|d| d.state.as_object().cloned()).unwrap_or_default(),
-                        set: params.clone(),
-                    }),
                 }
-                let input = ActionInput { trait_name: trait_name.clone(), action: action.clone(), params: params.clone() };
-                p.out.push(done(what, apply(state, &ctx, *device_id, &input, &who).await));
+                p.out.push(done(what, r));
             }
             Step::Scene { routine_id } => {
                 let r = async {

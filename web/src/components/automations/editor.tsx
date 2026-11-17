@@ -132,7 +132,9 @@ export function AutomationEditor({
   })
 
   const lasting = draft.triggers.some(lasts)
-  const drivesDevice = draft.actions.some((s) => s.kind === "device")
+  const drivesDevice = draft.actions.some(
+    (s) => s.kind === "device" || s.kind === "group"
+  )
   const all = [
     ...draft.actions,
     ...(withElse ? draft.else : []),

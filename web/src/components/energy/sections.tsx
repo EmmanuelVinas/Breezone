@@ -131,7 +131,7 @@ export function shiftDay(day: string, by: number) {
   return isoDay(d)
 }
 
-function dayLabel(day: string, style: "long" | "short") {
+export function dayLabel(day: string, style: "long" | "short") {
   return new Date(`${day}T12:00:00`).toLocaleDateString(
     locale(),
     style === "long"

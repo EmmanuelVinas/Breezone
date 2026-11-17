@@ -517,6 +517,11 @@ comment les conditions sont réunies : `all` (et, par défaut) ou `any` (ou) ; u
 peut pas lire (appareil injoignable) ne décide que si les autres ne le font pas.
 
 `Step` : `{kind:"device", device_id, trait, action, params}` (comme `POST /api/devices/{id}/actions`) |
+`{kind:"group", device_type, room_id?, trait, action, params}` (la même action sur chaque appareil
+des modules de ce type — voir `devices::TYPES` — dans la pièce, ou partout sans `room_id` ; les
+appareils sont cherchés à chaque exécution, un appareil ajouté plus tard suit ; refusé sans appareil ;
+pour un utilisateur, il faut le pilotage de tout le type ou de toute la pièce, pas appareil par
+appareil ; un appareil en échec n'empêche pas les autres) |
 `{kind:"scene", routine_id}` | `{kind:"wait", seconds}` (1 … 86400) | `{kind:"wait_until",
 condition, for_seconds?, timeout_seconds, on_timeout?: "continue"|"stop"}` (attend que la condition
 soit vraie, `for_seconds` d'affilée, au plus `timeout_seconds`) | `{kind:"restore"}` (remet les

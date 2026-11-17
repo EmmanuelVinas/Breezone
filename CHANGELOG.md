@@ -6,10 +6,24 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.32] - 2026-11-17
+
+### Added
+
+- Automations: an action on a group — all the devices of a type in a room, or in the whole home
+  (“Shutters · Living room”, “Shutters · whole home”) — offered at the top of each type in the list
+  of devices. The devices are found at each run, so one added later follows; driving a group needs
+  control of the whole type or room.
+
 ### Changed
 
 - Modules › Airzone no longer shows the installations of another Breezone server, nor a way to add
   one: servers are linked, and what they share chosen, in Settings › Servers only.
+- Solar: the “Production per panel” chart goes back day by day, like the energy curve.
+- Automations and scenes: a shutter sent to 0 % reads “Close”, to 100 % “Open”, and “Open to 40 %”
+  in between, instead of “Open to (Opening 0 %)”; a relay reads “Switch on” or “Switch off”.
+- In the automations, a device of a module can be driven by any user who controls it (fine-grained
+  rights), not only by an administrator.
 
 ## [0.11.0-beta.31] - 2026-11-17
 

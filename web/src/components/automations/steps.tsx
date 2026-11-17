@@ -7,7 +7,7 @@ import type {
 } from "@/lib/api"
 import type { DeviceAction } from "@/lib/api"
 import { t } from "@/lib/i18n"
-import { SCENE_TYPE } from "@/lib/device-icons"
+import { deviceType, SCENE_TYPE } from "@/lib/device-icons"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -66,6 +66,103 @@ export function deviceStep(home: Home, d: DeviceView): AutomationStep | null {
   return {
     kind: "device",
     device_id: d.id,
+    trait: first.trait,
+    action: first.action.name,
+    params: defaultParams(first.trait, first.action.params),
+  }
+}
+
+type GroupStep = Extract<AutomationStep, { kind: "group" }>
+
+/** The devices of a group: those of the modules of its type, in its room or anywhere. */
+export function groupMembers(
+  home: Home,
+  g: Pick<GroupStep, "device_type" | "room_id">
+) {
+  return home.devices.filter(
+    (d) =>
+      d.installation_id === null &&
+      deviceType(d).id === g.device_type &&
+      (g.room_id == null || d.room_id === g.room_id)
+  )
+}
+
+/** The actions every device of a group has. */
+function groupActions(home: Home, members: DeviceView[]) {
+  const [first, ...rest] = members
+  if (!first) return []
+  return actionsOf(home, first).filter((a) =>
+    rest.every((d) => actionsOf(home, d).some((x) => x.key === a.key))
+  )
+}
+
+const groupKey = (type: string, room: number | null | undefined) =>
+  `group:${type}:${room ?? ""}`
+
+/**
+ * The groups worth offering: devices of the modules of the same type, two at least, in the same
+ * room, and all those of a type in the home.
+ */
+function groupOptions(home: Home, devices: DeviceView[]) {
+  const modules = devices.filter(
+    (d) => d.installation_id === null && home.drivable.has(d.id)
+  )
+  const out: {
+    key: string
+    type: string
+    room: number | null
+    label: string
+    n: number
+  }[] = []
+  const types = [...new Set(modules.map((d) => deviceType(d).id))]
+  for (const type of types) {
+    const all = groupMembers(home, { device_type: type, room_id: null })
+    if (all.length < 2 || !all.every((d) => home.drivable.has(d.id))) continue
+    if (groupActions(home, all).length === 0) continue
+    const label = deviceType(all[0]).label
+    out.push({
+      key: groupKey(type, null),
+      type,
+      room: null,
+      label: t("{type} · toute la maison ({n})", {
+        type: label,
+        n: all.length,
+      }),
+      n: all.length,
+    })
+    for (const room of home.rooms ?? []) {
+      const here = all.filter((d) => d.room_id === room.id)
+      if (here.length < 2 || here.length === all.length) continue
+      out.push({
+        key: groupKey(type, room.id),
+        type,
+        room: room.id,
+        label: t("{type} · {room} ({n})", {
+          type: label,
+          room: room.name,
+          n: here.length,
+        }),
+        n: here.length,
+      })
+    }
+  }
+  return out
+}
+
+function groupStep(
+  home: Home,
+  type: string,
+  room: number | null
+): AutomationStep | null {
+  const first = groupActions(
+    home,
+    groupMembers(home, { device_type: type, room_id: room })
+  )[0]
+  if (!first) return null
+  return {
+    kind: "group",
+    device_type: type,
+    room_id: room,
     trait: first.trait,
     action: first.action.name,
     params: defaultParams(first.trait, first.action.params),
@@ -131,43 +228,66 @@ export function TargetEditor({
   onChange,
 }: {
   home: Home
-  step: Extract<AutomationStep, { kind: "device" | "scene" }>
+  step: Extract<AutomationStep, { kind: "device" | "group" | "scene" }>
   onChange: (s: AutomationStep) => void
 }) {
   const devices = home.devices.filter(
     (d) => home.drivable.has(d.id) && actionsOf(home, d).length > 0
   )
-  const targets: Option[] = [
-    ...byType(devices).map(({ d, type }): Option => [
-      `device:${d.id}`,
-      d.name,
-      type,
-    ]),
-    ...home.scenes.map((s): Option => [`scene:${s.id}`, s.name, SCENE_TYPE]),
-  ]
+  // The groups of a type come first in its section, then its devices one by one.
+  const groups = groupOptions(home, devices)
+  const targets: Option[] = []
+  let lastType: string | undefined
+  for (const { d, type } of byType(devices)) {
+    if (type.id !== lastType)
+      for (const g of groups.filter((g) => g.type === type.id))
+        targets.push([g.key, g.label, type])
+    lastType = type.id
+    targets.push([`device:${d.id}`, d.name, type])
+  }
+  targets.push(
+    ...home.scenes.map((s): Option => [`scene:${s.id}`, s.name, SCENE_TYPE])
+  )
   const key =
     step.kind === "scene"
       ? `scene:${step.routine_id}`
-      : `device:${step.device_id}`
+      : step.kind === "group"
+        ? groupKey(step.device_type, step.room_id)
+        : `device:${step.device_id}`
   if (!targets.some(([k]) => k === key))
-    targets.unshift([key, t("Appareil indisponible")])
+    targets.unshift([
+      key,
+      step.kind === "group"
+        ? t("Groupe sans appareil")
+        : t("Appareil indisponible"),
+    ])
   const device =
     step.kind === "device"
       ? home.devices.find((d) => d.id === step.device_id)
       : undefined
-  const actions = device ? actionsOf(home, device) : []
+  const actions =
+    step.kind === "group"
+      ? groupActions(home, groupMembers(home, step))
+      : device
+        ? actionsOf(home, device)
+        : []
   const chosen =
-    step.kind === "device"
-      ? actions.find((a) => a.key === `${step.trait}.${step.action}`)
-      : undefined
+    step.kind === "scene"
+      ? undefined
+      : actions.find((a) => a.key === `${step.trait}.${step.action}`)
   return (
     <>
       <Pick
         value={key}
         onChange={(k) => {
-          const [kind, id] = k.split(":")
+          const [kind, id, room] = k.split(":")
           if (kind === "scene")
             return onChange({ kind: "scene", routine_id: Number(id) })
+          if (kind === "group") {
+            const next = groupStep(home, id, room ? Number(room) : null)
+            if (next) onChange(next)
+            return
+          }
           const d = home.devices.find((x) => x.id === Number(id))
           const next = d && deviceStep(home, d)
           if (next) onChange(next)
@@ -175,7 +295,7 @@ export function TargetEditor({
         options={targets}
         className="w-full lg:w-64"
       />
-      {step.kind === "device" && actions.length > 1 && (
+      {step.kind !== "scene" && actions.length > 1 && (
         <Pick
           value={`${step.trait}.${step.action}`}
           onChange={(k) => {
@@ -191,7 +311,7 @@ export function TargetEditor({
           className="w-full lg:w-56"
         />
       )}
-      {step.kind === "device" &&
+      {step.kind !== "scene" &&
         chosen &&
         shownParams(chosen.trait, chosen.action.params).map((p) => (
           <ParamInput
@@ -252,6 +372,32 @@ export function describeDeviceAction(home: DeviceHome, a: DeviceAction) {
     (x) => x.key === `${a.trait}.${a.action}`
   )
   if (!found) return device.name
+  const on = a.params.on
+  if (
+    a.trait === "switch.relay" &&
+    a.action === "set" &&
+    typeof on === "boolean" &&
+    Object.keys(a.params).length === 1
+  )
+    return t("{zone} : {actions}", {
+      zone: device.name,
+      actions: on ? t("Allumer") : t("Éteindre"),
+    })
+  const position = a.params.position
+  if (
+    a.trait === "cover.position" &&
+    a.action === "set" &&
+    typeof position === "number"
+  )
+    return t("{zone} : {actions}", {
+      zone: device.name,
+      actions:
+        position <= 0
+          ? t("Fermer")
+          : position >= 100
+            ? t("Ouvrir")
+            : t("Ouvrir à {n} %", { n: position }),
+    })
   const given = shownParams(found.trait, found.action.params).flatMap((p) => {
     const v = a.params[p.name]
     if (v === undefined || v === null) return []
@@ -315,6 +461,7 @@ export function StepEditor({
 }) {
   switch (step.kind) {
     case "device":
+    case "group":
     case "scene":
       return <TargetEditor home={home} step={step} onChange={onChange} />
     case "wait":
@@ -412,7 +559,9 @@ export function StepList({
   const firstTarget = home.devices.find(
     (d) => home.drivable.has(d.id) && actionsOf(home, d).length > 0
   )
-  const drivesDevice = [...before, ...steps].some((s) => s.kind === "device")
+  const drivesDevice = [...before, ...steps].some(
+    (s) => s.kind === "device" || s.kind === "group"
+  )
   const kinds: Option[] = [
     ...(firstTarget ? [["device", t("Agir sur un appareil")] as Option] : []),
     ...(home.scenes.length ? [["scene", t("Lancer une scène")] as Option] : []),

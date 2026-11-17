@@ -8,6 +8,7 @@ import type {
   TraitField,
   TraitInfo,
   TraitLabel,
+  Room,
 } from "@/lib/api"
 import { MODE_LABEL } from "@/lib/format"
 import { lang, locale, t } from "@/lib/i18n"
@@ -112,6 +113,8 @@ export type Home = {
   drivable: Set<number>
   traits: TraitInfo[]
   scenes: Routine[]
+  /** The rooms, to name the groups of devices. */
+  rooms?: Room[]
   roles: { grid: boolean; solar: boolean; consumption: boolean }
   /** The home has a tariff of electricity, and one that follows the Tempo colours. */
   prices?: { tariff: boolean; tempo: boolean }

@@ -438,7 +438,7 @@ export function SolarPage() {
               color="var(--cool)"
             />
           </div>
-          <SolarPanels devices={all} date={day} today={day} withCurve />
+          <SolarPanels devices={all} today={day} withCurve />
           <div className="grid gap-4 lg:grid-cols-2">
             <TodayCurve />
             <DaysCard />

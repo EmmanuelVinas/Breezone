@@ -54,7 +54,7 @@ pub fn conflicts(rules: &[(AutomationRow, Automation)], ctx: &Context) -> HashMa
             if !a.triggers.iter().any(|x| b.triggers.iter().any(|y| coincide(x, y))) {
                 continue;
             }
-            let (sa, sb): (Vec<Step>, Vec<Step>) = (a.steps().cloned().collect(), b.steps().cloned().collect());
+            let (sa, sb) = (ctx.expand(&a.steps().cloned().collect::<Vec<_>>()), ctx.expand(&b.steps().cloned().collect::<Vec<_>>()));
             let Some((device, setting)) = clash(&sa, &sb) else { continue };
             let name = ctx.device_name(device);
             let setting = ctx.device(device).and_then(|d| {

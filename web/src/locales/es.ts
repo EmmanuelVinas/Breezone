@@ -1756,6 +1756,10 @@ const es: Record<string, string> = {
   Afficher: "Mostrar",
   "À gauche, votre compte Airzone ; à droite, le WebServer par lequel ce serveur joint chaque installation, sur son réseau.":
     "A la izquierda, su cuenta Airzone; a la derecha, el WebServer por el que este servidor llega a cada instalación, en su red.",
+  "Ouvrir à {n} %": "Abrir al {n} %",
+  "{type} · toute la maison ({n})": "{type} · toda la casa ({n})",
+  "{type} · {room} ({n})": "{type} · {room} ({n})",
+  "Groupe sans appareil": "Grupo sin dispositivos",
 }
 
 export default es

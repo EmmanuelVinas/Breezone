@@ -30,7 +30,15 @@ async fn sees(state: &AppState, access: &Access, rule: &Automation, ctx: &Contex
         Some(i) => access.can_view(i),
         None => access.can_view_module(&crate::devices::module_device(d)),
     });
-    Ok(seen && access.sees_scopes(&scene_scopes(state, rule).await?))
+    let groups = rule.driven_groups().into_iter().all(|g| access.can_view_module(&group_scope(g)));
+    Ok(seen && groups && access.sees_scopes(&scene_scopes(state, rule).await?))
+}
+
+/// A group as an access to it is judged: the devices of a type in a room (or anywhere), including
+/// those added later — given by a grant on all devices, the type or the room, not device by device.
+fn group_scope((kind, room_id): (&str, Option<i64>)) -> crate::access::ModuleDevice {
+    let kind = crate::devices::TYPES.iter().copied().find(|t| *t == kind).unwrap_or("other");
+    crate::access::ModuleDevice { id: 0, room_id, kind }
 }
 
 /// Driving what the rule drives: the zones of an installation need the right to drive it, a device
@@ -44,6 +52,15 @@ async fn check_control(state: &AppState, access: &Access, rule: &Automation, ctx
             },
             None if !access.is_admin() => return Err(ApiError::forbidden("administrators only")),
             None => {}
+        }
+    }
+    for g in rule.driven_groups() {
+        if !access.can_control_module(&group_scope(g)) {
+            return Err(ApiError::forbidden(crate::text!(
+                "piloter un groupe demande le pilotage de tout ce type d'appareil, ou de toute la pièce",
+                "driving a group needs control of this whole type of device, or of the whole room",
+                "controlar un grupo requiere el control de todo este tipo de dispositivo, o de toda la estancia"
+            )));
         }
     }
     access.control_scopes(&scene_scopes(state, rule).await?)

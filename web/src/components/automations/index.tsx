@@ -16,6 +16,7 @@ import { AutomationEditor, inputOf } from "./editor"
 import type { Home } from "./fields"
 import { AutomationCard, AutomationsBar, UnreadableAutomations } from "./list"
 import { RecipesDialog, blank } from "./recipes"
+import { groupMembers } from "./steps"
 
 export function AutomationsSection() {
   const automations = useQuery({
@@ -31,6 +32,7 @@ export function AutomationsSection() {
     staleTime: Infinity,
   })
   const routines = useQuery({ queryKey: ["routines"], queryFn: api.routines })
+  const rooms = useQuery({ queryKey: ["rooms"], queryFn: api.rooms })
   const live = useQuery({ queryKey: ["energy-live"], queryFn: api.energyLive })
   const price = usePrice()
   const { installations, ids } = useChosenInstallations()
@@ -54,7 +56,9 @@ export function AutomationsSection() {
   const drivable = new Set(
     shown
       .filter((d) =>
-        d.installation_id === null ? admin : editable.has(d.installation_id)
+        d.installation_id === null
+          ? d.can_control
+          : editable.has(d.installation_id)
       )
       .map((d) => d.id)
   )
@@ -62,6 +66,7 @@ export function AutomationsSection() {
     devices: shown,
     drivable,
     traits: traits.data ?? [],
+    rooms: rooms.data ?? [],
     scenes: (routines.data ?? []).filter((r) =>
       r.actions.every((x) =>
         isDeviceAction(x)
@@ -115,9 +120,11 @@ export function AutomationsSection() {
     steps(a).every((s) =>
       s.kind === "device"
         ? drivable.has(s.device_id)
-        : s.kind === "scene"
-          ? home.scenes.some((r) => r.id === s.routine_id)
-          : true
+        : s.kind === "group"
+          ? groupMembers(home, s).every((d) => drivable.has(d.id))
+          : s.kind === "scene"
+            ? home.scenes.some((r) => r.id === s.routine_id)
+            : true
     )
   const ready = devices.isSuccess && traits.isSuccess
   const canCreate = ready && (drivable.size > 0 || home.scenes.length > 0)

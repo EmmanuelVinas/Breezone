@@ -18,8 +18,7 @@ async fn serve(router: Router) -> u16 {
 }
 
 /// A Shelly Pro 3EM: an energy meter and a relay.
-async fn fake_shelly() -> u16 {
-    let relay = Arc::new(Mutex::new(false));
+async fn fake_shelly(relay: Arc<Mutex<bool>>) -> u16 {
     let router = Router::new()
         .route("/rpc/Shelly.GetDeviceInfo", get(|| async { Json(json!({"id": "shellypro3em-c3d4", "app": "Pro3EM", "ver": "1.4.4", "gen": 2})) }))
         .route(
@@ -86,7 +85,7 @@ async fn the_devices_of_the_modules_are_given_by_type_room_or_device() {
     let base = format!("http://127.0.0.1:{}", serve(breezone_server::app(state)).await);
     let http = reqwest::Client::new();
     let admin = Client { token: token(&http, &base, "/api/setup", "admin").await, base: base.clone(), http: http.clone() };
-    let port = fake_shelly().await;
+    let port = fake_shelly(Arc::new(Mutex::new(false))).await;
     let (s, v) = admin.call(Method::POST, "/api/sources", Some(json!({"driver": "shelly", "name": "Tableau", "config": {"host": format!("127.0.0.1:{port}")}}))).await;
     assert_eq!(s, StatusCode::CREATED, "{v}");
     let (_, devices) = admin.call(Method::GET, "/api/devices", None).await;
@@ -152,4 +151,60 @@ async fn the_devices_of_the_modules_are_given_by_type_room_or_device() {
 async fn user_id(admin: &Client, name: &str) -> i64 {
     let (_, v) = admin.call(Method::GET, "/api/users", None).await;
     v.as_array().unwrap().iter().find(|u| u["username"] == name).unwrap()["id"].as_i64().unwrap()
+}
+
+/// "Every relay of the home": one action for all the devices of a type, those added later too.
+#[tokio::test]
+async fn a_group_drives_every_device_of_a_type() {
+    let dir = std::env::temp_dir().join(format!("breezone-device-groups-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let mut cfg = Config::for_tests(dir);
+    cfg.scan_port = 9;
+    let state = breezone_server::init_state(cfg).await.unwrap();
+    let base = format!("http://127.0.0.1:{}", serve(breezone_server::app(state)).await);
+    let http = reqwest::Client::new();
+    let admin = Client { token: token(&http, &base, "/api/setup", "admin").await, base: base.clone(), http: http.clone() };
+    let relay = Arc::new(Mutex::new(false));
+    let port = fake_shelly(relay.clone()).await;
+    let (s, v) = admin.call(Method::POST, "/api/sources", Some(json!({"driver": "shelly", "name": "Tableau", "config": {"host": format!("127.0.0.1:{port}")}}))).await;
+    assert_eq!(s, StatusCode::CREATED, "{v}");
+
+    let group = |kind: &str, room: Option<i64>| json!({"kind": "group", "device_type": kind, "room_id": room, "trait": "switch.relay", "action": "set", "params": {"on": true}});
+    let rule = |step: Value| json!({"name": "Tout allumer", "when": {"kind": "time", "time": "07:00"}, "actions": [step]});
+
+    // A group with no device, an unknown type or room: refused.
+    let (s, _) = admin.call(Method::POST, "/api/automations", Some(rule(group("light", None)))).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST, "no light here");
+    let (s, _) = admin.call(Method::POST, "/api/automations", Some(rule(group("toaster", None)))).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+    let (s, _) = admin.call(Method::POST, "/api/automations", Some(rule(group("switch", Some(999))))).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+
+    let (s, created) = admin.call(Method::POST, "/api/automations", Some(rule(group("switch", None)))).await;
+    assert_eq!(s, StatusCode::CREATED, "{created}");
+    assert_eq!(created["summary"]["actions"][0], "Plugs and relays · whole home (1): Switch on");
+    let id = created["id"].as_i64().unwrap();
+    let (s, run) = admin.call(Method::POST, &format!("/api/automations/{id}/run"), None).await;
+    assert_eq!((s, &run["results"][0]["ok"]), (StatusCode::OK, &json!(true)), "{run}");
+    assert!(*relay.lock().unwrap(), "the relay of the group was switched on");
+
+    // A user drives a group with a grant on the whole type, not with one on each device.
+    let (_, devices) = admin.call(Method::GET, "/api/devices", None).await;
+    let relay_id = devices.as_array().unwrap().iter().find(|d| d["kind"] == "switch.relay").unwrap()["id"].as_i64().unwrap();
+    let user = |name: &'static str, devices: Value| {
+        let admin = &admin;
+        async move {
+            let (s, v) = admin.call(Method::POST, "/api/users", Some(json!({"username": name, "password": "motdepasse1", "role": "user", "devices": devices}))).await;
+            assert_eq!(s, StatusCode::CREATED, "{v}");
+            Client { token: token(&admin.http, &admin.base, "/api/auth/login", name).await, base: admin.base.clone(), http: admin.http.clone() }
+        }
+    };
+    let lea = user("lea", json!([{"scope": "type", "ref": "switch", "permission": "control"}])).await;
+    let (s, v) = lea.call(Method::POST, "/api/automations", Some(rule(group("switch", None)))).await;
+    assert_eq!(s, StatusCode::CREATED, "{v}");
+    let bob = user("bob", json!([{"scope": "device", "ref": relay_id.to_string(), "permission": "control"}])).await;
+    let (s, _) = bob.call(Method::POST, "/api/automations", Some(rule(group("switch", None)))).await;
+    assert_eq!(s, StatusCode::FORBIDDEN, "a later relay would not be his");
+    let (_, list) = bob.call(Method::GET, "/api/automations", None).await;
+    assert!(list.as_array().unwrap().is_empty(), "nor does he see the rules of the group: {list}");
 }
