@@ -1,5 +1,4 @@
 import { useState } from "react"
-import { Link } from "react-router"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   ArrowRight,
@@ -10,8 +9,6 @@ import {
   Loader2,
   MapPin,
   Network,
-  Plus,
-  Server,
   Trash2,
   TriangleAlert,
   Unlink,
@@ -33,7 +30,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
@@ -125,21 +121,6 @@ function AccessBox({
       <div className="truncate text-xs text-muted-foreground">
         WebServer {config?.host}:{config?.port}
         {config?.mac ? ` · ${config.mac}` : ""}
-      </div>
-    </div>
-  )
-}
-
-/** An installation of the Airzone account that another Breezone server shares with this one. */
-function SharedBox({ name, server }: { name: string; server: string }) {
-  return (
-    <div className="min-w-0 rounded-2xl border border-dashed p-3 text-sm">
-      <div className="flex items-center gap-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-        <Server className="size-3.5" />{" "}
-        {t("Partagée par « {name} »", { name: server })}
-      </div>
-      <div className="mt-1 truncate text-muted-foreground">
-        {t("{name} est pilotée par le serveur de son site.", { name })}
       </div>
     </div>
   )
@@ -481,18 +462,11 @@ function LinkToCloudDialog({
 // ---------------------------------------------------------------------------------------
 
 /**
- * The installations of the Airzone account on the left, how this server reaches each one on
- * the right (its own network, or another Breezone server), and the installations of this
- * server that are in no Airzone installation.
+ * The installations of the Airzone account on the left, the WebServer through which this
+ * server reaches each one on the right, and the installations of this server that are in no
+ * Airzone installation.
  */
-export function InstallationMap({
-  openFor,
-  onAdd,
-}: {
-  openFor?: string | null
-  /** Adds an installation that is not in the Airzone account (a WebServer of this network). */
-  onAdd: () => void
-}) {
+export function InstallationMap({ openFor }: { openFor?: string | null }) {
   const refresh = useRefresh()
   const remove = useMutation({
     mutationFn: api.deleteInstallation,
@@ -519,8 +493,12 @@ export function InstallationMap({
   // A node's installations are shared by that server, not reached by this module: they are
   // managed in Settings › Servers.
   const all = (configs.data ?? []).filter((i) => i.node_id === null)
-  const shared = (id: number | null) =>
-    status.data?.find((s) => s.id === id && s.node)
+  // The Airzone account may hold the installation of a site with its own server: it is that
+  // server's, shared in Settings › Servers.
+  const mine = list.filter(
+    (c) =>
+      !status.data?.some((s) => s.id === c.installation_id && s.node !== null)
+  )
   const orphans = all.filter(
     (i) => !list.some((c) => c.installation_id === i.id)
   )
@@ -552,24 +530,7 @@ export function InstallationMap({
             <Network className="size-3.5" /> {t("Joint par ce serveur")}
           </span>
         </div>
-        {list.map((c) => {
-          const from = shared(c.installation_id)
-          if (from?.node)
-            return (
-              <div
-                key={c.cloud_id}
-                className="grid items-center gap-2 md:grid-cols-[1fr_4rem_1fr_7rem] md:gap-3"
-              >
-                <AirzoneBox c={c} />
-                <Connector joined={false} />
-                <SharedBox name={from.name} server={from.node.name} />
-                <Button size="sm" variant="ghost" asChild>
-                  <Link to="/settings?tab=servers">
-                    <Server /> {t("Serveurs")}
-                  </Link>
-                </Button>
-              </div>
-            )
+        {mine.map((c) => {
           const joined = c.installation_id !== null
           return (
             <div
@@ -632,11 +593,6 @@ export function InstallationMap({
           </p>
         )}
       </CardContent>
-      <CardFooter>
-        <Button variant="outline" onClick={onAdd}>
-          <Plus /> {t("Ajouter une installation hors Airzone")}
-        </Button>
-      </CardFooter>
       {current && (
         <LinkDialog
           key={current.cloud_id}

@@ -6,6 +6,11 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Modules › Airzone no longer shows the installations of another Breezone server, nor a way to add
+  one: servers are linked, and what they share chosen, in Settings › Servers only.
+
 ## [0.11.0-beta.31] - 2026-11-17
 
 ### Added

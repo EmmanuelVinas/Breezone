@@ -98,8 +98,6 @@ const es: Record<string, string> = {
   "Ajouter un utilisateur": "Añadir un usuario",
   "Ajouter un WebServer": "Añadir un WebServer",
   "Ajouter une installation": "Añadir una instalación",
-  "Ajouter une installation hors Airzone":
-    "Añadir una instalación fuera de Airzone",
   "Ajoutez au moins une zone ou un appareil à piloter.":
     "Añada al menos una zona o un dispositivo que controlar.",
   "Alertes Airzone": "Alertas de Airzone",
@@ -1756,9 +1754,6 @@ const es: Record<string, string> = {
     "Los administradores ven y controlan todo, y configuran el servidor. Un usuario solo ve lo que usted le da: instalaciones y dispositivos de los módulos (todos, por tipo, por habitación o uno a uno), solo lectura o con control.",
   "Appareils des modules": "Dispositivos de los módulos",
   Afficher: "Mostrar",
-  "Partagée par « {name} »": "Compartida por «{name}»",
-  "{name} est pilotée par le serveur de son site.":
-    "{name} la controla el servidor de su sitio.",
   "À gauche, votre compte Airzone ; à droite, le WebServer par lequel ce serveur joint chaque installation, sur son réseau.":
     "A la izquierda, su cuenta Airzone; a la derecha, el WebServer por el que este servidor llega a cada instalación, en su red.",
 }

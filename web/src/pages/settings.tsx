@@ -134,10 +134,7 @@ function InstallationsTab({ openAccess }: { openAccess: string | null }) {
 
   return (
     <div className="grid gap-6">
-      <InstallationMap
-        openFor={openAccess}
-        onAdd={() => setDialog({ nonce: Date.now() })}
-      />
+      <InstallationMap openFor={openAccess} />
       <Card className="rounded-3xl">
         <CardHeader>
           <CardTitle className="flex flex-wrap items-center gap-2">

@@ -22,22 +22,22 @@ async fn serve(router: Router) -> u16 {
 struct Fake {
     relay: Arc<Mutex<bool>>,
     /// Wh the meter counts at each reading.
-    step: u64,
+    step: Arc<AtomicU64>,
     counted: Arc<AtomicU64>,
 }
 
 /// A Shelly Pro 3EM with one relay, answering its local RPC API.
 async fn fake_shelly(relay: Arc<Mutex<bool>>) -> u16 {
-    fake_shelly_counting(relay, 0).await
+    fake_shelly_counting(relay, Arc::new(AtomicU64::new(0))).await
 }
 
-async fn fake_shelly_counting(relay: Arc<Mutex<bool>>, step: u64) -> u16 {
+async fn fake_shelly_counting(relay: Arc<Mutex<bool>>, step: Arc<AtomicU64>) -> u16 {
     let router = Router::new()
         .route("/rpc/Shelly.GetDeviceInfo", get(|| async { Json(json!({"id": "shellypro3em-a1b2", "app": "Pro3EM", "ver": "1.4.4", "gen": 2})) }))
         .route(
             "/rpc/Shelly.GetStatus",
             get(|State(f): State<Fake>| async move {
-                let wh = f.counted.fetch_add(f.step, Ordering::SeqCst) as f64;
+                let wh = f.counted.fetch_add(f.step.load(Ordering::SeqCst), Ordering::SeqCst) as f64;
                 Json(json!({
                     "em:0": {"id": 0, "a_act_power": 1120.4, "b_act_power": 640.0, "c_act_power": 650.1, "total_act_power": 2410.5, "a_voltage": 232.1},
                     "emdata:0": {"id": 0, "total_act": 1234567.0 + wh, "total_act_ret": 45678.0},
@@ -210,7 +210,8 @@ async fn a_shelly_source_provides_devices_driven_through_their_traits() {
 
 #[tokio::test]
 async fn the_measures_have_a_history_and_make_the_energy_of_the_home() {
-    let shelly = fake_shelly_counting(Arc::new(Mutex::new(false)), 1).await;
+    let step = Arc::new(AtomicU64::new(1));
+    let shelly = fake_shelly_counting(Arc::new(Mutex::new(false)), step.clone()).await;
     // Read often, a history point every second.
     let tune = |cfg: &mut Config| {
         cfg.device_read_ms = 200;
@@ -259,7 +260,10 @@ async fn the_measures_have_a_history_and_make_the_energy_of_the_home() {
     let (s, _) = server.call("GET", "/api/devices/999999/history", t, None).await;
     assert_eq!(s, StatusCode::NOT_FOUND);
 
-    // Its counter went up: energy drawn from the grid today, used by the home.
+    // Its counter went up: energy drawn from the grid today, used by the home. It stops counting
+    // and a history point records its last value, so the day and the days read the same energy.
+    step.store(0, Ordering::SeqCst);
+    tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
     let (_, days) = server.call("GET", "/api/energy/days?days=3", t, None).await;
     let days = days.as_array().unwrap();
     assert_eq!(days.len(), 3);

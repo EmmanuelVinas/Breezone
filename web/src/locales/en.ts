@@ -97,8 +97,6 @@ const en: Record<string, string> = {
   "Ajouter un utilisateur": "Add a user",
   "Ajouter un WebServer": "Add a WebServer",
   "Ajouter une installation": "Add an installation",
-  "Ajouter une installation hors Airzone":
-    "Add an installation outside Airzone",
   "Ajoutez au moins une zone ou un appareil à piloter.":
     "Add at least one zone or device to drive.",
   "Alertes Airzone": "Airzone alerts",
@@ -1738,9 +1736,6 @@ const en: Record<string, string> = {
     "Administrators see and drive everything, and set up the server. A user only sees what you give them: installations, and devices of the modules (all, by type, by room or one by one), read-only or with control.",
   "Appareils des modules": "Devices of the modules",
   Afficher: "Show",
-  "Partagée par « {name} »": "Shared by “{name}”",
-  "{name} est pilotée par le serveur de son site.":
-    "{name} is driven by its own site's server.",
   "À gauche, votre compte Airzone ; à droite, le WebServer par lequel ce serveur joint chaque installation, sur son réseau.":
     "On the left, your Airzone account; on the right, the WebServer through which this server reaches each installation on its network.",
 }
