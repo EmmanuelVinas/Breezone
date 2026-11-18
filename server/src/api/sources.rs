@@ -295,7 +295,7 @@ pub async fn scan(State(state): State<AppState>, _admin: AdminUser, body: Option
     }
     .ok_or_else(|| ApiError::bad_request("indiquez le réseau à analyser, par exemple 192.168.1.0/24"))?;
     let started = std::time::Instant::now();
-    let products = crate::discovery::scan_products(&subnet, state.cfg.scan_port).await.map_err(ApiError::bad_request)?;
+    let products = crate::discovery::scan_products(&subnet, state.cfg.scan_port, &state.drivers.quiet_hosts().await).await.map_err(ApiError::bad_request)?;
     let installations = db::list_installations(&state.db).await?;
     let sources = db::list_sources(&state.db).await?;
     let mac = |m: &Option<String>| m.as_deref().map(crate::cloud::normalize_mac);

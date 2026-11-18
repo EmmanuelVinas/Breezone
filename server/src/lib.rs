@@ -220,6 +220,9 @@ pub async fn run(cfg: Config) -> anyhow::Result<()> {
     let _ = stop.send(true);
     // Open WebSockets would keep the server up: they get a few seconds, then are dropped.
     let _ = tokio::time::timeout(std::time::Duration::from_secs(5), server).await;
+    // The connections kept with the hardware are ended cleanly: a HomeKit gateway has few, and
+    // one left to time out on its side is one less for the server that starts next.
+    state.drivers.close_all().await;
     if !restart {
         return Ok(());
     }

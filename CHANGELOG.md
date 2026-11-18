@@ -6,6 +6,14 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- HomeKit gateway unreachable after updates (“timed out, before the session was set up”): the
+  search for lost sources no longer opens connections to the HomeKit accessories already added
+  (they are found through mDNS only), so it no longer uses up the few connections of a gateway; a
+  source is no longer taken for lost right after a restart (it is given 3 minutes to answer); and
+  the server ends its HomeKit sessions cleanly before it stops or restarts on a new version.
+
 ## [0.11.0-beta.34] - 2026-11-18
 
 ### Added

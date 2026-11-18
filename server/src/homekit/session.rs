@@ -207,6 +207,14 @@ impl Connection {
         serde_json::from_slice(&body).map_err(|e| HapError::Protocol(format!("event: {e}")))
     }
 
+    /// Ends the session the way TCP means it: Breezone says it is done (FIN), then waits a moment
+    /// for the accessory to close its side, so that it frees the connection at once.
+    pub async fn close(mut self) {
+        let _ = self.stream.shutdown().await;
+        let mut buf = [0u8; 512];
+        let _ = tokio::time::timeout(Duration::from_secs(1), async { while matches!(self.stream.read(&mut buf).await, Ok(n) if n > 0) {} }).await;
+    }
+
     pub async fn request(&mut self, method: &str, path: &str, content_type: Option<&str>, body: &[u8]) -> Result<Response, HapError> {
         // Without the port, as the reference controllers do: some accessories reject it.
         let host = self.host.rsplit_once(':').map_or(self.host.as_str(), |(h, _)| h);

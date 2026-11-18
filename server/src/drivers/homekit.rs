@@ -232,6 +232,8 @@ pub struct HomeKit {
     /// starting server does not open two sessions at once on an accessory that may still hold the
     /// previous ones.
     ready: tokio::sync::watch::Sender<bool>,
+    /// Set when the server stops: the listening session is ended cleanly.
+    closing: tokio::sync::watch::Sender<bool>,
 }
 
 impl Drop for HomeKit {
@@ -270,7 +272,14 @@ fn presses_of(event: &Value, buttons: &HashMap<(u64, u64), (String, u32)>) -> Ve
 }
 
 /// Listens to the remotes of an accessory on a session of its own, opened again when it fails.
-async fn listen(addr: String, pairing: Pairing, presses: Arc<std::sync::Mutex<HashMap<String, State>>>, sink: Sink, mut ready: tokio::sync::watch::Receiver<bool>) {
+async fn listen(
+    addr: String,
+    pairing: Pairing,
+    presses: Arc<std::sync::Mutex<HashMap<String, State>>>,
+    sink: Sink,
+    mut ready: tokio::sync::watch::Receiver<bool>,
+    mut closing: tokio::sync::watch::Receiver<bool>,
+) {
     if ready.wait_for(|r| *r).await.is_err() {
         return;
     }
@@ -286,7 +295,15 @@ async fn listen(addr: String, pairing: Pairing, presses: Arc<std::sync::Mutex<Ha
             conn.subscribe(&buttons.keys().copied().collect::<Vec<_>>()).await?;
             tracing::info!("listening to {} button(s) of the HomeKit accessory at {addr}", buttons.len());
             loop {
-                let event = match conn.next_event(QUIET).await {
+                let next = tokio::select! {
+                    e = conn.next_event(QUIET) => Some(e),
+                    _ = closing.wait_for(|c| *c) => None,
+                };
+                let Some(next) = next else {
+                    conn.close().await;
+                    return Ok(true);
+                };
+                let event = match next {
                     Ok(e) => e,
                     // Quiet for long: the session is opened again, in case it died silently.
                     Err(HapError::Unreachable(m)) if m == "timed out" => return Ok(true),
@@ -310,6 +327,9 @@ async fn listen(addr: String, pairing: Pairing, presses: Arc<std::sync::Mutex<Ha
                 tracing::debug!("HomeKit events at {addr}: {e}");
                 wait = (wait * 2).min(Duration::from_secs(300));
             }
+        }
+        if *closing.borrow() {
+            return;
         }
         tokio::time::sleep(wait).await;
     }
@@ -337,6 +357,7 @@ impl HomeKit {
             presses: Arc::default(),
             listener: std::sync::Mutex::new(None),
             ready: tokio::sync::watch::channel(false).0,
+            closing: tokio::sync::watch::channel(false).0,
         })
     }
 
@@ -479,8 +500,20 @@ impl Driver for HomeKit {
         })
     }
 
+    fn close(&self) -> DriverFuture<'_, ()> {
+        Box::pin(async move {
+            self.closing.send_replace(true);
+            if let Some(conn) = self.conn.lock().await.take() {
+                conn.close().await;
+            }
+            // The listening session ends on its own (see `listen`): a moment for it to say so.
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            Ok(())
+        })
+    }
+
     fn listen(&self, sink: Sink) {
-        let task = tokio::spawn(listen(self.addr.clone(), self.pairing.clone(), self.presses.clone(), sink, self.ready.subscribe()));
+        let task = tokio::spawn(listen(self.addr.clone(), self.pairing.clone(), self.presses.clone(), sink, self.ready.subscribe(), self.closing.subscribe()));
         if let Some(previous) = self.listener.lock().unwrap_or_else(|e| e.into_inner()).replace(task.abort_handle()) {
             previous.abort();
         }

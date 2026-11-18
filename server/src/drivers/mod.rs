@@ -98,6 +98,11 @@ pub trait Driver: Send + Sync {
     /// Starts listening to what the hardware tells without being asked (the presses of a remote's
     /// buttons), sent to `sink` until the driver is dropped.
     fn listen(&self, _sink: Sink) {}
+    /// Ends the connections kept open with the hardware, cleanly, before the server stops or
+    /// restarts on a new version (a gateway with few connections frees them at once).
+    fn close(&self) -> DriverFuture<'_, ()> {
+        Box::pin(async { Ok(()) })
+    }
     /// What the hardware says about itself, raw, to understand how a model behaves (support).
     fn diagnostic(&self) -> DriverFuture<'_, Value> {
         Box::pin(async { Ok(Value::Null) })
@@ -292,6 +297,8 @@ pub struct Runtime {
     /// The presses of the remotes, sent by the drivers that listen (`Driver::listen`).
     presses: tokio::sync::mpsc::UnboundedSender<Press>,
     heard: std::sync::Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<Press>>>,
+    /// When this server started: a source not read since is not lost before `RELOCATE_AFTER`.
+    started: i64,
 }
 
 /// A source unreachable this long (seconds) is looked for on the network by its identity.
@@ -330,6 +337,7 @@ impl Runtime {
             searched: RwLock::new(HashMap::new()),
             presses,
             heard: std::sync::Mutex::new(Some(heard)),
+            started: db::now(),
         }
     }
 
@@ -550,6 +558,28 @@ impl Runtime {
         }
     }
 
+    /// The addresses of the HomeKit accessories added: a scan finds them through mDNS only.
+    pub async fn quiet_hosts(&self) -> Vec<std::net::Ipv4Addr> {
+        self.sources
+            .read()
+            .await
+            .values()
+            .filter(|r| r.source.driver == "homekit")
+            .filter_map(|r| {
+                let config: Value = serde_json::from_str(&r.source.config).ok()?;
+                let host = config["host"].as_str()?.trim();
+                host.split(':').next()?.parse().ok()
+            })
+            .collect()
+    }
+
+    /// Ends the drivers' open connections cleanly (see `Driver::close`), a few seconds at most.
+    pub async fn close_all(&self) {
+        let drivers: Vec<Arc<dyn Driver>> = self.sources.read().await.values().filter_map(|r| r.driver.clone()).collect();
+        let all = futures_util::future::join_all(drivers.iter().map(|d| d.close()));
+        let _ = tokio::time::timeout(Duration::from_secs(3), all).await;
+    }
+
     /// The sources unreachable for a while that know the identity of their hardware, and were not
     /// looked for lately.
     async fn lost(&self) -> Vec<i64> {
@@ -561,7 +591,9 @@ impl Runtime {
             .values()
             .filter(|r| r.source.enabled && r.driver.is_some() && matches!(r.status.state, "offline" | "error"))
             .filter(|r| config_identity(&r.source).is_some())
-            .filter(|r| now - r.status.last_seen.unwrap_or(r.source.created_at) >= RELOCATE_AFTER)
+            // Not read since the server started: lost only once it has had the time to answer (a
+            // search right after a restart would probe a gateway still freeing its connections).
+            .filter(|r| now - r.status.last_seen.unwrap_or(r.source.created_at.max(self.started)) >= RELOCATE_AFTER)
             .filter(|r| searched.get(&r.source.id).is_none_or(|t| t.elapsed() >= RELOCATE_EVERY))
             .map(|r| r.source.id)
             .collect()
@@ -579,7 +611,7 @@ impl Runtime {
             }
         }
         let Some(subnet) = crate::discovery::global_subnet(&self.db, configured).await else { return };
-        match crate::discovery::scan_products(&subnet, airzone_port).await {
+        match crate::discovery::scan_products(&subnet, airzone_port, &self.quiet_hosts().await).await {
             Ok(products) => {
                 self.relocate(&products, &lost).await;
             }
@@ -591,7 +623,7 @@ impl Runtime {
     /// hardware, and whether the source followed it to another address.
     pub async fn locate(&self, id: i64, configured: Option<&str>, airzone_port: u16) -> Result<Located, String> {
         let subnet = crate::discovery::global_subnet(&self.db, configured).await.ok_or_else(|| "no network to scan: set it in Settings".to_string())?;
-        let products = crate::discovery::scan_products(&subnet, airzone_port).await?;
+        let products = crate::discovery::scan_products(&subnet, airzone_port, &self.quiet_hosts().await).await?;
         self.searched.write().await.insert(id, Instant::now());
         let identity = self.sources.read().await.get(&id).and_then(|r| Some((config_identity(&r.source)?, r.source.driver.clone())));
         let seen = identity.as_ref().and_then(|(identity, driver)| {

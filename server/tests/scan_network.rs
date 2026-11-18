@@ -6,7 +6,7 @@
 async fn scan_a_real_network() {
     let subnet = std::env::var("BREEZONE_SCAN_SUBNET").expect("BREEZONE_SCAN_SUBNET");
     let started = std::time::Instant::now();
-    let products = breezone_server::discovery::scan_products(&subnet, 3000).await.unwrap();
+    let products = breezone_server::discovery::scan_products(&subnet, 3000, &[]).await.unwrap();
     println!("{} product(s) in {:?}", products.len(), started.elapsed());
     for p in &products {
         println!("  {} {:<16} {} {} {}", p.brand, p.host, p.model, p.note.as_deref().unwrap_or(""), if p.supported { "" } else { "(non pris en charge)" });

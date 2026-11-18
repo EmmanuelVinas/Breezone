@@ -139,7 +139,9 @@ pub struct Product {
 }
 
 /// Every supported product on `subnet`, each address asked for every brand at once.
-pub async fn scan_products(subnet: &str, airzone_port: u16) -> Result<Vec<Product>, String> {
+/// `quiet`: hosts only asked through mDNS, never connected to (the HomeKit gateways already
+/// added: their few connections are kept for their sessions).
+pub async fn scan_products(subnet: &str, airzone_port: u16, quiet: &[std::net::Ipv4Addr]) -> Result<Vec<Product>, String> {
     let hosts = hosts_in(subnet)?;
     // HomeKit accessories answer mDNS: asked meanwhile.
     let homekit = tokio::spawn({
@@ -148,7 +150,7 @@ pub async fn scan_products(subnet: &str, airzone_port: u16) -> Result<Vec<Produc
     });
     let limit = Arc::new(Semaphore::new(SCAN_PARALLEL));
     let mut tasks = Vec::with_capacity(hosts.len());
-    for host in hosts {
+    for host in hosts.into_iter().filter(|h| !quiet.contains(h)) {
         let limit = limit.clone();
         tasks.push(tokio::spawn(async move {
             let _permit = limit.acquire().await.ok()?;
