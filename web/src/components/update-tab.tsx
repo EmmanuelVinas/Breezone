@@ -324,7 +324,7 @@ export function UpdateTab() {
             )}
             <p className="text-xs text-muted-foreground">
               {t(
-                "Avec Docker, vous pouvez aussi mettre à jour l'image : « docker compose pull && docker compose up -d », ou « Mettre à jour » dans Container Manager sur Synology."
+                "Avec Docker, vous pouvez aussi mettre à jour l'image : « docker compose pull && docker compose up -d », ou depuis votre gestionnaire de conteneurs."
               )}
             </p>
           </CardContent>

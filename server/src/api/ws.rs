@@ -53,14 +53,14 @@ pub async fn handler(ws: Result<WebSocketUpgrade, WebSocketUpgradeRejection>, St
 fn proxy_hint() -> Text {
     crate::text!(
         "Temps réel indisponible : la demande de WebSocket est arrivée sans ses en-têtes. \
-Si Breezone est derrière un proxy inversé (NAS Synology, nginx…), ajoutez-y les en-têtes WebSocket \
-(Synology : Proxy inversé › En-tête personnalisé › Créer › WebSocket).",
+Si Breezone est derrière un proxy inversé (nginx, NAS…), ajoutez-y les en-têtes WebSocket \
+(Upgrade et Connection).",
         "Live updates unavailable: the WebSocket request arrived without its headers. \
-If Breezone is behind a reverse proxy (Synology NAS, nginx…), add the WebSocket headers to it \
-(Synology: Reverse Proxy › Custom Header › Create › WebSocket).",
+If Breezone is behind a reverse proxy (nginx, NAS…), add the WebSocket headers to it \
+(Upgrade and Connection).",
         "Tiempo real no disponible: la solicitud de WebSocket llegó sin sus encabezados. \
-Si Breezone está detrás de un proxy inverso (NAS Synology, nginx…), añada los encabezados WebSocket \
-(Synology: Proxy inverso › Encabezado personalizado › Crear › WebSocket)."
+Si Breezone está detrás de un proxy inverso (nginx, NAS…), añada los encabezados WebSocket \
+(Upgrade y Connection)."
     )
 }
 

@@ -741,8 +741,8 @@ const es: Record<string, string> = {
     "Reiniciando con la nueva versión: la página se recargará sola.",
   "La mise à jour a échoué": "La actualización ha fallado",
   "Breezone n'a pas changé de version.": "Breezone no ha cambiado de versión.",
-  "Avec Docker, vous pouvez aussi mettre à jour l'image : « docker compose pull && docker compose up -d », ou « Mettre à jour » dans Container Manager sur Synology.":
-    "Con Docker, también puede actualizar la imagen: «docker compose pull && docker compose up -d», o «Actualizar» en Container Manager en Synology.",
+  "Avec Docker, vous pouvez aussi mettre à jour l'image : « docker compose pull && docker compose up -d », ou depuis votre gestionnaire de conteneurs.":
+    "Con Docker, también puede actualizar la imagen: «docker compose pull && docker compose up -d», o desde su gestor de contenedores.",
   "Mettre à jour vers {version}": "Actualizar a {version}",
   "Notes de version": "Notas de la versión",
   "Mettre à jour vers Breezone {version} ?":
