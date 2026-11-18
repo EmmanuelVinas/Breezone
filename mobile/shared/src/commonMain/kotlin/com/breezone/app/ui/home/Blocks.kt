@@ -144,7 +144,7 @@ enum class BlockKind(
     val size: BlockSize,
     val choice: BlockChoice = BlockChoice.None,
 ) {
-    Pages(BlockTypes.PAGES, Res.string.block_pages, FzIcons.LayoutGrid, BlockSize.Full),
+    Pages(BlockTypes.PAGES, Res.string.block_pages, FzIcons.LayoutGrid, BlockSize.Full, BlockChoice.Pages),
     Weather(BlockTypes.WEATHER, Res.string.block_weather, FzIcons.CloudSun, BlockSize.Full),
     Presence(BlockTypes.PRESENCE, Res.string.block_presence, FzIcons.Users, BlockSize.Full),
     Energy(BlockTypes.ENERGY, Res.string.block_energy, FzIcons.Zap, BlockSize.Half, BlockChoice.Flow),
@@ -191,7 +191,7 @@ enum class BlockKind(
 }
 
 /** What has to be chosen before a card is added. */
-enum class BlockChoice { None, Flow, Room, Kind, Device, Chart, ZoneGroup, Zone }
+enum class BlockChoice { None, Flow, Room, Kind, Device, Chart, ZoneGroup, Zone, Pages }
 
 /** The title a card shows while the home is being arranged, so that each can be told apart. */
 @Composable
@@ -203,6 +203,8 @@ fun blockTitle(b: DashboardBlock, ctx: HomeContext): String {
         BlockKind.Kind -> DeviceKind.byId(b.string("type"))?.let { stringResource(it.label) } ?: stringResource(kind.label)
         BlockKind.Device, BlockKind.Chart -> ctx.devices.firstOrNull { it.id == b.long("device_id") }?.name ?: stringResource(kind.label)
         BlockKind.Zones -> b.string("group") ?: stringResource(kind.label)
+        BlockKind.Pages -> b.strings("pages").mapNotNull { id -> AppPage.entries.firstOrNull { it.name == id } }.takeIf { it.isNotEmpty() }
+            ?.map { stringResource(it.label) }?.joinToString(" · ") ?: stringResource(kind.label)
         BlockKind.ZoneHistory, BlockKind.AirQuality -> listOfNotNull(stringResource(kind.label), ctx.devices.firstOrNull { it.id == b.long("device_id") }?.name).joinToString(" · ")
         else -> stringResource(kind.label)
     }
@@ -212,7 +214,7 @@ fun blockTitle(b: DashboardBlock, ctx: HomeContext): String {
 @Composable
 fun BlockContent(b: DashboardBlock, ctx: HomeContext, editing: Boolean) {
     when (BlockKind.of(b)) {
-        BlockKind.Pages -> PagesBlock(ctx)
+        BlockKind.Pages -> PagesBlock(b.strings("pages"), ctx)
         BlockKind.Weather -> if (ctx.weather?.weather != null || editing) WeatherCard(ctx.weather)
         BlockKind.Presence -> PresenceBlock(ctx)
         BlockKind.Energy -> EnergyBlock(EnergyFlow.of(b.string("flow")) ?: EnergyFlow.Solar, ctx)
@@ -260,9 +262,17 @@ private fun Waiting(b: DashboardBlock, ctx: HomeContext, editing: Boolean) {
 
 /** Tiles of the pages of the installation, with what each does now. */
 @Composable
-private fun PagesBlock(ctx: HomeContext) {
-    val tiles = ctx.pages.filter { it != AppPage.Home && it != AppPage.Settings && it != AppPage.Routines && it != AppPage.Schedules }
+private fun PagesBlock(chosen: List<String>, ctx: HomeContext) {
+    val all = shortcutPages(ctx)
+    // The pages chosen, in their order; none chosen: all of them.
+    val tiles = if (chosen.isEmpty()) all else chosen.mapNotNull { id -> all.firstOrNull { it.name == id } }
     if (tiles.isEmpty()) return
+    if (tiles.size == 1) {
+        val page = tiles.single()
+        val (sub, color, icon) = pageSummary(page, ctx)
+        TypeTile(icon, stringResource(page.label), sub, color, onClick = { ctx.nav.openPage(page) }, modifier = Modifier.fillMaxWidth())
+        return
+    }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         tiles.chunked(2).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -275,6 +285,9 @@ private fun PagesBlock(ctx: HomeContext) {
         }
     }
 }
+
+/** The pages a shortcut can lead to: those of the installation, but the home and the lists. */
+fun shortcutPages(ctx: HomeContext) = ctx.pages.filter { it != AppPage.Home && it != AppPage.Settings && it != AppPage.Routines && it != AppPage.Schedules }
 
 /** What a page's tile says now, and how it looks. */
 @Composable

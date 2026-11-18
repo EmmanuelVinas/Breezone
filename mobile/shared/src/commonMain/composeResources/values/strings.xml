@@ -638,4 +638,6 @@
     <string name="block_settings_apply">Appliquer</string>
     <string name="block_spacer">Espace vide</string>
     <string name="block_spacer_hint">Une case laissée vide, pour mettre la carte suivante à part</string>
+    <string name="block_pages_all">Toutes les pages</string>
+    <string name="block_settings_pages">Pages montrées</string>
 </resources>

@@ -6,6 +6,11 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- App: the page shortcuts of Home can show some pages only (chosen in the card's settings), and a
+  single page can be added as a half card of its own.
+
 ## [0.11.0-beta.36] - 2026-11-18
 
 ### Added

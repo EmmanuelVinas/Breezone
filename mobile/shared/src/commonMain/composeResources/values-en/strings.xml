@@ -623,4 +623,6 @@
     <string name="block_settings_apply">Apply</string>
     <string name="block_spacer">Empty space</string>
     <string name="block_spacer_hint">An empty cell, to set the next card apart</string>
+    <string name="block_pages_all">All the pages</string>
+    <string name="block_settings_pages">Pages shown</string>
 </resources>

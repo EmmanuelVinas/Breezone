@@ -619,4 +619,6 @@
     <string name="block_settings_apply">Aplicar</string>
     <string name="block_spacer">Espacio vacío</string>
     <string name="block_spacer_hint">Una casilla vacía, para separar la tarjeta siguiente</string>
+    <string name="block_pages_all">Todas las páginas</string>
+    <string name="block_settings_pages">Páginas mostradas</string>
 </resources>

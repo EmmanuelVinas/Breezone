@@ -43,7 +43,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.compose.resources.stringResource
 
 /** The cards that have something to set once added. */
-val BlockKind.settable get() = this in setOf(BlockKind.Room, BlockKind.Kind, BlockKind.Scenes, BlockKind.Chart)
+val BlockKind.settable get() = this in setOf(BlockKind.Pages, BlockKind.Room, BlockKind.Kind, BlockKind.Scenes, BlockKind.Chart)
 
 /**
  * What a card shows, set after it was added: the devices of a room or of a type, the scenes, the
@@ -71,6 +71,17 @@ fun BlockSettingsSheet(initial: DashboardBlock, ctx: HomeContext, onDismiss: () 
                     Caption(stringResource(Res.string.block_settings_devices), Modifier.padding(start = 4.dp))
                     Checklist(members.map { Triple(it.id.toString(), it.deviceKind.icon, it.name) }, members.filter { it.id !in hidden }.map { it.id.toString() }.toSet()) { shown ->
                         b = b.withConfig("hidden", JsonArray(members.filter { it.id.toString() !in shown }.map { JsonPrimitive(it.id) }))
+                    }
+                }
+                BlockKind.Pages -> {
+                    val pages = shortcutPages(ctx)
+                    val chosen = b.strings("pages")
+                    Caption(stringResource(Res.string.block_settings_pages), Modifier.padding(start = 4.dp))
+                    val labels = pages.map { stringResource(it.label) }
+                    Checklist(pages.mapIndexed { i, p -> Triple(p.name, p.icon, labels[i]) }, (chosen.ifEmpty { pages.map { it.name } }).toSet()) { next ->
+                        // Kept in the order of the bar; all ticked is the same as none chosen.
+                        val list = pages.map { it.name }.filter { it in next }
+                        b = b.withConfig("pages", JsonArray((if (list.size == pages.size) emptyList() else list).map { JsonPrimitive(it) }))
                     }
                 }
                 BlockKind.Scenes -> {

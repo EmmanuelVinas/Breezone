@@ -258,7 +258,7 @@ private fun rows(blocks: List<DashboardBlock>): List<List<DashboardBlock>> {
 }
 
 /** The cards that can sit two by two: those whose content holds in half the width. */
-private val HALVES = setOf(BlockKind.Energy, BlockKind.Presence, BlockKind.Device, BlockKind.Chart, BlockKind.Spacer)
+private val HALVES = setOf(BlockKind.Pages, BlockKind.Energy, BlockKind.Presence, BlockKind.Device, BlockKind.Chart, BlockKind.Spacer)
 
 /** A card while the home is arranged: its name and its handles above what it shows. */
 @Composable

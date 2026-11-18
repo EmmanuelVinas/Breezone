@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.breezone.app.data.BlockSize
 import com.breezone.app.data.Charted
 import com.breezone.app.data.DashboardBlock
 import com.breezone.app.data.block
@@ -71,6 +72,11 @@ fun AddBlockSheet(ctx: HomeContext, onDismiss: () -> Unit, onAdd: (DashboardBloc
                 if (kk.choice == BlockChoice.None) onAdd(block(kk.type, kk.size)) else kind = kk
             }
         }
+        // All the pages in one card, or one page alone as a half card.
+        BlockKind.Pages -> listOf(Entry("p-all", FzIcons.LayoutGrid, stringResource(Res.string.block_pages_all)) { onAdd(block(k.type, k.size)) }) +
+            shortcutPages(ctx).map { p ->
+                Entry("p-${p.name}", p.icon, stringResource(p.label)) { onAdd(block(k.type, BlockSize.Half, mapOf("pages" to JsonArray(listOf(JsonPrimitive(p.name)))))) }
+            }
         BlockKind.Energy -> {
             val roles = ctx.live?.roles
             EnergyFlow.entries.filter { f ->
