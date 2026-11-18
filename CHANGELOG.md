@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.42] - 2026-11-18
+
 ### Added
 
 - A remote (`button@1`, such as a Legrand remote switch through HomeKit) can be added to the
@@ -18,9 +20,6 @@ All notable changes are documented here. The format follows
 - Netatmo · Legrand: the lines of the Ecometer (NLE) show their power. Netatmo gives none in their
   status: it is now the mean of their last whole half hour, from their measures (read every
   10 minutes; Legrand tells them late).
-- Automations: two rules whose conditions cannot both be true (outdoor below 14° and above 25°,
-  « Salon · Mode : Heat » and « … : Cool »…) are no longer said to contradict each other; what one
-  does otherwise still counts.
 
 ## [0.11.0-beta.41] - 2026-11-18
 
@@ -31,6 +30,12 @@ All notable changes are documented here. The format follows
   and doorbells, online or not, their last event and its picture (decrypted with the verification
   code of the cameras), and a « Cameras » page. A ring of the doorbell is a button press: it shows
   in the activity and can start an automation.
+
+### Fixed
+
+- Automations: two rules whose conditions cannot both be true (outdoor below 14° and above 25°,
+  « Salon · Mode : Heat » and « … : Cool »…) are no longer said to contradict each other; what one
+  does otherwise still counts.
 
 ## [0.11.0-beta.40] - 2026-11-18
 
