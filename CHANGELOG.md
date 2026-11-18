@@ -11,9 +11,14 @@ All notable changes are documented here. The format follows
 - Overview: the « Device » block of a measure can show its curve of the last 24 hours, its value
   large, as the figures of the energy page. In « Add a block », each component has a fine frame,
   so that its name goes with its preview.
+- Netatmo · Legrand: in the card « Matching with your devices », a device of its own (a line of
+  the Ecometer…) is named there as one wishes; the name Netatmo gives it shows below when it differs.
 
 ### Fixed
 
+- Automations and scenes: those of the modules alone (shutters, lights…) are this server's: they are
+  no longer shown on an installation reached through another server, as if they were its own (one
+  rule, one switch, on both). Web and mobile.
 - The lists of choices open below their field and keep where they are scrolled: aligned on the
   chosen item, they jumped back to it at each refresh of the page (every few seconds).
 - Settings › Modules › Airzone: the dot of the module only counts this server's installations (one

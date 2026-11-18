@@ -9,7 +9,10 @@ import type {
 } from "@/lib/api"
 import { api, currentUser, isDeviceAction } from "@/lib/api"
 import { t } from "@/lib/i18n"
-import { useChosenInstallations } from "@/lib/selected-installation"
+import {
+  useChosenInstallations,
+  useModulesHere,
+} from "@/lib/selected-installation"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { AutomationEditor, inputOf } from "./editor"
@@ -36,6 +39,9 @@ export function AutomationsSection() {
   const live = useQuery({ queryKey: ["energy-live"], queryFn: api.energyLive })
   const price = usePrice()
   const { installations, ids } = useChosenInstallations()
+  // The modules (and the rules on them alone) are this server's: not those of an installation
+  // reached through another server.
+  const here = useModulesHere()
   const admin = currentUser()?.role === "admin"
   const [editing, setEditing] = useState<{
     id?: number
@@ -50,8 +56,8 @@ export function AutomationsSection() {
       .map((i) => i.id)
   )
   // The zones of the installation chosen, and the devices of the modules of this server.
-  const shown = (devices.data ?? []).filter(
-    (d) => d.installation_id === null || ids.has(d.installation_id)
+  const shown = (devices.data ?? []).filter((d) =>
+    d.installation_id === null ? here : ids.has(d.installation_id)
   )
   const drivable = new Set(
     shown
@@ -114,7 +120,7 @@ export function AutomationsSection() {
   // The rules of the installation chosen: those that touch it, and those of the modules alone.
   const list = (automations.data ?? []).filter((a) => {
     const zones = used(a).flatMap((id) => installationOf.get(id) ?? [])
-    return zones.length === 0 || zones.some((i) => ids.has(i))
+    return zones.length === 0 ? here : zones.some((i) => ids.has(i))
   })
   const canEdit = (a: Automation) =>
     steps(a).every((s) =>

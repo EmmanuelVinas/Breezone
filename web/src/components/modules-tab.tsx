@@ -1562,12 +1562,45 @@ function IgnoredCard({ sourceId }: { sourceId: number }) {
   )
 }
 
+/** The name of a device in Breezone, changed where it is shown (empty: its module's name). */
+function NameField({ device }: { device: DeviceView }) {
+  const qc = useQueryClient()
+  const [draft, setDraft] = useState<string | null>(null)
+  const save = useMutation({
+    mutationFn: (name: string) => api.updateDevice(device.id, { name }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["devices"] }),
+    onError: (e) => toast.error(errorText(e)),
+  })
+  return (
+    <Input
+      value={draft ?? device.name}
+      aria-label={t("Nom")}
+      className="h-8 max-w-72 font-medium"
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        if (draft !== null && draft.trim() !== device.name)
+          save.mutate(draft.trim())
+        setDraft(null)
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur()
+      }}
+    />
+  )
+}
+
 /**
  * What became of each device of a cloud module: the twin of a local device (it stays driven
  * locally, the cloud only does what the local cannot), a device of its own, or ignored.
  */
 function TwinsCard({ sourceId }: { sourceId: number }) {
   const qc = useQueryClient()
+  const devices = useQuery({ queryKey: ["devices"], queryFn: api.devices })
+  // Its device in Breezone (a device of its own only), to name it as one wishes.
+  const deviceOf = (reference: string) =>
+    devices.data?.find(
+      (x) => x.source_id === sourceId && x.reference === reference
+    )
   const twins = useQuery({
     queryKey: ["twins", sourceId],
     queryFn: () => api.sourceTwins(sourceId),
@@ -1622,7 +1655,21 @@ function TwinsCard({ sourceId }: { sourceId: number }) {
               className="flex flex-wrap items-center gap-3 rounded-2xl border p-3"
             >
               <div className="min-w-0 flex-1">
-                <div className="truncate font-medium">{d.name}</div>
+                {(() => {
+                  const own = d.status === "own" ? deviceOf(d.reference) : null
+                  if (!own)
+                    return <div className="truncate font-medium">{d.name}</div>
+                  return (
+                    <>
+                      <NameField device={own} />
+                      {own.name !== d.name && (
+                        <div className="truncate text-xs text-muted-foreground">
+                          {t("Dans Netatmo : {name}", { name: d.name })}
+                        </div>
+                      )}
+                    </>
+                  )
+                })()}
                 <div className="text-xs text-muted-foreground">
                   {d.status === "linked" && twin
                     ? t("Même appareil que « {name} » ({source}){how}", {

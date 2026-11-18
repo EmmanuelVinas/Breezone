@@ -1948,6 +1948,7 @@ const en: Record<string, string> = {
   "La courbe vient avec l'historique.": "The curve comes with the history.",
   "Courbe des dernières 24 h": "Curve of the last 24 h",
   "Sans courbe : ses commandes": "No curve: its controls",
+  "Dans Netatmo : {name}": "In Netatmo: {name}",
 }
 
 export default en

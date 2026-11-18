@@ -57,7 +57,7 @@ private fun devicesOf(a: Automation): List<Long> {
 
 /**
  * The automations of an installation (those that read or drive one of its zones, and those of
- * the modules alone), with "I'm home". They are created and changed on the web.
+ * the modules alone when it is this server's), with "I'm home". They are created and changed on the web.
  */
 @Composable
 fun AutomationsSection(serverId: String, inst: Installation) {
@@ -75,9 +75,11 @@ fun AutomationsSection(serverId: String, inst: Installation) {
         while (true) {
             runCatching {
                 val zones = api.devices().associate { it.id to it.installationId }
+                // Those of the modules alone are this server's: not shown on an installation
+                // reached through another server.
                 list = api.automations().filter { a ->
                     val installations = devicesOf(a).mapNotNull { zones[it] }
-                    installations.isEmpty() || inst.id in installations
+                    if (installations.isEmpty()) inst.access != "node" else inst.id in installations
                 }
                 presence = api.presence()
                 paused = api.automationSettings().pausedUntil != null

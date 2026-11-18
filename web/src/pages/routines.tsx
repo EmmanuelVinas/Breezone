@@ -16,7 +16,10 @@ import type {
 import { api, currentUser, isDeviceAction } from "@/lib/api"
 import { MODE_LABEL, relativeTime } from "@/lib/format"
 import { PageHeader } from "@/components/app-shell"
-import { useChosenInstallations } from "@/lib/selected-installation"
+import {
+  useChosenInstallations,
+  useModulesHere,
+} from "@/lib/selected-installation"
 import { AirzoneSchedulesSection } from "@/components/airzone-schedules"
 import { AirzoneRoutinesSection, TimersSection } from "@/components/timers"
 import {
@@ -82,8 +85,15 @@ function zoneOptions(installations: Installation[]): ZoneOption[] {
 /** The devices of the home and the catalog of their traits, to show and edit device actions. */
 type Home = { devices: DeviceView[]; traits: TraitInfo[] }
 
+/** The devices a scene may drive here: the modules are this server's, not those of an
+ * installation reached through another server. */
 function useHome(): Home {
-  const devices = useQuery({ queryKey: ["devices"], queryFn: api.devices })
+  const here = useModulesHere()
+  const devices = useQuery({
+    queryKey: ["devices"],
+    queryFn: api.devices,
+    select: (all) => all.filter((d) => d.installation_id !== null || here),
+  })
   const traits = useQuery({
     queryKey: ["traits"],
     queryFn: api.traits,
@@ -633,6 +643,7 @@ function BreezoneRoutines({
 }) {
   const routines = useQuery({ queryKey: ["routines"], queryFn: api.routines })
   const { installations, ids } = useChosenInstallations()
+  const here = useModulesHere()
   const options = zoneOptions(installations)
   // Installations whose routines this user may change.
   const editable = new Set(
@@ -647,13 +658,16 @@ function BreezoneRoutines({
     nonce: number
   } | null>(null)
   // The scenes of the installation chosen (those that act on it), and those of the modules of
-  // this server.
+  // this server (not on an installation reached through another server).
   const list = (routines.data ?? []).filter(
     (r) =>
-      r.actions.length === 0 ||
-      r.actions.some((a) => isDeviceAction(a) || ids.has(a.installation_id))
+      (r.actions.length === 0 && here) ||
+      r.actions.some((a) =>
+        isDeviceAction(a) ? here : ids.has(a.installation_id)
+      )
   )
-  const canCreate = options.length > 0 || moduleDevices(home).length > 0
+  const canCreate =
+    options.length > 0 || (here && moduleDevices(home).length > 0)
   return (
     <section className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
