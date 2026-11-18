@@ -214,6 +214,21 @@ struct Running {
     /// Numbers read since the last history point, by device then field.
     pending: HashMap<String, HashMap<String, Pending>>,
     last_read: Option<Instant>,
+    /// Readings failed in a row: an unreachable source is read less and less often.
+    failures: u32,
+}
+
+/// The longest wait between two readings of a source that does not answer.
+const RETRY_AT_MOST: Duration = Duration::from_secs(300);
+
+/// When a source is read again: at its pace, or, once it is offline, twice as late after each
+/// failure (up to `RETRY_AT_MOST`), so that a struggling device is not sent a new connection every
+/// few seconds. « Tester » reads it at once all the same.
+fn read_wait(every: Duration, failures: u32, offline: bool) -> Duration {
+    if !offline || failures == 0 {
+        return every;
+    }
+    (every * 2u32.pow(failures.min(8))).min(RETRY_AT_MOST.max(every))
 }
 
 /// Readings of one number since the last history point.
@@ -341,7 +356,7 @@ impl Runtime {
                         Err(e) => (None, Some(e)),
                     };
                     let status = SourceStatus { state: if error.is_some() { "error" } else { "unknown" }, last_error: error, ..Default::default() };
-                    Running { source, driver, devices: vec![], states: HashMap::new(), status, pending: HashMap::new(), last_read: None }
+                    Running { source, driver, devices: vec![], states: HashMap::new(), status, pending: HashMap::new(), last_read: None, failures: 0 }
                 }
             };
             next.insert(running.source.id, running);
@@ -402,11 +417,13 @@ impl Runtime {
                         }
                     }
                     r.states = states;
+                    r.failures = 0;
                     r.status.state = "online";
                     r.status.last_seen = Some(db::now());
                     r.status.last_error = None;
                 }
                 Err(e) => {
+                    r.failures = r.failures.saturating_add(1);
                     // A missed reading is not an outage (a Hoymiles DTU serves one client at a time):
                     // the source stays online, with its last values, until its readings fail for a while.
                     let grace = (driver.read_every().as_secs() as i64 * 3).max(MISSED_READINGS_GRACE);
@@ -501,7 +518,7 @@ impl Runtime {
             .await
             .values()
             .filter(|r| match (&r.driver, r.last_read) {
-                (Some(d), Some(last)) => last.elapsed() >= d.read_every(),
+                (Some(d), Some(last)) => last.elapsed() >= read_wait(d.read_every(), r.failures, matches!(r.status.state, "offline" | "error")),
                 _ => true,
             })
             .map(|r| r.source.id)
@@ -747,5 +764,21 @@ impl Runtime {
                 Err(e) => tracing::error!("cannot stop the charge of {reference} (source {id}): {e}"),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_offline_source_is_read_less_and_less_often() {
+        let every = Duration::from_secs(10);
+        assert_eq!(read_wait(every, 3, false), every, "a missed reading of an online source keeps its pace");
+        assert_eq!(read_wait(every, 0, true), every);
+        assert_eq!(read_wait(every, 1, true), Duration::from_secs(20));
+        assert_eq!(read_wait(every, 3, true), Duration::from_secs(80));
+        assert_eq!(read_wait(every, 40, true), RETRY_AT_MOST);
+        assert_eq!(read_wait(Duration::from_secs(600), 5, true), Duration::from_secs(600), "never sooner than its own pace");
     }
 }

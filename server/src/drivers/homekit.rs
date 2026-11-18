@@ -228,6 +228,10 @@ pub struct HomeKit {
     /// The last press of each remote, heard by the listening session.
     presses: Arc<std::sync::Mutex<HashMap<String, State>>>,
     listener: std::sync::Mutex<Option<tokio::task::AbortHandle>>,
+    /// Set once a reading's session was opened: the listening session waits for it, so that a
+    /// starting server does not open two sessions at once on an accessory that may still hold the
+    /// previous ones.
+    ready: tokio::sync::watch::Sender<bool>,
 }
 
 impl Drop for HomeKit {
@@ -266,7 +270,10 @@ fn presses_of(event: &Value, buttons: &HashMap<(u64, u64), (String, u32)>) -> Ve
 }
 
 /// Listens to the remotes of an accessory on a session of its own, opened again when it fails.
-async fn listen(addr: String, pairing: Pairing, presses: Arc<std::sync::Mutex<HashMap<String, State>>>, sink: Sink) {
+async fn listen(addr: String, pairing: Pairing, presses: Arc<std::sync::Mutex<HashMap<String, State>>>, sink: Sink, mut ready: tokio::sync::watch::Receiver<bool>) {
+    if ready.wait_for(|r| *r).await.is_err() {
+        return;
+    }
     let mut wait = Duration::from_secs(5);
     loop {
         let session = async {
@@ -322,7 +329,15 @@ impl HomeKit {
             return Err("invalid HomeKit accessory address".into());
         }
         let pairing: Pairing = secret.and_then(|s| serde_json::from_str(s).ok()).ok_or("a HomeKit accessory is added by pairing it with its code")?;
-        Ok(Self { addr: host.to_string(), pairing, conn: Mutex::new(None), layout: Mutex::new(None), presses: Arc::default(), listener: std::sync::Mutex::new(None) })
+        Ok(Self {
+            addr: host.to_string(),
+            pairing,
+            conn: Mutex::new(None),
+            layout: Mutex::new(None),
+            presses: Arc::default(),
+            listener: std::sync::Mutex::new(None),
+            ready: tokio::sync::watch::channel(false).0,
+        })
     }
 
     /// GET on the session, opened (again) when needed.
@@ -331,6 +346,7 @@ impl HomeKit {
         for attempt in 0..2 {
             if conn.is_none() {
                 *conn = Some(Connection::verify(&self.addr, &self.pairing).await.map_err(from_hap)?);
+                self.ready.send_replace(true);
             }
             match conn.as_mut().expect("opened").get_json(path).await {
                 Ok(v) => return Ok(v),
@@ -350,6 +366,7 @@ impl HomeKit {
         for attempt in 0..2 {
             if conn.is_none() {
                 *conn = Some(Connection::verify(&self.addr, &self.pairing).await.map_err(from_hap)?);
+                self.ready.send_replace(true);
             }
             match conn.as_mut().expect("opened").put_json("/characteristics", &body).await {
                 Ok(()) => return Ok(()),
@@ -463,7 +480,7 @@ impl Driver for HomeKit {
     }
 
     fn listen(&self, sink: Sink) {
-        let task = tokio::spawn(listen(self.addr.clone(), self.pairing.clone(), self.presses.clone(), sink));
+        let task = tokio::spawn(listen(self.addr.clone(), self.pairing.clone(), self.presses.clone(), sink, self.ready.subscribe()));
         if let Some(previous) = self.listener.lock().unwrap_or_else(|e| e.into_inner()).replace(task.abort_handle()) {
             previous.abort();
         }
