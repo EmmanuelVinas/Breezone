@@ -1718,7 +1718,8 @@ export function ModulesTab({
       next.delete("airzone")
       return next
     })
-  const installations = status.data ?? []
+  // This module's installations: those reached through another server are that server's.
+  const installations = (status.data ?? []).filter((i) => !i.node)
   const airzoneOnline =
     installations.length > 0 &&
     installations.every((i) => i.connection.state === "online")

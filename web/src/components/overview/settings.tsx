@@ -398,21 +398,40 @@ function Settings({
         </>
       )
     }
-    case "device":
+    case "device": {
+      const chosen = home.devices.find((d) => d.id === c.device_id)
+      const fields = chosen ? chartedFields(chosen, home) : []
       return (
-        <Field label={t("Appareil")}>
-          <Pick
-            value={c.device_id !== undefined ? String(c.device_id) : undefined}
-            placeholder={t("Choisir")}
-            onChange={(v) => set({ device_id: Number(v) })}
-            choices={deviceChoices(
-              home.devices.filter(
-                (x) => shown(x) || deviceType(x).id === "remote"
-              )
-            )}
-          />
-        </Field>
+        <>
+          <Field label={t("Appareil")}>
+            <Pick
+              value={
+                c.device_id !== undefined ? String(c.device_id) : undefined
+              }
+              placeholder={t("Choisir")}
+              onChange={(v) => set({ device_id: Number(v), curve: undefined })}
+              choices={deviceChoices(
+                home.devices.filter(
+                  (x) => shown(x) || deviceType(x).id === "remote"
+                )
+              )}
+            />
+          </Field>
+          {fields.length > 0 && (
+            <Field label={t("Courbe des dernières 24 h")}>
+              <Pick
+                value={typeof c.curve === "string" ? c.curve : "none"}
+                onChange={(v) => set({ curve: v === "none" ? undefined : v })}
+                choices={[
+                  { value: "none", label: t("Sans courbe : ses commandes") },
+                  ...fields.map((f) => ({ value: f.name, label: f.label })),
+                ]}
+              />
+            </Field>
+          )}
+        </>
       )
+    }
     case "linky":
       return (
         <Field label={t("Période")}>
@@ -1066,7 +1085,7 @@ export function BlockDialog({
                       key={e.key}
                       type="button"
                       onClick={() => setDraft(e.block)}
-                      className="group grid content-start gap-2 rounded-3xl border border-transparent p-2 text-left transition-colors hover:border-primary/50 hover:bg-accent/40 focus-visible:border-primary focus-visible:outline-none"
+                      className="group grid content-start gap-2 rounded-3xl border border-border/50 p-2 text-left transition-colors hover:border-primary/50 hover:bg-accent/40 focus-visible:border-primary focus-visible:outline-none"
                     >
                       <Preview block={e.block} />
                       <span className="truncate px-2 pb-1 text-sm font-medium">

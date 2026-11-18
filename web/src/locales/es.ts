@@ -1964,6 +1964,10 @@ const es: Record<string, string> = {
   "Aucun automatisme sur ce bouton": "Ninguna automatización en este botón",
   "Bouton {n}": "Botón {n}",
   "Aucun automatisme": "Ninguna automatización",
+  "Dernières 24 h": "Últimas 24 h",
+  "La courbe vient avec l'historique.": "La curva llega con el historial.",
+  "Courbe des dernières 24 h": "Curva de las últimas 24 h",
+  "Sans courbe : ses commandes": "Sin curva: sus mandos",
 }
 
 export default es

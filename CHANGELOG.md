@@ -6,6 +6,21 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Overview: the « Device » block of a measure can show its curve of the last 24 hours, its value
+  large, as the figures of the energy page. In « Add a block », each component has a fine frame,
+  so that its name goes with its preview.
+
+### Fixed
+
+- The lists of choices open below their field and keep where they are scrolled: aligned on the
+  chosen item, they jumped back to it at each refresh of the page (every few seconds).
+- Settings › Modules › Airzone: the dot of the module only counts this server's installations (one
+  reached through another server no longer turns it orange), and the card « Your installations »
+  lists them again (this server's were all left out). It now shows only when there is something to
+  link: an installation of the Airzone account not reached yet, or a WebServer in none of them.
+
 ## [0.11.0-beta.43] - 2026-11-18
 
 ### Fixed

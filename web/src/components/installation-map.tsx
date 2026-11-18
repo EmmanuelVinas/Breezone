@@ -497,7 +497,8 @@ export function InstallationMap({ openFor }: { openFor?: string | null }) {
   // server's, shared in Settings › Servers.
   const mine = list.filter(
     (c) =>
-      !status.data?.some((s) => s.id === c.installation_id && s.node !== null)
+      // `node` is left out of the answer for this server's own installations.
+      !status.data?.some((s) => s.id === c.installation_id && s.node != null)
   )
   const orphans = all.filter(
     (i) => !list.some((c) => c.installation_id === i.id)
@@ -509,6 +510,13 @@ export function InstallationMap({ openFor }: { openFor?: string | null }) {
   const current = list.find((c) => c.cloud_id === editing)
   const orphanEditing = all.find((i) => i.id === linkingLocal)
   const subnet = discovery.data?.subnet ?? discovery.data?.effective ?? null
+  // Shown only when there is something to do: an installation of the account not reached yet, or
+  // a WebServer that is in no installation of the account (the WebServers card says the rest).
+  const settled =
+    (list.length > 0 || all.length > 0) &&
+    mine.every((c) => c.installation_id !== null) &&
+    orphans.length === 0
+  if (cloud.isLoading || configs.isLoading || (settled && !current)) return null
 
   return (
     <Card className="rounded-3xl">

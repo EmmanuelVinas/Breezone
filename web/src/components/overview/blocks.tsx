@@ -445,8 +445,48 @@ function RemoteCard({ device }: { device: DeviceView }) {
   )
 }
 
+/** A measure with its curve of the last 24 hours, its value large (as the figures of a page). */
+function MeasureTile({ d, curve }: { d: DeviceView; curve: string }) {
+  const { value, tone } = look(d)
+  const history = useQuery({
+    queryKey: ["device-history", d.id, 24],
+    queryFn: () => api.deviceHistory(d.id, 24, 96),
+    refetchInterval: 5 * 60_000,
+  })
+  const points = history.data?.series[curve] ?? []
+  return (
+    <Card className="h-full rounded-3xl">
+      <CardContent className="grid h-full content-start gap-1">
+        <div
+          className={cn(
+            "flex items-center gap-2 text-sm font-medium",
+            tone ?? "text-primary"
+          )}
+        >
+          <DeviceTypeIcon of={deviceType(d)} className="size-4" aria-hidden />
+          <span className="min-w-0 truncate">{d.name}</span>
+        </div>
+        <div className="tabular font-heading text-3xl font-semibold">
+          {d.available ? (value ?? "–") : t("Indisponible")}
+        </div>
+        {points.length > 1 ? (
+          <Sparkline
+            points={points}
+            className={cn("mt-2 h-14 w-full", tone ?? "text-primary")}
+            label={t("Dernières 24 h")}
+          />
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            {t("La courbe vient avec l'historique.")}
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 /** A device driven from the overview: the card of its own page, or its line with its switch. */
-function DeviceBlock({ id }: { id: number }) {
+function DeviceBlock({ id, curve }: { id: number; curve?: string }) {
   const { devices, installation } = useOverview()
   const qc = useQueryClient()
   const d = devices.find((x) => x.id === id)
@@ -515,6 +555,7 @@ function DeviceBlock({ id }: { id: number }) {
       break
     }
   }
+  if (curve) return <MeasureTile d={d} curve={curve} />
   const on = state(d).on === true
   return (
     <Card className="h-full rounded-3xl" style={glow(tint([d]))}>
@@ -950,7 +991,12 @@ export function BlockView({
     case "group":
       return <GroupBlock config={c as GroupConfig} />
     case "device":
-      return <DeviceBlock id={Number(c.device_id)} />
+      return (
+        <DeviceBlock
+          id={Number(c.device_id)}
+          curve={typeof c.curve === "string" ? c.curve : undefined}
+        />
+      )
     case "chart":
       return (
         <ChartBlock
