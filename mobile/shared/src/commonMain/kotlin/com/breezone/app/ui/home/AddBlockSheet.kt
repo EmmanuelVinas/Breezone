@@ -105,6 +105,8 @@ fun AddBlockSheet(ctx: HomeContext, onDismiss: () -> Unit, onAdd: (DashboardBloc
                 }
             }
         }
+        BlockKind.ZoneHistory, BlockKind.AirQuality -> shown.filter { d -> ctx.zoneOf(d)?.let { k != BlockKind.AirQuality || it.airQuality != null } == true }
+            .map { d -> Entry("z${d.id}", FzIcons.Thermometer, d.name) { onAdd(block(k.type, k.size, mapOf("device_id" to JsonPrimitive(d.id)))) } }
         BlockKind.Zones -> listOf(Entry("z-all", FzIcons.Thermometer, allZones) { onAdd(block(k.type, k.size)) }) +
             zoneGroups(ctx.installation).filterNotNull().map { g ->
                 Entry("z-$g", FzIcons.Thermometer, g) { onAdd(block(k.type, k.size, mapOf("group" to JsonPrimitive(g)))) }
@@ -164,4 +166,11 @@ private fun BlockKind.hint() = when (this) {
     BlockKind.Device -> Res.string.block_device_hint
     BlockKind.Chart -> Res.string.block_chart_hint
     BlockKind.Scenes -> Res.string.block_scenes_hint
+    BlockKind.ZoneHistory -> Res.string.block_zone_history_hint
+    BlockKind.AirQuality -> Res.string.block_air_quality_hint
+    BlockKind.Charger -> Res.string.block_charger_hint
+    BlockKind.ChargerCurve -> Res.string.block_charger_curve_hint
+    BlockKind.SolarToday -> Res.string.block_solar_today_hint
+    BlockKind.SolarPanels -> Res.string.block_solar_panels_hint
+    BlockKind.VentilationHouse -> Res.string.block_ventilation_house_hint
 }

@@ -29,9 +29,15 @@ import { WeatherCard } from "@/components/weather-card"
 import { PriceNow } from "@/components/electricity/electricity-tab"
 import { usePrice, useTariff } from "@/components/electricity/hooks"
 import { ZoneCard } from "@/components/zone-card"
-import { LightCard } from "@/pages/lights"
+import { LightCard, LightScenes } from "@/pages/lights"
 import { ShutterCard } from "@/pages/shutters"
-import { RoomCard } from "@/pages/ventilation"
+import { House, isRoom, isUnit, RoomCard } from "@/pages/ventilation"
+import { ChargerCard, PowerCurve } from "@/pages/charging"
+import { DaysCard, TodayCurve } from "@/pages/solar"
+import { SolarPanels } from "@/components/solar-panels"
+import { ZoneHistory } from "@/components/zone-history"
+import { AirQualityCard } from "@/components/air-quality"
+import { currentUser } from "@/lib/api"
 import { RoomIcon } from "@/lib/room-icons"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -54,6 +60,7 @@ import {
   groupDevices,
   measuredFlows,
   shown,
+  zoneOf,
 } from "./model"
 
 const state = (d: DeviceView) => (d.state ?? {}) as Record<string, unknown>
@@ -672,6 +679,79 @@ function ScenesBlock({ ids }: { ids?: number[] }) {
   )
 }
 
+/** The zone of the installation a device is (a block of a zone's history or air). */
+function useZone(id: number) {
+  const { devices, installation } = useOverview()
+  const d = devices.find((x) => x.id === id)
+  const ref = d ? zoneOf(d) : undefined
+  return ref
+    ? installation.zones.find(
+        (z) => z.system_id === ref.system_id && z.zone_id === ref.zone_id
+      )
+    : undefined
+}
+
+function ZoneHistoryBlock({ id }: { id: number }) {
+  const zone = useZone(id)
+  return zone ? <ZoneHistory zone={zone} /> : <Missing />
+}
+
+function AirQualityBlock({ id }: { id: number }) {
+  const zone = useZone(id)
+  return zone ? <AirQualityCard zone={zone} /> : <Missing />
+}
+
+function Missing() {
+  return <Placeholder label={t("Appareil indisponible")} />
+}
+
+/** A charger (the one chosen, else the first): its card of the charging page, or its curve. */
+function ChargerBlock({ id, curve }: { id?: number; curve: boolean }) {
+  const { devices } = useOverview()
+  const chargers = devices.filter((d) => d.traits.includes("ev.charger@1"))
+  const d = chargers.find((x) => x.id === id) ?? chargers[0]
+  // When the devices were last read: the end of a charge is counted from it.
+  const readAt =
+    useQuery({ queryKey: ["devices"], queryFn: api.devices }).dataUpdatedAt /
+    1000
+  if (!d) return <Missing />
+  return curve ? (
+    <PowerCurve device={d} />
+  ) : (
+    <ChargerCard device={d} readAt={readAt} />
+  )
+}
+
+function SolarPanelsBlock() {
+  const { devices } = useOverview()
+  const now = new Date()
+  const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`
+  return <SolarPanels devices={devices} today={day} withCurve />
+}
+
+function VentilationBlock() {
+  const { devices } = useOverview()
+  const unit = devices.find(isUnit)
+  if (!unit) return <Missing />
+  const rooms = devices.filter(
+    (d) => isRoom(d) && d.source_id === unit.source_id
+  )
+  return <House unit={unit} rooms={rooms} canDrive={unit.can_control} />
+}
+
+function LightScenesBlock() {
+  const scenes = useQuery({
+    queryKey: ["scenes"],
+    queryFn: api.scenes,
+    staleTime: 60_000,
+  })
+  const list = scenes.data ?? []
+  if (list.length === 0) return <Placeholder label={t("Aucune scène.")} />
+  return (
+    <LightScenes scenes={list} canDrive={currentUser()?.role === "admin"} />
+  )
+}
+
 /** A block of the overview; one of a type this version does not know shows nothing. */
 /** While editing, a block with nothing to show yet still shows what it is. */
 function Placeholder({ label }: { label: string }) {
@@ -748,6 +828,28 @@ export function BlockView({
       return <EnergyMeasuresBlock config={c} />
     case "energy_surplus":
       return <EnergySurplusBlock />
+    case "zone_history":
+      return <ZoneHistoryBlock id={Number(c.device_id)} />
+    case "air_quality":
+      return <AirQualityBlock id={Number(c.device_id)} />
+    case "light_scenes":
+      return <LightScenesBlock />
+    case "charger":
+    case "charger_curve":
+      return (
+        <ChargerBlock
+          id={typeof c.device_id === "number" ? c.device_id : undefined}
+          curve={block.type === "charger_curve"}
+        />
+      )
+    case "solar_today":
+      return <TodayCurve />
+    case "solar_days":
+      return <DaysCard />
+    case "solar_panels":
+      return <SolarPanelsBlock />
+    case "ventilation_house":
+      return <VentilationBlock />
     default:
       return null
   }

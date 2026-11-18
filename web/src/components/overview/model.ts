@@ -27,6 +27,15 @@ export type BlockType =
   | "energy_breakdown"
   | "energy_measures"
   | "energy_surplus"
+  | "zone_history"
+  | "air_quality"
+  | "light_scenes"
+  | "charger"
+  | "charger_curve"
+  | "solar_today"
+  | "solar_days"
+  | "solar_panels"
+  | "ventilation_house"
 
 export type EnergyFlow = "solar" | "home" | "battery" | "grid"
 
@@ -46,6 +55,15 @@ export const BLOCK_LABEL: Record<BlockType, string> = {
   energy_breakdown: t("Répartition par usage"),
   energy_measures: t("Appareils mesurés"),
   energy_surplus: t("Pilotage sur le surplus"),
+  zone_history: t("Historique d'une zone"),
+  air_quality: t("Qualité de l'air d'une zone"),
+  light_scenes: t("Scènes des lumières"),
+  charger: t("Borne, avec ses commandes"),
+  charger_curve: t("Puissance de la borne"),
+  solar_today: t("Production de la journée"),
+  solar_days: t("Production jour par jour"),
+  solar_panels: t("Micro-onduleurs et panneaux"),
+  ventilation_house: t("Ventilation de la maison"),
 }
 
 /** Where a type of block comes from: the page it is a part of (the menu of blocks groups them). */
@@ -65,6 +83,15 @@ export const BLOCK_GROUP: Record<BlockType, string> = {
   energy_breakdown: t("Énergie"),
   energy_measures: t("Énergie"),
   energy_surplus: t("Énergie"),
+  zone_history: t("Climatisation"),
+  air_quality: t("Climatisation"),
+  light_scenes: t("Lumières"),
+  charger: t("Recharge"),
+  charger_curve: t("Recharge"),
+  solar_today: t("Solaire"),
+  solar_days: t("Solaire"),
+  solar_panels: t("Solaire"),
+  ventilation_house: t("Ventilation"),
 }
 
 export const FLOW_LABEL: Record<EnergyFlow, string> = {
@@ -97,6 +124,15 @@ export const DEFAULT_SIZE: Record<BlockType, DashboardSize> = {
   energy_breakdown: "half",
   energy_measures: "full",
   energy_surplus: "full",
+  zone_history: "half",
+  air_quality: "half",
+  light_scenes: "full",
+  charger: "full",
+  charger_curve: "half",
+  solar_today: "half",
+  solar_days: "half",
+  solar_panels: "full",
+  ventilation_house: "full",
 }
 
 export const newId = () => Math.random().toString(36).slice(2, 10)

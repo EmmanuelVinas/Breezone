@@ -1742,6 +1742,20 @@ const en: Record<string, string> = {
   "{type} · toute la maison ({n})": "{type} · whole home ({n})",
   "{type} · {room} ({n})": "{type} · {room} ({n})",
   "Groupe sans appareil": "Group with no device",
+  "Historique d'une zone": "A zone's history",
+  "Qualité de l'air d'une zone": "A zone's air quality",
+  "Scènes des lumières": "Light scenes",
+  "Borne, avec ses commandes": "Charger, with its controls",
+  "Puissance de la borne": "Charger power",
+  "Production de la journée": "Today's production",
+  "Production jour par jour": "Production day by day",
+  "Micro-onduleurs et panneaux": "Micro-inverters and panels",
+  "Ventilation de la maison": "Home ventilation",
+  "Borne": "Charger",
+  "Chiffres montrés (aucun coché : tous)": "Figures shown (none ticked: all)",
+  "Graphiques": "Charts",
+  "Retour aux composants": "Back to the components",
+  "Rien à ajouter pour l'instant.": "Nothing to add yet.",
 }
 
 export default en

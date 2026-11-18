@@ -246,50 +246,59 @@ fun SolarScreen(serverId: String, onBack: (() -> Unit)? = null) {
     val data = all[serverId] ?: ServerDevices()
     val inverters = data.withTrait(TraitIds.INVERTER)
     val panels = data.withTrait(TraitIds.PANEL)
-    val sun = Fz.colors.warning
     Scaffold(topBar = { FzTopBar(stringResource(Res.string.house_solar), null, onBack) }) { padding ->
         LazyColumn(
             Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item(key = "now", contentType = "now") {
-                SectionCard {
-                    Caption(stringResource(Res.string.solar_now))
-                    Text(formatPower(live?.solar ?: inverters.sumOf { it.stateAs(EnergyPowerState.serializer())?.power ?: 0.0 }), fontSize = 40.sp, fontWeight = FontWeight.SemiBold, color = sun)
-                    day?.totals?.production?.let { Caption(stringResource(Res.string.solar_today, formatEnergy(it))) }
-                    if (day != null) {
-                        PowerDayChart(
-                            listOf(PowerSeries(day.points.mapNotNull { p -> p.solar?.let { p.ts to it } }, sun, area = true)),
-                            day.points.firstOrNull()?.ts ?: 0L,
-                            Modifier.fillMaxWidth().height(150.dp),
-                        )
-                    }
-                }
-            }
+            item(key = "now", contentType = "now") { SolarNowCard(live, day, inverters) }
             inverters.forEach { inv ->
-                item(key = "inv-${inv.id}", contentType = "inverter") {
-                    val s = inv.stateAs(SolarInverterState.serializer())
-                    val power = inv.stateAs(EnergyPowerState.serializer())?.power
-                    val mine = panels.filter { p -> p.stateAs(SolarPanelState.serializer())?.inverter == inv.reference.toString().trim('"') || panels.size == (s?.panels ?: -1L).toInt() }
-                    DeviceGroupCard(inv.name, listOfNotNull(power?.let(::formatPower), s?.energyToday?.let { stringResource(Res.string.solar_today, formatEnergy(it)) }).joinToString(" · ")) {
-                        (mine.ifEmpty { panels }).forEach { p ->
-                            val ps = p.stateAs(SolarPanelState.serializer())
-                            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                IconBadge(FzIcons.Sun, sun, active = (ps?.power ?: 0.0) > 0, size = 34.dp)
-                                Spacer(Modifier.width(12.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text(p.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    ps?.energyToday?.let { Caption(stringResource(Res.string.solar_today, formatEnergy(it))) }
-                                }
-                                Text(formatPower(ps?.power), fontWeight = FontWeight.Medium)
-                            }
-                        }
-                        if (s?.temperature != null) Caption(stringResource(Res.string.solar_temperature, s.temperature.roundToInt()))
-                    }
-                }
+                item(key = "inv-${inv.id}", contentType = "inverter") { InverterCard(inv, panels) }
             }
         }
+    }
+}
+
+/** What the panels make now, and their curve of the day. */
+@Composable
+internal fun SolarNowCard(live: EnergyLive?, day: EnergyDay?, inverters: List<DeviceView>) {
+    val sun = Fz.colors.warning
+    SectionCard {
+        Caption(stringResource(Res.string.solar_now))
+        Text(formatPower(live?.solar ?: inverters.sumOf { it.stateAs(EnergyPowerState.serializer())?.power ?: 0.0 }), fontSize = 40.sp, fontWeight = FontWeight.SemiBold, color = sun)
+        day?.totals?.production?.let { Caption(stringResource(Res.string.solar_today, formatEnergy(it))) }
+        if (day != null) {
+            PowerDayChart(
+                listOf(PowerSeries(day.points.mapNotNull { p -> p.solar?.let { p.ts to it } }, sun, area = true)),
+                day.points.firstOrNull()?.ts ?: 0L,
+                Modifier.fillMaxWidth().height(150.dp),
+            )
+        }
+    }
+}
+
+/** A micro-inverter and its panels, each with what it makes now and today. */
+@Composable
+internal fun InverterCard(inv: DeviceView, panels: List<DeviceView>) {
+    val sun = Fz.colors.warning
+    val s = inv.stateAs(SolarInverterState.serializer())
+    val power = inv.stateAs(EnergyPowerState.serializer())?.power
+    val mine = panels.filter { p -> p.stateAs(SolarPanelState.serializer())?.inverter == inv.reference.toString().trim('"') || panels.size == (s?.panels ?: -1L).toInt() }
+    DeviceGroupCard(inv.name, listOfNotNull(power?.let(::formatPower), s?.energyToday?.let { stringResource(Res.string.solar_today, formatEnergy(it)) }).joinToString(" · ")) {
+        (mine.ifEmpty { panels }).forEach { p ->
+            val ps = p.stateAs(SolarPanelState.serializer())
+            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                IconBadge(FzIcons.Sun, sun, active = (ps?.power ?: 0.0) > 0, size = 34.dp)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(p.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    ps?.energyToday?.let { Caption(stringResource(Res.string.solar_today, formatEnergy(it))) }
+                }
+                Text(formatPower(ps?.power), fontWeight = FontWeight.Medium)
+            }
+        }
+        if (s?.temperature != null) Caption(stringResource(Res.string.solar_temperature, s.temperature.roundToInt()))
     }
 }
 
@@ -312,15 +321,6 @@ fun ChargingScreen(serverId: String, onBack: (() -> Unit)? = null) {
     LaunchedEffect(serverId) { hub.followDevices(serverId, everyMs = 5_000) }
     val data = all[serverId] ?: ServerDevices()
     val charger: DeviceView? = data.withTrait(TraitIds.CHARGER).firstOrNull()
-    var history by remember { mutableStateOf<List<List<Double>>>(emptyList()) }
-    var oldest by remember { mutableStateOf<Long?>(null) }
-    var hours by remember { mutableIntStateOf(Periods.DAY) }
-    LaunchedEffect(serverId, charger?.id, hours) {
-        val id = charger?.id ?: return@LaunchedEffect
-        val read = runCatching { hub.api(serverId)?.deviceHistoryOver(id, hours) }.getOrNull() ?: return@LaunchedEffect
-        history = read.series["power"].orEmpty()
-        oldest = read.oldest
-    }
     Scaffold(topBar = {
         FzTopBar(stringResource(Res.string.house_charging), charger?.name, onBack) {
             charger?.let { CommandIndicator(status["$serverId/${it.id}"], Modifier.padding(end = 16.dp)) }
@@ -336,60 +336,9 @@ fun ChargingScreen(serverId: String, onBack: (() -> Unit)? = null) {
             }
             if (charger != null) {
                 val s = charger.stateAs(EvChargerState.serializer()) ?: EvChargerState()
-                val power = charger.stateAs(EnergyPowerState.serializer())?.power
                 val act: (String, JsonObject, JsonObject?) -> Unit = { action, params, optimistic -> hub.act(serverId, charger, "ev.charger", action, params, optimistic) }
-                val charging = s.status == EvChargerStatus.Charging
-                item(key = "hero", contentType = "hero") {
-                    SectionCard {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconBadge(FzIcons.PlugZap, MaterialTheme.colorScheme.primary, active = charging, size = 48.dp)
-                            Spacer(Modifier.width(12.dp))
-                            Column {
-                                Text(chargerLabel(s.shown), style = MaterialTheme.typography.titleMedium)
-                                if (s.vehicle == true && s.sessionSecs > 0) Caption(stringResource(Res.string.charger_session, formatEnergy(s.sessionEnergy), s.sessionSecs.toInt() / 3600, s.sessionSecs.toInt() % 3600 / 60))
-                            }
-                        }
-                        Text(
-                            formatPower(power ?: 0.0),
-                            fontSize = 48.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (charging) MaterialTheme.colorScheme.primary else Fz.colors.muted,
-                            modifier = Modifier.align(Alignment.CenterHorizontally),
-                        )
-                        s.energyGoal?.let { goal ->
-                            Box(Modifier.fillMaxWidth().height(10.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)) {
-                                Box(Modifier.fillMaxHeight().fillMaxWidth((s.sessionEnergy / goal).toFloat().coerceIn(0f, 1f)).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
-                            }
-                            Caption(stringResource(Res.string.charger_goal, formatEnergy(goal)))
-                        }
-                        if (s.vehicle == true) {
-                            if (charging || !s.paused) {
-                                OutlinedButton(
-                                    onClick = { act("stop", JsonObject(emptyMap()), buildJsonObject { put("paused", true) }) },
-                                    enabled = charger.usable,
-                                    shape = Fz.shapes.button,
-                                    modifier = Modifier.fillMaxWidth(),
-                                ) { Text(stringResource(Res.string.charger_pause)) }
-                            } else {
-                                Button(
-                                    onClick = { act("start", JsonObject(emptyMap()), buildJsonObject { put("paused", false) }) },
-                                    enabled = charger.usable,
-                                    shape = Fz.shapes.button,
-                                    modifier = Modifier.fillMaxWidth(),
-                                ) { Text(stringResource(Res.string.charger_start)) }
-                            }
-                        }
-                    }
-                }
-                if (history.size > 1) {
-                    item(key = "history", contentType = "history") {
-                        SectionCard {
-                            SectionTitle(stringResource(Res.string.charger_power))
-                            PeriodChips(hours, oldest) { hours = it }
-                            Sparkline(history, MaterialTheme.colorScheme.primary, Modifier.fillMaxWidth().height(72.dp))
-                        }
-                    }
-                }
+                item(key = "hero", contentType = "hero") { ChargerHero(serverId, charger) }
+                item(key = "history", contentType = "history") { ChargerPowerCard(serverId, charger) }
                 item(key = "settings", contentType = "settings") {
                     SectionCard {
                         SectionTitle(stringResource(Res.string.charger_settings))
@@ -427,5 +376,75 @@ fun ChargingScreen(serverId: String, onBack: (() -> Unit)? = null) {
                 }
             }
         }
+    }
+}
+
+/** A charger now: what it does, the power it draws, its goal, and pause or start. */
+@Composable
+internal fun ChargerHero(serverId: String, charger: DeviceView) {
+    val hub = koinInject<Hub>()
+    val s = charger.stateAs(EvChargerState.serializer()) ?: EvChargerState()
+    val power = charger.stateAs(EnergyPowerState.serializer())?.power
+    val act: (String, JsonObject, JsonObject?) -> Unit = { action, params, optimistic -> hub.act(serverId, charger, "ev.charger", action, params, optimistic) }
+    val charging = s.status == EvChargerStatus.Charging
+    SectionCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconBadge(FzIcons.PlugZap, MaterialTheme.colorScheme.primary, active = charging, size = 48.dp)
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text(chargerLabel(s.shown), style = MaterialTheme.typography.titleMedium)
+                if (s.vehicle == true && s.sessionSecs > 0) Caption(stringResource(Res.string.charger_session, formatEnergy(s.sessionEnergy), s.sessionSecs.toInt() / 3600, s.sessionSecs.toInt() % 3600 / 60))
+            }
+        }
+        Text(
+            formatPower(power ?: 0.0),
+            fontSize = 48.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = if (charging) MaterialTheme.colorScheme.primary else Fz.colors.muted,
+            modifier = Modifier.align(Alignment.CenterHorizontally),
+        )
+        s.energyGoal?.let { goal ->
+            Box(Modifier.fillMaxWidth().height(10.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)) {
+                Box(Modifier.fillMaxHeight().fillMaxWidth((s.sessionEnergy / goal).toFloat().coerceIn(0f, 1f)).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
+            }
+            Caption(stringResource(Res.string.charger_goal, formatEnergy(goal)))
+        }
+        if (s.vehicle == true) {
+            if (charging || !s.paused) {
+                OutlinedButton(
+                    onClick = { act("stop", JsonObject(emptyMap()), buildJsonObject { put("paused", true) }) },
+                    enabled = charger.usable,
+                    shape = Fz.shapes.button,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(stringResource(Res.string.charger_pause)) }
+            } else {
+                Button(
+                    onClick = { act("start", JsonObject(emptyMap()), buildJsonObject { put("paused", false) }) },
+                    enabled = charger.usable,
+                    shape = Fz.shapes.button,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(stringResource(Res.string.charger_start)) }
+            }
+        }
+    }
+}
+
+/** The power a charger drew over a period (none until it has a history). */
+@Composable
+internal fun ChargerPowerCard(serverId: String, charger: DeviceView) {
+    val hub = koinInject<Hub>()
+    var history by remember { mutableStateOf<List<List<Double>>>(emptyList()) }
+    var oldest by remember { mutableStateOf<Long?>(null) }
+    var hours by remember { mutableIntStateOf(Periods.DAY) }
+    LaunchedEffect(serverId, charger.id, hours) {
+        val read = runCatching { hub.api(serverId)?.deviceHistoryOver(charger.id, hours) }.getOrNull() ?: return@LaunchedEffect
+        history = read.series["power"].orEmpty()
+        oldest = read.oldest
+    }
+    if (history.size < 2) return
+    SectionCard {
+        SectionTitle(stringResource(Res.string.charger_power))
+        PeriodChips(hours, oldest) { hours = it }
+        Sparkline(history, MaterialTheme.colorScheme.primary, Modifier.fillMaxWidth().height(72.dp))
     }
 }

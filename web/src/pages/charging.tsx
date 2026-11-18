@@ -251,7 +251,7 @@ const curveConfig = {
  * The charging power over the last 24 hours, and the solar surplus of today (what the home
  * returns to the grid, plus what the charger takes): it needs a main meter and a solar measure.
  */
-function PowerCurve({ device }: { device: DeviceView }) {
+export function PowerCurve({ device }: { device: DeviceView }) {
   const [period, setPeriod] = useState<HistoryPeriod>("24h")
   const history = useQuery({
     queryKey: ["device-history", device.id, period],
@@ -488,7 +488,7 @@ function StatesCard() {
 }
 
 /** `readAt`: when the state was read (seconds). */
-function ChargerCard({
+export function ChargerCard({
   device,
   readAt,
 }: {

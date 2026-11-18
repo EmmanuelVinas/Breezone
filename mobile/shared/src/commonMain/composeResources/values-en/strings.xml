@@ -601,4 +601,24 @@
         <item quantity="one">%1$d device</item>
         <item quantity="other">%1$d devices</item>
     </plurals>
+    <string name="block_zone_history">A zone’s history</string>
+    <string name="block_zone_history_hint">Its temperature, setpoint and humidity curves</string>
+    <string name="block_air_quality">A zone’s air quality</string>
+    <string name="block_air_quality_hint">The zone’s air, day by day</string>
+    <string name="block_charger">Charger</string>
+    <string name="block_charger_hint">Its state, its power, pause or start</string>
+    <string name="block_charger_curve">Charger power</string>
+    <string name="block_charger_curve_hint">What it drew over the period</string>
+    <string name="block_solar_today">Solar production</string>
+    <string name="block_solar_today_hint">Now, and the day’s curve</string>
+    <string name="block_solar_panels">Micro-inverters and panels</string>
+    <string name="block_solar_panels_hint">What each panel makes</string>
+    <string name="block_ventilation_house">Home ventilation</string>
+    <string name="block_ventilation_house_hint">The level, the flow and the boost</string>
+    <string name="block_settings">Card settings</string>
+    <string name="block_settings_devices">Devices shown on the card</string>
+    <string name="block_settings_scenes">Scenes shown (none ticked: the installation’s)</string>
+    <string name="block_settings_measures">Measures</string>
+    <string name="block_settings_none">This card has no settings.</string>
+    <string name="block_settings_apply">Apply</string>
 </resources>

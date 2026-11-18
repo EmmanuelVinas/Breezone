@@ -401,6 +401,12 @@ sans pièce) ou `{type}` (un type d'appareil), avec `hidden` (appareils masqués
 `energy_curve`, `energy_breakdown` (les parties de son écran Énergie), et `chart`
 `{device_id, fields, hours}`.
 
+Les parties des autres pages se posent aussi sur un tableau de bord (web et app) : `zone_history`
+et `air_quality` `{device_id}` (une zone), `light_scenes` (scènes Hue), `charger` et `charger_curve`
+`{device_id?}` (la première borne sans `device_id`), `solar_today`, `solar_days`, `solar_panels`,
+`ventilation_house`. `scenes` peut porter `routine_ids`, et `group` `hidden` (les appareils de la
+pièce ou du type laissés hors de la carte).
+
 `GET /api/devices/charted` 🔒 : `[{device_id, fields}]`, les appareils qui ont un historique et ses
 champs (ce qu'un graphique peut montrer). L'historique d'une zone Airzone se lit aussi par
 `/api/devices/{id}/history` (`room_temp`, `humidity`, `setpoint`). Un bloc `group` peut avoir

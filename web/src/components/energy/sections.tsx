@@ -249,11 +249,36 @@ export type KpiCurves = Partial<
   Record<"production" | "consumption" | "grid" | "cost", number[]>
 >
 
+/** The figures of the period, each of which a block may show alone. */
+export const KPI_IDS = [
+  "production",
+  "consumption",
+  "grid",
+  "self",
+  "autonomy",
+  "cost",
+  "gains",
+  "battery",
+] as const
+export type KpiId = (typeof KPI_IDS)[number]
+
+export const KPI_LABEL: Record<KpiId, string> = {
+  production: t("Production"),
+  consumption: t("Consommation"),
+  grid: t("Réseau électrique"),
+  self: t("Autoconsommation"),
+  autonomy: t("Autonomie"),
+  cost: t("Coût"),
+  gains: t("Gagné grâce au solaire"),
+  battery: t("Batterie"),
+}
+
 export function Kpis({
   totals,
   live,
   showMoney = true,
   curves,
+  only,
 }: {
   totals: DayEnergy
   live: EnergyLive
@@ -261,7 +286,10 @@ export function Kpis({
   showMoney?: boolean
   /** A curve at the bottom of the tiles (none: no curve). */
   curves?: KpiCurves
+  /** The figures shown (none: all those the home has). */
+  only?: KpiId[]
 }) {
+  const show = (id: KpiId) => !only?.length || only.includes(id)
   const { roles } = live
   const contract = useTariff()
   const currency = contract.data?.contract?.currency ?? "EUR"
@@ -278,8 +306,14 @@ export function Kpis({
         )
       : null
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-      {roles.solar && (
+    <div
+      className={
+        only?.length === 1
+          ? "grid h-full"
+          : "grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5"
+      }
+    >
+      {show("production") && roles.solar && (
         <Kpi
           icon={Sun}
           label={t("Production")}
@@ -293,24 +327,26 @@ export function Kpis({
           curve={curves?.production}
         />
       )}
-      <Kpi
-        icon={Home}
-        label={t("Consommation")}
-        value={kwh(totals.consumption)}
-        sub={[
-          roles.solar && totals.self_consumed !== null
-            ? t("dont {kwh} solaires", { kwh: kwh(totals.self_consumed) })
-            : null,
-          cost
-            ? t("vaut {price}", { price: euros(cost.energy + cost.saved) })
-            : null,
-        ]
-          .filter(Boolean)
-          .join(" · ")}
-        color={COLOR.home}
-        curve={curves?.consumption}
-      />
-      {roles.grid && (
+      {show("consumption") && (
+        <Kpi
+          icon={Home}
+          label={t("Consommation")}
+          value={kwh(totals.consumption)}
+          sub={[
+            roles.solar && totals.self_consumed !== null
+              ? t("dont {kwh} solaires", { kwh: kwh(totals.self_consumed) })
+              : null,
+            cost
+              ? t("vaut {price}", { price: euros(cost.energy + cost.saved) })
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+          color={COLOR.home}
+          curve={curves?.consumption}
+        />
+      )}
+      {show("grid") && roles.grid && (
         <Kpi
           icon={UtilityPole}
           label={t("Réseau électrique")}
@@ -327,7 +363,7 @@ export function Kpis({
           curve={curves?.grid}
         />
       )}
-      {roles.solar && selfShare !== null && (
+      {show("self") && roles.solar && selfShare !== null && (
         <Kpi
           icon={Leaf}
           label={t("Autoconsommation")}
@@ -336,7 +372,7 @@ export function Kpis({
           color="var(--primary)"
         />
       )}
-      {autonomy !== null && (
+      {show("autonomy") && autonomy !== null && (
         <Kpi
           icon={ShieldCheck}
           label={t("Autonomie")}
@@ -345,7 +381,7 @@ export function Kpis({
           color={COLOR.battery}
         />
       )}
-      {cost && (
+      {show("cost") && cost && (
         <Kpi
           icon={Euro}
           label={t("Coût")}
@@ -357,7 +393,7 @@ export function Kpis({
           curve={curves?.cost}
         />
       )}
-      {cost && roles.solar && (
+      {show("gains") && cost && roles.solar && (
         <Kpi
           icon={PiggyBank}
           label={t("Gagné grâce au solaire")}
@@ -373,7 +409,7 @@ export function Kpis({
           color={COLOR.solar}
         />
       )}
-      {roles.battery && (
+      {show("battery") && roles.battery && (
         <Kpi
           icon={BatteryCharging}
           label={t("Batterie")}

@@ -1760,6 +1760,20 @@ const es: Record<string, string> = {
   "{type} · toute la maison ({n})": "{type} · toda la casa ({n})",
   "{type} · {room} ({n})": "{type} · {room} ({n})",
   "Groupe sans appareil": "Grupo sin dispositivos",
+  "Historique d'une zone": "Historial de una zona",
+  "Qualité de l'air d'une zone": "Calidad del aire de una zona",
+  "Scènes des lumières": "Escenas de las luces",
+  "Borne, avec ses commandes": "Cargador, con sus mandos",
+  "Puissance de la borne": "Potencia del cargador",
+  "Production de la journée": "Producción del día",
+  "Production jour par jour": "Producción día a día",
+  "Micro-onduleurs et panneaux": "Microinversores y paneles",
+  "Ventilation de la maison": "Ventilación de la casa",
+  "Borne": "Cargador",
+  "Chiffres montrés (aucun coché : tous)": "Cifras mostradas (ninguna marcada: todas)",
+  "Graphiques": "Gráficos",
+  "Retour aux composants": "Volver a los componentes",
+  "Rien à ajouter pour l'instant.": "Nada que añadir por ahora.",
 }
 
 export default es

@@ -6,6 +6,22 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.34] - 2026-11-18
+
+### Added
+
+- Dashboards: “Add a block” shows every component of the home as it looks, by section on the left
+  (overview, rooms, types, devices, charts, energy, climate, lights, charging, solar, ventilation)
+  and their live previews on the right; a component is then set up beside its preview.
+- Dashboards: the parts of the other pages as blocks — a zone's history and its air quality, the
+  Hue scenes, the charger and its power, the solar production of the day and day by day, the
+  micro-inverters and their panels, the house's ventilation. Each figure of the period
+  (production, consumption, grid, self-consumption, autonomy, cost, solar gains, battery) can be
+  added on its own.
+- App: the same parts as cards of Home (zone history and air, charger and its power, solar
+  production, micro-inverters, ventilation), and card settings: the devices of a room or a type
+  the card shows (asked as soon as one is added), the scenes, the measures and period of a chart.
+
 ## [0.11.0-beta.33] - 2026-11-18
 
 ### Added

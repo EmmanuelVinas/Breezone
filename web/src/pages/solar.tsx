@@ -80,7 +80,7 @@ const curveConfig = {
 } satisfies ChartConfig
 
 /** Today's production, every 15 minutes, beside what the home used. */
-function TodayCurve() {
+export function TodayCurve() {
   const day = useQuery({
     queryKey: ["energy-day", "today"],
     queryFn: () => api.energyDay(),
@@ -194,7 +194,7 @@ const barsConfig = {
 } satisfies ChartConfig
 
 /** What the panels gave each day (or month), used on the spot or returned: 30 days to 5 years. */
-function DaysCard() {
+export function DaysCard() {
   const [period, setPeriod] = useState<HistoryPeriod>("30d")
   const count = period === "5y" ? 5 * 365 + 1 : period === "1y" ? 365 : 30
   const days = useQuery({

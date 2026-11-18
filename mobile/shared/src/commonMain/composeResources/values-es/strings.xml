@@ -597,4 +597,24 @@
         <item quantity="one">%1$d aparato</item>
         <item quantity="other">%1$d aparatos</item>
     </plurals>
+    <string name="block_zone_history">Historial de una zona</string>
+    <string name="block_zone_history_hint">Sus curvas de temperatura, consigna y humedad</string>
+    <string name="block_air_quality">Calidad del aire de una zona</string>
+    <string name="block_air_quality_hint">El aire de la zona, día a día</string>
+    <string name="block_charger">Cargador</string>
+    <string name="block_charger_hint">Su estado, su potencia, pausa o reanudar</string>
+    <string name="block_charger_curve">Potencia del cargador</string>
+    <string name="block_charger_curve_hint">Lo que consumió en el periodo</string>
+    <string name="block_solar_today">Producción solar</string>
+    <string name="block_solar_today_hint">Ahora, y la curva del día</string>
+    <string name="block_solar_panels">Microinversores y paneles</string>
+    <string name="block_solar_panels_hint">Lo que produce cada panel</string>
+    <string name="block_ventilation_house">Ventilación de la casa</string>
+    <string name="block_ventilation_house_hint">El nivel, el caudal y la sobreventilación</string>
+    <string name="block_settings">Ajustes de la tarjeta</string>
+    <string name="block_settings_devices">Aparatos mostrados en la tarjeta</string>
+    <string name="block_settings_scenes">Escenas mostradas (ninguna marcada: las de la instalación)</string>
+    <string name="block_settings_measures">Medidas</string>
+    <string name="block_settings_none">Esta tarjeta no tiene ajustes.</string>
+    <string name="block_settings_apply">Aplicar</string>
 </resources>

@@ -1,22 +1,26 @@
-import { useState } from "react"
-import { Plus, X } from "lucide-react"
+import { useMemo, useState } from "react"
+import { ChevronLeft, Plus, X } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import type {
   Charted,
   DashboardBlock,
   DashboardPage,
+  DashboardSize,
   EnergyLive,
   SurplusView,
   DeviceView,
+  Installation,
   Room,
   Routine,
   TraitInfo,
 } from "@/lib/api"
 import { deviceType, typeOrder } from "@/lib/device-icons"
 import { t } from "@/lib/i18n"
+import { cn } from "@/lib/utils"
 import { ROOM_ICONS, roomIconName } from "@/lib/room-icons"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { KPI_IDS, KPI_LABEL, type KpiId } from "@/components/energy/sections"
 import {
   Dialog,
   DialogContent,
@@ -42,6 +46,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { BlockType, EnergyFlow } from "./model"
+import { BlockView } from "./blocks"
 import {
   BLOCK_GROUP,
   BLOCK_LABEL,
@@ -66,6 +71,8 @@ type Home = {
   priced: boolean
   /** This server measures energy (the parts of the energy page have something to show). */
   energy: boolean
+  /** The installation shown: its zones. */
+  installation?: Installation
 }
 
 /** A choice of a list: its value, its words, its icon, and the heading it is listed under. */
@@ -168,6 +175,15 @@ function available(home: Home): BlockType[] {
     if (b === "price") return home.priced
     // The parts of the energy page: with a measure of the energy of this server.
     if (b.startsWith("energy_")) return home.energy
+    // The parts of the other pages: with the devices they show.
+    const has = (trait: string) =>
+      home.devices.some((d) => d.traits.includes(trait))
+    if (b === "zone_history" || b === "air_quality")
+      return home.devices.some((d) => zoneOf(d) !== undefined)
+    if (b === "light_scenes") return has("light@1")
+    if (b === "charger" || b === "charger_curve") return has("ev.charger@1")
+    if (b.startsWith("solar_")) return has("solar.inverter@1")
+    if (b === "ventilation_house") return has("ventilation.unit@1")
     return true
   })
 }
@@ -176,6 +192,8 @@ function available(home: Home): BlockType[] {
 export function complete(b: DashboardBlock) {
   const c = b.config
   if (b.type === "device") return typeof c.device_id === "number"
+  if (b.type === "zone_history" || b.type === "air_quality")
+    return typeof c.device_id === "number"
   if (b.type === "chart")
     return (
       typeof c.device_id === "number" &&
@@ -383,6 +401,42 @@ function Settings({
           />
         </Field>
       )
+    case "zone_history":
+    case "air_quality":
+      return (
+        <Field label={t("Zone")}>
+          <Pick
+            value={c.device_id !== undefined ? String(c.device_id) : undefined}
+            placeholder={t("Choisir")}
+            onChange={(v) => set({ device_id: Number(v) })}
+            choices={deviceChoices(
+              home.devices.filter((d) => zoneOf(d) !== undefined)
+            )}
+          />
+        </Field>
+      )
+    case "charger":
+    case "charger_curve": {
+      const chargers = home.devices.filter((d) =>
+        d.traits.includes("ev.charger@1")
+      )
+      // With one charger, nothing to choose: the block follows it.
+      if (chargers.length < 2)
+        return (
+          <p className="text-sm text-muted-foreground">
+            {t("Ce bloc n'a pas de réglage.")}
+          </p>
+        )
+      return (
+        <Field label={t("Borne")}>
+          <Pick
+            value={String(c.device_id ?? chargers[0].id)}
+            onChange={(v) => set({ device_id: Number(v) })}
+            choices={deviceChoices(chargers)}
+          />
+        </Field>
+      )
+    }
     case "chart": {
       const withData = home.devices.filter(
         (x) => chartedFields(x, home).length > 0
@@ -550,6 +604,30 @@ function Settings({
           </Field>
           {block.type === "energy_kpis" && (
             <>
+              <Field label={t("Chiffres montrés (aucun coché : tous)")}>
+                <div className="grid grid-cols-2 gap-2">
+                  {KPI_IDS.map((k) => {
+                    const chosen = (c.kpis as KpiId[] | undefined) ?? []
+                    return (
+                      <label
+                        key={k}
+                        className="flex items-center gap-2 text-sm"
+                      >
+                        <Checkbox
+                          checked={chosen.includes(k)}
+                          onCheckedChange={(v) => {
+                            const next = KPI_IDS.filter((x) =>
+                              x === k ? v === true : chosen.includes(x)
+                            )
+                            set({ kpis: next.length ? next : undefined })
+                          }}
+                        />
+                        {KPI_LABEL[k]}
+                      </label>
+                    )
+                  })}
+                </div>
+              </Field>
               <label className="flex items-center justify-between gap-4 text-sm">
                 <span>
                   {t("Courbe dans les tuiles")}
@@ -615,7 +693,173 @@ function Settings({
   }
 }
 
-/** Sets up a block: a new one (its type first), or one already on the overview. */
+/** A component of the catalog: the block it adds, under the heading of its page. */
+type Entry = {
+  key: string
+  group: string
+  label: string
+  block: DashboardBlock
+}
+
+/**
+ * Every component this home can show, ready to add: each energy figure and each period figure on
+ * its own, each room, each type, each device, each chart, the parts of the other pages.
+ */
+function catalog(home: Home): Entry[] {
+  const out: Entry[] = []
+  const add = (
+    group: string,
+    key: string,
+    label: string,
+    type: BlockType,
+    config: Record<string, unknown> = {},
+    size?: DashboardSize
+  ) => out.push({ key, group, label, block: newBlock(type, config, size) })
+  const roles = home.live?.roles
+  const devices = home.devices.filter(shown)
+  for (const type of available(home)) {
+    const group = BLOCK_GROUP[type]
+    switch (type) {
+      case "energy": {
+        const flows = measuredFlows(roles)
+        for (const f of flows)
+          add(group, `energy:${f}`, FLOW_LABEL[f], type, { flow: f })
+        if (flows.length > 1)
+          add(
+            group,
+            "energy:all",
+            t("Plusieurs mesures côte à côte"),
+            type,
+            { flows },
+            "half"
+          )
+        break
+      }
+      case "energy_kpis": {
+        add(group, "kpis", BLOCK_LABEL[type], type)
+        const has: Record<KpiId, boolean> = {
+          production: !!roles?.solar,
+          consumption: true,
+          grid: !!roles?.grid,
+          self: !!roles?.solar,
+          autonomy: !!roles?.grid && !!(roles?.solar || roles?.battery),
+          cost: home.priced,
+          gains: home.priced && !!roles?.solar,
+          battery: !!roles?.battery,
+        }
+        for (const k of KPI_IDS)
+          if (has[k])
+            add(group, `kpi:${k}`, KPI_LABEL[k], type, { kpis: [k] }, "quarter")
+        break
+      }
+      case "group": {
+        for (const r of home.rooms)
+          if (devices.some((d) => d.room_id === r.id))
+            add(t("Pièces"), `room:${r.id}`, r.name, type, { room_id: r.id })
+        if (devices.some((d) => d.room_id === null))
+          add(t("Pièces"), "room:none", t("Sans pièce"), type, {
+            room_id: null,
+          })
+        const types = [
+          ...new Map(
+            devices.map((d) => [deviceType(d).id, deviceType(d)])
+          ).values(),
+        ].sort((a, b) => typeOrder(a) - typeOrder(b))
+        for (const ty of types)
+          add(t("Types d'appareils"), `type:${ty.id}`, ty.label, type, {
+            type: ty.id,
+          })
+        break
+      }
+      case "device":
+        for (const d of devices)
+          add(t("Appareils"), `device:${d.id}`, d.name, type, {
+            device_id: d.id,
+          })
+        break
+      case "chart":
+        for (const d of home.devices) {
+          const fields = chartedFields(d, home)
+          if (fields.length)
+            add(
+              t("Graphiques"),
+              `chart:${d.id}`,
+              `${d.name} · ${fields[0].label}`,
+              type,
+              {
+                device_id: d.id,
+                fields: [fields[0].name],
+                hours: 24,
+              }
+            )
+        }
+        break
+      case "zone_history":
+      case "air_quality":
+        for (const d of home.devices)
+          if (zoneOf(d) && (type === "zone_history" || measuresAir(d, home)))
+            add(
+              group,
+              `${type}:${d.id}`,
+              `${BLOCK_LABEL[type]} · ${d.name}`,
+              type,
+              { device_id: d.id }
+            )
+        break
+      default:
+        add(group, type, BLOCK_LABEL[type], type)
+    }
+  }
+  return out
+}
+
+/** Whether the zone a device is measures its air (a card of its air has something to show). */
+function measuresAir(d: DeviceView, home: Home) {
+  const ref = zoneOf(d)
+  return !!home.installation?.zones.some(
+    (z) =>
+      z.system_id === ref?.system_id &&
+      z.zone_id === ref?.zone_id &&
+      z.air_quality != null
+  )
+}
+
+/** A block as it shows, smaller, to look at only (nothing in it can be clicked). */
+function Preview({
+  block,
+  tall = false,
+}: {
+  block: DashboardBlock
+  tall?: boolean
+}) {
+  return (
+    <div
+      inert
+      aria-hidden
+      className={cn(
+        "relative overflow-hidden rounded-3xl",
+        tall ? "max-h-96" : "h-44"
+      )}
+    >
+      <div
+        className="origin-top-left"
+        style={
+          tall ? undefined : { width: "166.667%", transform: "scale(0.6)" }
+        }
+      >
+        <BlockView block={block} editing />
+      </div>
+      {!tall && (
+        <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-popover to-transparent" />
+      )}
+    </div>
+  )
+}
+
+/**
+ * Sets up a block. A new one is picked among the components of the home, by section on the
+ * left and as they look on the right, then set up; one already on the page is set up at once.
+ */
 export function BlockDialog({
   initial,
   home,
@@ -630,55 +874,131 @@ export function BlockDialog({
   onClose: () => void
 }) {
   const [draft, setDraft] = useState<DashboardBlock | undefined>(initial)
+  const entries = useMemo(() => (initial ? [] : catalog(home)), [initial, home])
+  // The overview's own blocks first, then what gathers devices, then the parts of each page.
+  const order = [
+    t("Vue d'ensemble"),
+    t("Pièces"),
+    t("Types d'appareils"),
+    t("Appareils"),
+    t("Graphiques"),
+  ]
+  const rank = (g: string) =>
+    order.includes(g) ? order.indexOf(g) : order.length
+  const groups = [...new Set(entries.map((e) => e.group))].sort(
+    (a, b) => rank(a) - rank(b)
+  )
+  const [group, setGroup] = useState<string | undefined>(groups[0])
+  const shownGroup = group && groups.includes(group) ? group : groups[0]
+
+  if (initial)
+    return (
+      <Dialog open onOpenChange={(o) => !o && onClose()}>
+        <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("Réglages du bloc")}</DialogTitle>
+          </DialogHeader>
+          {draft && (
+            <div className="grid gap-4">
+              <Preview block={draft} tall />
+              <Settings
+                block={draft}
+                home={home}
+                page={page}
+                onChange={setDraft}
+              />
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              disabled={!draft || !complete(draft)}
+              onClick={() => draft && onDone(draft)}
+            >
+              {t("Appliquer")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    )
+
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>
-            {initial ? t("Réglages du bloc") : t("Ajouter un bloc")}
-          </DialogTitle>
+      <DialogContent className="flex h-[88svh] flex-col gap-0 p-0 sm:max-w-6xl">
+        <DialogHeader className="border-b p-5">
+          <DialogTitle>{t("Ajouter un bloc")}</DialogTitle>
         </DialogHeader>
-        <div className="grid gap-4">
-          {!initial && (
-            <Field label={t("Type de bloc")}>
-              <Pick
-                value={draft?.type}
-                placeholder={t("Choisir")}
-                onChange={(type) =>
-                  setDraft(
-                    newBlock(
-                      type as BlockType,
-                      type === "energy"
-                        ? { flow: measuredFlows(home.live?.roles)[0] }
-                        : {}
-                    )
-                  )
-                }
-                choices={available(home).map((b) => ({
-                  value: b,
-                  label: BLOCK_LABEL[b],
-                  group: BLOCK_GROUP[b],
-                }))}
-              />
-            </Field>
-          )}
-          {draft && (
-            <Settings
-              block={draft}
-              home={home}
-              page={page}
-              onChange={setDraft}
-            />
-          )}
+        <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+          <nav className="flex shrink-0 gap-1 overflow-x-auto border-b p-3 md:w-56 md:flex-col md:overflow-y-auto md:border-r md:border-b-0">
+            {groups.map((g) => (
+              <button
+                key={g}
+                type="button"
+                onClick={() => {
+                  setGroup(g)
+                  setDraft(undefined)
+                }}
+                className={cn(
+                  "flex shrink-0 items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
+                  g === shownGroup && !draft && "bg-accent text-foreground"
+                )}
+              >
+                {g}
+                <span className="tabular text-xs text-muted-foreground">
+                  {entries.filter((e) => e.group === g).length}
+                </span>
+              </button>
+            ))}
+          </nav>
+          <div className="min-h-0 flex-1 overflow-y-auto p-5">
+            {draft ? (
+              <div className="mx-auto grid max-w-2xl gap-5">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="justify-self-start"
+                  onClick={() => setDraft(undefined)}
+                >
+                  <ChevronLeft /> {t("Retour aux composants")}
+                </Button>
+                <Preview block={draft} tall />
+                <Settings
+                  block={draft}
+                  home={home}
+                  page={page}
+                  onChange={setDraft}
+                />
+                <Button
+                  disabled={!complete(draft)}
+                  onClick={() => onDone(draft)}
+                >
+                  <Plus /> {t("Ajouter")}
+                </Button>
+              </div>
+            ) : entries.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {t("Rien à ajouter pour l'instant.")}
+              </p>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {entries
+                  .filter((e) => e.group === shownGroup)
+                  .map((e) => (
+                    <button
+                      key={e.key}
+                      type="button"
+                      onClick={() => setDraft(e.block)}
+                      className="group grid content-start gap-2 rounded-3xl border border-transparent p-2 text-left transition-colors hover:border-primary/50 hover:bg-accent/40 focus-visible:border-primary focus-visible:outline-none"
+                    >
+                      <Preview block={e.block} />
+                      <span className="truncate px-2 pb-1 text-sm font-medium">
+                        {e.label}
+                      </span>
+                    </button>
+                  ))}
+              </div>
+            )}
+          </div>
         </div>
-        <DialogFooter>
-          <Button
-            disabled={!draft || !complete(draft)}
-            onClick={() => draft && onDone(draft)}
-          >
-            {initial ? t("Appliquer") : t("Ajouter")}
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

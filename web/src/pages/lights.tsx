@@ -364,7 +364,7 @@ function Detail({
 }
 
 /** The scenes of the Hue app, one button each. */
-function Scenes({
+export function LightScenes({
   scenes,
   canDrive,
 }: {
@@ -518,7 +518,7 @@ export function LightsPage() {
       ) : (
         <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
           <div className="grid gap-6">
-            {wide.length > 0 && <Scenes scenes={wide} canDrive={admin} />}
+            {wide.length > 0 && <LightScenes scenes={wide} canDrive={admin} />}
             {groups.map((g) => {
               const on = g.lights.filter((d) => stateOf(d).on && d.available)
               const drivable = g.lights.filter((d) => d.can_control)
@@ -561,7 +561,7 @@ export function LightsPage() {
                       </Button>
                     </div>
                   </div>
-                  <Scenes
+                  <LightScenes
                     scenes={scenesIn(g.room?.id ?? null).filter(
                       (s) => g.room !== null || !wide.includes(s)
                     )}

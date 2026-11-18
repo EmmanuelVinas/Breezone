@@ -133,8 +133,8 @@ fun ZoneScreen(serverId: String, installationId: Long, systemId: Long, zoneId: L
                     Muted(zone.errors.joinToString(" · "))
                 }
             }
-            History(hub, serverId, zone)
-            DailyComfort(hub, serverId, zone)
+            ZoneHistorySection(hub, serverId, zone)
+            ZoneComfortSection(hub, serverId, zone)
             zone.airQuality?.let { AirQualitySection(hub, serverId, zone, it) }
             Spacer(Modifier.height(24.dp))
         }
@@ -250,7 +250,7 @@ private fun Segments(options: List<Pair<Long, String>>, selected: Long?, onSelec
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun History(hub: Hub, serverId: String, zone: Zone) {
+internal fun ZoneHistorySection(hub: Hub, serverId: String, zone: Zone) {
     var hours by remember { mutableIntStateOf(24) }
     var readings by remember { mutableStateOf<List<Reading>?>(null) }
     var hidden by remember { mutableStateOf(emptySet<HistorySeries>()) }
@@ -317,7 +317,7 @@ private fun duration(secs: Long): String {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun DailyComfort(hub: Hub, serverId: String, zone: Zone) {
+internal fun ZoneComfortSection(hub: Hub, serverId: String, zone: Zone) {
     var days by remember { mutableIntStateOf(7) }
     var stats by remember { mutableStateOf<List<DayStats>?>(null) }
     LaunchedEffect(zone.installationId, zone.systemId, zone.zoneId, days) {
@@ -370,7 +370,7 @@ private fun DailyComfort(hub: Hub, serverId: String, zone: Zone) {
 }
 
 @Composable
-private fun AirQualitySection(hub: Hub, serverId: String, zone: Zone, air: AirQuality) {
+internal fun AirQualitySection(hub: Hub, serverId: String, zone: Zone, air: AirQuality) {
     var days by remember { mutableIntStateOf(7) }
     var stats by remember { mutableStateOf<List<DayStats>?>(null) }
     LaunchedEffect(zone.installationId, zone.systemId, zone.zoneId, days) {

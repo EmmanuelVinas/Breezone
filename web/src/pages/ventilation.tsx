@@ -34,8 +34,8 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { errorText, number } from "@/lib/format"
 
-const isUnit = (d: DeviceView) => d.traits.includes("ventilation.unit@1")
-const isRoom = (d: DeviceView) => d.traits.includes("ventilation.room@1")
+export const isUnit = (d: DeviceView) => d.traits.includes("ventilation.unit@1")
+export const isRoom = (d: DeviceView) => d.traits.includes("ventilation.room@1")
 const roomState = (d: DeviceView) =>
   (d.state ?? {}) as Partial<VentilationRoomState>
 const unitState = (d: DeviceView) =>
@@ -472,7 +472,7 @@ function Detail({
   )
 }
 
-function House({
+export function House({
   unit,
   rooms,
   canDrive,

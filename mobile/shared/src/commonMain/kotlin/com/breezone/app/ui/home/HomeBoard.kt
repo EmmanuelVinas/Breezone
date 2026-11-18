@@ -62,7 +62,7 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 
 /** The cards that read the energy of the home now: it is read only while one is on the home. */
-private val ENERGY_BLOCKS = setOf(BlockTypes.ENERGY, BlockTypes.ENERGY_FLOW, BlockTypes.ENERGY_CURVE, BlockTypes.ENERGY_BREAKDOWN)
+private val ENERGY_BLOCKS = setOf(BlockTypes.ENERGY, BlockTypes.ENERGY_FLOW, BlockTypes.ENERGY_CURVE, BlockTypes.ENERGY_BREAKDOWN, BlockTypes.SOLAR_TODAY)
 
 /**
  * The home of an installation: cards each user arranges for the phone, apart from the web's
@@ -93,6 +93,7 @@ fun HomeBoard(serverId: String, installationId: Long, nav: HomeNav, onInstallati
     }
     var draft by remember { mutableStateOf<List<DashboardBlock>?>(null) }
     var adding by remember { mutableStateOf(false) }
+    var settingsOf by remember { mutableStateOf<String?>(null) }
     var resetting by remember { mutableStateOf(false) }
 
     // The devices of this installation: its own zones, and the modules' when they go with it.
@@ -135,6 +136,14 @@ fun HomeBoard(serverId: String, installationId: Long, nav: HomeNav, onInstallati
         AddBlockSheet(ctx, onDismiss = { adding = false }) { b ->
             draft = draft.orEmpty() + b
             adding = false
+            // A room or a type: say at once which of its devices the card shows.
+            if (BlockKind.of(b) in setOf(BlockKind.Room, BlockKind.Kind)) settingsOf = b.id
+        }
+    }
+    draft?.firstOrNull { it.id == settingsOf }?.let { b ->
+        BlockSettingsSheet(b, ctx, onDismiss = { settingsOf = null }) { next ->
+            draft = draft.orEmpty().map { if (it.id == next.id) next else it }
+            settingsOf = null
         }
     }
     if (resetting) {
@@ -201,6 +210,7 @@ fun HomeBoard(serverId: String, installationId: Long, nav: HomeNav, onInstallati
                         onMove = { by -> draft = list.toMutableList().apply { add((i + by).coerceIn(0, lastIndex), removeAt(i)) } },
                         onSize = { size -> draft = list.map { if (it.id == b.id) it.copy(size = size.wire) else it } },
                         onRemove = { draft = list.filterNot { it.id == b.id } },
+                        onSettings = { settingsOf = b.id },
                     )
                 }
                 item(key = "add", contentType = "add") {
@@ -260,6 +270,7 @@ private fun EditFrame(
     onMove: (Int) -> Unit,
     onSize: (BlockSize) -> Unit,
     onRemove: () -> Unit,
+    onSettings: () -> Unit,
 ) {
     val kind = BlockKind.of(b)
     Column(
@@ -284,6 +295,9 @@ private fun EditFrame(
                         Modifier.size(18.dp),
                     )
                 }
+            }
+            if (kind?.settable == true) {
+                IconButton(onClick = onSettings) { Icon(FzIcons.Settings, stringResource(Res.string.block_settings), Modifier.size(18.dp)) }
             }
             IconButton(onClick = onRemove) { Icon(FzIcons.X, stringResource(Res.string.home_remove), Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error) }
         }

@@ -616,4 +616,24 @@
         <item quantity="many">%1$d appareils</item>
         <item quantity="other">%1$d appareils</item>
     </plurals>
+    <string name="block_zone_history">Historique d’une zone</string>
+    <string name="block_zone_history_hint">Ses courbes de température, consigne et humidité</string>
+    <string name="block_air_quality">Qualité de l’air d’une zone</string>
+    <string name="block_air_quality_hint">L’air de la zone, jour par jour</string>
+    <string name="block_charger">Borne</string>
+    <string name="block_charger_hint">Son état, sa puissance, pause ou reprise</string>
+    <string name="block_charger_curve">Puissance de la borne</string>
+    <string name="block_charger_curve_hint">Ce qu’elle a tiré sur la période</string>
+    <string name="block_solar_today">Production solaire</string>
+    <string name="block_solar_today_hint">Maintenant, et la courbe de la journée</string>
+    <string name="block_solar_panels">Micro-onduleurs et panneaux</string>
+    <string name="block_solar_panels_hint">Ce que fait chaque panneau</string>
+    <string name="block_ventilation_house">Ventilation de la maison</string>
+    <string name="block_ventilation_house_hint">Le niveau, le débit et la surventilation</string>
+    <string name="block_settings">Réglages de la carte</string>
+    <string name="block_settings_devices">Appareils montrés sur la carte</string>
+    <string name="block_settings_scenes">Scènes montrées (aucune cochée : celles de l’installation)</string>
+    <string name="block_settings_measures">Mesures</string>
+    <string name="block_settings_none">Cette carte n’a pas de réglage.</string>
+    <string name="block_settings_apply">Appliquer</string>
 </resources>

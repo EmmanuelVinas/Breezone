@@ -87,6 +87,13 @@ object BlockTypes {
     const val SCENES = "scenes"
     const val ZONES = "zones"
     const val PRESENCE = "presence"
+    const val ZONE_HISTORY = "zone_history"
+    const val AIR_QUALITY = "air_quality"
+    const val CHARGER = "charger"
+    const val CHARGER_CURVE = "charger_curve"
+    const val SOLAR_TODAY = "solar_today"
+    const val SOLAR_PANELS = "solar_panels"
+    const val VENTILATION_HOUSE = "ventilation_house"
 }
 
 /** What the home has, to compose a first layout from. */

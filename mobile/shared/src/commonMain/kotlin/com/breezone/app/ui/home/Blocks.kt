@@ -77,6 +77,13 @@ import com.breezone.app.ui.screens.chargerLabel
 import com.breezone.app.ui.screens.formatEnergy
 import com.breezone.app.ui.screens.formatPower
 import com.breezone.app.ui.screens.hasUses
+import com.breezone.app.ui.screens.AirQualitySection
+import com.breezone.app.ui.screens.ChargerHero
+import com.breezone.app.ui.screens.ChargerPowerCard
+import com.breezone.app.ui.screens.InverterCard
+import com.breezone.app.ui.screens.SolarNowCard
+import com.breezone.app.ui.screens.VentilationHouseCard
+import com.breezone.app.ui.screens.ZoneHistorySection
 import com.breezone.app.ui.screens.ventilationLevel
 import com.breezone.app.ui.theme.Fz
 import kotlinx.coroutines.delay
@@ -150,6 +157,13 @@ enum class BlockKind(
     Device(BlockTypes.DEVICE, Res.string.block_device, FzIcons.Power, BlockSize.Full, BlockChoice.Device),
     Chart(BlockTypes.CHART, Res.string.block_chart, FzIcons.ChartLine, BlockSize.Full, BlockChoice.Chart),
     Scenes(BlockTypes.SCENES, Res.string.block_scenes, FzIcons.Sparkles, BlockSize.Full),
+    ZoneHistory(BlockTypes.ZONE_HISTORY, Res.string.block_zone_history, FzIcons.ChartLine, BlockSize.Full, BlockChoice.Zone),
+    AirQuality(BlockTypes.AIR_QUALITY, Res.string.block_air_quality, FzIcons.Wind, BlockSize.Full, BlockChoice.Zone),
+    Charger(BlockTypes.CHARGER, Res.string.block_charger, FzIcons.PlugZap, BlockSize.Full),
+    ChargerCurve(BlockTypes.CHARGER_CURVE, Res.string.block_charger_curve, FzIcons.ChartLine, BlockSize.Full),
+    SolarToday(BlockTypes.SOLAR_TODAY, Res.string.block_solar_today, FzIcons.Sun, BlockSize.Full),
+    SolarPanels(BlockTypes.SOLAR_PANELS, Res.string.block_solar_panels, FzIcons.SolarPanel, BlockSize.Full),
+    VentilationHouse(BlockTypes.VENTILATION_HOUSE, Res.string.block_ventilation_house, FzIcons.Fan, BlockSize.Full),
     ;
 
     /** Worth offering for this home: an energy card needs a measure, a zone card zones… */
@@ -158,6 +172,11 @@ enum class BlockKind(
         Zones -> ctx.installation?.zones?.isNotEmpty() == true
         Room, Kind, Device -> ctx.devices.isNotEmpty()
         Chart -> ctx.devices.isNotEmpty()
+        ZoneHistory -> ctx.installation?.zones?.isNotEmpty() == true
+        AirQuality -> ctx.installation?.zones?.any { it.airQuality != null } == true
+        Charger, ChargerCurve -> ctx.server.withTrait(TraitIds.CHARGER).isNotEmpty() && AppPage.Charging in ctx.pages
+        SolarToday, SolarPanels -> AppPage.Solar in ctx.pages
+        VentilationHouse -> ctx.server.withTrait(TraitIds.VENTILATION_UNIT).isNotEmpty() && AppPage.Ventilation in ctx.pages
         else -> true
     }
 
@@ -171,7 +190,7 @@ enum class BlockKind(
 }
 
 /** What has to be chosen before a card is added. */
-enum class BlockChoice { None, Flow, Room, Kind, Device, Chart, ZoneGroup }
+enum class BlockChoice { None, Flow, Room, Kind, Device, Chart, ZoneGroup, Zone }
 
 /** The title a card shows while the home is being arranged, so that each can be told apart. */
 @Composable
@@ -183,6 +202,7 @@ fun blockTitle(b: DashboardBlock, ctx: HomeContext): String {
         BlockKind.Kind -> DeviceKind.byId(b.string("type"))?.let { stringResource(it.label) } ?: stringResource(kind.label)
         BlockKind.Device, BlockKind.Chart -> ctx.devices.firstOrNull { it.id == b.long("device_id") }?.name ?: stringResource(kind.label)
         BlockKind.Zones -> b.string("group") ?: stringResource(kind.label)
+        BlockKind.ZoneHistory, BlockKind.AirQuality -> listOfNotNull(stringResource(kind.label), ctx.devices.firstOrNull { it.id == b.long("device_id") }?.name).joinToString(" · ")
         else -> stringResource(kind.label)
     }
 }
@@ -203,9 +223,30 @@ fun BlockContent(b: DashboardBlock, ctx: HomeContext, editing: Boolean) {
         BlockKind.Device -> DeviceBlock(b.long("device_id"), ctx)
         BlockKind.Chart -> ChartBlock(b.long("device_id"), b.strings("fields").ifEmpty { listOfNotNull(b.string("field")) }, b.long("hours")?.toInt() ?: 24, ctx)
         BlockKind.Scenes -> ScenesBlock(b.longs("routine_ids"), ctx)
+        BlockKind.ZoneHistory -> zoneBlock(b, ctx)?.let { ZoneHistorySection(ctx.hub, ctx.serverId, it) } ?: Gone()
+        BlockKind.AirQuality -> zoneBlock(b, ctx)?.let { z -> z.airQuality?.let { AirQualitySection(ctx.hub, ctx.serverId, z, it) } } ?: Waiting(b, ctx, editing)
+        BlockKind.Charger -> charger(b, ctx)?.let { ChargerHero(ctx.serverId, it) } ?: Gone()
+        BlockKind.ChargerCurve -> charger(b, ctx)?.let { ChargerPowerCard(ctx.serverId, it) } ?: Gone()
+        BlockKind.SolarToday -> SolarNowCard(ctx.live, ctx.day, ctx.server.withTrait(TraitIds.INVERTER))
+        BlockKind.SolarPanels -> ctx.server.withTrait(TraitIds.INVERTER).forEach { InverterCard(it, ctx.server.withTrait(TraitIds.PANEL)) }
+        BlockKind.VentilationHouse -> ctx.server.withTrait(TraitIds.VENTILATION_UNIT).firstOrNull()?.let { unit ->
+            VentilationHouseCard(ctx.serverId, unit, ctx.server.withTrait(TraitIds.VENTILATION_ROOM).filter { it.sourceId == unit.sourceId })
+        } ?: Gone()
         null -> if (editing) Waiting(b, ctx, true)
     }
 }
+
+/** The zone a card shows (its device). */
+private fun zoneBlock(b: DashboardBlock, ctx: HomeContext): Zone? = ctx.devices.firstOrNull { it.id == b.long("device_id") }?.let { ctx.zoneOf(it) }
+
+/** The charger a card shows: the one chosen, else the first. */
+private fun charger(b: DashboardBlock, ctx: HomeContext): DeviceView? {
+    val chargers = ctx.server.withTrait(TraitIds.CHARGER)
+    return chargers.firstOrNull { it.id == b.long("device_id") } ?: chargers.firstOrNull()
+}
+
+@Composable
+private fun Gone() = SectionCard { Muted(stringResource(Res.string.block_device_gone)) }
 
 /** A card with nothing to show yet: only while arranging, so that it can be told apart. */
 @Composable

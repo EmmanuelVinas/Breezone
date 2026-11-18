@@ -138,8 +138,6 @@ fun VentilationScreen(serverId: String, onBack: (() -> Unit)?, onOpen: (Long) ->
     val unit = data.withTrait(TraitIds.VENTILATION_UNIT).firstOrNull()
     val valves = data.withTrait(TraitIds.VENTILATION_ROOM).filter { unit == null || it.sourceId == unit.sourceId }
     val u = unit?.stateAs(VentilationUnitState.serializer()) ?: VentilationUnitState()
-    val level = ventilationLevel(valves.map { it.valve() })
-    val flow = unit?.let { rememberHistory(hub, serverId, it.id) }?.series?.get("flow").orEmpty()
 
     Scaffold(topBar = {
         FzTopBar(stringResource(Res.string.house_ventilation), pluralStringResource(Res.plurals.ventilation_valves, valves.size, valves.size), onBack) {
@@ -155,36 +153,7 @@ fun VentilationScreen(serverId: String, onBack: (() -> Unit)?, onOpen: (Long) ->
                 item(key = "empty", contentType = "note") { SectionCard { Muted(stringResource(Res.string.ventilation_empty)) } }
             }
             if (unit != null) {
-                item(key = "house", contentType = "house") {
-                    SectionCard {
-                        Caption(stringResource(Res.string.ventilation_level))
-                        Text(level?.let { stringResource(Res.string.common_percent, it) } ?: "–", fontSize = 40.sp, fontWeight = FontWeight.SemiBold)
-                        Caption(
-                            listOfNotNull(
-                                stringResource(Res.string.ventilation_flow, u.flow.toInt()),
-                                u.power?.let { "${it.toInt()} W" },
-                                stringResource(if (u.boost) Res.string.ventilation_boosting else Res.string.ventilation_auto),
-                            ).joinToString(" · "),
-                        )
-                        u.worstRoom?.let { Text(stringResource(Res.string.ventilation_worst, it, causeText(u.mainPollutant)), fontSize = 14.sp) }
-                        if (!u.sensors) Caption(stringResource(Res.string.ventilation_no_key))
-                        LevelBar(level ?: 0)
-                        if (flow.size > 1) Sparkline(flow, Fz.colors.air, Modifier.fillMaxWidth().height(56.dp))
-                        if (u.boost) {
-                            OutlinedButton(onClick = { hub.stopBoost(serverId, unit, "ventilation.unit") }, enabled = unit.usable, shape = Fz.shapes.button) {
-                                Icon(FzIcons.Square, null, Modifier.size(14.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text(stringResource(Res.string.ventilation_stop_boosts))
-                            }
-                        } else {
-                            Button(onClick = { hub.boost(serverId, unit, "ventilation.unit", 60) }, enabled = unit.usable, shape = Fz.shapes.button) {
-                                Icon(FzIcons.Fan, null, Modifier.size(18.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text(stringResource(Res.string.ventilation_boost_house))
-                            }
-                        }
-                    }
-                }
+                item(key = "house", contentType = "house") { VentilationHouseCard(serverId, unit, valves) }
                 item(key = "rooms", contentType = "rooms") {
                     DeviceGroupCard(stringResource(Res.string.ventilation_rooms), null) {
                         valves.forEach { d -> ValveRow(d, demanding = u.worstRoom == d.name, cause = causeText(u.mainPollutant)) { onOpen(d.id) } }
@@ -351,4 +320,41 @@ fun ventilationLevel(rooms: List<VentilationRoomState>): Int? {
     val nominal = rooms.sumOf { it.nominal ?: 0.0 }
     if (nominal <= 0) return null
     return (rooms.sumOf { it.flow } / nominal * 100).toInt()
+}
+
+/** The house as its ventilation unit sees it: its level, its flow, what asks for air, and a boost. */
+@Composable
+internal fun VentilationHouseCard(serverId: String, unit: DeviceView, valves: List<DeviceView>) {
+    val hub = koinInject<Hub>()
+    val u = unit.stateAs(VentilationUnitState.serializer()) ?: VentilationUnitState()
+    val level = ventilationLevel(valves.map { it.valve() })
+    val flow = rememberHistory(hub, serverId, unit.id)?.series?.get("flow").orEmpty()
+    SectionCard {
+        Caption(stringResource(Res.string.ventilation_level))
+        Text(level?.let { stringResource(Res.string.common_percent, it) } ?: "–", fontSize = 40.sp, fontWeight = FontWeight.SemiBold)
+        Caption(
+            listOfNotNull(
+                stringResource(Res.string.ventilation_flow, u.flow.toInt()),
+                u.power?.let { "${it.toInt()} W" },
+                stringResource(if (u.boost) Res.string.ventilation_boosting else Res.string.ventilation_auto),
+            ).joinToString(" · "),
+        )
+        u.worstRoom?.let { Text(stringResource(Res.string.ventilation_worst, it, causeText(u.mainPollutant)), fontSize = 14.sp) }
+        if (!u.sensors) Caption(stringResource(Res.string.ventilation_no_key))
+        LevelBar(level ?: 0)
+        if (flow.size > 1) Sparkline(flow, Fz.colors.air, Modifier.fillMaxWidth().height(56.dp))
+        if (u.boost) {
+            OutlinedButton(onClick = { hub.stopBoost(serverId, unit, "ventilation.unit") }, enabled = unit.usable, shape = Fz.shapes.button) {
+                Icon(FzIcons.Square, null, Modifier.size(14.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(Res.string.ventilation_stop_boosts))
+            }
+        } else {
+            Button(onClick = { hub.boost(serverId, unit, "ventilation.unit", 60) }, enabled = unit.usable, shape = Fz.shapes.button) {
+                Icon(FzIcons.Fan, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(Res.string.ventilation_boost_house))
+            }
+        }
+    }
 }

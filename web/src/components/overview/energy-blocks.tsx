@@ -16,6 +16,7 @@ import {
   PERIOD_DAYS,
   total,
   type KpiCurves,
+  type KpiId,
   type Period,
 } from "@/components/energy/sections"
 
@@ -133,6 +134,7 @@ export function EnergyKpisBlock({
       live={e.live}
       showMoney={config.money !== false}
       curves={curves}
+      only={Array.isArray(config.kpis) ? (config.kpis as KpiId[]) : undefined}
     />
   )
 }
