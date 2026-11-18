@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.39] - 2026-11-18
+
 ### Added
 
 - Netatmo · Legrand module (cloud), added with the Netatmo account: the lines of the Ecometer as
