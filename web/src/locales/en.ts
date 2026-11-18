@@ -1765,6 +1765,9 @@ const en: Record<string, string> = {
     "Switched off by Breezone, on every installation: only Breezone's automations and schedules drive the climate. Switch them on for Airzone to run them again, as they were.",
   "Avec son port HomeKit : l'adresse IP, deux-points, puis le port (souvent dans l'application du fabricant, ou trouvé par la recherche).":
     "With its HomeKit port: the IP address, a colon, then the port (often in the maker's app, or found by the search).",
+  "Autoconsommation / autonomie": "Self-consumption / autonomy",
+  "de la production utilisée sur place / de la consommation couverte":
+    "of the production used on site / of the consumption covered",
 }
 
 export default en

@@ -1783,6 +1783,9 @@ const es: Record<string, string> = {
     "Desactivadas por Breezone, en todas las instalaciones: solo las automatizaciones y programaciones de Breezone manejan la climatización. Actívelas para que Airzone las ejecute de nuevo, tal como estaban.",
   "Avec son port HomeKit : l'adresse IP, deux-points, puis le port (souvent dans l'application du fabricant, ou trouvé par la recherche).":
     "Con su puerto HomeKit: la dirección IP, dos puntos y el puerto (a menudo en la aplicación del fabricante, o encontrado por la búsqueda).",
+  "Autoconsommation / autonomie": "Autoconsumo / autonomía",
+  "de la production utilisée sur place / de la consommation couverte":
+    "de la producción usada en casa / del consumo cubierto",
 }
 
 export default es

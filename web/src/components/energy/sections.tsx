@@ -25,6 +25,7 @@ import {
   Leaf,
   PiggyBank,
   Scale,
+  Gauge,
   Plug,
   ShieldCheck,
   Sun,
@@ -260,12 +261,15 @@ export const KPI_IDS = [
   "cost",
   "gains",
   "balance",
+  "shares",
   "battery",
 ] as const
 export type KpiId = (typeof KPI_IDS)[number]
 
 /** The figures shown when none is chosen: the balance repeats the cost and the gains, so only on request. */
-export const DEFAULT_KPIS: KpiId[] = KPI_IDS.filter((k) => k !== "balance")
+export const DEFAULT_KPIS: KpiId[] = KPI_IDS.filter(
+  (k) => k !== "balance" && k !== "shares"
+)
 
 export const KPI_LABEL: Record<KpiId, string> = {
   production: t("Production"),
@@ -276,6 +280,7 @@ export const KPI_LABEL: Record<KpiId, string> = {
   cost: t("Coût"),
   gains: t("Gagné grâce au solaire"),
   balance: t("Coût réseau / gain solaire"),
+  shares: t("Autoconsommation / autonomie"),
   battery: t("Batterie"),
 }
 
@@ -423,6 +428,28 @@ export function Kpis({
           </>
         }
         sub={t("achetés au réseau / économisés ou revendus")}
+        color="var(--foreground)"
+      />
+    ),
+    // How much of the solar is used here, against how much of the home it covers.
+    shares: roles.solar && (selfShare !== null || autonomy !== null) && (
+      <Kpi
+        icon={Gauge}
+        label={t("Autoconsommation / autonomie")}
+        value={
+          <>
+            <span style={{ color: "var(--primary)" }}>
+              {selfShare === null ? "–" : percent(selfShare)}
+            </span>
+            <span className="text-muted-foreground"> / </span>
+            <span style={{ color: COLOR.battery }}>
+              {autonomy === null ? "–" : percent(autonomy)}
+            </span>
+          </>
+        }
+        sub={t(
+          "de la production utilisée sur place / de la consommation couverte"
+        )}
         color="var(--foreground)"
       />
     ),

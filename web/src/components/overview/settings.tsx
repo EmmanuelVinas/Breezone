@@ -733,6 +733,7 @@ function catalog(home: Home): Entry[] {
           cost: home.priced,
           gains: home.priced && !!roles?.solar,
           balance: home.priced && !!roles?.solar,
+          shares: !!roles?.solar,
           battery: !!roles?.battery,
         }
         for (const k of KPI_IDS)
@@ -947,7 +948,7 @@ export function BlockDialog({
   if (initial)
     return (
       <Dialog open onOpenChange={(o) => !o && onClose()}>
-        <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-lg">
+        <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-3xl lg:max-w-5xl">
           <DialogHeader>
             <DialogTitle>{t("Réglages du bloc")}</DialogTitle>
           </DialogHeader>

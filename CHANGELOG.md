@@ -8,6 +8,8 @@ All notable changes are documented here. The format follows
 
 ### Added
 
+- Dashboards: a “Self-consumption / autonomy” figure, the two side by side (“47 % / 13 %”), on its
+  own or ticked in the figures of the period (not shown unless chosen).
 - Airzone schedules can be switched off all at once (web and app, administrators), so that
   Breezone's automations and schedules do not compete with them: those that were on are switched
   off in Airzone, and only they come back on when switched on again. While they are all off, the
