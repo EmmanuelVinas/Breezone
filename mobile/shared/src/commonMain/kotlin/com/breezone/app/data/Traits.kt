@@ -21,6 +21,16 @@ data class ButtonState(
     val lastAt: Long? = null,
 )
 
+/** Camera or doorbell (`camera@1`): state. */
+@Serializable
+data class CameraState(
+    val online: Boolean = false,
+    val motion: Boolean = false,
+    val lastEvent: String? = null,
+    val lastEventAt: Long? = null,
+    val imageAt: Long? = null,
+)
+
 @Serializable
 enum class ClimateZoneMode {
     @SerialName("stop") Stop,
@@ -306,4 +316,4 @@ data class VentilationUnitBoost(
 class VentilationUnitStopBoost
 
 /** Traits described by this version (`trait@version`). */
-val TRAITS = listOf("button@1", "climate.zone@1", "cover.position@1", "energy.meter@1", "ev.charger@1", "light@1", "solar.inverter@1", "solar.panel@1", "energy.power@1", "switch.relay@1", "ventilation.room@1", "ventilation.unit@1")
+val TRAITS = listOf("button@1", "camera@1", "climate.zone@1", "cover.position@1", "energy.meter@1", "ev.charger@1", "light@1", "solar.inverter@1", "solar.panel@1", "energy.power@1", "switch.relay@1", "ventilation.room@1", "ventilation.unit@1")

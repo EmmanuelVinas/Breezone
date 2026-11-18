@@ -1,0 +1,13 @@
+{
+  "trait": "camera",
+  "version": 1,
+  "label": { "fr": "Caméra ou sonnette", "en": "Camera or doorbell", "es": "Cámara o timbre" },
+  "state": [
+    { "name": "online", "type": "bool", "history": false, "label": { "fr": "En ligne", "en": "Online", "es": "En línea" } },
+    { "name": "motion", "type": "bool", "label": { "fr": "Mouvement", "en": "Motion", "es": "Movimiento" } },
+    { "name": "last_event", "type": "string", "history": false, "optional": true, "label": { "fr": "Dernier événement", "en": "Last event", "es": "Último evento" } },
+    { "name": "last_event_at", "type": "integer", "history": false, "unit": "s", "optional": true, "label": { "fr": "Heure du dernier événement", "en": "Time of the last event", "es": "Hora del último evento" } },
+    { "name": "image_at", "type": "integer", "history": false, "unit": "s", "optional": true, "label": { "fr": "Heure de la dernière image", "en": "Time of the last picture", "es": "Hora de la última imagen" } }
+  ],
+  "actions": []
+}

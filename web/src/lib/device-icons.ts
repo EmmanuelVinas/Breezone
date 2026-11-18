@@ -2,18 +2,19 @@ import { createElement } from "react"
 import type { LucideIcon, LucideProps } from "lucide-react"
 import {
   AppWindow,
-  CloudSun,
   Blinds,
   Box,
+  Cctv,
+  CloudSun,
   DoorOpen,
   Fan,
   Gamepad2,
   House,
-  Sparkles,
   Lightbulb,
   PlugZap,
   Power,
   SolarPanel,
+  Sparkles,
   Thermometer,
   Wind,
   Zap,
@@ -36,6 +37,7 @@ const TYPES: DeviceType[] = [
   { id: "switch", label: t("Prises et relais"), icon: Power },
   { id: "solar", label: t("Solaire"), icon: SolarPanel },
   { id: "energy", label: t("Énergie"), icon: Zap },
+  { id: "camera", label: t("Caméras"), icon: Cctv },
   { id: "remote", label: t("Télécommandes"), icon: Gamepad2 },
   { id: "other", label: t("Autres"), icon: Box },
 ]
@@ -82,9 +84,11 @@ export function deviceType(d: Pick<DeviceView, "kind" | "traits">): DeviceType {
                       ? "solar"
                       : has("energy.")
                         ? "energy"
-                        : d.kind === "remote" || has("button")
-                          ? "remote"
-                          : "other"
+                        : has("camera")
+                          ? "camera"
+                          : d.kind === "remote" || has("button")
+                            ? "remote"
+                            : "other"
   return TYPES.find((x) => x.id === id)!
 }
 

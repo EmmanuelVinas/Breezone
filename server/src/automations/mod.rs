@@ -1435,6 +1435,19 @@ mod tests {
         assert_eq!(names(3), vec!["d".to_string()], "c is on Saturday: only d, every day");
         assert_eq!(names(5), vec!["f".to_string()], "start and stop");
         assert_eq!(found[&1][0].what.fr, "Salon (Consigne)");
+
+        // One when it is cold and the car charges, the other when it is hot and it is only plugged
+        // (as « Salon · Mode : Chaud » and « … : Froid »): never at the same time.
+        let surplus = |name: &str, op: &str, t: f64, mode: &str, sp: f64| {
+            rule(json!({"name": name, "when": at("12:00", json!([])), "conditions": [
+                {"kind": "measure", "measure": {"kind": "outdoor"}, "op": op, "value": t},
+                {"kind": "state", "device_id": 2, "field": "status", "value": mode}
+            ], "actions": [set(sp)]}))
+        };
+        let rules = vec![(named(1, "heat"), surplus("heat", "below", 14.0, "charging", 20.0)), (named(2, "cool"), surplus("cool", "above", 25.0, "plugged", 23.0))];
+        assert!(conflicts(&rules, &c).is_empty(), "their conditions exclude each other");
+        let rules = vec![(named(1, "heat"), surplus("heat", "below", 14.0, "charging", 20.0)), (named(2, "warm"), surplus("warm", "below", 18.0, "charging", 22.0))];
+        assert_eq!(conflicts(&rules, &c).len(), 2, "both may run when it is 12° outside");
     }
 
     #[test]

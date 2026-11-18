@@ -687,6 +687,28 @@ export async function request<T>(
   return (text ? JSON.parse(text) : undefined) as T
 }
 
+/** The last picture of a camera (its last event), as a blob: an `<img>` cannot send the token. */
+export async function devicePicture(id: number): Promise<Blob> {
+  const token = await getAccessToken()
+  const res = await fetch(`/api/devices/${id}/picture`, {
+    headers: {
+      "Accept-Language": lang(),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  })
+  if (!res.ok) {
+    let message = res.statusText
+    try {
+      const data = (await res.json()) as Record<string, unknown>
+      if (typeof data.error === "string") message = data.error
+    } catch {
+      /* not JSON */
+    }
+    throw new ApiError(res.status, message, {})
+  }
+  return res.blob()
+}
+
 function deviceName() {
   const ua = navigator.userAgent
   const browser = /Firefox/.test(ua)
@@ -1178,7 +1200,8 @@ export type SurplusView = {
 }
 
 /** A linked account (Settings › Accounts): never its secrets. */
-export type AccountKind = "airzone" | "rte" | "linky" | "netatmo" | "weather"
+export type AccountKind =
+  "airzone" | "rte" | "linky" | "netatmo" | "ezviz" | "weather"
 export type AccountView = {
   kind: AccountKind
   /** Its credentials are kept (a service without any: always). */
@@ -1197,6 +1220,8 @@ export type AccountView = {
     client_id?: string
     prm?: string
     homes?: { name: string; rooms: number; modules: number }[]
+    /** EZVIZ: the names of the devices of the account. */
+    devices?: string[]
   }
 }
 

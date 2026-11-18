@@ -46,6 +46,9 @@ const VentilationPage = lazy(() =>
 const ShuttersPage = lazy(() =>
   import("@/pages/shutters").then((m) => ({ default: m.ShuttersPage }))
 )
+const CamerasPage = lazy(() =>
+  import("@/pages/cameras").then((m) => ({ default: m.CamerasPage }))
+)
 const SettingsPage = lazy(() =>
   import("@/pages/settings").then((m) => ({ default: m.SettingsPage }))
 )
@@ -114,6 +117,14 @@ function Protected() {
             element={
               <ThisServerOnly>
                 <ShuttersPage />
+              </ThisServerOnly>
+            }
+          />
+          <Route
+            path="/cameras"
+            element={
+              <ThisServerOnly>
+                <CamerasPage />
               </ThisServerOnly>
             }
           />

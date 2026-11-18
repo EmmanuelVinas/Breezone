@@ -178,9 +178,9 @@ async fn accounts_are_linked_used_and_removed() {
     let (s, list) = c.call(reqwest::Method::GET, "/api/accounts", None).await;
     assert_eq!(s, StatusCode::OK, "{list}");
     let kinds: Vec<&str> = list.as_array().unwrap().iter().map(|a| a["kind"].as_str().unwrap()).collect();
-    assert_eq!(kinds, ["airzone", "rte", "linky", "netatmo", "weather"]);
-    assert!(list.as_array().unwrap()[..4].iter().all(|a| a["connected"] == false && a["state"] == "none" && a["enabled"] == true));
-    assert_eq!((list[4]["connected"].clone(), list[4]["service"].clone(), list[4]["enabled"].clone()), (json!(true), json!(true), json!(true)));
+    assert_eq!(kinds, ["airzone", "rte", "linky", "netatmo", "ezviz", "weather"]);
+    assert!(list.as_array().unwrap()[..5].iter().all(|a| a["connected"] == false && a["state"] == "none" && a["enabled"] == true));
+    assert_eq!((list[5]["connected"].clone(), list[5]["service"].clone(), list[5]["enabled"].clone()), (json!(true), json!(true), json!(true)));
     let (s, v) = c.call(reqwest::Method::PUT, "/api/accounts/weather/enabled", Some(json!({"enabled": false}))).await;
     assert_eq!((s, v["enabled"].clone()), (StatusCode::OK, json!(false)), "{v}");
     let (_, v) = c.call(reqwest::Method::GET, "/api/weather", None).await;

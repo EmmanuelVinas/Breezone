@@ -3,6 +3,7 @@ import { Link } from "react-router"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   CalendarDays,
+  Cctv,
   CloudSun,
   ExternalLink,
   Gauge,
@@ -34,6 +35,8 @@ type Field = {
   label: string
   secret?: boolean
   placeholder?: string
+  /** Not needed to connect (a code asked only sometimes). */
+  optional?: boolean
 }
 
 /** What each kind of account is for, and how to get what it asks. */
@@ -142,6 +145,39 @@ const KINDS: Record<AccountKind, Kind> = {
       "Désactivé : le module Netatmo s'arrête, les appareils locaux continuent."
     ),
   },
+  ezviz: {
+    title: "EZVIZ",
+    icon: Cctv,
+    description: t(
+      "Vos caméras et sonnettes EZVIZ : leur dernier événement et son image, et les coups de sonnette pour les automatismes. Le même compte que l'application EZVIZ, sans clé développeur."
+    ),
+    steps: [
+      t(
+        "Conseil : créez un second compte EZVIZ et partagez-lui vos appareils depuis l'application ; Breezone n'a pas le mot de passe de votre compte principal."
+      ),
+      t(
+        "Si le compte a la double authentification, une première connexion fait envoyer un code par EZVIZ : saisissez-le dans « Code reçu », puis connectez à nouveau."
+      ),
+      t(
+        "Si EZVIZ chiffre les images, donnez le code de vérification des caméras (6 lettres, sur leur étiquette)."
+      ),
+    ],
+    link: { url: "https://www.ezviz.com", label: "ezviz.com" },
+    fields: [
+      { name: "account", label: t("Identifiant (e-mail ou téléphone)") },
+      { name: "password", label: t("Mot de passe"), secret: true },
+      { name: "code", label: t("Code reçu"), optional: true },
+      {
+        name: "image_code",
+        label: t("Code de vérification des caméras"),
+        secret: true,
+        optional: true,
+      },
+    ],
+    off: t(
+      "Désactivé : le module EZVIZ s'arrête, plus d'images ni de coups de sonnette."
+    ),
+  },
   weather: {
     title: t("Météo"),
     icon: CloudSun,
@@ -183,6 +219,11 @@ function summary(a: AccountView): string | null {
   if (a.kind === "airzone") return c.email ?? null
   if (a.kind === "linky")
     return c.prm ? t("Compteur {prm}", { prm: c.prm }) : null
+  if (a.kind === "ezviz" && c.email)
+    return t("{email} : {n} appareil(s)", {
+      email: c.email,
+      n: c.devices?.length ?? 0,
+    })
   if (a.kind === "netatmo" && c.homes)
     return c.homes
       .map((h) =>
@@ -249,7 +290,7 @@ function AccountCard({ a }: { a: AccountView }) {
     },
     onError: (e) => toast.error(errorText(e)),
   })
-  const filled = kind.fields.every((f) => values[f.name]?.trim())
+  const filled = kind.fields.every((f) => f.optional || values[f.name]?.trim())
   const what = summary(a)
   return (
     <Card className="rounded-3xl">

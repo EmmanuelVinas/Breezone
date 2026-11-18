@@ -189,3 +189,19 @@ pub async fn act(State(state): State<AppState>, user: AuthUser, Path(id): Path<i
     devices::apply(&state, &view, &input, &user.username).await?;
     viewed_by(&state, &access, id).await
 }
+
+/// The last picture of a camera (its last event), for whom sees the camera.
+pub async fn picture(State(state): State<AppState>, user: AuthUser, Path(id): Path<i64>) -> ApiResult<axum::response::Response> {
+    use axum::response::IntoResponse;
+    let access = Access::of(&state.db, &user).await?;
+    let view = devices::get(&state, id).await?.ok_or_else(|| ApiError::not_found("device not found"))?;
+    if view.installation_id.is_some() || !access.can_view_module(&devices::module_device(&view)) {
+        return Err(ApiError::not_found("device not found"));
+    }
+    let (Some(source_id), Some(reference)) = (view.source_id, view.reference.as_str()) else { return Err(ApiError::not_found("device not found")) };
+    match state.drivers.picture(source_id, reference).await {
+        Ok((bytes, kind)) => Ok(([(axum::http::header::CONTENT_TYPE, kind), (axum::http::header::CACHE_CONTROL, "private, no-store")], bytes).into_response()),
+        Err(crate::drivers::DriverError::Unsupported(m)) => Err(ApiError::conflict(m)),
+        Err(e) => Err(ApiError::bad_gateway(e.to_string())),
+    }
+}

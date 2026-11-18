@@ -36,6 +36,42 @@ pub(super) fn clash(a: &[Step], b: &[Step]) -> Option<(i64, String)> {
     None
 }
 
+/// The conditions a rule needs, all of them (`None`: any one of several would do).
+fn required(r: &Automation) -> &[Condition] {
+    if r.joined == Match::All || r.conditions.len() == 1 {
+        &r.conditions
+    } else {
+        &[]
+    }
+}
+
+/// Two conditions that cannot both be true: a choice of the same device set otherwise (« Salon ·
+/// Mode : Chaud » and « … : Froid »), a measure above one value and below a lower one, someone home
+/// and nobody, day and night, months apart.
+fn excludes(a: &Condition, b: &Condition) -> bool {
+    let months = |from: u32, to: u32| -> Vec<u32> { (1..=12).filter(|m| if from <= to { (from..=to).contains(m) } else { *m >= from || *m <= to }).collect() };
+    match (a, b) {
+        (Condition::State { device_id: d1, field: f1, value: v1 }, Condition::State { device_id: d2, field: f2, value: v2 }) => d1 == d2 && f1 == f2 && v1 != v2,
+        (Condition::Measure { measure: m1, op: o1, value: v1 }, Condition::Measure { measure: m2, op: o2, value: v2 }) if m1 == m2 => match (o1, o2) {
+            (Op::Above, Op::Below) => v2 <= v1,
+            (Op::Below, Op::Above) => v1 <= v2,
+            _ => false,
+        },
+        (Condition::Presence { home: h1 }, Condition::Presence { home: h2 }) => h1 != h2,
+        (Condition::Daylight { day: d1 }, Condition::Daylight { day: d2 }) => d1 != d2,
+        (Condition::Months { from: f1, to: t1 }, Condition::Months { from: f2, to: t2 }) => {
+            let (x, y) = (months(*f1, *t1), months(*f2, *t2));
+            !x.iter().any(|m| y.contains(m))
+        }
+        _ => false,
+    }
+}
+
+/// The two rules never do their actions at the same time: their conditions exclude each other.
+fn exclusive(a: &Automation, b: &Automation) -> bool {
+    required(a).iter().any(|x| required(b).iter().any(|y| excludes(x, y)))
+}
+
 /// A rule that may contradict another one.
 #[derive(Debug, Clone, Serialize)]
 pub struct Conflict {
@@ -54,8 +90,16 @@ pub fn conflicts(rules: &[(AutomationRow, Automation)], ctx: &Context) -> HashMa
             if !a.triggers.iter().any(|x| b.triggers.iter().any(|y| coincide(x, y))) {
                 continue;
             }
-            let (sa, sb) = (ctx.expand(&a.steps().cloned().collect::<Vec<_>>()), ctx.expand(&b.steps().cloned().collect::<Vec<_>>()));
-            let Some((device, setting)) = clash(&sa, &sb) else { continue };
+            let expand = |steps: Vec<&Step>| ctx.expand(&steps.into_iter().cloned().collect::<Vec<_>>());
+            let found = if exclusive(a, b) {
+                // When one does its actions, the other can only do what it does otherwise.
+                let (main_a, main_b) = (expand(a.actions.iter().chain(&a.over).collect()), expand(b.actions.iter().chain(&b.over).collect()));
+                let (else_a, else_b) = (expand(a.otherwise.iter().collect()), expand(b.otherwise.iter().collect()));
+                clash(&main_a, &else_b).or_else(|| clash(&else_a, &main_b)).or_else(|| clash(&else_a, &else_b))
+            } else {
+                clash(&expand(a.steps().collect()), &expand(b.steps().collect()))
+            };
+            let Some((device, setting)) = found else { continue };
             let name = ctx.device_name(device);
             let setting = ctx.device(device).and_then(|d| {
                 d.traits.iter().find_map(|t| {

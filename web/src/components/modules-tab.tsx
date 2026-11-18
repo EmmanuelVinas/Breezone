@@ -7,6 +7,7 @@ import {
   Cloud,
   Download,
   Blinds,
+  Cctv,
   EyeOff,
   Fan,
   KeyRound,
@@ -242,6 +243,16 @@ function DeviceRow({
       : null,
     typeof s.status === "string"
       ? (CHARGER_STATUS[chargerStatus(s)] ?? s.status)
+      : null,
+    device.traits.includes("camera@1")
+      ? [
+          s.online === true ? t("en ligne") : t("hors ligne"),
+          typeof s.last_event === "string" &&
+            typeof s.last_event_at === "number" &&
+            `${s.last_event} ${relativeTime(s.last_event_at)}`,
+        ]
+          .filter(Boolean)
+          .join(" · ")
       : null,
     wattsOf(s.power),
     typeof s.on === "boolean" && !d_light(s)
@@ -641,6 +652,21 @@ const DRIVER: Record<
       "Un appareil déjà présent en local (même nom et même type, par HomeKit) n'est pas ajouté une seconde fois : il reste piloté en local, et passe par le cloud seulement pour ce que le local ne sait pas faire (arrêter un volet Legrand en cours de route) ou quand le local ne répond plus."
     ),
   },
+  ezviz: {
+    icon: Cctv,
+    tone: "bg-primary/15 text-primary",
+    connection: t(
+      "Cloud d'EZVIZ, par le compte lié (Réglages › Comptes et services), comme l'application EZVIZ"
+    ),
+    every: t("toutes les 8 s (pour les coups de sonnette)"),
+    reads: t(
+      "caméras et sonnettes : en ligne, dernier événement (mouvement, personne, appel) et son image"
+    ),
+    writes: t("rien pour l'instant"),
+    note: t(
+      "Un coup de sonnette est un appui de bouton : il peut déclencher un automatisme. Les images chiffrées par EZVIZ se lisent avec le code de vérification des caméras (sur leur étiquette), donné dans le compte."
+    ),
+  },
 }
 
 function Tile({
@@ -869,7 +895,7 @@ function SourceDetail({
   const Icon = d?.icon ?? Zap
   const host = typeof source.config.host === "string" ? source.config.host : ""
   // Reached through its maker's cloud, by a linked account: no address of its own.
-  const cloud = source.driver === "netatmo"
+  const cloud = source.driver === "netatmo" || source.driver === "ezviz"
   const charger = devices.find((x) => x.traits.includes("ev.charger@1"))
   return (
     <>
@@ -982,8 +1008,8 @@ function SourceDetail({
         </CardContent>
       </Card>
       {charger && <CurrentOwner charger={charger} />}
-      {cloud && <TwinsCard sourceId={source.id} />}
-      {!cloud && <IgnoredCard sourceId={source.id} />}
+      {source.driver === "netatmo" && <TwinsCard sourceId={source.id} />}
+      {source.driver !== "netatmo" && <IgnoredCard sourceId={source.id} />}
       {source.driver === "renson" && (
         <RensonKey
           sourceId={source.id}

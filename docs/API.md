@@ -178,6 +178,7 @@ avec un identifiant stable. Les routes des zones restent celles qui les pilotent
 
 | POST 🔒 | `/api/devices/{id}/actions` | `{trait, action, params}` : action d'un trait de l'appareil, quelle que soit sa source (`climate.zone` / `set` pour une zone Airzone, avec les droits de l'installation ; `switch.relay` / `set` pour un relais Shelly, réservé aux administrateurs pour l'instant). Paramètre inconnu → `422 unsupported` ; manquant ou mal typé → `400` → appareil à jour |
 | GET 🔒 | `/api/devices/{id}/history?hours=24&points=96` ou `?from=&until=&bucket=` | `{bucket, series:{field:[[ts, value]]}}` : chaque nombre de l'état d'un appareil d'une source (puissance, énergie, relais en 0/1…), moyenne par intervalle (dernière valeur pour un compteur `energy_in` / `energy_out`). Avec `from` et `until` (horodatages), sur cette période, par exemple un jour local, et `bucket` secondes par point. Un point est enregistré toutes les 5 min (`BREEZONE_HISTORY_INTERVAL_SECS`) : moyenne des lectures depuis le point précédent |
+| GET 🔒 | `/api/devices/{id}/picture` | Image du dernier événement d'une caméra (`camera@1`), déchiffrée : `image/jpeg` ou `image/png` ; `409` sans image (ou chiffrée sans code de vérification) |
 
 ### Énergie
 
@@ -591,7 +592,7 @@ Un compte relie Breezone à un service en ligne, toujours en plus de ce qu'il li
 secrets (mot de passe, secret client, jetons) sont chiffrés avec la clé du serveur et ne sont
 jamais renvoyés. Types : `airzone` (Airzone Cloud, connecté depuis le module Airzone, voir plus
 bas), `rte` (couleur Tempo officielle), `linky` (Conso API, ce qu'Enedis a mesuré), `netatmo`
-(Legrand Home + Control), et le service `weather` (Open-Meteo, MeteoAlarm : sans identifiants,
+(Legrand Home + Control), `ezviz` (caméras et sonnettes, compte de l'application EZVIZ), et le service `weather` (Open-Meteo, MeteoAlarm : sans identifiants,
 toujours `connected`, `service: true`).
 
 Chacun se désactive sans être oublié : ce qui s'en sert fait comme s'il n'était pas là (Tempo par
@@ -601,7 +602,7 @@ le relais public, le module Netatmo arrêté, plus de synchronisation Airzone, p
 | Méthode | Chemin | Description |
 |---------|--------|-------------|
 | GET 👑 | `/api/accounts` | `[{kind, connected, enabled, service, state, last_error, last_ok, expires_at, config}]`, tous les types ; `state` ∈ `ok \| error \| expired \| unknown \| none` ; `config` : ce qui n'est pas secret (`email`, `client_id`, `prm`, `homes` de Netatmo) |
-| PUT 👑 | `/api/accounts/{kind}` | Connecte après vérification auprès du service (`502` s'il refuse, rien n'est gardé) : `rte` `{client_id, client_secret}` ; `linky` `{token, prm}` (lit l'année passée) ; `netatmo` `{client_id, client_secret, refresh_token}` (jeton du « Token generator », droits `read_magellan write_magellan` ; Breezone garde le nouveau refresh token donné à chaque renouvellement) |
+| PUT 👑 | `/api/accounts/{kind}` | Connecte après vérification auprès du service (`502` s'il refuse, rien n'est gardé) : `rte` `{client_id, client_secret}` ; `linky` `{token, prm}` (lit l'année passée) ; `netatmo` `{client_id, client_secret, refresh_token}` (jeton du « Token generator », droits `read_magellan write_magellan` ; Breezone garde le nouveau refresh token donné à chaque renouvellement) ; `ezviz` `{account, password, code?, image_code?}` (le MD5 du mot de passe est gardé ; un compte à double authentification répond d'abord `400` après avoir fait envoyer un code, à redonner dans `code` ; `image_code` : code de vérification des caméras, pour leurs images chiffrées) |
 | POST 👑 | `/api/accounts/{kind}/test` | Utilise le compte une fois de plus → la vue, avec son état et sa dernière erreur |
 | PUT 👑 | `/api/accounts/{kind}/enabled` | `{enabled}` : l'active ou le désactive → la vue |
 | DELETE 👑 | `/api/accounts/{kind}` | Oublie le compte (`airzone` : comme `DELETE /api/cloud` ; `weather` : `400`, il se désactive) |

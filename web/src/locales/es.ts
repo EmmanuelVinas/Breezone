@@ -1920,6 +1920,46 @@ const es: Record<string, string> = {
   "Rechercher un compte ou un service": "Buscar una cuenta o un servicio",
   "Aucun compte ni service ne correspond à « {query} ».":
     "Ninguna cuenta ni servicio coincide con «{query}».",
+  "Vos caméras et sonnettes EZVIZ : leur dernier événement et son image, et les coups de sonnette pour les automatismes. Le même compte que l'application EZVIZ, sans clé développeur.":
+    "Sus cámaras y timbres EZVIZ: su último evento y su imagen, y los timbrazos para las automatizaciones. La misma cuenta que la aplicación EZVIZ, sin clave de desarrollador.",
+  "Conseil : créez un second compte EZVIZ et partagez-lui vos appareils depuis l'application ; Breezone n'a pas le mot de passe de votre compte principal.":
+    "Consejo: cree una segunda cuenta EZVIZ y compártale sus dispositivos desde la aplicación; Breezone no tiene la contraseña de su cuenta principal.",
+  "Si le compte a la double authentification, une première connexion fait envoyer un code par EZVIZ : saisissez-le dans « Code reçu », puis connectez à nouveau.":
+    "Si la cuenta tiene verificación en dos pasos, una primera conexión hace que EZVIZ envíe un código: escríbalo en «Código recibido» y conecte de nuevo.",
+  "Si EZVIZ chiffre les images, donnez le code de vérification des caméras (6 lettres, sur leur étiquette).":
+    "Si EZVIZ cifra las imágenes, indique el código de verificación de las cámaras (6 letras, en su etiqueta).",
+  "Identifiant (e-mail ou téléphone)": "Usuario (correo o teléfono)",
+  "Code reçu": "Código recibido",
+  "Code de vérification des caméras": "Código de verificación de las cámaras",
+  "Désactivé : le module EZVIZ s'arrête, plus d'images ni de coups de sonnette.":
+    "Desactivado: el módulo EZVIZ se detiene, sin imágenes ni timbrazos.",
+  "{email} : {n} appareil(s)": "{email}: {n} dispositivo(s)",
+  Caméras: "Cámaras",
+  "en ligne": "en línea",
+  "hors ligne": "sin conexión",
+  "Cloud d'EZVIZ, par le compte lié (Réglages › Comptes et services), comme l'application EZVIZ":
+    "Nube de EZVIZ, por la cuenta vinculada (Ajustes › Cuentas y servicios), como la aplicación EZVIZ",
+  "toutes les 8 s (pour les coups de sonnette)":
+    "cada 8 s (para los timbrazos)",
+  "caméras et sonnettes : en ligne, dernier événement (mouvement, personne, appel) et son image":
+    "cámaras y timbres: en línea, último evento (movimiento, persona, llamada) y su imagen",
+  "rien pour l'instant": "nada por ahora",
+  "Un coup de sonnette est un appui de bouton : il peut déclencher un automatisme. Les images chiffrées par EZVIZ se lisent avec le code de vérification des caméras (sur leur étiquette), donné dans le compte.":
+    "Un timbrazo es una pulsación de botón: puede iniciar una automatización. Las imágenes cifradas por EZVIZ se leen con el código de verificación de las cámaras (en su etiqueta), indicado en la cuenta.",
+  "L'image n'a pas pu être lue.": "No se pudo leer la imagen.",
+  "Pas encore d'image aujourd'hui.": "Aún no hay imagen hoy.",
+  "Dernière image de « {name} »": "Última imagen de «{name}»",
+  Mouvement: "Movimiento",
+  "En ligne": "En línea",
+  "{event}, {when}": "{event}, {when}",
+  "Aucun événement aujourd'hui": "Ningún evento hoy",
+  "Dernier coup de sonnette {when}": "Último timbrazo {when}",
+  "Pas de coup de sonnette depuis le démarrage du serveur":
+    "Ningún timbrazo desde que arrancó el servidor",
+  "La dernière image de chaque caméra et sonnette, et leur dernier événement. Le direct viendra plus tard.":
+    "La última imagen de cada cámara y timbre, y su último evento. El directo llegará más adelante.",
+  "Aucune caméra : connectez un compte EZVIZ dans Réglages › Comptes et services.":
+    "Ninguna cámara: conecte una cuenta EZVIZ en Ajustes › Cuentas y servicios.",
 }
 
 export default es

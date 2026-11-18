@@ -68,8 +68,9 @@ fn enabled() -> bool {
 
 /// Checks the driver and its configuration; returns the trimmed name and the configuration text.
 fn checked(input: &SourceInput) -> ApiResult<(String, String)> {
-    // The Netatmo module comes with its account: only its name and whether it runs change here.
-    if input.driver != crate::accounts::netatmo::KIND {
+    // The Netatmo and EZVIZ modules come with their account: only their name and whether they run
+    // change here.
+    if !crate::accounts::MODULES.contains(&input.driver.as_str()) {
         crate::drivers::create(&input.driver, &input.config, None).map_err(ApiError::bad_request)?;
     }
     let name: String = input.name.trim().chars().take(60).collect();
@@ -100,8 +101,8 @@ async fn polled(state: &AppState, id: i64) -> ApiResult<SourceView> {
 }
 
 pub async fn create(State(state): State<AppState>, _admin: AdminUser, Json(input): Json<SourceInput>) -> ApiResult<(StatusCode, Json<SourceView>)> {
-    if input.driver == crate::accounts::netatmo::KIND {
-        return Err(ApiError::bad_request("le module Netatmo s'ajoute en connectant le compte (Réglages › Comptes et services)"));
+    if crate::accounts::MODULES.contains(&input.driver.as_str()) {
+        return Err(ApiError::bad_request("ce module s'ajoute en connectant son compte (Réglages › Comptes et services)"));
     }
     let (name, config) = checked(&input)?;
     let id = db::insert_source(&state.db, &input.driver, &name, &config).await?;
@@ -493,7 +494,7 @@ pub struct TwinsView {
 /// last reading, and for a cloud module the local devices it may be linked to.
 pub async fn twins(State(state): State<AppState>, _admin: AdminUser, Path(id): Path<i64>) -> ApiResult<Json<TwinsView>> {
     let source = db::source_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("source not found"))?;
-    if source.driver != crate::accounts::netatmo::KIND {
+    if !crate::accounts::MODULES.contains(&source.driver.as_str()) {
         return Ok(Json(TwinsView { devices: state.drivers.cloud_view(id).await, locals: vec![] }));
     }
     let names: std::collections::HashMap<String, String> = db::list_devices(&state.db).await?.into_iter().filter_map(|d| Some((d.source_ref, d.name?))).collect();
@@ -503,7 +504,7 @@ pub async fn twins(State(state): State<AppState>, _admin: AdminUser, Path(id): P
         .devices()
         .await
         .into_iter()
-        .filter(|d| d.source_id != id && d.driver != crate::accounts::netatmo::KIND)
+        .filter(|d| d.source_id != id && !crate::accounts::MODULES.contains(&d.driver.as_str()))
         .map(|d| LocalChoice {
             name: names.get(&format!("{}/{}", d.source_id, d.info.reference)).cloned().unwrap_or_else(|| d.info.name.clone()),
             source: sources.get(&d.source_id).cloned().unwrap_or_default(),
@@ -530,7 +531,7 @@ pub struct TwinInput {
 /// local device, a device of its own, or back to what its name finds.
 pub async fn set_twin(State(state): State<AppState>, _admin: AdminUser, Path(id): Path<i64>, Json(input): Json<TwinInput>) -> ApiResult<Json<TwinsView>> {
     let source = db::source_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("source not found"))?;
-    if source.driver != crate::accounts::netatmo::KIND && !matches!(input.choice.as_str(), "auto" | "ignore") {
+    if !crate::accounts::MODULES.contains(&source.driver.as_str()) && !matches!(input.choice.as_str(), "auto" | "ignore") {
         return Err(ApiError::bad_request("choice: auto or ignore"));
     }
     let mut config: serde_json::Map<String, Value> = serde_json::from_str(&source.config).unwrap_or_default();

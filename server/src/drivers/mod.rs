@@ -6,6 +6,7 @@
 //! whose zones are still read by the hub for now (they are already devices, and their actions go
 //! through the same generic route). The future WASM modules (ADR 0012) will be drivers too.
 
+pub mod ezviz;
 pub mod homekit;
 pub mod hoymiles;
 pub mod hue;
@@ -109,6 +110,10 @@ pub trait Driver: Send + Sync {
     fn cloud(&self) -> bool {
         false
     }
+    /// The last picture of a camera (its last event): the bytes and their type.
+    fn picture<'a>(&'a self, _reference: &'a str) -> DriverFuture<'a, (Vec<u8>, &'static str)> {
+        Box::pin(async { Err(DriverError::Unsupported("no picture from this module".into())) })
+    }
     /// What the hardware says about itself, raw, to understand how a model behaves (support).
     fn diagnostic(&self) -> DriverFuture<'_, Value> {
         Box::pin(async { Ok(Value::Null) })
@@ -185,7 +190,7 @@ pub struct DriverInfo {
 }
 
 pub fn available() -> Vec<DriverInfo> {
-    vec![shelly::info(), trydan::info(), hoymiles::info(), homekit::info(), hue::info(), renson::info(), netatmo::info()]
+    vec![shelly::info(), trydan::info(), hoymiles::info(), homekit::info(), hue::info(), renson::info(), netatmo::info(), ezviz::info()]
 }
 
 /// The driver of a source, from its configuration and its secret (decrypted).
@@ -487,6 +492,7 @@ pub struct Runtime {
     heard: std::sync::Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<Press>>>,
     /// Netatmo's address (the cloud module reaches its linked account).
     netatmo_url: String,
+    ezviz_url: String,
     /// When this server started: a source not read since is not lost before `RELOCATE_AFTER`.
     started: i64,
 }
@@ -517,7 +523,7 @@ impl Goal {
 
 impl Runtime {
     /// `key`: decrypts the secrets of the sources (the server key).
-    pub fn new(db: Db, key: [u8; 32], netatmo_url: String) -> Self {
+    pub fn new(db: Db, key: [u8; 32], netatmo_url: String, ezviz_url: String) -> Self {
         let (presses, heard) = tokio::sync::mpsc::unbounded_channel();
         Self {
             db,
@@ -528,6 +534,7 @@ impl Runtime {
             presses,
             heard: std::sync::Mutex::new(Some(heard)),
             netatmo_url,
+            ezviz_url,
             started: db::now(),
         }
     }
@@ -549,6 +556,7 @@ impl Runtime {
                     let secret = source.secret.as_deref().and_then(|s| crate::crypto::decrypt(&self.key, s));
                     let created = match source.driver.as_str() {
                         "netatmo" => Ok(Arc::new(netatmo::Netatmo::new(self.db.clone(), self.key, self.netatmo_url.clone())) as Arc<dyn Driver>),
+                        "ezviz" => Ok(Arc::new(ezviz::Ezviz::new(self.db.clone(), self.key, self.ezviz_url.clone())) as Arc<dyn Driver>),
                         _ => create(&source.driver, &config, secret.as_deref()),
                     };
                     let (driver, error) = match created {
@@ -732,13 +740,16 @@ impl Runtime {
         let given = {
             let mut sources = self.sources.write().await;
             let Some(r) = sources.get_mut(&p.source_id).filter(|r| r.source.enabled) else { return };
-            let given = r.devices.iter().find(|d| d.reference == p.reference).map(|d| d.name.clone());
+            let found = r.devices.iter().find(|d| d.reference == p.reference);
+            let doorbell = found.is_some_and(|d| d.kind == "doorbell");
+            let given = found.map(|d| d.name.clone());
             let state = r.states.entry(p.reference.clone()).or_default();
             state.insert("last_button".into(), Value::from(p.button));
             state.insert("last_press".into(), Value::from(p.press));
             state.insert("last_at".into(), Value::from(db::now()));
-            given
+            (given, doorbell)
         };
+        let (given, doorbell) = given;
         let source_ref = format!("{}/{}", p.source_id, p.reference);
         let device: Option<(i64, Option<String>)> =
             match sqlx::query_as("SELECT id, name FROM devices WHERE source_id = ? AND source_ref = ?").bind(p.source_id).bind(&source_ref).fetch_optional(&self.db).await {
@@ -752,10 +763,14 @@ impl Runtime {
             "long" => crate::text!("appui long", "long press", "pulsación larga"),
             _ => crate::text!("appui", "press", "pulsación"),
         };
-        let message = crate::i18n::Text {
-            fr: format!("« {name} » : bouton {}, {}", p.button, how.fr),
-            en: format!("“{name}”: button {}, {}", p.button, how.en),
-            es: format!("«{name}»: botón {}, {}", p.button, how.es),
+        let message = if doorbell {
+            crate::i18n::Text { fr: format!("« {name} » : on sonne"), en: format!("“{name}”: someone rings"), es: format!("«{name}»: llaman al timbre") }
+        } else {
+            crate::i18n::Text {
+                fr: format!("« {name} » : bouton {}, {}", p.button, how.fr),
+                en: format!("“{name}”: button {}, {}", p.button, how.en),
+                es: format!("«{name}»: botón {}, {}", p.button, how.es),
+            }
         };
         let data = serde_json::json!({"device_id": device_id, "button": p.button, "press": p.press});
         if let Err(e) = db::insert_event(&self.db, "button", "info", None, None, &message, Some(&data)).await {
@@ -994,6 +1009,12 @@ impl Runtime {
         Ok(())
     }
 
+    /// The last picture of a camera of a source.
+    pub async fn picture(&self, source_id: i64, reference: &str) -> Result<(Vec<u8>, &'static str), DriverError> {
+        let driver = self.sources.read().await.get(&source_id).and_then(|r| r.driver.clone()).ok_or_else(|| DriverError::Unreachable("source not configured".into()))?;
+        driver.picture(reference).await
+    }
+
     pub async fn act(&self, source_id: i64, reference: &str, trait_name: &str, action: &str, params: &State) -> Result<(), DriverError> {
         let driver = self.sources.read().await.get(&source_id).and_then(|r| r.driver.clone()).ok_or_else(|| DriverError::Unreachable("source not configured".into()))?;
         match driver.act(reference, trait_name, action, params).await {
@@ -1164,7 +1185,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let db = db::connect(&dir.join("breezone.db")).await.unwrap();
-        let rt = Runtime::new(db.clone(), [0; 32], String::new());
+        let rt = Runtime::new(db.clone(), [0; 32], String::new(), String::new());
         let local_id = db::insert_source(&db, "homekit", "Passerelle", "{}").await.unwrap();
         let cloud_id = db::insert_source(&db, "netatmo", "Netatmo", "{}").await.unwrap();
         let sources = db::list_sources(&db).await.unwrap();

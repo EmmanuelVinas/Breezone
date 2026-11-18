@@ -50,10 +50,12 @@ pub struct Config {
     /// when the server may look things up on the internet, else none.
     pub cre_url: Option<String>,
     /// The services of the linked accounts (`accounts`), only reached once an account is set:
-    /// RTE's data portal (Tempo), Conso API (Linky, through Enedis), Netatmo.
+    /// RTE's data portal (Tempo), Conso API (Linky, through Enedis), Netatmo, EZVIZ (its European
+    /// API: an account elsewhere is sent to its own region at login).
     pub rte_url: String,
     pub conso_api_url: String,
     pub netatmo_url: String,
+    pub ezviz_url: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -113,6 +115,7 @@ impl Config {
             rte_url: var("BREEZONE_RTE_URL").unwrap_or_else(|| "https://digital.iservices.rte-france.com".into()),
             conso_api_url: var("BREEZONE_CONSO_API_URL").unwrap_or_else(|| "https://conso.boris.sh".into()),
             netatmo_url: var("BREEZONE_NETATMO_URL").unwrap_or_else(|| "https://api.netatmo.com".into()),
+            ezviz_url: var("BREEZONE_EZVIZ_URL").unwrap_or_else(|| "https://apiieu.ezvizlife.com".into()),
         }
     }
 
@@ -156,6 +159,7 @@ impl Config {
             rte_url: "http://127.0.0.1:9".into(),
             conso_api_url: "http://127.0.0.1:9".into(),
             netatmo_url: "http://127.0.0.1:9".into(),
+            ezviz_url: "http://127.0.0.1:9".into(),
         }
     }
 }

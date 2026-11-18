@@ -6,6 +6,22 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Automations: two rules whose conditions cannot both be true (outdoor below 14° and above 25°,
+  « Salon · Mode : Heat » and « … : Cool »…) are no longer said to contradict each other; what one
+  does otherwise still counts.
+
+## [0.11.0-beta.41] - 2026-11-18
+
+### Added
+
+- EZVIZ account (Settings › Accounts and services), with the user name and password of the EZVIZ
+  app (no developer key), two-step verification by code. Its module comes with it: the cameras
+  and doorbells, online or not, their last event and its picture (decrypted with the verification
+  code of the cameras), and a « Cameras » page. A ring of the doorbell is a button press: it shows
+  in the activity and can start an automation.
+
 ## [0.11.0-beta.40] - 2026-11-18
 
 ### Added

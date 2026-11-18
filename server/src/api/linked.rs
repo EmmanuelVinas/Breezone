@@ -26,6 +26,16 @@ pub struct ConnectInput {
     pub token: String,
     #[serde(default)]
     pub prm: String,
+    #[serde(default)]
+    pub account: String,
+    #[serde(default)]
+    pub password: String,
+    /// The code of a two-step verification, when the service sent one.
+    #[serde(default)]
+    pub code: String,
+    /// The verification code of the cameras, for their encrypted pictures.
+    #[serde(default)]
+    pub image_code: String,
 }
 
 pub async fn connect(State(state): State<AppState>, AdminUser(user): AdminUser, Path(kind): Path<String>, Json(input): Json<ConnectInput>) -> ApiResult<Json<AccountView>> {
@@ -33,6 +43,7 @@ pub async fn connect(State(state): State<AppState>, AdminUser(user): AdminUser, 
         accounts::rte::KIND => accounts::rte::connect(&state, &input.client_id, &input.client_secret).await?,
         accounts::linky::KIND => accounts::linky::connect(&state, &input.token, &input.prm).await?,
         accounts::netatmo::KIND => accounts::netatmo::connect(&state, &input.client_id, &input.client_secret, &input.refresh_token).await?,
+        accounts::ezviz::KIND => accounts::ezviz::connect(&state, &input.account, &input.password, &input.code, &input.image_code).await?,
         crate::cloud::ACCOUNT => return Err(ApiError::bad_request("le compte Airzone se connecte depuis Réglages › Modules › Airzone")),
         _ => return Err(ApiError::not_found("unknown account")),
     }
@@ -46,6 +57,7 @@ pub async fn test(State(state): State<AppState>, AdminUser(user): AdminUser, Pat
         accounts::rte::KIND => accounts::rte::test(&state).await,
         accounts::linky::KIND => accounts::linky::test(&state).await,
         accounts::netatmo::KIND => accounts::netatmo::test(&state).await,
+        accounts::ezviz::KIND => accounts::ezviz::test(&state).await,
         crate::cloud::ACCOUNT => crate::cloud::sync_stored(&state, &user.username).await.map(|_| ()),
         accounts::WEATHER => {
             state.weather.refresh().await;
@@ -66,13 +78,13 @@ pub struct EnabledInput {
 }
 
 /// Switches an account or a service on or off, without forgetting it: what uses it does as if it
-/// were not set (the Netatmo module stops, the Tempo colours come from the public relay…).
+/// were not set (the Netatmo or EZVIZ module stops, the Tempo colours come from the public relay…).
 pub async fn set_enabled(State(state): State<AppState>, AdminUser(user): AdminUser, Path(kind): Path<String>, Json(input): Json<EnabledInput>) -> ApiResult<Json<AccountView>> {
     if !accounts::KINDS.contains(&kind.as_str()) {
         return Err(ApiError::not_found("unknown account"));
     }
     crate::db::set_account_enabled(&state.db, &kind, input.enabled).await?;
-    if kind == accounts::netatmo::KIND {
+    if accounts::MODULES.contains(&kind.as_str()) {
         for s in crate::db::list_sources(&state.db).await?.into_iter().filter(|s| s.driver == kind) {
             crate::db::update_source(&state.db, s.id, &s.name, &s.config, input.enabled).await?;
         }

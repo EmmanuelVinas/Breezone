@@ -12,6 +12,20 @@ export type ButtonState = {
   last_at: number | null
 }
 
+/** Camera or doorbell (`camera@1`): state. */
+export type CameraState = {
+  /** Online */
+  online: boolean
+  /** Motion */
+  motion: boolean
+  /** Last event */
+  last_event: string | null
+  /** Time of the last event (s) */
+  last_event_at: number | null
+  /** Time of the last picture (s) */
+  image_at: number | null
+}
+
 /** Air conditioning (`climate.zone@1`): state. */
 export type ClimateZoneState = {
   /** On */
@@ -284,4 +298,4 @@ export type VentilationUnitBoost = {
 export type VentilationUnitStopBoost = Record<string, never>
 
 /** Traits described by this version (`trait@version`). */
-export const TRAITS = ["button@1", "climate.zone@1", "cover.position@1", "energy.meter@1", "ev.charger@1", "light@1", "solar.inverter@1", "solar.panel@1", "energy.power@1", "switch.relay@1", "ventilation.room@1", "ventilation.unit@1"] as const
+export const TRAITS = ["button@1", "camera@1", "climate.zone@1", "cover.position@1", "energy.meter@1", "ev.charger@1", "light@1", "solar.inverter@1", "solar.panel@1", "energy.power@1", "switch.relay@1", "ventilation.room@1", "ventilation.unit@1"] as const

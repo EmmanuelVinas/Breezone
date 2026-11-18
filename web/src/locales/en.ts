@@ -1901,6 +1901,45 @@ const en: Record<string, string> = {
   "Rechercher un compte ou un service": "Search an account or a service",
   "Aucun compte ni service ne correspond à « {query} ».":
     "No account or service matches “{query}”.",
+  "Vos caméras et sonnettes EZVIZ : leur dernier événement et son image, et les coups de sonnette pour les automatismes. Le même compte que l'application EZVIZ, sans clé développeur.":
+    "Your EZVIZ cameras and doorbells: their last event and its picture, and the rings for the automations. The same account as the EZVIZ app, no developer key.",
+  "Conseil : créez un second compte EZVIZ et partagez-lui vos appareils depuis l'application ; Breezone n'a pas le mot de passe de votre compte principal.":
+    "Tip: create a second EZVIZ account and share your devices with it from the app; Breezone does not get the password of your main account.",
+  "Si le compte a la double authentification, une première connexion fait envoyer un code par EZVIZ : saisissez-le dans « Code reçu », puis connectez à nouveau.":
+    "If the account has two-step verification, a first connection has EZVIZ send a code: type it in “Code received”, then connect again.",
+  "Si EZVIZ chiffre les images, donnez le code de vérification des caméras (6 lettres, sur leur étiquette).":
+    "If EZVIZ encrypts the pictures, give the verification code of the cameras (6 letters, on their label).",
+  "Identifiant (e-mail ou téléphone)": "User name (e-mail or phone)",
+  "Code reçu": "Code received",
+  "Code de vérification des caméras": "Verification code of the cameras",
+  "Désactivé : le module EZVIZ s'arrête, plus d'images ni de coups de sonnette.":
+    "Off: the EZVIZ module stops, no more pictures nor rings.",
+  "{email} : {n} appareil(s)": "{email}: {n} device(s)",
+  Caméras: "Cameras",
+  "en ligne": "online",
+  "hors ligne": "offline",
+  "Cloud d'EZVIZ, par le compte lié (Réglages › Comptes et services), comme l'application EZVIZ":
+    "EZVIZ's cloud, through the linked account (Settings › Accounts and services), as the EZVIZ app does",
+  "toutes les 8 s (pour les coups de sonnette)": "every 8 s (for the rings)",
+  "caméras et sonnettes : en ligne, dernier événement (mouvement, personne, appel) et son image":
+    "cameras and doorbells: online, last event (motion, person, call) and its picture",
+  "rien pour l'instant": "nothing for now",
+  "Un coup de sonnette est un appui de bouton : il peut déclencher un automatisme. Les images chiffrées par EZVIZ se lisent avec le code de vérification des caméras (sur leur étiquette), donné dans le compte.":
+    "A ring is a button press: it can start an automation. The pictures EZVIZ encrypts are read with the verification code of the cameras (on their label), given in the account.",
+  "L'image n'a pas pu être lue.": "The picture could not be read.",
+  "Pas encore d'image aujourd'hui.": "No picture yet today.",
+  "Dernière image de « {name} »": "Last picture of “{name}”",
+  Mouvement: "Motion",
+  "En ligne": "Online",
+  "{event}, {when}": "{event}, {when}",
+  "Aucun événement aujourd'hui": "No event today",
+  "Dernier coup de sonnette {when}": "Last ring {when}",
+  "Pas de coup de sonnette depuis le démarrage du serveur":
+    "No ring since the server started",
+  "La dernière image de chaque caméra et sonnette, et leur dernier événement. Le direct viendra plus tard.":
+    "The last picture of each camera and doorbell, and their last event. Live view will come later.",
+  "Aucune caméra : connectez un compte EZVIZ dans Réglages › Comptes et services.":
+    "No camera: connect an EZVIZ account in Settings › Accounts and services.",
 }
 
 export default en

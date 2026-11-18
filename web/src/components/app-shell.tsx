@@ -19,6 +19,7 @@ import {
   Sun,
   Timer,
   Zap,
+  Cctv,
 } from "lucide-react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import type { LiveState } from "@/hooks/use-live"
@@ -56,6 +57,7 @@ type NavItem = {
     | "light"
     | "cover"
     | "ventilation"
+    | "camera"
     | "admin"
 }
 
@@ -105,6 +107,13 @@ const NAV: { title: string | null; items: NavItem[] }[] = [
         icon: Fan,
         end: false,
         when: "ventilation",
+      },
+      {
+        to: "/cameras",
+        label: t("Caméras"),
+        icon: Cctv,
+        end: false,
+        when: "camera",
       },
       {
         to: "/solaire",
@@ -194,6 +203,7 @@ function useModules() {
     ventilation: !!devices?.some((d) =>
       d.traits.includes("ventilation.unit@1")
     ),
+    camera: !!devices?.some((d) => d.traits.includes("camera@1")),
   }
 }
 
@@ -259,6 +269,7 @@ export function AppShell({
     (n.when === "light" && here && modules.light) ||
     (n.when === "cover" && here && modules.cover) ||
     (n.when === "ventilation" && here && modules.ventilation) ||
+    (n.when === "camera" && here && modules.camera) ||
     (n.when === "charger" && here && modules.charger) ||
     (n.when === "admin" && user?.role === "admin")
   const sections = NAV.map((s) => ({
