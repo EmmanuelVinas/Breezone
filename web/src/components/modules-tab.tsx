@@ -90,7 +90,27 @@ const BY_ADDRESS = [
   { driver: "trydan", label: "V2C Trydan" },
   { driver: "hoymiles", label: "Hoymiles (DTU)" },
   { driver: "renson", label: "Renson Healthbox" },
+  { driver: "hue", label: "Philips Hue" },
+  { driver: "homekit", label: "HomeKit (Legrand, VELUX…)" },
 ]
+
+/** A product typed by its address, as if the search had found it (a Hue bridge, a HomeKit accessory). */
+function typed(driver: string, label: string, host: string): FoundProduct {
+  return {
+    brand: driver === "hue" ? "hue" : "homekit",
+    driver,
+    model: label,
+    host,
+    port: Number(host.split(":")[1] ?? 80),
+    mac: null,
+    device_id: null,
+    firmware: null,
+    note: null,
+    supported: true,
+    flags: 0,
+    added: false,
+  }
+}
 
 /** A light's state in a few words: "allumée · 50 %". */
 function d_light(s: Record<string, unknown>) {
@@ -1300,6 +1320,13 @@ function AddModuleDialog({
         </div>
         <div className="grid gap-2 border-t pt-4">
           <Label htmlFor="module-host">{t("Ou par son adresse")}</Label>
+          {driver === "homekit" && (
+            <p className="text-xs text-muted-foreground">
+              {t(
+                "Avec son port HomeKit : l'adresse IP, deux-points, puis le port (souvent dans l'application du fabricant, ou trouvé par la recherche)."
+              )}
+            </p>
+          )}
           <div className="flex gap-2">
             <Select value={driver} onValueChange={setDriver}>
               <SelectTrigger className="w-40" aria-label={t("Produit")}>
@@ -1316,21 +1343,29 @@ function AddModuleDialog({
             <Input
               id="module-host"
               value={host}
-              placeholder="192.168.1.40"
+              placeholder={
+                driver === "homekit" ? "192.168.1.30:5001" : "192.168.1.40"
+              }
               onChange={(e) => setHost(e.target.value)}
             />
             <Button
               variant="outline"
-              disabled={!host.trim() || add.isPending}
-              onClick={() =>
-                add.mutate({
-                  driver,
-                  name:
-                    BY_ADDRESS.find((d) => d.driver === driver)?.label ??
-                    driver,
-                  host: host.trim(),
-                })
+              disabled={
+                !host.trim() ||
+                add.isPending ||
+                // A HomeKit accessory listens on a port of its own.
+                (driver === "homekit" && !/:\d+$/.test(host.trim()))
               }
+              onClick={() => {
+                const label =
+                  BY_ADDRESS.find((d) => d.driver === driver)?.label ?? driver
+                // The bridge's button, or the accessory's code, as when found by the search.
+                if (driver === "hue")
+                  setLinking(typed(driver, label, host.trim()))
+                else if (driver === "homekit")
+                  startPairing(typed(driver, "HomeKit", host.trim()))
+                else add.mutate({ driver, name: label, host: host.trim() })
+              }}
             >
               <Plus /> {t("Ajouter")}
             </Button>

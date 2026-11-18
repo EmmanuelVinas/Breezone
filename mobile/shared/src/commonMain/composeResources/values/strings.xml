@@ -640,4 +640,6 @@
     <string name="block_spacer_hint">Une case laissée vide, pour mettre la carte suivante à part</string>
     <string name="block_pages_all">Toutes les pages</string>
     <string name="block_settings_pages">Pages montrées</string>
+    <string name="schedules_airzone_title">Programmations Airzone</string>
+    <string name="schedules_airzone_paused">Désactivées par Breezone, sur toutes les installations : seuls les automatismes et les programmations de Breezone pilotent la climatisation. Réactivez-les pour qu’Airzone les exécute à nouveau, comme elles étaient.</string>
 </resources>

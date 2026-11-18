@@ -104,6 +104,7 @@ pub fn router() -> Router<AppState> {
         // Schedules of the Airzone app (Airzone Cloud)
         .route("/api/airzone/schedules", get(schedules::list).post(schedules::create))
         .route("/api/airzone/schedules/sync", post(schedules::sync))
+        .route("/api/airzone/schedules/enabled", put(schedules::set_all_enabled))
         .route("/api/airzone/schedules/{cloud_id}/{id}", put(schedules::update).delete(schedules::delete))
         .route("/api/airzone/schedules/{cloud_id}/{id}/enabled", put(schedules::set_enabled))
         // Updates of Breezone itself (issue #40)

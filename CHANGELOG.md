@@ -8,6 +8,23 @@ All notable changes are documented here. The format follows
 
 ### Added
 
+- Airzone schedules can be switched off all at once (web and app, administrators), so that
+  Breezone's automations and schedules do not compete with them: those that were on are switched
+  off in Airzone, and only they come back on when switched on again. While they are all off, the
+  section is folded; one switched on again, even in the Airzone app, unfolds it.
+- App: the automations of Breezone come first in Schedules, the Airzone schedules after.
+- Settings › Modules: a Philips Hue bridge and a HomeKit accessory (Legrand, VELUX…) can also be
+  added by their address (the bridge's button, or the accessory's code, as when found).
+
+### Changed
+
+- The network searched for modules defaults to the one of the hardware already added (WebServers,
+  modules) when the server runs in a container, instead of asking for it.
+
+## [0.11.0-beta.37] - 2026-11-18
+
+### Added
+
 - Dashboards: a “Grid cost / solar gain” figure, the two side by side (“1,19 € / 0,10 €”): what was
   bought from the grid, against what the solar saved or sold. Added on its own or ticked in the
   figures of the period (not shown unless chosen).

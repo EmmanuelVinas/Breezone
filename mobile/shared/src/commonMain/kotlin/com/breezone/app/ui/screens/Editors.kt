@@ -61,7 +61,7 @@ import org.jetbrains.compose.resources.stringResource
  */
 @Composable
 fun SectionList(
-    hint: String,
+    hint: String?,
     addLabel: String,
     onAdd: (() -> Unit)?,
     modifier: Modifier = Modifier,
@@ -73,7 +73,7 @@ fun SectionList(
             contentPadding = SectionListPadding,
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item(key = "hint", contentType = "hint") { Muted(hint) }
+            if (hint != null) item(key = "hint", contentType = "hint") { Muted(hint) }
             content()
             item(key = "bottom-space", contentType = "space") { Spacer(Modifier.height(80.dp)) }
         }

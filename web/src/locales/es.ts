@@ -1778,6 +1778,11 @@ const es: Record<string, string> = {
   "Coût réseau / gain solaire": "Coste de la red / ganancia solar",
   "achetés au réseau / économisés ou revendus":
     "comprados a la red / ahorrados o vendidos",
+  "Programmations Airzone actives": "Programaciones Airzone activas",
+  "Désactivées par Breezone, sur toutes les installations : seuls les automatismes et les programmations de Breezone pilotent la climatisation. Réactivez-les pour qu'Airzone les exécute à nouveau, comme elles étaient.":
+    "Desactivadas por Breezone, en todas las instalaciones: solo las automatizaciones y programaciones de Breezone manejan la climatización. Actívelas para que Airzone las ejecute de nuevo, tal como estaban.",
+  "Avec son port HomeKit : l'adresse IP, deux-points, puis le port (souvent dans l'application du fabricant, ou trouvé par la recherche).":
+    "Con su puerto HomeKit: la dirección IP, dos puntos y el puerto (a menudo en la aplicación del fabricante, o encontrado por la búsqueda).",
 }
 
 export default es

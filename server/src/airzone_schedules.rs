@@ -357,7 +357,19 @@ pub struct SchedulesState {
     pub last_error: Option<Text>,
     /// An Airzone account is remembered (needed to read and write the schedules).
     pub account: bool,
+    /// Breezone switched the Airzone schedules off (see `KEY_PAUSED`), so that its own automations
+    /// and schedules do not compete with them.
+    pub paused: bool,
     pub schedules: Vec<ScheduleView>,
+}
+
+/// The Airzone schedules Breezone switched off together ("cloud_id/id", JSON), switched on again
+/// when they are resumed; set while they are paused.
+pub const KEY_PAUSED: &str = "airzone_schedules_paused";
+
+/// The schedules Breezone switched off together, if they are paused.
+pub async fn paused(state: &AppState) -> ApiResult<Option<Vec<String>>> {
+    Ok(db::get_setting(&state.db, KEY_PAUSED).await?.map(|v| serde_json::from_str(&v).unwrap_or_default()))
 }
 
 pub async fn list(state: &AppState) -> ApiResult<SchedulesState> {
@@ -378,6 +390,8 @@ pub async fn list(state: &AppState) -> ApiResult<SchedulesState> {
         last_sync: db::get_setting(&state.db, KEY_LAST_SYNC).await?.and_then(|v| v.parse().ok()),
         last_error: db::get_setting(&state.db, KEY_LAST_ERROR).await?.as_deref().map(Text::load),
         account: cloud::load_credentials(state).await.is_some(),
+        // Switched off by Breezone, and none switched on again since (in the Airzone app too).
+        paused: db::get_setting(&state.db, KEY_PAUSED).await?.is_some() && !schedules.iter().any(|s| s.enabled),
         schedules,
     })
 }

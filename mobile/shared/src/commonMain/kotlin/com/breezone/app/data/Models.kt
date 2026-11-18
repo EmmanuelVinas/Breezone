@@ -306,6 +306,8 @@ data class SchedulesState(
     val lastError: String? = null,
     /** True when the server remembers an Airzone account (needed to read and edit schedules). */
     val account: Boolean = false,
+    /** Breezone switched them all off, so that its own automations do not compete with them. */
+    val paused: Boolean = false,
     val schedules: List<AirzoneSchedule> = emptyList(),
 )
 

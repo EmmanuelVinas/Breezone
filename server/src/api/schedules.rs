@@ -2,7 +2,7 @@
 
 use crate::access::Access;
 use crate::airzone_schedules::{self, ScheduleInput, ScheduleOp, SchedulesState};
-use crate::auth::AuthUser;
+use crate::auth::{AdminUser, AuthUser};
 use crate::db;
 use crate::error::{ApiError, ApiResult};
 use crate::AppState;
@@ -91,4 +91,39 @@ pub async fn set_enabled(
 pub async fn delete(State(state): State<AppState>, user: AuthUser, Path((cloud_id, id)): Path<(String, String)>) -> ApiResult<Json<SchedulesState>> {
     let (access, linked) = may_change(&state, &user, &cloud_id, true).await?;
     change(&state, linked, &cloud_id, ScheduleOp::Delete { schedule_id: id }, &user.username, &access).await
+}
+
+/// Switches all the Airzone schedules off, so that Breezone's own do not compete with them, or on
+/// again: only those it switched off, as they were (one switched off in the Airzone app stays off).
+pub async fn set_all_enabled(State(state): State<AppState>, AdminUser(user): AdminUser, Json(input): Json<EnabledInput>) -> ApiResult<Json<SchedulesState>> {
+    let access = Access::of(&state.db, &user).await?;
+    let installations = db::list_installations(&state.db).await?;
+    let linked = |cloud_id: &str| installations.iter().find(|i| i.cloud_id.as_deref() == Some(cloud_id)).cloned();
+    let already = airzone_schedules::paused(&state).await?;
+    let mut failed = None;
+    if input.enabled {
+        for key in already.unwrap_or_default() {
+            let Some((cloud_id, id)) = key.split_once('/') else { continue };
+            let op = ScheduleOp::Enable { schedule_id: id.to_string(), enabled: true };
+            if let Err(e) = change(&state, linked(cloud_id), cloud_id, op, &user.username, &access).await {
+                failed = Some(e);
+            }
+        }
+        db::delete_setting(&state.db, airzone_schedules::KEY_PAUSED).await?;
+    } else {
+        let mut off = already.unwrap_or_default();
+        for s in airzone_schedules::list(&state).await?.schedules.into_iter().filter(|s| s.enabled) {
+            let op = ScheduleOp::Enable { schedule_id: s.id.clone(), enabled: false };
+            match change(&state, linked(&s.cloud_id), &s.cloud_id, op, &user.username, &access).await {
+                Ok(_) => off.push(format!("{}/{}", s.cloud_id, s.id)),
+                Err(e) => failed = Some(e),
+            }
+        }
+        db::set_setting(&state.db, airzone_schedules::KEY_PAUSED, &serde_json::to_string(&off).unwrap_or_default()).await?;
+    }
+    // Those that could be changed are: the list says where things stand, the error what failed.
+    if let Some(e) = failed {
+        return Err(e);
+    }
+    Ok(Json(visible(airzone_schedules::list(&state).await?, &access)))
 }

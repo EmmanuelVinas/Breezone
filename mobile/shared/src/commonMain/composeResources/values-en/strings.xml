@@ -625,4 +625,6 @@
     <string name="block_spacer_hint">An empty cell, to set the next card apart</string>
     <string name="block_pages_all">All the pages</string>
     <string name="block_settings_pages">Pages shown</string>
+    <string name="schedules_airzone_title">Airzone schedules</string>
+    <string name="schedules_airzone_paused">Switched off by Breezone, on every installation: only Breezone’s automations and schedules drive the climate. Switch them on for Airzone to run them again, as they were.</string>
 </resources>

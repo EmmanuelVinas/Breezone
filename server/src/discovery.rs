@@ -336,7 +336,8 @@ pub fn in_container() -> bool {
 const SUBNET_SETTING: &str = "scan.subnet";
 
 /// Subnet scanned by default: the one saved from the web UI, else BREEZONE_SCAN_SUBNET, else the
-/// server's own /24 (not inside a container, where it would be the container network).
+/// /24 of the hardware Breezone already reaches (its WebServers and modules: inside a container,
+/// the server's own address is the container network's), else the server's own /24.
 pub async fn global_subnet(db: &crate::db::Db, configured: Option<&str>) -> Option<String> {
     if let Ok(Some(saved)) = crate::db::get_setting(db, SUBNET_SETTING).await {
         return Some(saved);
@@ -344,10 +345,38 @@ pub async fn global_subnet(db: &crate::db::Db, configured: Option<&str>) -> Opti
     if let Some(c) = configured.filter(|c| !c.trim().is_empty()) {
         return Some(c.trim().to_string());
     }
+    if let Some(known) = known_subnet(db).await {
+        return Some(known);
+    }
     if in_container() {
         return None;
     }
     default_subnet()
+}
+
+/// The /24 most of the hardware already added is on (private addresses only).
+async fn known_subnet(db: &crate::db::Db) -> Option<String> {
+    let mut hosts: Vec<String> = crate::db::list_installations(db).await.ok()?.into_iter().map(|i| i.host).collect();
+    for source in crate::db::list_sources(db).await.ok()? {
+        let config: serde_json::Value = serde_json::from_str(&source.config).unwrap_or_default();
+        if let Some(h) = config["host"].as_str() {
+            hosts.push(h.to_string());
+        }
+    }
+    subnet_of_most(&hosts)
+}
+
+/// The /24 of the most addresses among `hosts` ("ip" or "ip:port"; names and public addresses left out).
+fn subnet_of_most(hosts: &[String]) -> Option<String> {
+    let mut counts: std::collections::BTreeMap<[u8; 3], usize> = Default::default();
+    for h in hosts {
+        let Ok(ip) = h.trim().split(':').next().unwrap_or_default().parse::<Ipv4Addr>() else { continue };
+        if ip.is_private() {
+            let o = ip.octets();
+            *counts.entry([o[0], o[1], o[2]]).or_default() += 1;
+        }
+    }
+    counts.into_iter().max_by_key(|(_, n)| *n).map(|(o, _)| format!("{}.{}.{}.0/24", o[0], o[1], o[2]))
 }
 
 pub async fn save_global_subnet(db: &crate::db::Db, subnet: Option<&str>) -> Result<(), String> {
@@ -363,6 +392,13 @@ pub async fn save_global_subnet(db: &crate::db::Db, subnet: Option<&str>) -> Res
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_subnet_of_the_hardware_already_added() {
+        let hosts = ["192.168.86.25:5001", "192.168.86.40", "10.0.0.7", "nas.local", "8.8.8.8"].map(String::from);
+        assert_eq!(subnet_of_most(&hosts).as_deref(), Some("192.168.86.0/24"));
+        assert_eq!(subnet_of_most(&["box.example.com".to_string()]), None);
+    }
 
     #[test]
     fn computes_hosts_of_subnet() {

@@ -249,4 +249,28 @@ async fn airzone_schedules_are_mirrored_and_edited_on_airzone_cloud() {
     assert_eq!(s, StatusCode::FORBIDDEN);
     let (s, v) = user.call(reqwest::Method::PUT, &format!("/api/airzone/schedules/inst-home/{id}/enabled"), Some(json!({"enabled": true}))).await;
     assert_eq!(s, StatusCode::OK, "{v}");
+
+    // All of them switched off at once, so that Breezone's own do not compete with them: an
+    // administrator's choice. Switched on again, only those that were on come back on.
+    let (s, _) = user.call(reqwest::Method::PUT, "/api/airzone/schedules/enabled", Some(json!({"enabled": false}))).await;
+    assert_eq!(s, StatusCode::FORBIDDEN);
+    let (_, before) = c.call(reqwest::Method::GET, "/api/airzone/schedules", None).await;
+    assert_eq!(before["paused"], false);
+    let was_on = |r: &Value| -> Vec<(String, bool)> {
+        let mut v: Vec<(String, bool)> = r["schedules"].as_array().unwrap().iter().map(|s| (s["name"].as_str().unwrap().to_string(), s["enabled"].as_bool().unwrap())).collect();
+        v.sort();
+        v
+    };
+    assert!(was_on(&before).iter().any(|(_, on)| *on) && was_on(&before).iter().any(|(_, on)| !*on), "some on, some off: {before}");
+    let (s, r) = c.call(reqwest::Method::PUT, "/api/airzone/schedules/enabled", Some(json!({"enabled": false}))).await;
+    assert_eq!(s, StatusCode::OK, "{r}");
+    assert_eq!(r["paused"], true);
+    assert!(was_on(&r).iter().all(|(_, on)| !*on), "all off: {r}");
+    // One switched on again (here or in the Airzone app): they are no longer all off.
+    let (_, r) = c.call(reqwest::Method::PUT, &format!("/api/airzone/schedules/inst-home/{id}/enabled"), Some(json!({"enabled": true}))).await;
+    assert_eq!(r["paused"], false, "{r}");
+    let (s, r) = c.call(reqwest::Method::PUT, "/api/airzone/schedules/enabled", Some(json!({"enabled": true}))).await;
+    assert_eq!(s, StatusCode::OK, "{r}");
+    assert_eq!(r["paused"], false);
+    assert_eq!(was_on(&r), was_on(&before), "as they were");
 }

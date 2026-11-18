@@ -306,6 +306,8 @@ export type SchedulesState = {
   last_sync: number | null
   last_error: string | null
   account: boolean
+  /** Breezone switched them all off (absent before 0.11.0-beta.38). */
+  paused?: boolean
   schedules: AirzoneSchedule[]
 }
 
@@ -1678,6 +1680,10 @@ export const api = {
       `/api/airzone/schedules/${cloudId}/${id}/enabled`,
       { enabled }
     ),
+  setAirzoneSchedulesEnabled: (enabled: boolean) =>
+    request<SchedulesState>("PUT", "/api/airzone/schedules/enabled", {
+      enabled,
+    }),
   deleteAirzoneSchedule: (cloudId: string, id: string) =>
     request<SchedulesState>(
       "DELETE",

@@ -2,6 +2,9 @@ package com.breezone.app.ui.screens
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -82,14 +85,29 @@ fun InstallationSchedules(serverId: String, inst: Installation, canEdit: Boolean
 
     val s = state
     val schedules = s?.schedules.orEmpty().filter { it.installationId == inst.id }
+    val admin = hub.server(serverId)?.user?.isAdmin == true
+    val paused = s?.paused == true
     SectionList(
-        hint = stringResource(Res.string.schedules_hint),
+        hint = null,
         addLabel = stringResource(Res.string.schedules_new),
-        onAdd = if (canEdit && s?.account == true && cloudId != null) ({ creating = true }) else null,
+        onAdd = if (canEdit && s?.account == true && cloudId != null && !paused) ({ creating = true }) else null,
         modifier = modifier,
     ) {
+        // Breezone's own automations first; the Airzone schedules after, which can be switched off.
+        item(key = "automations", contentType = "automations") { AutomationsSection(serverId, inst) }
+        item(key = "airzone", contentType = "airzone") {
+            Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f)) { SectionTitle(stringResource(Res.string.schedules_airzone_title), FzIcons.Cloud) }
+                    if (admin && s?.account == true) {
+                        Switch(checked = !paused, onCheckedChange = { on -> apply { hub.api(serverId)?.setSchedulesEnabled(on) } })
+                    }
+                }
+                Muted(stringResource(if (paused) Res.string.schedules_airzone_paused else Res.string.schedules_hint))
+            }
+        }
         when {
-            s == null -> Unit
+            s == null || paused -> Unit
             !s.account -> item(key = "no-account", contentType = "message") { Muted(stringResource(Res.string.schedules_no_account)) }
             else -> {
                 s.lastError?.let { error ->
@@ -102,7 +120,7 @@ fun InstallationSchedules(serverId: String, inst: Installation, canEdit: Boolean
                 }
             }
         }
-        items(schedules, key = { "${it.cloudId}-${it.id}" }, contentType = { "schedule" }) { schedule ->
+        items(if (paused) emptyList() else schedules, key = { "${it.cloudId}-${it.id}" }, contentType = { "schedule" }) { schedule ->
             val editable = schedule.editable && canEdit
             ScheduleCard(
                 schedule = schedule,
@@ -112,8 +130,6 @@ fun InstallationSchedules(serverId: String, inst: Installation, canEdit: Boolean
                 onEnabled = { enabled -> apply { hub.api(serverId)?.setScheduleEnabled(schedule, enabled) } },
             )
         }
-        // Breezone's own automations, under the Airzone schedules: what runs by itself.
-        item(key = "automations", contentType = "automations") { AutomationsSection(serverId, inst) }
     }
 
     if (creating || editing != null) {

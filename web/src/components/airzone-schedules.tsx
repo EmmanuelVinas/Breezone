@@ -17,7 +17,7 @@ import type {
   SchedulesState,
   ZoneCommand,
 } from "@/lib/api"
-import { api } from "@/lib/api"
+import { api, currentUser } from "@/lib/api"
 import { useChosenInstallations } from "@/lib/selected-installation"
 import {
   DAY_LABEL,
@@ -487,6 +487,16 @@ export function AirzoneSchedulesSection() {
     onSuccess: (r) => qc.setQueryData(["airzone-schedules"], r),
     onError: (e) => toast.error(errorText(e)),
   })
+  // All of them off at once, so that Breezone's own do not compete with them (administrators).
+  const pause = useMutation({
+    mutationFn: (enabled: boolean) => api.setAirzoneSchedulesEnabled(enabled),
+    onSuccess: (r) => qc.setQueryData(["airzone-schedules"], r),
+    onError: (e) => {
+      toast.error(errorText(e))
+      qc.invalidateQueries({ queryKey: ["airzone-schedules"] })
+    },
+  })
+  const admin = currentUser()?.role === "admin"
   const { chosen } = useChosenInstallations()
   const st = data.data
   // The installation chosen only: its schedules, and new ones for it.
@@ -507,8 +517,16 @@ export function AirzoneSchedulesSection() {
     <section className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="flex items-center gap-2 text-lg font-semibold">
+          <h2 className="flex items-center gap-3 text-lg font-semibold">
             <Cloud className="size-5" /> {t("Programmations Airzone")}
+            {admin && st.account && (
+              <Switch
+                checked={!st.paused}
+                disabled={pause.isPending}
+                onCheckedChange={(on) => pause.mutate(on)}
+                aria-label={t("Programmations Airzone actives")}
+              />
+            )}
           </h2>
           <p className="text-sm text-muted-foreground">
             {st.last_sync
@@ -526,47 +544,59 @@ export function AirzoneSchedulesSection() {
             <p className="text-sm text-destructive">{st.last_error}</p>
           )}
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => refresh.mutate()}
-            disabled={refresh.isPending}
-          >
-            <RefreshCw className={refresh.isPending ? "animate-spin" : ""} />{" "}
-            {t("Actualiser")}
-          </Button>
-          {cloudInstallations.some((c) => editable(c.installation_id)) && (
-            <Button onClick={() => setEditing({ nonce: Date.now() })}>
-              <Plus /> {t("Nouvelle")}
+        {!st.paused && (
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => refresh.mutate()}
+              disabled={refresh.isPending}
+            >
+              <RefreshCw className={refresh.isPending ? "animate-spin" : ""} />{" "}
+              {t("Actualiser")}
             </Button>
-          )}
-        </div>
-      </div>
-      {[...groups.entries()].map(([installation, list]) => {
-        const inst = status.data?.find((i) => i.id === list[0].installation_id)
-        return (
-          <div key={installation} className="grid gap-3">
-            <h3 className="text-sm font-medium text-muted-foreground">
-              {installation}
-            </h3>
-            <div className="grid gap-4 md:grid-cols-2">
-              {list.map((s) => (
-                <ScheduleCard
-                  key={s.id}
-                  s={s}
-                  inst={inst}
-                  onEdit={
-                    editable(s.installation_id)
-                      ? () => setEditing({ s, nonce: Date.now() })
-                      : undefined
-                  }
-                />
-              ))}
-            </div>
+            {cloudInstallations.some((c) => editable(c.installation_id)) && (
+              <Button onClick={() => setEditing({ nonce: Date.now() })}>
+                <Plus /> {t("Nouvelle")}
+              </Button>
+            )}
           </div>
-        )
-      })}
-      {schedules.length === 0 && (
+        )}
+      </div>
+      {st.paused && (
+        <p className="rounded-3xl border border-dashed p-6 text-sm text-muted-foreground">
+          {t(
+            "Désactivées par Breezone, sur toutes les installations : seuls les automatismes et les programmations de Breezone pilotent la climatisation. Réactivez-les pour qu'Airzone les exécute à nouveau, comme elles étaient."
+          )}
+        </p>
+      )}
+      {!st.paused &&
+        [...groups.entries()].map(([installation, list]) => {
+          const inst = status.data?.find(
+            (i) => i.id === list[0].installation_id
+          )
+          return (
+            <div key={installation} className="grid gap-3">
+              <h3 className="text-sm font-medium text-muted-foreground">
+                {installation}
+              </h3>
+              <div className="grid gap-4 md:grid-cols-2">
+                {list.map((s) => (
+                  <ScheduleCard
+                    key={s.id}
+                    s={s}
+                    inst={inst}
+                    onEdit={
+                      editable(s.installation_id)
+                        ? () => setEditing({ s, nonce: Date.now() })
+                        : undefined
+                    }
+                  />
+                ))}
+              </div>
+            </div>
+          )
+        })}
+      {!st.paused && schedules.length === 0 && (
         <p className="rounded-3xl border border-dashed p-6 text-center text-sm text-muted-foreground">
           {t("Aucune programmation dans l'application Airzone.")}
         </p>

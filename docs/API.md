@@ -671,11 +671,12 @@ Synchronisation toutes les heures, à la demande et après la liaison d'une inst
 
 | Méthode | Chemin | Description |
 |---------|--------|-------------|
-| GET 🔒 | `/api/airzone/schedules` | `{last_sync, last_error, account, schedules:[AirzoneSchedule]}` |
+| GET 🔒 | `/api/airzone/schedules` | `{last_sync, last_error, account, paused, schedules:[AirzoneSchedule]}` : `paused` : Breezone les a toutes désactivées, et aucune n'a été réactivée depuis (ici ou dans l'application Airzone) |
 | POST 🔒 | `/api/airzone/schedules/sync` | Relit tout sur Airzone Cloud → idem |
 | POST 🔒 | `/api/airzone/schedules` | `{cloud_id, name, enabled?, days, time, zones:[{system_id, zone_id}], action}` → crée chez Airzone |
 | PUT 🔒 | `/api/airzone/schedules/{cloud_id}/{id}` | Idem sans `cloud_id` → modifie chez Airzone (champs inconnus conservés) |
 | PUT 🔒 | `/api/airzone/schedules/{cloud_id}/{id}/enabled` | `{enabled}` |
+| PUT 🔒 | `/api/airzone/schedules/enabled` | `{enabled}` (administrateur) : `false` désactive chez Airzone toutes celles qui sont actives et retient lesquelles, pour que les automatismes et programmations de Breezone ne leur fassent pas concurrence ; `true` réactive celles-là seulement |
 | DELETE 🔒 | `/api/airzone/schedules/{cloud_id}/{id}` | Supprime chez Airzone |
 
 `AirzoneSchedule` : `{cloud_id, installation, installation_id, id, name, enabled, kind, days (ISO,

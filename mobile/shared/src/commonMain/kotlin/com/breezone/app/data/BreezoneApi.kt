@@ -263,6 +263,10 @@ class BreezoneApi(
     suspend fun setScheduleEnabled(s: AirzoneSchedule, enabled: Boolean): SchedulesState =
         call(HttpMethod.Put, "${schedulePath(s)}/enabled", buildJsonObject { put("enabled", enabled) }.toString())
 
+    /** All the Airzone schedules off, or on again as they were (administrators). */
+    suspend fun setSchedulesEnabled(enabled: Boolean): SchedulesState =
+        call(HttpMethod.Put, "/api/airzone/schedules/enabled", buildJsonObject { put("enabled", enabled) }.toString())
+
     suspend fun deleteSchedule(s: AirzoneSchedule): SchedulesState = call(HttpMethod.Delete, schedulePath(s))
 
     private fun schedulePath(s: AirzoneSchedule) =
