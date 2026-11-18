@@ -405,7 +405,11 @@ function Settings({
             value={c.device_id !== undefined ? String(c.device_id) : undefined}
             placeholder={t("Choisir")}
             onChange={(v) => set({ device_id: Number(v) })}
-            choices={deviceChoices(devices)}
+            choices={deviceChoices(
+              home.devices.filter(
+                (x) => shown(x) || deviceType(x).id === "remote"
+              )
+            )}
           />
         </Field>
       )
@@ -779,7 +783,10 @@ function catalog(home: Home): Entry[] {
         break
       }
       case "device":
-        for (const d of devices)
+        // A remote too: its buttons are pressed from the block.
+        for (const d of home.devices.filter(
+          (x) => shown(x) || deviceType(x).id === "remote"
+        ))
           add(t("Appareils"), `device:${d.id}`, d.name, type, {
             device_id: d.id,
           })

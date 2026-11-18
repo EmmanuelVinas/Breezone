@@ -7,13 +7,17 @@
 //!   GET  {netatmo}/api/homestatus?home_id=…  → {body: {home: {modules: [{id, current_position, on, power…}]}}}
 //!   POST {netatmo}/api/setstate {home: {id, modules: [{id, bridge, target_position | on | brightness}]}}
 //!        target_position -1 stops a Legrand shutter where it is.
+//!   POST {netatmo}/api/getmeasure (device_id, module_id, scale=30min, type=sum_energy_elec…, date_begin, date_end)
+//!        → {body: [{beg_time, step_time, value: [[Wh…], …]}]}: what the lines of an Ecometer (NLE)
+//!        used, by half hour, the middle of the first one at `beg_time`. Their status has no power:
+//!        the power shown is the mean of the last half hour told, a little late.
 
 use super::{Described, DeviceInfo, Driver, DriverError, DriverFuture, DriverInfo, State};
 use crate::crypto::Key;
 use crate::db::Db;
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 
 pub fn info() -> DriverInfo {
@@ -58,8 +62,10 @@ struct Module {
     name: String,
     bridge: Option<String>,
     kind: Kind,
-    /// Its status gives a power: a relay that measures, a line of the Ecometer.
+    /// Its status gives a power: a relay that measures, a meter.
     measures: bool,
+    /// A line of an Ecometer: its power comes from its measures by half hour.
+    ecometer: bool,
 }
 
 impl Module {
@@ -88,6 +94,33 @@ pub struct Netatmo {
     url: String,
     /// The modules of every home, read again at each `describe`.
     modules: Mutex<Vec<Module>>,
+    /// The power of the lines of the Ecometer (mean of their last half hour), read now and then.
+    lines: Mutex<(Option<Instant>, HashMap<String, f64>)>,
+}
+
+/// The lines of an Ecometer are read again this often: Legrand tells them by half hour, late.
+const LINES_EVERY: Duration = Duration::from_secs(600);
+/// What Legrand's Ecometer measures (its older API), all tariffs.
+const ECOMETER_TYPES: &str = "sum_energy_elec,sum_energy_elec$0,sum_energy_elec$1,sum_energy_elec$2";
+
+/// The mean power (W) of the last whole slot of a `getmeasure` answer, `None` without any.
+fn last_power(body: &Value, now: i64) -> Option<f64> {
+    let mut last: Option<(i64, f64)> = None;
+    for lot in body.as_array().into_iter().flatten() {
+        let (Some(beg), Some(step)) = (lot["beg_time"].as_i64(), lot["step_time"].as_i64().or(Some(1800))) else { continue };
+        for (i, values) in lot["value"].as_array().into_iter().flatten().enumerate() {
+            let start = beg - step / 2 + i as i64 * step;
+            let wh: Vec<f64> = values.as_array().into_iter().flatten().filter_map(Value::as_f64).collect();
+            if wh.is_empty() || start + step > now || step <= 0 {
+                continue;
+            }
+            let w = wh.iter().sum::<f64>() * 3600.0 / step as f64;
+            if last.is_none_or(|(t, _)| start > t) {
+                last = Some((start, w));
+            }
+        }
+    }
+    last.map(|(_, w)| w)
 }
 
 fn unreachable(e: impl std::fmt::Display) -> DriverError {
@@ -97,7 +130,7 @@ fn unreachable(e: impl std::fmt::Display) -> DriverError {
 impl Netatmo {
     pub fn new(db: Db, key: Key, url: String) -> Self {
         let http = reqwest::Client::builder().timeout(Duration::from_secs(20)).build().unwrap_or_default();
-        Self { http, db, key, url: url.trim_end_matches('/').to_string(), modules: Mutex::new(vec![]) }
+        Self { http, db, key, url: url.trim_end_matches('/').to_string(), modules: Mutex::new(vec![]), lines: Mutex::new((None, HashMap::new())) }
     }
 
     async fn token(&self) -> Result<String, DriverError> {
@@ -133,6 +166,44 @@ impl Netatmo {
         self.load().await
     }
 
+    /// The power of each line of the Ecometer, read again when it is old.
+    async fn lines(&self, modules: &[Module]) -> HashMap<String, f64> {
+        let mut cache = self.lines.lock().await;
+        if cache.0.is_some_and(|t| t.elapsed() < LINES_EVERY) {
+            return cache.1.clone();
+        }
+        let now = crate::db::now();
+        let mut out = HashMap::new();
+        for m in modules.iter().filter(|m| m.ecometer) {
+            let form = [
+                ("device_id", m.bridge.clone().unwrap_or_else(|| m.id.clone())),
+                ("module_id", m.id.clone()),
+                ("scale", "30min".into()),
+                ("type", ECOMETER_TYPES.into()),
+                ("date_begin", (now - 4 * 3600).to_string()),
+                ("date_end", now.to_string()),
+            ];
+            let Ok(token) = self.token().await else { break };
+            let resp = match self.http.post(format!("{}/api/getmeasure", self.url)).bearer_auth(token).form(&form).send().await {
+                Ok(r) if r.status().is_success() => r,
+                Ok(r) => {
+                    tracing::debug!("Netatmo getmeasure of {}: HTTP {}", m.name, r.status());
+                    continue;
+                }
+                Err(e) => {
+                    tracing::debug!("Netatmo getmeasure of {}: {e}", m.name);
+                    continue;
+                }
+            };
+            let body: Value = resp.json().await.unwrap_or_default();
+            if let Some(w) = last_power(&body["body"], now) {
+                out.insert(m.reference(), w);
+            }
+        }
+        *cache = (Some(Instant::now()), out.clone());
+        out
+    }
+
     /// Reads the homes and their modules again (and which ones measure a power).
     async fn load(&self) -> Result<Vec<Module>, DriverError> {
         let data = self.get("/api/homesdata").await?;
@@ -152,6 +223,7 @@ impl Netatmo {
                     bridge: m["bridge"].as_str().map(str::to_string),
                     kind,
                     measures: measures(id),
+                    ecometer: t == "NLE" && !measures(id),
                 });
             }
         }
@@ -215,6 +287,7 @@ impl Driver for Netatmo {
             let mut homes: Vec<&str> = modules.iter().map(|m| m.home.as_str()).collect();
             homes.dedup();
             let mut out = HashMap::new();
+            let lines = self.lines(&modules).await;
             for home in homes {
                 for s in self.status(home).await? {
                     let Some(m) = modules.iter().find(|m| m.home == home && s["id"].as_str() == Some(m.id.as_str())) else { continue };
@@ -222,7 +295,11 @@ impl Driver for Netatmo {
                     if s["reachable"].as_bool() == Some(false) {
                         continue;
                     }
-                    out.insert(m.reference(), state_of(m, &s));
+                    let mut state = state_of(m, &s);
+                    if let (false, Some(w)) = (state.contains_key("power"), lines.get(&m.reference())) {
+                        state.insert("power".into(), json!(w.round()));
+                    }
+                    out.insert(m.reference(), state);
                 }
             }
             Ok(out)
@@ -296,7 +373,18 @@ mod tests {
     use super::*;
 
     fn module(kind: Kind, measures: bool) -> Module {
-        Module { home: "h".into(), id: "m".into(), name: "Volet salon".into(), bridge: Some("g".into()), kind, measures }
+        Module { home: "h".into(), id: "m".into(), name: "Volet salon".into(), bridge: Some("g".into()), kind, measures, ecometer: false }
+    }
+
+    #[test]
+    fn the_power_of_a_line_of_the_ecometer_is_its_last_whole_half_hour() {
+        // Slots of 30 min, the middle of the first at 900 (it starts at 0): 100 Wh, then 250 Wh
+        // (peak and off-peak), then one still running.
+        let body = json!([{"beg_time": 900, "step_time": 1800, "value": [[100, null, null, null], [null, null, 200, 50], [null, null, 10, null]]}]);
+        assert_eq!(last_power(&body, 5000), Some(500.0), "250 Wh in half an hour: 500 W; the third is not over");
+        assert_eq!(last_power(&body, 5400), Some(20.0));
+        assert_eq!(last_power(&json!([]), 5000), None);
+        assert_eq!(last_power(&json!([{"beg_time": 900, "step_time": 1800, "value": [[null, null, null, null]]}]), 5000), None, "nothing told");
     }
 
     #[test]

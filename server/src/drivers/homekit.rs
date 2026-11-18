@@ -679,6 +679,15 @@ mod tests {
         let told: Vec<String> = events.as_array().into_iter().flatten().filter(|e| e["kind"] == "button").filter_map(|e| e["message"].as_str().map(str::to_string)).collect();
         assert!(told.iter().any(|m| m.contains("Télécommande") && m.contains("button 1, long press")) && told.iter().any(|m| m.contains("button 2, press")), "{events}");
 
+        // A button pressed from Breezone (a block of the overview): as on the remote, not past its 4.
+        let press = format!("/api/devices/{}/actions", remote["id"]);
+        let (s, text, d) = call("POST", &press, t, Some(json!({"trait":"button","action":"press","params":{"button":3}}))).await;
+        assert_eq!(s, 200, "{text}");
+        assert_eq!((d["state"]["last_button"].clone(), d["state"]["last_press"].clone()), (json!(3), json!("single")));
+        let (s, _, _) = call("POST", &press, t, Some(json!({"trait":"button","action":"press","params":{"button":5}}))).await;
+        assert_ne!(s, 200, "this remote has 4 buttons");
+        assert_eq!(fake.state.lock().unwrap().position, 75, "the hardware was not asked");
+
         let (s, _, _) = call("DELETE", &format!("/api/sources/{}", source["id"]), t, None).await;
         assert_eq!(s, 204);
         assert!(fake.state.lock().unwrap().controllers.is_empty(), "Breezone removed its own pairing");

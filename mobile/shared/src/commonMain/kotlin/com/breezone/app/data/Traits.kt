@@ -12,6 +12,13 @@ enum class ButtonLastPress {
     @SerialName("long") Long,
 }
 
+@Serializable
+enum class ButtonPress {
+    @SerialName("single") Single,
+    @SerialName("double") Double,
+    @SerialName("long") Long,
+}
+
 /** Remote or button (`button@1`): state. */
 @Serializable
 data class ButtonState(
@@ -19,6 +26,13 @@ data class ButtonState(
     val lastButton: Long? = null,
     val lastPress: ButtonLastPress? = null,
     val lastAt: Long? = null,
+)
+
+/** Remote or button (`button@1`): action `press`. */
+@Serializable
+data class ButtonPress(
+    val button: Long? = null,
+    val press: ButtonPress? = null,
 )
 
 /** Camera or doorbell (`camera@1`): state. */

@@ -366,6 +366,85 @@ function GroupBlock({ config }: { config: GroupConfig }) {
   )
 }
 
+/**
+ * A remote whose buttons are pressed from the overview: each starts the automations set on it, as
+ * the remote itself would (what the remote does in its own app is not asked).
+ */
+function RemoteCard({ device }: { device: DeviceView }) {
+  const qc = useQueryClient()
+  const automations = useQuery({
+    queryKey: ["automations"],
+    queryFn: api.automations,
+    staleTime: 60_000,
+    retry: false,
+  })
+  const press = useMutation({
+    mutationFn: (button: number) =>
+      api.act(device.id, "button", "press", { button, press: "single" }),
+    onSuccess: (_, button) => {
+      toast.success(t("Bouton {n} appuyé", { n: button }))
+      qc.invalidateQueries({ queryKey: ["devices"] })
+      qc.invalidateQueries({ queryKey: ["automations"] })
+    },
+    onError: (e) => toast.error(errorText(e)),
+  })
+  const count = Math.max(1, Number(state(device).buttons) || 1)
+  const started = (n: number) =>
+    (automations.data ?? [])
+      .filter(
+        (a) =>
+          a.enabled &&
+          a.triggers.some(
+            (x) =>
+              x.kind === "button" &&
+              x.device_id === device.id &&
+              (x.button == null || x.button === n) &&
+              (x.press == null || x.press === "single")
+          )
+      )
+      .map((a) => a.name)
+  const usable = device.can_control && device.available
+  return (
+    <Card className="h-full rounded-3xl">
+      <CardContent className="grid gap-3">
+        <div className="flex items-center gap-2">
+          <DeviceTypeIcon
+            of={deviceType(device)}
+            className="size-4 text-muted-foreground"
+          />
+          <span className="min-w-0 flex-1 truncate font-medium">
+            {device.name}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {Array.from({ length: count }, (_, i) => i + 1).map((n) => {
+            const names = started(n)
+            return (
+              <Button
+                key={n}
+                variant="outline"
+                className="h-auto min-h-14 flex-col items-start gap-0.5 rounded-2xl px-3 py-2 text-left whitespace-normal"
+                disabled={!usable || press.isPending}
+                onClick={() => press.mutate(n)}
+                title={
+                  names.length
+                    ? names.join(" · ")
+                    : t("Aucun automatisme sur ce bouton")
+                }
+              >
+                <span className="font-medium">{t("Bouton {n}", { n })}</span>
+                <span className="line-clamp-2 text-xs font-normal text-muted-foreground">
+                  {names.length ? names.join(" · ") : t("Aucun automatisme")}
+                </span>
+              </Button>
+            )
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 /** A device driven from the overview: the card of its own page, or its line with its switch. */
 function DeviceBlock({ id }: { id: number }) {
   const { devices, installation } = useOverview()
@@ -425,6 +504,8 @@ function DeviceBlock({ id }: { id: number }) {
           canDrive={d.can_control}
         />
       )
+    case "remote":
+      return <RemoteCard device={d} />
     case "climate": {
       const ref = d.reference as { system_id?: number; zone_id?: number }
       const zone = installation.zones.find(

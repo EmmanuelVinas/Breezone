@@ -12,6 +12,12 @@ export type ButtonState = {
   last_at: number | null
 }
 
+/** Remote or button (`button@1`): action `press`. */
+export type ButtonPress = {
+  button: number
+  press?: "single" | "double" | "long"
+}
+
 /** Camera or doorbell (`camera@1`): state. */
 export type CameraState = {
   /** Online */

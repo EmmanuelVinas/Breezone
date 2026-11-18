@@ -6,8 +6,18 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A remote (`button@1`, such as a Legrand remote switch through HomeKit) can be added to the
+  overview with the « Device » block: its buttons are pressed from there, each starting the
+  automations set on it, and each tells which ones. A press from Breezone does what a press on the
+  remote does for Breezone; what the remote does in its own app (Legrand) is not asked.
+
 ### Fixed
 
+- Netatmo · Legrand: the lines of the Ecometer (NLE) show their power. Netatmo gives none in their
+  status: it is now the mean of their last whole half hour, from their measures (read every
+  10 minutes; Legrand tells them late).
 - Automations: two rules whose conditions cannot both be true (outdoor below 14° and above 25°,
   « Salon · Mode : Heat » and « … : Cool »…) are no longer said to contradict each other; what one
   does otherwise still counts.

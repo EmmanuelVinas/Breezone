@@ -1940,6 +1940,10 @@ const en: Record<string, string> = {
     "The last picture of each camera and doorbell, and their last event. Live view will come later.",
   "Aucune caméra : connectez un compte EZVIZ dans Réglages › Comptes et services.":
     "No camera: connect an EZVIZ account in Settings › Accounts and services.",
+  "Bouton {n} appuyé": "Button {n} pressed",
+  "Aucun automatisme sur ce bouton": "No automation on this button",
+  "Bouton {n}": "Button {n}",
+  "Aucun automatisme": "No automation",
 }
 
 export default en

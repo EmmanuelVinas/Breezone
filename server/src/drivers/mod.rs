@@ -1016,6 +1016,22 @@ impl Runtime {
     }
 
     pub async fn act(&self, source_id: i64, reference: &str, trait_name: &str, action: &str, params: &State) -> Result<(), DriverError> {
+        // A button pressed from Breezone: as if on the remote, for the automations it starts (the
+        // hardware is not asked: what the remote does in its own app stays there).
+        if trait_name == "button" && action == "press" {
+            let button = params.get("button").and_then(Value::as_u64).filter(|b| *b >= 1).ok_or_else(|| DriverError::Unsupported("button: 1, 2…".into()))?;
+            let buttons = self.sources.read().await.get(&source_id).and_then(|r| r.states.get(reference)?.get("buttons")?.as_u64());
+            if buttons.is_some_and(|n| button > n) {
+                return Err(DriverError::Unsupported(format!("this remote has {} button(s)", buttons.unwrap_or(0))));
+            }
+            let press = match params.get("press").and_then(Value::as_str) {
+                Some("double") => "double",
+                Some("long") => "long",
+                _ => "single",
+            };
+            self.pressed(Press { source_id, reference: reference.to_string(), button: button as u32, press }).await;
+            return Ok(());
+        }
         let driver = self.sources.read().await.get(&source_id).and_then(|r| r.driver.clone()).ok_or_else(|| DriverError::Unreachable("source not configured".into()))?;
         match driver.act(reference, trait_name, action, params).await {
             // What the local module cannot do, or cannot reach now, its cloud twin may.

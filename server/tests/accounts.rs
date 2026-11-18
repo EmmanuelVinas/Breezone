@@ -131,7 +131,8 @@ fn netatmo(used: Arc<Mutex<Vec<String>>>, set: Arc<Mutex<Vec<Value>>>) -> Router
                 Json(json!({"body": {"homes": [{"id": "h1", "name": "Maison", "rooms": [{}, {}, {}], "modules": [
                     {"id": "g1", "type": "NLG", "name": "Passerelle"},
                     {"id": "v1", "type": "NLV", "name": "Volet bureau", "bridge": "g1"},
-                    {"id": "e1", "type": "NLE", "name": "Chauffage", "bridge": "g1"}
+                    {"id": "e1", "type": "NLE", "name": "Chauffage", "bridge": "g1"},
+                    {"id": "e2", "type": "NLE", "name": "Institut", "bridge": "g1"}
                 ]}]}}))
             }),
         )
@@ -142,8 +143,21 @@ fn netatmo(used: Arc<Mutex<Vec<String>>>, set: Arc<Mutex<Vec<Value>>>) -> Router
                 Json(json!({"body": {"home": {"id": "h1", "modules": [
                     {"id": "g1", "type": "NLG"},
                     {"id": "v1", "type": "NLV", "current_position": 30, "target_position": 30, "reachable": true},
-                    {"id": "e1", "type": "NLE", "power": 812, "reachable": true}
+                    {"id": "e1", "type": "NLE", "power": 812, "reachable": true},
+                    {"id": "e2", "type": "NLE"}
                 ]}}}))
+            }),
+        )
+        .route(
+            // A line of the Ecometer without a power in its status: 300 Wh in the last whole half hour.
+            "/api/getmeasure",
+            post(|h: HeaderMap, Form(f): Form<HashMap<String, String>>| async move {
+                assert_eq!(bearer(&h), "Bearer net-access");
+                assert_eq!((f["device_id"].as_str(), f["module_id"].as_str(), f["scale"].as_str()), ("g1", "e2", "30min"));
+                assert!(f["type"].starts_with("sum_energy_elec"));
+                let end: i64 = f["date_end"].parse().unwrap();
+                let start = end - end % 1800 - 3600;
+                Json(json!({"body": [{"beg_time": start + 900, "step_time": 1800, "value": [[null, null, 100, null], [null, null, 200, 100]]}]}))
             }),
         )
         .route(
@@ -212,7 +226,7 @@ async fn accounts_are_linked_used_and_removed() {
     // Netatmo: the refresh token given is used once, the one Netatmo gives back is kept.
     let (s, v) = c.call(reqwest::Method::PUT, "/api/accounts/netatmo", Some(json!({"client_id": "nid", "client_secret": "nsecret", "refresh_token": "refresh-1"}))).await;
     assert_eq!(s, StatusCode::OK, "{v}");
-    assert_eq!(v["config"]["homes"], json!([{"name": "Maison", "rooms": 3, "modules": 3}]));
+    assert_eq!(v["config"]["homes"], json!([{"name": "Maison", "rooms": 3, "modules": 4}]));
     let (s, v) = c.call(reqwest::Method::POST, "/api/accounts/netatmo/test", None).await;
     assert_eq!((s, v["state"].clone()), (StatusCode::OK, json!("ok")), "the second refresh token was kept: {v}");
     assert_eq!(*used.lock().unwrap(), ["refresh-1", "refresh-2"]);
@@ -227,6 +241,8 @@ async fn accounts_are_linked_used_and_removed() {
     assert!(find("Passerelle").is_none(), "the gateway is not a device: {devices}");
     let line = find("Chauffage").expect("the line of the Ecometer");
     assert_eq!(line["state"]["power"], 812.0);
+    let institut = find("Institut").expect("a line without a power in its status");
+    assert_eq!(institut["state"]["power"], 600.0, "300 Wh in its last whole half hour: {institut}");
     let shutter = find("Volet bureau").expect("the shutter");
     assert_eq!((shutter["state"]["position"].clone(), shutter["state"]["stoppable"].clone()), (json!(30), json!(true)));
     // Stopped where it is: Legrand's -1, through its gateway.

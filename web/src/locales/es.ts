@@ -1960,6 +1960,10 @@ const es: Record<string, string> = {
     "La última imagen de cada cámara y timbre, y su último evento. El directo llegará más adelante.",
   "Aucune caméra : connectez un compte EZVIZ dans Réglages › Comptes et services.":
     "Ninguna cámara: conecte una cuenta EZVIZ en Ajustes › Cuentas y servicios.",
+  "Bouton {n} appuyé": "Botón {n} pulsado",
+  "Aucun automatisme sur ce bouton": "Ninguna automatización en este botón",
+  "Bouton {n}": "Botón {n}",
+  "Aucun automatisme": "Ninguna automatización",
 }
 
 export default es
