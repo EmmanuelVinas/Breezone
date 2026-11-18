@@ -1177,6 +1177,37 @@ export type SurplusView = {
   candidates: { device_id: number; name: string; kind: "charger" | "relay" }[]
 }
 
+/** A linked account (Settings › Accounts): never its secrets. */
+export type AccountKind = "airzone" | "rte" | "linky" | "netatmo"
+export type AccountView = {
+  kind: AccountKind
+  connected: boolean
+  state: "ok" | "error" | "expired" | "unknown" | "none"
+  last_error: string | null
+  last_ok: number | null
+  expires_at: number | null
+  /** What is not secret: e-mail, client id, meter number, homes reached. */
+  config: {
+    email?: string
+    client_id?: string
+    prm?: string
+    homes?: { name: string; rooms: number; modules: number }[]
+  }
+}
+
+/** A day as Enedis measured it (Linky), with its cost at the tariff. */
+export type LinkyDay = {
+  day: string
+  consumption: number | null
+  production: number | null
+  cost: number | null
+  /** The cost comes from the day's total at one price (no half hours). */
+  estimated: boolean
+  /** The same day as the modules measured it (drawn from the grid). */
+  measured: number | null
+}
+export type LinkyView = { prm: string | null; days: LinkyDay[] }
+
 export const api = {
   surplus: () => request<SurplusView>("GET", "/api/surplus"),
   saveSurplusLoad: (deviceId: number, input: SurplusLoadInput) =>
@@ -1286,6 +1317,15 @@ export const api = {
       params,
     }),
   energyLive: () => request<EnergyLive>("GET", "/api/energy/live"),
+  linky: (days = 30) =>
+    request<LinkyView>("GET", `/api/energy/linky?days=${days}`),
+  accounts: () => request<AccountView[]>("GET", "/api/accounts"),
+  connectAccount: (kind: AccountKind, input: Record<string, string>) =>
+    request<AccountView>("PUT", `/api/accounts/${kind}`, input),
+  testAccount: (kind: AccountKind) =>
+    request<AccountView>("POST", `/api/accounts/${kind}/test`),
+  deleteAccount: (kind: AccountKind) =>
+    request<void>("DELETE", `/api/accounts/${kind}`),
   /** The energy of a local day; its cost at the prices of `installationId` (the home by default). */
   energyDay: (date?: string, installationId?: number) => {
     const q = new URLSearchParams()

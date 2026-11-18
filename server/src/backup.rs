@@ -46,10 +46,12 @@ const TABLES: &[Table] = &[
     Table { name: "electricity_prices", filter: LOCAL, without: &[] },
     // The overviews the administrators set (those of each user go with users matched by name).
     Table { name: "dashboards", filter: "user_id IS NULL AND installation_id IN (SELECT id FROM installations WHERE node_id IS NULL)", without: &[] },
+    // The linked accounts without their secrets: what they are, to connect again.
+    Table { name: "accounts", filter: "1", without: &["secret", "state", "last_error", "last_ok", "expires_at"] },
 ];
 
 /// Settings that are configuration (not secrets, not this server's identity).
-const SETTINGS: &[&str] = &["cloud.email", "node.name", "node.public_url", "scan.subnet", crate::update::CHANNEL_SETTING];
+const SETTINGS: &[&str] = &["node.name", "node.public_url", "scan.subnet", crate::update::CHANNEL_SETTING];
 
 async fn schema(db: &Db) -> sqlx::Result<i64> {
     sqlx::query_scalar("SELECT COALESCE(MAX(version), 0) FROM _sqlx_migrations WHERE success = 1").fetch_one(db).await
@@ -111,6 +113,8 @@ pub struct Imported {
     pub to_pair: Vec<String>,
     /// The Airzone account needs its password again.
     pub airzone_password: bool,
+    /// The other linked accounts to connect again (their secrets are not in the file).
+    pub to_connect: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -227,7 +231,8 @@ async fn replace_in(conn: &mut SqliteConnection, file: &Value, importer: i64, in
     // Secrets kept for the same module (same driver and hardware).
     let secrets: Vec<(i64, String, String, String)> =
         sqlx::query_as("SELECT id, driver, COALESCE(json_extract(config, '$.device_id'), ''), secret FROM sources WHERE secret IS NOT NULL").fetch_all(&mut *conn).await?;
-    let email: Option<String> = sqlx::query_scalar("SELECT value FROM settings WHERE key = 'cloud.email'").fetch_optional(&mut *conn).await?;
+    // The secrets of the accounts, kept for the same account (same kind and configuration).
+    let accounts: Vec<(String, String, String)> = sqlx::query_as("SELECT kind, config, secret FROM accounts WHERE secret IS NOT NULL").fetch_all(&mut *conn).await?;
 
     // Before the installations its filter looks at.
     sqlx::query(AssertSqlSafe(format!("DELETE FROM user_installations WHERE {LOCAL}"))).execute(&mut *conn).await?;
@@ -315,11 +320,21 @@ async fn replace_in(conn: &mut SqliteConnection, file: &Value, importer: i64, in
             sqlx::query("INSERT INTO settings (key, value) VALUES (?, ?)").bind(key).bind(v).execute(&mut *conn).await?;
         }
     }
-    let new_email = settings.get("cloud.email").and_then(Value::as_str);
-    if new_email != email.as_deref() {
-        sqlx::query("DELETE FROM settings WHERE key = 'cloud.password'").execute(&mut *conn).await?;
+    // A file of a version before the accounts: its Airzone e-mail was a setting.
+    if let Some(email) = settings.get("cloud.email").and_then(Value::as_str) {
+        sqlx::query(
+            "INSERT INTO accounts (kind, config, created_at, updated_at) VALUES ('airzone', json_object('email', ?), CAST(strftime('%s', 'now') AS INTEGER), CAST(strftime('%s', 'now') AS INTEGER)) \
+             ON CONFLICT (kind) DO NOTHING",
+        )
+        .bind(email)
+        .execute(&mut *conn)
+        .await?;
     }
-    let has_password: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM settings WHERE key = 'cloud.password')").fetch_one(&mut *conn).await?;
+    for (kind, config, secret) in &accounts {
+        sqlx::query("UPDATE accounts SET secret = ? WHERE kind = ? AND json(config) = json(?)").bind(secret).bind(kind).bind(config).execute(&mut *conn).await?;
+    }
+    let airzone_password: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM accounts WHERE kind = 'airzone' AND secret IS NULL)").fetch_one(&mut *conn).await?;
+    let to_connect: Vec<String> = sqlx::query_scalar("SELECT kind FROM accounts WHERE secret IS NULL AND kind != 'airzone' ORDER BY id").fetch_all(&mut *conn).await?;
 
     // What was about rows that are gone: history and links of this server.
     for q in [
@@ -342,6 +357,7 @@ async fn replace_in(conn: &mut SqliteConnection, file: &Value, importer: i64, in
         routines: counts[TABLES.iter().position(|t| t.name == "routines").unwrap_or(0)],
         without_password,
         to_pair,
-        airzone_password: new_email.is_some() && !has_password,
+        airzone_password,
+        to_connect,
     })
 }

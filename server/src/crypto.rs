@@ -29,7 +29,7 @@ fn legacy_key(jwt_secret: &[u8]) -> Key {
 }
 
 async fn holds_secrets(db: &Db) -> sqlx::Result<bool> {
-    sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM settings WHERE key IN ('cloud.password', 'node.signing_key')) OR EXISTS (SELECT 1 FROM sources WHERE secret IS NOT NULL)")
+    sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM settings WHERE key IN ('cloud.password', 'node.signing_key')) OR EXISTS (SELECT 1 FROM sources WHERE secret IS NOT NULL) OR EXISTS (SELECT 1 FROM accounts WHERE secret IS NOT NULL)")
         .fetch_one(db)
         .await
 }

@@ -59,6 +59,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { AccountsTab } from "@/components/accounts-tab"
 import {
   Select,
   SelectContent,
@@ -1243,6 +1244,7 @@ export function SettingsPage() {
     ...(admin ? [{ id: "servers", label: t("Serveurs") }] : []),
     ...(admin ? [{ id: "users", label: t("Utilisateurs") }] : []),
     ...(admin ? [{ id: "modules", label: t("Modules") }] : []),
+    ...(admin ? [{ id: "accounts", label: t("Comptes liés") }] : []),
     ...(admin ? [{ id: "rooms", label: t("Pièces") }] : []),
     ...(admin ? [{ id: "electricity", label: t("Électricité") }] : []),
     ...(admin ? [{ id: "breezone", label: "Breezone" }] : []),
@@ -1304,6 +1306,11 @@ export function SettingsPage() {
                 />
               }
             />
+          </TabsContent>
+        )}
+        {admin && (
+          <TabsContent value="accounts">
+            <AccountsTab />
           </TabsContent>
         )}
         {admin && (

@@ -3,6 +3,7 @@
 //! the mobile app, and the web UI served as static files.
 
 pub mod access;
+pub mod accounts;
 pub mod airzone;
 pub mod airzone_schedules;
 pub mod api;
@@ -189,6 +190,7 @@ pub fn spawn_background(state: &AppState) {
     tokio::spawn(state.updater.clone().run_checks());
     tokio::spawn(state.weather.clone().run());
     tokio::spawn(tempo::run_loop(state.clone()));
+    tokio::spawn(accounts::linky::run_loop(state.clone()));
     tokio::spawn(cre::run_loop(state.clone()));
 }
 

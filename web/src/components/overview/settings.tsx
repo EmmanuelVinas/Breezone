@@ -78,6 +78,8 @@ type Home = {
   energy: boolean
   /** The installation shown: its zones. */
   installation?: Installation
+  /** A Linky account gives what Enedis measured. */
+  linky?: boolean
 }
 
 /** A choice of a list: its value, its words, its icon, and the heading it is listed under. */
@@ -189,6 +191,7 @@ function available(home: Home): BlockType[] {
     if (b === "charger" || b === "charger_curve") return has("ev.charger@1")
     if (b.startsWith("solar_")) return has("solar.inverter@1")
     if (b === "ventilation_house") return has("ventilation.unit@1")
+    if (b === "linky") return !!home.linky
     return true
   })
 }
@@ -403,6 +406,21 @@ function Settings({
             placeholder={t("Choisir")}
             onChange={(v) => set({ device_id: Number(v) })}
             choices={deviceChoices(devices)}
+          />
+        </Field>
+      )
+    case "linky":
+      return (
+        <Field label={t("Période")}>
+          <Pick
+            value={String(c.days ?? 30)}
+            onChange={(v) => set({ days: Number(v) })}
+            choices={[
+              { value: "7", label: t("7 jours") },
+              { value: "30", label: t("30 jours") },
+              { value: "90", label: t("90 jours") },
+              { value: "365", label: t("Année") },
+            ]}
           />
         </Field>
       )

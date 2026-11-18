@@ -49,6 +49,11 @@ pub struct Config {
     /// Where the regulated prices of EDF are read (`BREEZONE_CRE_URL`): the open data of the CRE
     /// when the server may look things up on the internet, else none.
     pub cre_url: Option<String>,
+    /// The services of the linked accounts (`accounts`), only reached once an account is set:
+    /// RTE's data portal (Tempo), Conso API (Linky, through Enedis), Netatmo.
+    pub rte_url: String,
+    pub conso_api_url: String,
+    pub netatmo_url: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -105,6 +110,9 @@ impl Config {
             cre_url: var("BREEZONE_CRE_URL")
                 .or_else(|| flag("BREEZONE_WEATHER").unwrap_or(!cfg!(debug_assertions)).then(|| "https://www.cre.fr/fileadmin/Documents/Open_data/Marches_de_detail".into())),
             tempo_url: var("BREEZONE_TEMPO_URL").or_else(|| flag("BREEZONE_WEATHER").unwrap_or(!cfg!(debug_assertions)).then(|| "https://www.api-couleur-tempo.fr".into())),
+            rte_url: var("BREEZONE_RTE_URL").unwrap_or_else(|| "https://digital.iservices.rte-france.com".into()),
+            conso_api_url: var("BREEZONE_CONSO_API_URL").unwrap_or_else(|| "https://conso.boris.sh".into()),
+            netatmo_url: var("BREEZONE_NETATMO_URL").unwrap_or_else(|| "https://api.netatmo.com".into()),
         }
     }
 
@@ -145,6 +153,9 @@ impl Config {
             weather: false,
             tempo_url: None,
             cre_url: None,
+            rte_url: "http://127.0.0.1:9".into(),
+            conso_api_url: "http://127.0.0.1:9".into(),
+            netatmo_url: "http://127.0.0.1:9".into(),
         }
     }
 }

@@ -13,6 +13,7 @@ use std::path::Path;
 use std::time::Duration;
 
 mod access;
+mod accounts;
 mod automations;
 mod cloud;
 mod dashboards;
@@ -30,6 +31,7 @@ mod timers;
 mod users;
 
 pub use access::*;
+pub use accounts::*;
 pub use automations::*;
 pub use cloud::*;
 pub use dashboards::*;

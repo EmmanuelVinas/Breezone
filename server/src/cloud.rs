@@ -33,8 +33,8 @@ use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
-const KEY_EMAIL: &str = "cloud.email";
-const KEY_PASSWORD: &str = "cloud.password";
+/// The Airzone Cloud account among the linked accounts (`accounts`).
+pub const ACCOUNT: &str = "airzone";
 const KEY_LAST_SYNC: &str = "cloud.last_sync";
 const KEY_LAST_ERROR: &str = "cloud.last_error";
 const AUTO_SYNC_PERIOD: Duration = Duration::from_secs(24 * 3600);
@@ -273,21 +273,28 @@ pub struct Credentials {
     pub password: String,
 }
 
+/// The e-mail of the account, remembered even without its password.
+async fn email(state: &AppState) -> ApiResult<Option<String>> {
+    Ok(db::account(&state.db, ACCOUNT).await?.and_then(|a| serde_json::from_str::<Value>(&a.config).ok()?["email"].as_str().map(str::to_string)))
+}
+
 pub async fn load_credentials(state: &AppState) -> Option<Credentials> {
-    let email = db::get_setting(&state.db, KEY_EMAIL).await.ok()??;
-    let enc = db::get_setting(&state.db, KEY_PASSWORD).await.ok()??;
-    let password = decrypt(&state.data_key, &enc)?;
+    let account = db::account(&state.db, ACCOUNT).await.ok()??;
+    let email = serde_json::from_str::<Value>(&account.config).ok()?["email"].as_str()?.to_string();
+    let password = decrypt(&state.data_key, &account.secret?)?;
     Some(Credentials { email, password })
 }
 
-async fn save_credentials(state: &AppState, c: &Credentials) -> ApiResult<()> {
-    db::set_setting(&state.db, KEY_EMAIL, c.email.trim()).await?;
-    db::set_setting(&state.db, KEY_PASSWORD, &encrypt(&state.data_key, &c.password)).await?;
+/// Remembers the e-mail, and the password (encrypted) when given.
+async fn save_credentials(state: &AppState, email: &str, password: Option<&str>) -> ApiResult<()> {
+    let config = json!({ "email": email.trim() }).to_string();
+    db::save_account(&state.db, ACCOUNT, &config, password.map(|p| encrypt(&state.data_key, p)).as_deref(), None).await?;
     Ok(())
 }
 
 pub async fn forget(state: &AppState) -> ApiResult<()> {
-    for k in [KEY_EMAIL, KEY_PASSWORD, KEY_LAST_SYNC, KEY_LAST_ERROR] {
+    db::delete_account(&state.db, ACCOUNT).await?;
+    for k in [KEY_LAST_SYNC, KEY_LAST_ERROR] {
         db::delete_setting(&state.db, k).await?;
     }
     db::clear_cloud_installations(&state.db).await?;
@@ -334,8 +341,9 @@ pub struct CloudStatus {
 }
 
 pub async fn status(state: &AppState, include_email: bool) -> ApiResult<CloudStatus> {
-    let email = db::get_setting(&state.db, KEY_EMAIL).await?;
-    let auto_sync = email.is_some() && db::get_setting(&state.db, KEY_PASSWORD).await?.is_some();
+    let account = db::account(&state.db, ACCOUNT).await?;
+    let email = email(state).await?;
+    let auto_sync = email.is_some() && account.is_some_and(|a| a.secret.is_some());
     let rows = db::list_cloud_installations(&state.db).await?;
     let access: HashMap<String, InstallationAccess> = db::list_access(&state.db).await?.into_iter().map(|a| (a.cloud_id.clone(), a)).collect();
     Ok(CloudStatus {
@@ -399,12 +407,12 @@ pub async fn connect(state: &AppState, req: &ConnectRequest, actor: &str) -> Api
     }
     let report = sync(state, &creds, SyncOptions { overwrite: true }, actor).await?;
     if req.remember {
-        save_credentials(state, &creds).await?;
+        save_credentials(state, &creds.email, Some(&creds.password)).await?;
         crate::airzone_schedules::sync_soon(state);
     } else {
-        db::set_setting(&state.db, KEY_EMAIL, &creds.email).await?;
-        db::delete_setting(&state.db, KEY_PASSWORD).await?;
+        save_credentials(state, &creds.email, None).await?;
     }
+    db::set_account_state(&state.db, ACCOUNT, "ok", None).await?;
     Ok(report)
 }
 
@@ -424,9 +432,11 @@ pub async fn sync(state: &AppState, creds: &Credentials, opts: SyncOptions, acto
         Ok(_) => {
             db::set_setting(&state.db, KEY_LAST_SYNC, &db::now().to_string()).await?;
             db::delete_setting(&state.db, KEY_LAST_ERROR).await?;
+            db::set_account_state(&state.db, ACCOUNT, "ok", None).await?;
         }
         Err(e) => {
             db::set_setting(&state.db, KEY_LAST_ERROR, &e.message.store()).await?;
+            db::set_account_state(&state.db, ACCOUNT, "error", Some(&e.message.store())).await?;
             let text = crate::text!(
                 "Synchronisation Airzone Cloud échouée : {0}",
                 "Airzone Cloud synchronisation failed: {0}",

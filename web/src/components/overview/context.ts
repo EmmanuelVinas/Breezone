@@ -27,6 +27,8 @@ export type OverviewData = {
   priced: boolean
   /** This server measures energy: the parts of the energy page have something to show. */
   energy: boolean
+  /** A Linky account gives what Enedis measured. */
+  linky?: boolean
 }
 
 export const OverviewContext = createContext<OverviewData | null>(null)

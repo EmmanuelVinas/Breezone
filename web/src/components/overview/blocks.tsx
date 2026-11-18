@@ -752,6 +752,78 @@ function LightScenesBlock() {
   )
 }
 
+/** What Enedis measured (Linky) day by day, what it cost, and how much the modules measure of it. */
+function LinkyBlock({ days }: { days: number }) {
+  const data = useQuery({
+    queryKey: ["linky", days],
+    queryFn: () => api.linky(days),
+    staleTime: 30 * 60_000,
+  })
+  const list = data.data?.days ?? []
+  const used = list.filter((d) => d.consumption !== null)
+  if (used.length === 0)
+    return <Placeholder label={t("Pas encore de relevé Linky.")} />
+  const total = used.reduce((n, d) => n + (d.consumption ?? 0), 0)
+  const costs = used.filter((d) => d.cost !== null)
+  const cost = costs.reduce((n, d) => n + (d.cost ?? 0), 0)
+  const estimated = costs.some((d) => d.estimated)
+  const max = Math.max(...used.map((d) => d.consumption ?? 0), 0.001)
+  // What the modules measured of what the meter counted, over the days both know.
+  const both = used.filter((d) => d.measured !== null)
+  const share =
+    both.length > 0
+      ? both.reduce((n, d) => n + (d.measured ?? 0), 0) /
+        Math.max(
+          both.reduce((n, d) => n + (d.consumption ?? 0), 0),
+          0.001
+        )
+      : null
+  return (
+    <Card className="h-full rounded-3xl">
+      <CardContent className="grid h-full gap-3">
+        <Title meta={t("{n} jours", { n: used.length })}>
+          {t("Linky · Enedis")}
+        </Title>
+        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+          <span className="tabular font-heading text-2xl font-semibold">
+            {kwh(total)}
+          </span>
+          {costs.length > 0 && (
+            <span className="tabular text-muted-foreground">
+              {estimated ? "≈ " : ""}
+              {cost.toLocaleString(undefined, {
+                style: "currency",
+                currency: "EUR",
+              })}
+            </span>
+          )}
+        </div>
+        <div
+          className="flex h-20 items-end gap-px"
+          aria-label={t("Consommation jour par jour")}
+        >
+          {used.map((d) => (
+            <div
+              key={d.day}
+              title={`${d.day} · ${kwh(d.consumption)}`}
+              className="min-w-0 flex-1 rounded-t-sm bg-cool/70"
+              style={{ height: `${((d.consumption ?? 0) / max) * 100}%` }}
+            />
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {share !== null
+            ? t(
+                "Relevé par Enedis, le lendemain. Vos modules en mesurent {n} %.",
+                { n: Math.round(share * 100) }
+              )
+            : t("Relevé par Enedis, le lendemain.")}
+        </p>
+      </CardContent>
+    </Card>
+  )
+}
+
 /** A block of the overview; one of a type this version does not know shows nothing. */
 /** While editing, a block with nothing to show yet still shows what it is. */
 function Placeholder({ label }: { label: string }) {
@@ -851,6 +923,8 @@ export function BlockView({
     case "ventilation_house":
       return <VentilationBlock />
     // An empty cell, to leave room: seen only while arranging.
+    case "linky":
+      return <LinkyBlock days={Number(c.days ?? 30)} />
     case "spacer":
       return editing ? (
         <Placeholder label={t("Espace vide")} />

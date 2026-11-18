@@ -8,6 +8,7 @@ pub(crate) mod energy;
 mod federation;
 pub(crate) mod home;
 mod hvac;
+mod linked;
 pub(crate) mod price;
 mod routines;
 mod schedules;
@@ -115,6 +116,10 @@ pub fn router() -> Router<AppState> {
         .route("/api/devices/{id}/actions", post(home::act))
         .route("/api/devices/charted", get(energy::charted))
         .route("/api/devices/{id}/history", get(energy::device_history))
+        .route("/api/accounts", get(linked::list))
+        .route("/api/accounts/{kind}", put(linked::connect).delete(linked::delete))
+        .route("/api/accounts/{kind}/test", post(linked::test))
+        .route("/api/energy/linky", get(linked::linky))
         .route("/api/energy/live", get(energy::live))
         .route("/api/surplus", get(surplus::get))
         .route("/api/surplus/order", axum::routing::put(surplus::order))

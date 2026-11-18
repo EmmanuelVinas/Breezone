@@ -585,6 +585,26 @@ appareils des modules (borne, relais, lumières…) sont réservés aux administ
 
 Le rapport de synchronisation contient `notes` : pourquoi une installation n'a pas été jointe.
 
+## Comptes liés 👑
+
+Un compte relie Breezone à un service en ligne, toujours en plus de ce qu'il lit en local. Les
+secrets (mot de passe, secret client, jetons) sont chiffrés avec la clé du serveur et ne sont
+jamais renvoyés. Types : `airzone` (Airzone Cloud, connecté depuis le module Airzone, voir plus
+bas), `rte` (couleur Tempo officielle), `linky` (Conso API, ce qu'Enedis a mesuré), `netatmo`
+(Legrand Home + Control).
+
+| Méthode | Chemin | Description |
+|---------|--------|-------------|
+| GET 👑 | `/api/accounts` | `[{kind, connected, state, last_error, last_ok, expires_at, config}]`, tous les types ; `state` ∈ `ok \| error \| expired \| unknown \| none` ; `config` : ce qui n'est pas secret (`email`, `client_id`, `prm`, `homes` de Netatmo) |
+| PUT 👑 | `/api/accounts/{kind}` | Connecte après vérification auprès du service (`502` s'il refuse, rien n'est gardé) : `rte` `{client_id, client_secret}` ; `linky` `{token, prm}` (lit l'année passée) ; `netatmo` `{client_id, client_secret, refresh_token}` (jeton du « Token generator », droits `read_magellan write_magellan` ; Breezone garde le nouveau refresh token donné à chaque renouvellement) |
+| POST 👑 | `/api/accounts/{kind}/test` | Utilise le compte une fois de plus → la vue, avec son état et sa dernière erreur |
+| DELETE 👑 | `/api/accounts/{kind}` | Oublie le compte (`airzone` : comme `DELETE /api/cloud`) |
+| GET 🔒 | `/api/energy/linky?days=30&installation_id=` | `{prm, days: [{day, consumption, production, cost, estimated, measured}]}` (kWh) : `cost` au tarif de l'installation, chaque demi-heure à son prix quand la courbe est connue (`estimated` sinon : le total du jour au prix de midi) ; `measured`, ce que les modules ont mesuré tiré du réseau ce jour-là. Pour ceux qui voient l'énergie |
+
+Avec un compte `rte`, la couleur des jours Tempo vient de RTE (la saison une fois, puis aujourd'hui
+et demain) ; sans lui, ou si RTE échoue, du relais public. Le compte `linky` est relu toutes les
+6 h (les journées arrivent le lendemain). Bloc de tableau de bord : `linky` `{days}`.
+
 ## Fédération entre serveurs Breezone
 
 Administration (jeton utilisateur) :

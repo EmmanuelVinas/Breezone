@@ -51,6 +51,13 @@ export function useHomeData() {
     staleTime: Infinity,
   })
   const price = usePrice()
+  // What Enedis measured, when a Linky account is linked (empty otherwise).
+  const linky = useQuery({
+    queryKey: ["linky", 30],
+    queryFn: () => api.linky(30),
+    staleTime: 30 * 60_000,
+    retry: false,
+  })
 
   // The devices of this installation, and those of the modules of this server.
   const mine = useMemo(
@@ -82,6 +89,7 @@ export function useHomeData() {
         priced,
         energy:
           modulesHere && Object.values(live.data?.roles ?? {}).some(Boolean),
+        linky: modulesHere && !!linky.data?.prm,
       }
     : null
   return {

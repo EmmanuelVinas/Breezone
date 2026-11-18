@@ -80,11 +80,21 @@ async fn store(db: &db::Db, days: &[Day]) -> sqlx::Result<usize> {
 
 /// Reads today's and tomorrow's colours, and the season's when it is missing.
 pub async fn refresh(state: &AppState) -> anyhow::Result<()> {
-    let Some(base) = state.cfg.tempo_url.clone() else { return Ok(()) };
     let tariffs: Vec<Tariff> = db::all_tariffs(&state.db).await?.into_iter().filter_map(|json| serde_json::from_str(&json).ok()).collect();
     if !followed(&tariffs) {
         return Ok(());
     }
+    // RTE itself when an account is linked (the season once, then today and tomorrow); the public
+    // relay otherwise, or when RTE fails.
+    let today = crate::rollup::local_day(db::now(), state.cfg.timezone);
+    let start = season_start(today);
+    let season = today > start && colors(&state.db, start, start).await?.is_empty();
+    match crate::accounts::rte::refresh(state, season).await {
+        Ok(true) => return Ok(()),
+        Ok(false) => {}
+        Err(e) => tracing::warn!("Tempo colours not read from RTE: {}", e.message.en),
+    }
+    let Some(base) = state.cfg.tempo_url.clone() else { return Ok(()) };
     let http = reqwest::Client::builder().timeout(Duration::from_secs(10)).user_agent("Breezone").build()?;
     let get = |path: String| {
         let http = http.clone();
@@ -108,9 +118,6 @@ pub async fn refresh(state: &AppState) -> anyhow::Result<()> {
 }
 
 pub async fn run_loop(state: AppState) {
-    if state.cfg.tempo_url.is_none() {
-        return;
-    }
     loop {
         if let Err(e) = refresh(&state).await {
             tracing::warn!("Tempo colours not read: {e:#}");

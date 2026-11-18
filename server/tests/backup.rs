@@ -68,7 +68,8 @@ async fn configuration_moves_without_secrets_and_restores_in_place() {
     a.sql("INSERT INTO devices (id, source, source_ref, kind, name, room_id, created_at, source_id) VALUES (11, 'hue', '5:light:1', 'light', 'Lampe', 3, 1, 5)").await;
     a.sql("INSERT INTO device_samples (device_id, ts, field, value) VALUES (11, 100, 'power', 12.0)").await;
     a.sql("INSERT INTO routines (id, name, enabled, days, time, actions, created_at, updated_at) VALUES (4, 'Matin', 1, 31, '07:00', '[{\"installation_id\":7}]', 1, 1)").await;
-    a.sql("INSERT INTO settings (key, value) VALUES ('cloud.email', 'moi@exemple.fr'), ('cloud.password', 'CLOUD-PASSWORD'), ('scan.subnet', '10.0.0.0/24')").await;
+    a.sql("INSERT INTO settings (key, value) VALUES ('scan.subnet', '10.0.0.0/24')").await;
+    a.sql("INSERT INTO accounts (kind, config, secret, created_at, updated_at) VALUES ('airzone', '{\"email\":\"moi@exemple.fr\"}', 'CLOUD-PASSWORD', 1, 1), ('rte', '{\"client_id\":\"abc\"}', 'RTE-SECRET', 1, 1)").await;
     let (s, alice) = a.call("POST", "/api/users", Some(json!({"username": "alice", "password": "motdepasse2", "role": "user"}))).await;
     assert!(s.is_success(), "{alice}");
     a.sql(&format!("INSERT OR REPLACE INTO user_installations (user_id, installation_id, permission) VALUES ({}, 7, 'control')", alice["id"])).await;
@@ -77,7 +78,7 @@ async fn configuration_moves_without_secrets_and_restores_in_place() {
     let (s, file) = a.call("GET", "/api/system/config", None).await;
     assert_eq!(s, 200);
     let text = file.to_string();
-    for secret in ["S3CRET-KEY", "CLOUD-PASSWORD", "password_hash", "$argon2"] {
+    for secret in ["S3CRET-KEY", "CLOUD-PASSWORD", "RTE-SECRET", "password_hash", "$argon2"] {
         assert!(!text.contains(secret), "{secret} is in the file");
     }
     if let Some(k) = &signing_key {
@@ -97,8 +98,9 @@ async fn configuration_moves_without_secrets_and_restores_in_place() {
     assert_eq!(b.one("SELECT name FROM devices WHERE id = 11 AND room_id = 3 AND source_id = 5").await.as_deref(), Some("Lampe"));
     assert_eq!(b.one("SELECT actions FROM routines WHERE id = 4").await.as_deref(), Some("[{\"installation_id\":7}]"));
     assert_eq!(b.one("SELECT secret FROM sources WHERE id = 5").await, None);
-    assert_eq!(b.one("SELECT value FROM settings WHERE key = 'cloud.email'").await.as_deref(), Some("moi@exemple.fr"));
-    assert_eq!(b.one("SELECT value FROM settings WHERE key = 'cloud.password'").await, None);
+    assert_eq!(b.one("SELECT json_extract(config, '$.email') FROM accounts WHERE kind = 'airzone'").await.as_deref(), Some("moi@exemple.fr"));
+    assert_eq!(b.one("SELECT secret FROM accounts WHERE kind = 'airzone'").await, None);
+    assert_eq!(done["to_connect"], json!(["rte"]));
     assert_eq!(b.count("SELECT COUNT(*) FROM user_installations ui JOIN users u ON u.id = ui.user_id WHERE u.username = 'alice' AND ui.installation_id = 7").await, 1);
     let (s, _) = b.call("POST", "/api/auth/login", Some(json!({"username": "alice", "password": "motdepasse2", "device_name": "test"}))).await;
     assert_ne!(s, 200, "no password came with the file");
@@ -112,7 +114,8 @@ async fn configuration_moves_without_secrets_and_restores_in_place() {
     assert_eq!(done["airzone_password"], false);
     assert_eq!(a.one("SELECT display_name FROM zone_meta").await.as_deref(), Some("Salon"));
     assert_eq!(a.one("SELECT secret FROM sources WHERE id = 5").await.as_deref(), Some("S3CRET-KEY"));
-    assert_eq!(a.one("SELECT value FROM settings WHERE key = 'cloud.password'").await.as_deref(), Some("CLOUD-PASSWORD"));
+    assert_eq!(a.one("SELECT secret FROM accounts WHERE kind = 'airzone'").await.as_deref(), Some("CLOUD-PASSWORD"));
+    assert_eq!(a.one("SELECT secret FROM accounts WHERE kind = 'rte'").await.as_deref(), Some("RTE-SECRET"));
     assert_eq!(a.count("SELECT COUNT(*) FROM readings WHERE installation_id = 7").await, 1);
     assert_eq!(a.count("SELECT COUNT(*) FROM device_samples WHERE device_id = 11").await, 1);
     assert_eq!(a.one("SELECT value FROM settings WHERE key = 'node.signing_key'").await, signing_key);
