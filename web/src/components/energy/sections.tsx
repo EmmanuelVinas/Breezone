@@ -1249,7 +1249,13 @@ export function Measures({
                 const on = d.state?.on
                 return (
                   <tr key={d.id} className={cn(!d.available && "opacity-50")}>
-                    <td className="py-2.5 pr-3 font-medium">{d.name}</td>
+                    <td className="py-2.5 pr-3">
+                      <div className="font-medium">{d.name}</div>
+                      {/* Where it comes from: two measures may bear the same name. */}
+                      <div className="text-xs text-muted-foreground">
+                        {DRIVER_LABEL[d.source] ?? d.source}
+                      </div>
+                    </td>
                     <td className="py-2.5 pr-3 text-muted-foreground">
                       {roleText(d, devices, roomNames)}
                     </td>

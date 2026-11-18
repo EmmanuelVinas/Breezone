@@ -167,11 +167,14 @@ export function ShutterCard({
   selected,
   onSelect,
   canDrive,
+  fill = false,
 }: {
   device: DeviceView
   selected: boolean
   onSelect: () => void
   canDrive: boolean
+  /** As high as its row (a block of the overview): the window in the middle, the buttons below. */
+  fill?: boolean
 }) {
   const command = useCommand()
   const s = useMoving(device)
@@ -180,11 +183,17 @@ export function ShutterCard({
     <Card
       className={cn(
         "cursor-pointer gap-3 rounded-3xl py-4 transition-shadow",
-        selected && "ring-2 ring-primary"
+        selected && "ring-2 ring-primary",
+        fill && "h-full"
       )}
       onClick={onSelect}
     >
-      <CardContent className="grid gap-3 px-4">
+      <CardContent
+        className={cn(
+          "grid gap-3 px-4",
+          fill && "flex-1 grid-rows-[auto_1fr_auto] items-center"
+        )}
+      >
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <b className="block truncate">{device.name}</b>

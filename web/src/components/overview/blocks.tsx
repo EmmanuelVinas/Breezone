@@ -523,26 +523,31 @@ function DeviceBlock({ id, curve }: { id: number; curve?: string }) {
           selected={false}
           onSelect={noop}
           canDrive={d.can_control}
+          fill
         />
       )
     case "light":
       return (
-        <LightCard
-          light={d}
-          selected={false}
-          onSelect={noop}
-          canDrive={d.can_control}
-        />
+        <div className="h-full *:h-full">
+          <LightCard
+            light={d}
+            selected={false}
+            onSelect={noop}
+            canDrive={d.can_control}
+          />
+        </div>
       )
     case "room-air":
       return (
-        <RoomCard
-          device={d}
-          demanding={false}
-          selected={false}
-          onSelect={noop}
-          canDrive={d.can_control}
-        />
+        <div className="h-full *:h-full">
+          <RoomCard
+            device={d}
+            demanding={false}
+            selected={false}
+            onSelect={noop}
+            canDrive={d.can_control}
+          />
+        </div>
       )
     case "remote":
       return <RemoteCard device={d} />

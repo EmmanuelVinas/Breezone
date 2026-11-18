@@ -13,6 +13,8 @@ All notable changes are documented here. The format follows
   so that its name goes with its preview.
 - Netatmo · Legrand: in the card « Matching with your devices », a device of its own (a line of
   the Ecometer…) is named there as one wishes; the name Netatmo gives it shows below when it differs.
+- Energy › « Measured devices »: each measure tells the module it comes from (Shelly, Hoymiles,
+  Legrand Écocompteur…), two measures may bear the same name.
 
 ### Fixed
 
