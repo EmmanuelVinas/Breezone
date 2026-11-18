@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.36] - 2026-11-18
+
 ### Added
 
 - Dashboards: the figures of the period are shown in the order chosen — in the block's settings,
