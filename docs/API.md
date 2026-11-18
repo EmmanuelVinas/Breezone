@@ -601,6 +601,13 @@ bas), `rte` (couleur Tempo officielle), `linky` (Conso API, ce qu'Enedis a mesur
 | DELETE 👑 | `/api/accounts/{kind}` | Oublie le compte (`airzone` : comme `DELETE /api/cloud`) |
 | GET 🔒 | `/api/energy/linky?days=30&installation_id=` | `{prm, days: [{day, consumption, production, cost, estimated, measured}]}` (kWh) : `cost` au tarif de l'installation, chaque demi-heure à son prix quand la courbe est connue (`estimated` sinon : le total du jour au prix de midi) ; `measured`, ce que les modules ont mesuré tiré du réseau ce jour-là. Pour ceux qui voient l'énergie |
 
+Avec un compte `netatmo`, le module `netatmo` (« Netatmo · Legrand », cloud) est ajouté seul aux
+sources. Il lit les maisons du compte toutes les minutes : volets, lumières, prises, et lignes de
+l'Écocompteur (`energy.power@1`). Un appareil qu'une source locale a déjà (même nom, même famille :
+volet, marche-arrêt…) n'est pas ajouté une seconde fois : il reste celui de la source locale, et
+le cloud ne sert qu'aux actions que le local refuse ou quand il ne répond plus (arrêt d'un volet
+Legrand : `target_position: -1`). Un volet local qui a un tel jumeau se dit `stoppable`.
+
 Avec un compte `rte`, la couleur des jours Tempo vient de RTE (la saison une fois, puis aujourd'hui
 et demain) ; sans lui, ou si RTE échoue, du relais public. Le compte `linky` est relu toutes les
 6 h (les journées arrivent le lendemain). Bloc de tableau de bord : `linky` `{days}`.

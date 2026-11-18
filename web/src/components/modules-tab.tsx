@@ -4,6 +4,7 @@ import { RoomSelect } from "@/components/room-select"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   AirVent,
+  Cloud,
   Download,
   Blinds,
   Fan,
@@ -21,7 +22,7 @@ import {
   Trash2,
   Zap,
 } from "lucide-react"
-import { useSearchParams } from "react-router"
+import { Link, useSearchParams } from "react-router"
 import { toast } from "sonner"
 import type {
   DeviceView,
@@ -583,6 +584,21 @@ const DRIVER: Record<
     ),
     writes: t("rien : lecture seule"),
   },
+  netatmo: {
+    icon: Cloud,
+    tone: "bg-cool/15 text-cool",
+    connection: t(
+      "Cloud de Netatmo, par le compte lié (Réglages › Comptes liés) : en complément du local"
+    ),
+    every: t("toutes les minutes (le cloud limite les appels)"),
+    reads: t(
+      "lignes de l'Écocompteur, et ce que le local n'a pas : volets, prises, lumières absents de HomeKit"
+    ),
+    writes: t("position et arrêt des volets, marche et arrêt, intensité"),
+    note: t(
+      "Un appareil déjà présent en local (même nom et même type, par HomeKit) n'est pas ajouté une seconde fois : il reste piloté en local, et passe par le cloud seulement pour ce que le local ne sait pas faire (arrêter un volet Legrand en cours de route) ou quand le local ne répond plus."
+    ),
+  },
 }
 
 function Tile({
@@ -810,6 +826,8 @@ function SourceDetail({
   const d = DRIVER[source.driver]
   const Icon = d?.icon ?? Zap
   const host = typeof source.config.host === "string" ? source.config.host : ""
+  // Reached through its maker's cloud, by a linked account: no address of its own.
+  const cloud = source.driver === "netatmo"
   const charger = devices.find((x) => x.traits.includes("ev.charger@1"))
   return (
     <>
@@ -850,24 +868,34 @@ function SourceDetail({
         <CardContent className="grid gap-4">
           <div className="grid gap-1.5">
             <span className="text-xs text-muted-foreground">
-              {t("Adresse IP ou nom")}
+              {cloud ? t("Compte") : t("Adresse IP ou nom")}
             </span>
             <div className="flex flex-wrap gap-2">
-              <span className="tabular min-w-40 flex-1 rounded-2xl bg-muted/60 px-3 py-2 font-mono text-sm text-primary">
-                {host || "–"}
-              </span>
-              <Button
-                variant="outline"
-                disabled={locate.isPending}
-                onClick={() => (known ? locate.mutate() : onSearch())}
-              >
-                {locate.isPending ? (
-                  <Loader2 className="animate-spin" />
-                ) : (
-                  <Search />
-                )}
-                {t("Rechercher")}
-              </Button>
+              {cloud ? (
+                <Button asChild variant="outline" className="flex-1">
+                  <Link to="/settings?tab=accounts">
+                    <Cloud /> {t("Réglages › Comptes liés")}
+                  </Link>
+                </Button>
+              ) : (
+                <>
+                  <span className="tabular min-w-40 flex-1 rounded-2xl bg-muted/60 px-3 py-2 font-mono text-sm text-primary">
+                    {host || "–"}
+                  </span>
+                  <Button
+                    variant="outline"
+                    disabled={locate.isPending}
+                    onClick={() => (known ? locate.mutate() : onSearch())}
+                  >
+                    {locate.isPending ? (
+                      <Loader2 className="animate-spin" />
+                    ) : (
+                      <Search />
+                    )}
+                    {t("Rechercher")}
+                  </Button>
+                </>
+              )}
               <Button
                 variant="outline"
                 onClick={() => refresh.mutate()}

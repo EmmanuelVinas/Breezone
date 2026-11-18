@@ -82,6 +82,7 @@ export const DRIVER_LABEL: Record<string, string> = {
   shelly: "Shelly",
   hoymiles: "Hoymiles",
   trydan: "V2C Trydan",
+  netatmo: "Legrand Écocompteur",
 }
 
 /** Downloads rows as a CSV file (separator `;`, read by spreadsheets in every language). */

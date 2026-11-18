@@ -85,7 +85,7 @@ pub async fn init_state(cfg: Config) -> anyhow::Result<AppState> {
     let hub = Hub::new(db.clone(), cfg.clone(), data_key.clone());
     let updater = Arc::new(update::Updater::new(cfg.data_dir.clone(), cfg.self_update));
     updater.set_beta(db::get_setting(&db, update::CHANNEL_SETTING).await?.as_deref() == Some("beta"));
-    let drivers = Arc::new(drivers::Runtime::new(db.clone(), *data_key));
+    let drivers = Arc::new(drivers::Runtime::new(db.clone(), *data_key, cfg.netatmo_url.clone()));
     drivers.reload().await?;
     drivers.clone().hear();
     let weather = Arc::new(weather::Weather::new(db.clone(), cfg.timezone, cfg.weather));
@@ -93,6 +93,10 @@ pub async fn init_state(cfg: Config) -> anyhow::Result<AppState> {
     let surplus = Arc::new(surplus::Surplus::default());
     let state = AppState { db, cfg, hub, auth, data_key, updater, drivers, weather, automations, surplus };
     bootstrap(&state).await?;
+    // An account linked before the Netatmo module existed gets it now.
+    if let Err(e) = accounts::netatmo::ensure_source(&state).await {
+        tracing::warn!("Netatmo module not added: {}", e.message.en);
+    }
     state.hub.reload_installations().await?;
     Ok(state)
 }

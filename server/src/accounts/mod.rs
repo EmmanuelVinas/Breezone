@@ -65,15 +65,24 @@ pub async fn view(state: &AppState, kind: &str) -> ApiResult<AccountView> {
 
 /// The configuration and decrypted secrets of an account, when it is connected.
 pub async fn load<S: DeserializeOwned>(state: &AppState, kind: &str) -> ApiResult<Option<(Value, S)>> {
-    let Some(row) = db::account(&state.db, kind).await? else { return Ok(None) };
-    let Some(secret) = row.secret.as_deref().and_then(|s| decrypt(&state.data_key, s)).and_then(|s| serde_json::from_str(&s).ok()) else { return Ok(None) };
+    load_in(&state.db, &state.data_key, kind).await
+}
+
+/// Same, from the database and key alone (a module that uses an account).
+pub async fn load_in<S: DeserializeOwned>(db: &db::Db, key: &crate::crypto::Key, kind: &str) -> ApiResult<Option<(Value, S)>> {
+    let Some(row) = db::account(db, kind).await? else { return Ok(None) };
+    let Some(secret) = row.secret.as_deref().and_then(|s| decrypt(key, s)).and_then(|s| serde_json::from_str(&s).ok()) else { return Ok(None) };
     Ok(Some((serde_json::from_str(&row.config).unwrap_or_else(|_| json!({})), secret)))
 }
 
 /// Keeps an account: its configuration as it is, its secrets encrypted.
 pub async fn save<S: Serialize>(state: &AppState, kind: &str, config: &Value, secret: &S, expires_at: Option<i64>) -> ApiResult<()> {
-    let secret = encrypt(&state.data_key, &serde_json::to_string(secret).unwrap_or_default());
-    db::save_account(&state.db, kind, &config.to_string(), Some(&secret), expires_at).await?;
+    save_in(&state.db, &state.data_key, kind, config, secret, expires_at).await
+}
+
+pub async fn save_in<S: Serialize>(db: &db::Db, key: &crate::crypto::Key, kind: &str, config: &Value, secret: &S, expires_at: Option<i64>) -> ApiResult<()> {
+    let secret = encrypt(key, &serde_json::to_string(secret).unwrap_or_default());
+    db::save_account(db, kind, &config.to_string(), Some(&secret), expires_at).await?;
     Ok(())
 }
 

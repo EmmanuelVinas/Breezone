@@ -68,7 +68,10 @@ fn enabled() -> bool {
 
 /// Checks the driver and its configuration; returns the trimmed name and the configuration text.
 fn checked(input: &SourceInput) -> ApiResult<(String, String)> {
-    crate::drivers::create(&input.driver, &input.config, None).map_err(ApiError::bad_request)?;
+    // The Netatmo module comes with its account: only its name and whether it runs change here.
+    if input.driver != crate::accounts::netatmo::KIND {
+        crate::drivers::create(&input.driver, &input.config, None).map_err(ApiError::bad_request)?;
+    }
     let name: String = input.name.trim().chars().take(60).collect();
     if name.is_empty() {
         return Err(ApiError::bad_request(crate::text!("le nom est vide", "the name is empty", "el nombre está vacío")));
@@ -85,6 +88,9 @@ async fn polled(state: &AppState, id: i64) -> ApiResult<SourceView> {
 }
 
 pub async fn create(State(state): State<AppState>, _admin: AdminUser, Json(input): Json<SourceInput>) -> ApiResult<(StatusCode, Json<SourceView>)> {
+    if input.driver == crate::accounts::netatmo::KIND {
+        return Err(ApiError::bad_request("le module Netatmo s'ajoute en connectant le compte (Réglages › Comptes liés)"));
+    }
     let (name, config) = checked(&input)?;
     let id = db::insert_source(&state.db, &input.driver, &name, &config).await?;
     Ok((StatusCode::CREATED, Json(polled(&state, id).await?)))

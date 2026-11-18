@@ -30,8 +30,12 @@ pub struct Secret {
 
 /// A new access from the refresh token (which Netatmo replaces at the same time).
 async fn renew(state: &AppState, s: &mut Secret) -> ApiResult<()> {
+    renew_at(&state.cfg.netatmo_url, s).await
+}
+
+async fn renew_at(url: &str, s: &mut Secret) -> ApiResult<()> {
     let resp = http()
-        .post(format!("{}/oauth2/token", state.cfg.netatmo_url.trim_end_matches('/')))
+        .post(format!("{}/oauth2/token", url.trim_end_matches('/')))
         .form(&[("grant_type", "refresh_token"), ("refresh_token", s.refresh_token.as_str()), ("client_id", s.client_id.as_str()), ("client_secret", s.client_secret.as_str())])
         .send()
         .await
@@ -75,6 +79,7 @@ fn summary(data: &Value) -> Value {
 
 /// Renews the access, reads the homes, and keeps everything (the new refresh token above all).
 async fn check(state: &AppState, mut s: Secret) -> ApiResult<()> {
+    let _one = RENEWING.lock().await;
     renew(state, &mut s).await?;
     let data = homes(state, s.access_token.as_deref().unwrap_or_default()).await?;
     let config = json!({ "client_id": s.client_id, "homes": summary(&data) });
@@ -96,21 +101,46 @@ pub async fn connect(state: &AppState, client_id: &str, client_secret: &str, ref
     }
     check(state, s).await?;
     db::set_account_state(&state.db, KIND, "ok", None).await?;
+    ensure_source(state).await?;
+    Ok(())
+}
+
+/// The Netatmo module, added with the account (once): it reads the homes the account reaches.
+pub async fn ensure_source(state: &AppState) -> ApiResult<()> {
+    if db::account(&state.db, KIND).await?.and_then(|a| a.secret).is_none() {
+        return Ok(());
+    }
+    if db::list_sources(&state.db).await?.iter().any(|s| s.driver == KIND) {
+        return Ok(());
+    }
+    db::insert_source(&state.db, KIND, "Netatmo · Legrand", "{}").await?;
+    state.drivers.reload().await?;
     Ok(())
 }
 
 pub async fn test(state: &AppState) -> ApiResult<()> {
     let Some((_, s)) = super::load::<Secret>(state, KIND).await? else { return Err(ApiError::bad_request("aucun compte Netatmo")) };
-    record(state, KIND, check(state, s).await).await
+    record(state, KIND, check(state, s).await).await?;
+    ensure_source(state).await
 }
 
-/// An access for a call to Netatmo, renewed when it is about to end (for the modules that use it).
-pub async fn access(state: &AppState) -> ApiResult<Option<String>> {
-    let Some((config, mut s)) = super::load::<Secret>(state, KIND).await? else { return Ok(None) };
+/// One renewal at a time: Netatmo replaces the refresh token at each, so two at once would lose one.
+static RENEWING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+/// An access for a call to Netatmo, renewed when it is about to end (for the module that uses it):
+/// `None` when no account is linked.
+pub async fn access_in(db: &db::Db, key: &crate::crypto::Key, url: &str) -> ApiResult<Option<String>> {
+    let _one = RENEWING.lock().await;
+    let Some((config, mut s)) = super::load_in::<Secret>(db, key, KIND).await? else { return Ok(None) };
     if s.access_token.is_none() || s.expires_at.is_none_or(|t| t - 60 < db::now()) {
-        record(state, KIND, renew(state, &mut s).await).await?;
+        let renewed = renew_at(url, &mut s).await;
+        match &renewed {
+            Ok(()) => db::set_account_state(db, KIND, "ok", None).await?,
+            Err(e) => db::set_account_state(db, KIND, "error", Some(&e.message.store())).await?,
+        }
+        renewed?;
         let expires_at = s.expires_at;
-        super::save(state, KIND, &config, &s, expires_at).await?;
+        super::save_in(db, key, KIND, &config, &s, expires_at).await?;
     }
     Ok(s.access_token)
 }

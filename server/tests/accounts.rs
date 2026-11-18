@@ -104,8 +104,9 @@ fn conso() -> Router {
         .route("/api/daily_production", get(|| async { (Code::NOT_FOUND, Json(json!({"message": "pas de production"}))) }))
 }
 
-/// Netatmo: each refresh token works once and is replaced by the next one.
-fn netatmo(used: Arc<Mutex<Vec<String>>>) -> Router {
+/// Netatmo: each refresh token works once and is replaced by the next one; a home with its
+/// gateway, a shutter and a line of an Ecometer; the changes asked are kept in `set`.
+fn netatmo(used: Arc<Mutex<Vec<String>>>, set: Arc<Mutex<Vec<Value>>>) -> Router {
     Router::new()
         .route(
             "/oauth2/token",
@@ -127,7 +128,32 @@ fn netatmo(used: Arc<Mutex<Vec<String>>>) -> Router {
             "/api/homesdata",
             get(|h: HeaderMap| async move {
                 assert_eq!(bearer(&h), "Bearer net-access");
-                Json(json!({"body": {"homes": [{"id": "h1", "name": "Maison", "rooms": [{}, {}, {}], "modules": [{}, {}]}]}}))
+                Json(json!({"body": {"homes": [{"id": "h1", "name": "Maison", "rooms": [{}, {}, {}], "modules": [
+                    {"id": "g1", "type": "NLG", "name": "Passerelle"},
+                    {"id": "v1", "type": "NLV", "name": "Volet bureau", "bridge": "g1"},
+                    {"id": "e1", "type": "NLE", "name": "Chauffage", "bridge": "g1"}
+                ]}]}}))
+            }),
+        )
+        .route(
+            "/api/homestatus",
+            get(|Query(q): Query<HashMap<String, String>>| async move {
+                assert_eq!(q["home_id"], "h1");
+                Json(json!({"body": {"home": {"id": "h1", "modules": [
+                    {"id": "g1", "type": "NLG"},
+                    {"id": "v1", "type": "NLV", "current_position": 30, "target_position": 30, "reachable": true},
+                    {"id": "e1", "type": "NLE", "power": 812, "reachable": true}
+                ]}}}))
+            }),
+        )
+        .route(
+            "/api/setstate",
+            post(move |Json(body): Json<Value>| {
+                let set = set.clone();
+                async move {
+                    set.lock().unwrap().push(body);
+                    Json(json!({"status": "ok"}))
+                }
             }),
         )
 }
@@ -135,12 +161,13 @@ fn netatmo(used: Arc<Mutex<Vec<String>>>) -> Router {
 #[tokio::test]
 async fn accounts_are_linked_used_and_removed() {
     let used = Arc::new(Mutex::new(vec![]));
+    let set = Arc::new(Mutex::new(vec![]));
     let dir = std::env::temp_dir().join(format!("breezone-accounts-test-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let mut cfg = Config::for_tests(dir);
     cfg.rte_url = format!("http://127.0.0.1:{}", serve(rte()).await);
     cfg.conso_api_url = format!("http://127.0.0.1:{}", serve(conso()).await);
-    cfg.netatmo_url = format!("http://127.0.0.1:{}", serve(netatmo(used.clone())).await);
+    cfg.netatmo_url = format!("http://127.0.0.1:{}", serve(netatmo(used.clone(), set.clone())).await);
     let state = breezone_server::init_state(cfg).await.unwrap();
     let port = serve(breezone_server::app(state)).await;
     let mut c = Client { base: format!("http://127.0.0.1:{port}"), http: reqwest::Client::new(), token: None };
@@ -178,10 +205,27 @@ async fn accounts_are_linked_used_and_removed() {
     // Netatmo: the refresh token given is used once, the one Netatmo gives back is kept.
     let (s, v) = c.call(reqwest::Method::PUT, "/api/accounts/netatmo", Some(json!({"client_id": "nid", "client_secret": "nsecret", "refresh_token": "refresh-1"}))).await;
     assert_eq!(s, StatusCode::OK, "{v}");
-    assert_eq!(v["config"]["homes"], json!([{"name": "Maison", "rooms": 3, "modules": 2}]));
+    assert_eq!(v["config"]["homes"], json!([{"name": "Maison", "rooms": 3, "modules": 3}]));
     let (s, v) = c.call(reqwest::Method::POST, "/api/accounts/netatmo/test", None).await;
     assert_eq!((s, v["state"].clone()), (StatusCode::OK, json!("ok")), "the second refresh token was kept: {v}");
     assert_eq!(*used.lock().unwrap(), ["refresh-1", "refresh-2"]);
+
+    // The Netatmo module came with the account: a shutter (no local one here) and the Ecometer's line.
+    let (_, sources) = c.call(reqwest::Method::GET, "/api/sources", None).await;
+    let source = sources.as_array().unwrap().iter().find(|s| s["driver"] == "netatmo").cloned().expect("netatmo module added");
+    let (s, v) = c.call(reqwest::Method::POST, &format!("/api/sources/{}/refresh", source["id"]), None).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    let (_, devices) = c.call(reqwest::Method::GET, "/api/devices", None).await;
+    let find = |name: &str| devices.as_array().unwrap().iter().find(|d| d["name"] == name).cloned();
+    assert!(find("Passerelle").is_none(), "the gateway is not a device: {devices}");
+    let line = find("Chauffage").expect("the line of the Ecometer");
+    assert_eq!(line["state"]["power"], 812.0);
+    let shutter = find("Volet bureau").expect("the shutter");
+    assert_eq!((shutter["state"]["position"].clone(), shutter["state"]["stoppable"].clone()), (json!(30), json!(true)));
+    // Stopped where it is: Legrand's -1, through its gateway.
+    let (s, v) = c.call(reqwest::Method::POST, &format!("/api/devices/{}/actions", shutter["id"]), Some(json!({"trait": "cover.position", "action": "stop", "params": {}}))).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    assert_eq!(set.lock().unwrap().last().cloned(), Some(json!({"home": {"id": "h1", "modules": [{"id": "v1", "bridge": "g1", "target_position": -1}]}})));
 
     // A user does not see them.
     let (s, _) = c.call(reqwest::Method::POST, "/api/users", Some(json!({"username":"camille","password":"motdepasse1","role":"user"}))).await;

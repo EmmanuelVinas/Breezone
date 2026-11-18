@@ -1870,6 +1870,18 @@ const es: Record<string, string> = {
   "Créer les {n} automatismes": "Crear las {n} automatizaciones",
   "Créer l'automatisme": "Crear la automatización",
   "Retour aux recettes": "Volver a las recetas",
+  "Cloud de Netatmo, par le compte lié (Réglages › Comptes liés) : en complément du local":
+    "Nube de Netatmo, por la cuenta vinculada (Ajustes › Cuentas vinculadas): además de lo local",
+  "toutes les minutes (le cloud limite les appels)":
+    "cada minuto (la nube limita las llamadas)",
+  "lignes de l'Écocompteur, et ce que le local n'a pas : volets, prises, lumières absents de HomeKit":
+    "las líneas del Ecocontador, y lo que falta en local: persianas, enchufes, luces ausentes de HomeKit",
+  "position et arrêt des volets, marche et arrêt, intensité":
+    "posición y parada de las persianas, encendido y apagado, intensidad",
+  "Un appareil déjà présent en local (même nom et même type, par HomeKit) n'est pas ajouté une seconde fois : il reste piloté en local, et passe par le cloud seulement pour ce que le local ne sait pas faire (arrêter un volet Legrand en cours de route) ou quand le local ne répond plus.":
+    "Un aparato ya presente en local (mismo nombre y tipo, por HomeKit) no se añade dos veces: sigue manejándose en local y pasa por la nube solo para lo que el local no sabe hacer (detener una persiana Legrand a medio camino) o cuando el local no responde.",
+  Compte: "Cuenta",
+  "Réglages › Comptes liés": "Ajustes › Cuentas vinculadas",
 }
 
 export default es

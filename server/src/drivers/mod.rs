@@ -9,6 +9,7 @@
 pub mod homekit;
 pub mod hoymiles;
 pub mod hue;
+pub mod netatmo;
 pub mod renson;
 pub mod shelly;
 pub mod trydan;
@@ -103,6 +104,11 @@ pub trait Driver: Send + Sync {
     fn close(&self) -> DriverFuture<'_, ()> {
         Box::pin(async { Ok(()) })
     }
+    /// Reaches the hardware through its maker's cloud: what it shares with a local module (same
+    /// name and kind) stays the local one's, and this one drives only what the local cannot.
+    fn cloud(&self) -> bool {
+        false
+    }
     /// What the hardware says about itself, raw, to understand how a model behaves (support).
     fn diagnostic(&self) -> DriverFuture<'_, Value> {
         Box::pin(async { Ok(Value::Null) })
@@ -179,7 +185,7 @@ pub struct DriverInfo {
 }
 
 pub fn available() -> Vec<DriverInfo> {
-    vec![shelly::info(), trydan::info(), hoymiles::info(), homekit::info(), hue::info(), renson::info()]
+    vec![shelly::info(), trydan::info(), hoymiles::info(), homekit::info(), hue::info(), renson::info(), netatmo::info()]
 }
 
 /// The driver of a source, from its configuration and its secret (decrypted).
@@ -191,6 +197,8 @@ pub fn create(driver: &str, config: &Value, secret: Option<&str>) -> Result<Arc<
         "homekit" => Ok(Arc::new(homekit::HomeKit::new(config, secret)?)),
         "hue" => Ok(Arc::new(hue::Hue::new(config, secret)?)),
         "renson" => Ok(Arc::new(renson::Renson::new(config)?)),
+        // Created by the runtime, which holds what reaches its account (see `Runtime::reload`).
+        "netatmo" => Err("the Netatmo module comes with its linked account".into()),
         other => Err(format!("unknown driver: {other}")),
     }
 }
@@ -221,6 +229,26 @@ struct Running {
     last_read: Option<Instant>,
     /// Readings failed in a row: an unreachable source is read less and less often.
     failures: u32,
+    /// For a cloud source: its devices that are also a local source's (same name and kind), by
+    /// that key; they are not devices of their own, only another way to drive the local ones.
+    twins: HashMap<(String, String), String>,
+    /// For a cloud source: every device it described, its twins included (sorted out at each reading).
+    cloud_devices: Vec<DeviceInfo>,
+}
+
+/// A device's name (normalised) and family.
+type TwinKey = (String, String);
+type HashSet<T> = std::collections::HashSet<T>;
+
+/// What tells a device of a cloud source and one of a local source apart from being the same:
+/// its name (as its app names it, the same on both paths) and its family.
+fn twin_key(d: &DeviceInfo) -> TwinKey {
+    let family = match d.kind.as_str() {
+        "shutter" | "window" | "door" | "cover" => "cover",
+        "light" | "switch.relay" => "onoff",
+        other => other,
+    };
+    (d.name.trim().to_lowercase().split_whitespace().collect::<Vec<_>>().join(" "), family.to_string())
 }
 
 /// The longest wait between two readings of a source that does not answer.
@@ -297,6 +325,8 @@ pub struct Runtime {
     /// The presses of the remotes, sent by the drivers that listen (`Driver::listen`).
     presses: tokio::sync::mpsc::UnboundedSender<Press>,
     heard: std::sync::Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<Press>>>,
+    /// Netatmo's address (the cloud module reaches its linked account).
+    netatmo_url: String,
     /// When this server started: a source not read since is not lost before `RELOCATE_AFTER`.
     started: i64,
 }
@@ -327,7 +357,7 @@ impl Goal {
 
 impl Runtime {
     /// `key`: decrypts the secrets of the sources (the server key).
-    pub fn new(db: Db, key: [u8; 32]) -> Self {
+    pub fn new(db: Db, key: [u8; 32], netatmo_url: String) -> Self {
         let (presses, heard) = tokio::sync::mpsc::unbounded_channel();
         Self {
             db,
@@ -337,6 +367,7 @@ impl Runtime {
             searched: RwLock::new(HashMap::new()),
             presses,
             heard: std::sync::Mutex::new(Some(heard)),
+            netatmo_url,
             started: db::now(),
         }
     }
@@ -356,7 +387,11 @@ impl Runtime {
                 None => {
                     let config: Value = serde_json::from_str(&source.config).unwrap_or(Value::Null);
                     let secret = source.secret.as_deref().and_then(|s| crate::crypto::decrypt(&self.key, s));
-                    let (driver, error) = match create(&source.driver, &config, secret.as_deref()) {
+                    let created = match source.driver.as_str() {
+                        "netatmo" => Ok(Arc::new(netatmo::Netatmo::new(self.db.clone(), self.key, self.netatmo_url.clone())) as Arc<dyn Driver>),
+                        _ => create(&source.driver, &config, secret.as_deref()),
+                    };
+                    let (driver, error) = match created {
                         Ok(d) => {
                             d.listen(Sink::new(source.id, self.presses.clone()));
                             (Some(d), None)
@@ -364,7 +399,18 @@ impl Runtime {
                         Err(e) => (None, Some(e)),
                     };
                     let status = SourceStatus { state: if error.is_some() { "error" } else { "unknown" }, last_error: error, ..Default::default() };
-                    Running { source, driver, devices: vec![], states: HashMap::new(), status, pending: HashMap::new(), last_read: None, failures: 0 }
+                    Running {
+                        source,
+                        driver,
+                        devices: vec![],
+                        states: HashMap::new(),
+                        status,
+                        pending: HashMap::new(),
+                        last_read: None,
+                        failures: 0,
+                        twins: HashMap::new(),
+                        cloud_devices: vec![],
+                    }
                 }
             };
             next.insert(running.source.id, running);
@@ -386,6 +432,12 @@ impl Runtime {
             None => return,
         };
         let Some(driver) = driver else { return };
+        // A cloud source waits for the local ones to be read once: what they have is not repeated.
+        let locals_pending =
+            driver.cloud() && self.sources.read().await.values().any(|o| o.source.enabled && o.driver.as_ref().is_some_and(|d| !d.cloud()) && o.status.state == "unknown");
+        if locals_pending {
+            return;
+        }
         if let Some(r) = self.sources.write().await.get_mut(&id) {
             r.last_read = Some(Instant::now());
         }
@@ -393,6 +445,15 @@ impl Runtime {
         let result = match &described {
             Some(Err(e)) => Err(e.clone()),
             _ => driver.read().await,
+        };
+        // The devices of the local sources (for a cloud source), or those the cloud can also drive.
+        let (local, in_cloud): (HashSet<TwinKey>, HashSet<TwinKey>) = {
+            let sources = self.sources.read().await;
+            let is_cloud = |o: &Running| o.driver.as_ref().is_some_and(|d| d.cloud());
+            (
+                sources.values().filter(|o| o.source.id != id && !is_cloud(o)).flat_map(|o| o.devices.iter().map(twin_key)).collect(),
+                sources.values().filter(|o| is_cloud(o)).flat_map(|o| o.twins.keys().cloned()).collect(),
+            )
         };
         let mut new_devices = vec![];
         let mut identity: Option<(db::Source, String)> = None;
@@ -403,13 +464,30 @@ impl Runtime {
                 r.status.model = Some(d.model);
                 r.status.firmware = d.firmware;
                 identity = d.identity.filter(|_| config_identity(&r.source).is_none()).map(|i| (r.source.clone(), i));
-                if r.devices != d.devices {
+                if driver.cloud() {
+                    r.cloud_devices = d.devices;
+                } else if r.devices != d.devices {
                     new_devices = d.devices.clone();
                     r.devices = d.devices;
                 }
             }
+            // A cloud source does not repeat a device a local source has: it is that one's twin.
+            if driver.cloud() {
+                r.twins = r.cloud_devices.iter().filter(|x| local.contains(&twin_key(x))).map(|x| (twin_key(x), x.reference.clone())).collect();
+                let own: Vec<DeviceInfo> = r.cloud_devices.iter().filter(|x| !local.contains(&twin_key(x))).cloned().collect();
+                if r.devices != own {
+                    new_devices = own.iter().filter(|x| !r.devices.contains(x)).cloned().collect();
+                    r.devices = own;
+                }
+            }
             match result {
-                Ok(states) => {
+                Ok(mut states) => {
+                    // A local shutter the cloud can stop midway can be stopped.
+                    for d in r.devices.iter().filter(|d| in_cloud.contains(&twin_key(d))) {
+                        if let Some(s) = states.get_mut(&d.reference).filter(|s| s.get("stoppable") == Some(&Value::Bool(false))) {
+                            s.insert("stoppable".into(), Value::Bool(true));
+                        }
+                    }
                     for (reference, state) in &states {
                         let pending = r.pending.entry(reference.clone()).or_default();
                         for (field, v) in state {
@@ -743,7 +821,16 @@ impl Runtime {
 
     pub async fn act(&self, source_id: i64, reference: &str, trait_name: &str, action: &str, params: &State) -> Result<(), DriverError> {
         let driver = self.sources.read().await.get(&source_id).and_then(|r| r.driver.clone()).ok_or_else(|| DriverError::Unreachable("source not configured".into()))?;
-        driver.act(reference, trait_name, action, params).await?;
+        match driver.act(reference, trait_name, action, params).await {
+            // What the local module cannot do, or cannot reach now, its cloud twin may.
+            Err(e @ (DriverError::Unsupported(_) | DriverError::Unreachable(_))) => {
+                let Some((cloud_id, cloud, twin)) = self.twin_of(source_id, reference).await else { return Err(e) };
+                tracing::info!("{reference} of source {source_id}: {trait_name}.{action} through the cloud ({e})");
+                cloud.act(&twin, trait_name, action, params).await?;
+                self.poll(cloud_id).await;
+            }
+            other => other?,
+        }
         if trait_name == "ev.charger" && matches!(action, "start" | "stop") {
             let key = (source_id, reference.to_string());
             let energy = params.get("energy").and_then(Value::as_f64).filter(|_| action == "start");
@@ -756,6 +843,16 @@ impl Runtime {
         }
         self.poll(source_id).await;
         Ok(())
+    }
+
+    /// The cloud source that can also drive a device of a local source, and its reference there.
+    async fn twin_of(&self, source_id: i64, reference: &str) -> Option<(i64, Arc<dyn Driver>, String)> {
+        let sources = self.sources.read().await;
+        let key = twin_key(sources.get(&source_id)?.devices.iter().find(|d| d.reference == reference)?);
+        sources.values().find_map(|o| {
+            let twin = o.twins.get(&key)?;
+            Some((o.source.id, o.driver.clone().filter(|d| d.cloud())?, twin.clone()))
+        })
     }
 
     async fn number(&self, source_id: i64, reference: &str, field: &str) -> Option<f64> {
@@ -802,6 +899,95 @@ impl Runtime {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_device_of_the_cloud_and_one_of_a_local_module_are_the_same_by_name_and_family() {
+        let d = |name: &str, kind: &str| DeviceInfo { reference: "r".into(), kind: kind.into(), traits: vec![], name: name.into() };
+        assert_eq!(twin_key(&d("Volet  Salon ", "shutter")), twin_key(&d("volet salon", "cover")));
+        assert_eq!(twin_key(&d("Lampe", "light")), twin_key(&d("lampe", "switch.relay")));
+        assert_ne!(twin_key(&d("Volet salon", "shutter")), twin_key(&d("Volet salon", "switch.relay")));
+    }
+
+    /// A local module whose shutter cannot be stopped, or the cloud one that can, with the same shutter.
+    struct Fake {
+        cloud: bool,
+        devices: Vec<DeviceInfo>,
+        done: Arc<std::sync::Mutex<Vec<String>>>,
+    }
+
+    impl Driver for Fake {
+        fn describe(&self) -> DriverFuture<'_, Described> {
+            Box::pin(async move { Ok(Described { model: "fake".into(), firmware: None, devices: self.devices.clone(), identity: None }) })
+        }
+        fn read(&self) -> DriverFuture<'_, HashMap<String, State>> {
+            Box::pin(async move {
+                Ok(self.devices.iter().map(|d| (d.reference.clone(), serde_json::from_value(serde_json::json!({"position": 40, "stoppable": self.cloud})).unwrap())).collect())
+            })
+        }
+        fn act<'a>(&'a self, reference: &'a str, _trait_name: &'a str, action: &'a str, _params: &'a State) -> DriverFuture<'a, ()> {
+            Box::pin(async move {
+                if !self.cloud && action == "stop" {
+                    return Err(DriverError::Unsupported("no hold position".into()));
+                }
+                self.done.lock().unwrap().push(format!("{reference} {action}"));
+                Ok(())
+            })
+        }
+        fn cloud(&self) -> bool {
+            self.cloud
+        }
+    }
+
+    #[tokio::test]
+    async fn the_cloud_twin_of_a_local_shutter_stops_it_and_is_not_repeated() {
+        let dir = std::env::temp_dir().join(format!("breezone-twins-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let db = db::connect(&dir.join("breezone.db")).await.unwrap();
+        let rt = Runtime::new(db.clone(), [0; 32], String::new());
+        let local_id = db::insert_source(&db, "homekit", "Passerelle", "{}").await.unwrap();
+        let cloud_id = db::insert_source(&db, "netatmo", "Netatmo", "{}").await.unwrap();
+        let sources = db::list_sources(&db).await.unwrap();
+        let done = Arc::new(std::sync::Mutex::new(vec![]));
+        let device =
+            |reference: &str, name: &str, kind: &str| DeviceInfo { reference: reference.into(), kind: kind.into(), traits: vec!["cover.position@1".into()], name: name.into() };
+        for (id, cloud, devices) in [
+            (local_id, false, vec![device("2.8", "Volet salon", "shutter")]),
+            (cloud_id, true, vec![device("h/v1", "Volet Salon", "shutter"), device("h/e1", "Chauffage", "energy.power")]),
+        ] {
+            let driver: Arc<dyn Driver> = Arc::new(Fake { cloud, devices, done: done.clone() });
+            let source = sources.iter().find(|s| s.id == id).unwrap().clone();
+            let running = Running {
+                source,
+                driver: Some(driver),
+                devices: vec![],
+                states: HashMap::new(),
+                status: SourceStatus { state: "unknown", ..Default::default() },
+                pending: HashMap::new(),
+                last_read: None,
+                failures: 0,
+                twins: HashMap::new(),
+                cloud_devices: vec![],
+            };
+            rt.sources.write().await.insert(id, running);
+        }
+
+        // The cloud waits for the local module to be read: nothing of it is repeated.
+        rt.poll(cloud_id).await;
+        assert!(rt.sources.read().await[&cloud_id].devices.is_empty());
+        rt.poll(local_id).await;
+        rt.poll(cloud_id).await;
+        let names: Vec<String> = rt.sources.read().await[&cloud_id].devices.iter().map(|d| d.name.clone()).collect();
+        assert_eq!(names, ["Chauffage"], "the shutter is the local one's twin, the Ecometer's line its own");
+
+        // The local shutter can now be stopped: through the cloud.
+        rt.poll(local_id).await;
+        assert_eq!(rt.sources.read().await[&local_id].states["2.8"]["stoppable"], true);
+        rt.act(local_id, "2.8", "cover.position", "stop", &State::new()).await.unwrap();
+        rt.act(local_id, "2.8", "cover.position", "set", &State::new()).await.unwrap();
+        assert_eq!(*done.lock().unwrap(), ["h/v1 stop", "2.8 set"], "what the local module can do stays its own");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn an_offline_source_is_read_less_and_less_often() {

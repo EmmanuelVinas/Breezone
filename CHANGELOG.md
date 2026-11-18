@@ -6,6 +6,14 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Netatmo · Legrand module (cloud), added with the Netatmo account: the lines of the Ecometer as
+  energy measures, and what the gateway does not give HomeKit. A device the local modules already
+  have (same name and kind) is not repeated: it stays driven locally and goes through the cloud
+  only for what the local cannot do, or when the local does not answer. A Legrand shutter can now
+  be stopped midway (the stop button shows), through the cloud.
+
 ## [0.11.0-beta.38] - 2026-11-18
 
 ### Added
