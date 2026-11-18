@@ -36,6 +36,7 @@ export type BlockType =
   | "solar_days"
   | "solar_panels"
   | "ventilation_house"
+  | "spacer"
 
 export type EnergyFlow = "solar" | "home" | "battery" | "grid"
 
@@ -64,6 +65,7 @@ export const BLOCK_LABEL: Record<BlockType, string> = {
   solar_days: t("Production jour par jour"),
   solar_panels: t("Micro-onduleurs et panneaux"),
   ventilation_house: t("Ventilation de la maison"),
+  spacer: t("Espace vide"),
 }
 
 /** Where a type of block comes from: the page it is a part of (the menu of blocks groups them). */
@@ -92,6 +94,7 @@ export const BLOCK_GROUP: Record<BlockType, string> = {
   solar_days: t("Solaire"),
   solar_panels: t("Solaire"),
   ventilation_house: t("Ventilation"),
+  spacer: t("Vue d'ensemble"),
 }
 
 export const FLOW_LABEL: Record<EnergyFlow, string> = {
@@ -133,6 +136,7 @@ export const DEFAULT_SIZE: Record<BlockType, DashboardSize> = {
   solar_days: "half",
   solar_panels: "full",
   ventilation_house: "full",
+  spacer: "quarter",
 }
 
 export const newId = () => Math.random().toString(36).slice(2, 10)

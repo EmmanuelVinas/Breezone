@@ -1,5 +1,5 @@
 // The parts of the energy page, each a block of a dashboard (the energy page, the overview).
-import type { ReactNode } from "react"
+import { Fragment, type ReactNode } from "react"
 import { Link } from "react-router"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
@@ -289,7 +289,6 @@ export function Kpis({
   /** The figures shown (none: all those the home has). */
   only?: KpiId[]
 }) {
-  const show = (id: KpiId) => !only?.length || only.includes(id)
   const { roles } = live
   const contract = useTariff()
   const currency = contract.data?.contract?.currency ?? "EUR"
@@ -305,6 +304,114 @@ export function Kpis({
           totals.consumption
         )
       : null
+  // Each figure the home has, then shown in the order chosen (the usual one otherwise).
+  const tiles: Record<KpiId, ReactNode> = {
+    production: roles.solar && (
+      <Kpi
+        icon={Sun}
+        label={t("Production")}
+        value={kwh(totals.production)}
+        sub={
+          cost
+            ? t("vaut {price}", { price: euros(cost.saved + cost.earned) })
+            : undefined
+        }
+        color={COLOR.solar}
+        curve={curves?.production}
+      />
+    ),
+    consumption: (
+      <Kpi
+        icon={Home}
+        label={t("Consommation")}
+        value={kwh(totals.consumption)}
+        sub={[
+          roles.solar && totals.self_consumed !== null
+            ? t("dont {kwh} solaires", { kwh: kwh(totals.self_consumed) })
+            : null,
+          cost
+            ? t("vaut {price}", { price: euros(cost.energy + cost.saved) })
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")}
+        color={COLOR.home}
+        curve={curves?.consumption}
+      />
+    ),
+    grid: roles.grid && (
+      <Kpi
+        icon={UtilityPole}
+        label={t("Réseau électrique")}
+        value={kwh(totals.imported)}
+        sub={[
+          totals.exported
+            ? t("{kwh} injectés", { kwh: kwh(totals.exported) })
+            : t("tirés du réseau"),
+          cost ? t("achetés {price}", { price: euros(cost.energy) }) : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")}
+        color={COLOR.grid}
+        curve={curves?.grid}
+      />
+    ),
+    self: roles.solar && selfShare !== null && (
+      <Kpi
+        icon={Leaf}
+        label={t("Autoconsommation")}
+        value={percent(selfShare)}
+        sub={t("de la production utilisée sur place")}
+        color="var(--primary)"
+      />
+    ),
+    autonomy: autonomy !== null && (
+      <Kpi
+        icon={ShieldCheck}
+        label={t("Autonomie")}
+        value={percent(autonomy)}
+        sub={t("de la consommation couverte")}
+        color={COLOR.battery}
+      />
+    ),
+    cost: cost && (
+      <Kpi
+        icon={Euro}
+        label={t("Coût")}
+        value={euros(cost.energy + cost.subscription)}
+        sub={t("dont {price} d'abonnement", {
+          price: euros(cost.subscription),
+        })}
+        color={COLOR.grid}
+        curve={curves?.cost}
+      />
+    ),
+    gains: cost && roles.solar && (
+      <Kpi
+        icon={PiggyBank}
+        label={t("Gagné grâce au solaire")}
+        value={euros(cost.saved + cost.earned)}
+        sub={
+          cost.earned > 0
+            ? t("{saved} économisés · {earned} de revente", {
+                saved: euros(cost.saved),
+                earned: euros(cost.earned),
+              })
+            : t("électricité non achetée")
+        }
+        color={COLOR.solar}
+      />
+    ),
+    battery: roles.battery && (
+      <Kpi
+        icon={BatteryCharging}
+        label={t("Batterie")}
+        value={kwh(totals.discharged)}
+        sub={t("restitués · {kwh} chargés", { kwh: kwh(totals.charged) })}
+        color={COLOR.battery}
+      />
+    ),
+  }
   return (
     <div
       className={
@@ -313,110 +420,8 @@ export function Kpis({
           : "grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5"
       }
     >
-      {show("production") && roles.solar && (
-        <Kpi
-          icon={Sun}
-          label={t("Production")}
-          value={kwh(totals.production)}
-          sub={
-            cost
-              ? t("vaut {price}", { price: euros(cost.saved + cost.earned) })
-              : undefined
-          }
-          color={COLOR.solar}
-          curve={curves?.production}
-        />
-      )}
-      {show("consumption") && (
-        <Kpi
-          icon={Home}
-          label={t("Consommation")}
-          value={kwh(totals.consumption)}
-          sub={[
-            roles.solar && totals.self_consumed !== null
-              ? t("dont {kwh} solaires", { kwh: kwh(totals.self_consumed) })
-              : null,
-            cost
-              ? t("vaut {price}", { price: euros(cost.energy + cost.saved) })
-              : null,
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-          color={COLOR.home}
-          curve={curves?.consumption}
-        />
-      )}
-      {show("grid") && roles.grid && (
-        <Kpi
-          icon={UtilityPole}
-          label={t("Réseau électrique")}
-          value={kwh(totals.imported)}
-          sub={[
-            totals.exported
-              ? t("{kwh} injectés", { kwh: kwh(totals.exported) })
-              : t("tirés du réseau"),
-            cost ? t("achetés {price}", { price: euros(cost.energy) }) : null,
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-          color={COLOR.grid}
-          curve={curves?.grid}
-        />
-      )}
-      {show("self") && roles.solar && selfShare !== null && (
-        <Kpi
-          icon={Leaf}
-          label={t("Autoconsommation")}
-          value={percent(selfShare)}
-          sub={t("de la production utilisée sur place")}
-          color="var(--primary)"
-        />
-      )}
-      {show("autonomy") && autonomy !== null && (
-        <Kpi
-          icon={ShieldCheck}
-          label={t("Autonomie")}
-          value={percent(autonomy)}
-          sub={t("de la consommation couverte")}
-          color={COLOR.battery}
-        />
-      )}
-      {show("cost") && cost && (
-        <Kpi
-          icon={Euro}
-          label={t("Coût")}
-          value={euros(cost.energy + cost.subscription)}
-          sub={t("dont {price} d'abonnement", {
-            price: euros(cost.subscription),
-          })}
-          color={COLOR.grid}
-          curve={curves?.cost}
-        />
-      )}
-      {show("gains") && cost && roles.solar && (
-        <Kpi
-          icon={PiggyBank}
-          label={t("Gagné grâce au solaire")}
-          value={euros(cost.saved + cost.earned)}
-          sub={
-            cost.earned > 0
-              ? t("{saved} économisés · {earned} de revente", {
-                  saved: euros(cost.saved),
-                  earned: euros(cost.earned),
-                })
-              : t("électricité non achetée")
-          }
-          color={COLOR.solar}
-        />
-      )}
-      {show("battery") && roles.battery && (
-        <Kpi
-          icon={BatteryCharging}
-          label={t("Batterie")}
-          value={kwh(totals.discharged)}
-          sub={t("restitués · {kwh} chargés", { kwh: kwh(totals.charged) })}
-          color={COLOR.battery}
-        />
+      {(only?.length ? only : KPI_IDS).map((id) =>
+        tiles[id] ? <Fragment key={id}>{tiles[id]}</Fragment> : null
       )}
     </div>
   )

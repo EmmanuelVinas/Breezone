@@ -6,6 +6,13 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Dashboards: the figures of the period are shown in the order chosen — in the block's settings,
+  each figure ticked moves up or down.
+- Dashboards (web and app): an “Empty space” block, a cell left empty (¼, ½ or a whole row), to set
+  a block apart on its own row without changing its size; seen only while arranging.
+
 ## [0.11.0-beta.35] - 2026-11-18
 
 ### Fixed

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { ChevronLeft, Plus, X } from "lucide-react"
+import { ArrowDown, ArrowUp, ChevronLeft, Plus, X } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import type {
   Charted,
@@ -604,30 +604,12 @@ function Settings({
           </Field>
           {block.type === "energy_kpis" && (
             <>
-              <Field label={t("Chiffres montrés (aucun coché : tous)")}>
-                <div className="grid grid-cols-2 gap-2">
-                  {KPI_IDS.map((k) => {
-                    const chosen = (c.kpis as KpiId[] | undefined) ?? []
-                    return (
-                      <label
-                        key={k}
-                        className="flex items-center gap-2 text-sm"
-                      >
-                        <Checkbox
-                          checked={chosen.includes(k)}
-                          onCheckedChange={(v) => {
-                            const next = KPI_IDS.filter((x) =>
-                              x === k ? v === true : chosen.includes(x)
-                            )
-                            set({ kpis: next.length ? next : undefined })
-                          }}
-                        />
-                        {KPI_LABEL[k]}
-                      </label>
-                    )
-                  })}
-                </div>
-              </Field>
+              <KpiOrder
+                value={(c.kpis as KpiId[] | undefined) ?? []}
+                onChange={(kpis) =>
+                  set({ kpis: kpis.length ? kpis : undefined })
+                }
+              />
               <label className="flex items-center justify-between gap-4 text-sm">
                 <span>
                   {t("Courbe dans les tuiles")}
@@ -811,6 +793,71 @@ function catalog(home: Home): Entry[] {
     }
   }
   return out
+}
+
+/**
+ * The figures of the period a block shows, in their order: those ticked first, each moved up or
+ * down; none ticked shows them all, in the usual order.
+ */
+function KpiOrder({
+  value,
+  onChange,
+}: {
+  value: KpiId[]
+  onChange: (kpis: KpiId[]) => void
+}) {
+  const shown = value.length ? value : [...KPI_IDS]
+  const rest = KPI_IDS.filter((k) => !shown.includes(k))
+  const move = (i: number, by: number) => {
+    const next = [...shown]
+    const [k] = next.splice(i, 1)
+    next.splice(i + by, 0, k)
+    onChange(next)
+  }
+  const row = (k: KpiId, i: number | null) => (
+    <div key={k} className="flex items-center gap-2 text-sm">
+      <Checkbox
+        checked={i !== null}
+        aria-label={KPI_LABEL[k]}
+        onCheckedChange={(v) =>
+          onChange(v === true ? [...shown, k] : shown.filter((x) => x !== k))
+        }
+      />
+      <span className={cn("flex-1", i === null && "text-muted-foreground")}>
+        {KPI_LABEL[k]}
+      </span>
+      {i !== null && (
+        <>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            disabled={i === 0}
+            aria-label={t("Monter")}
+            onClick={() => move(i, -1)}
+          >
+            <ArrowUp />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            disabled={i === shown.length - 1}
+            aria-label={t("Descendre")}
+            onClick={() => move(i, 1)}
+          >
+            <ArrowDown />
+          </Button>
+        </>
+      )}
+    </div>
+  )
+  return (
+    <Field label={t("Chiffres montrés, dans l'ordre")}>
+      <div className="grid gap-1">
+        {shown.map((k, i) => row(k, i))}
+        {rest.map((k) => row(k, null))}
+      </div>
+    </Field>
+  )
 }
 
 /** Whether the zone a device is measures its air (a card of its air has something to show). */

@@ -94,6 +94,7 @@ object BlockTypes {
     const val SOLAR_TODAY = "solar_today"
     const val SOLAR_PANELS = "solar_panels"
     const val VENTILATION_HOUSE = "ventilation_house"
+    const val SPACER = "spacer"
 }
 
 /** What the home has, to compose a first layout from. */

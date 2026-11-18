@@ -850,6 +850,13 @@ export function BlockView({
       return <SolarPanelsBlock />
     case "ventilation_house":
       return <VentilationBlock />
+    // An empty cell, to leave room: seen only while arranging.
+    case "spacer":
+      return editing ? (
+        <Placeholder label={t("Espace vide")} />
+      ) : (
+        <div aria-hidden className="h-full" />
+      )
     default:
       return null
   }

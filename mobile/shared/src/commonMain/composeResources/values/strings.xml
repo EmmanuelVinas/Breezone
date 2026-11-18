@@ -636,4 +636,6 @@
     <string name="block_settings_measures">Mesures</string>
     <string name="block_settings_none">Cette carte n’a pas de réglage.</string>
     <string name="block_settings_apply">Appliquer</string>
+    <string name="block_spacer">Espace vide</string>
+    <string name="block_spacer_hint">Une case laissée vide, pour mettre la carte suivante à part</string>
 </resources>

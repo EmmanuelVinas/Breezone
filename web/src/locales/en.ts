@@ -1751,11 +1751,12 @@ const en: Record<string, string> = {
   "Production jour par jour": "Production day by day",
   "Micro-onduleurs et panneaux": "Micro-inverters and panels",
   "Ventilation de la maison": "Home ventilation",
-  "Borne": "Charger",
-  "Chiffres montrés (aucun coché : tous)": "Figures shown (none ticked: all)",
-  "Graphiques": "Charts",
+  Borne: "Charger",
+  "Chiffres montrés, dans l'ordre": "Figures shown, in their order",
+  Graphiques: "Charts",
   "Retour aux composants": "Back to the components",
   "Rien à ajouter pour l'instant.": "Nothing to add yet.",
+  "Espace vide": "Empty space",
 }
 
 export default en

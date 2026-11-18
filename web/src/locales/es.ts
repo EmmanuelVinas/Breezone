@@ -1769,11 +1769,12 @@ const es: Record<string, string> = {
   "Production jour par jour": "Producción día a día",
   "Micro-onduleurs et panneaux": "Microinversores y paneles",
   "Ventilation de la maison": "Ventilación de la casa",
-  "Borne": "Cargador",
-  "Chiffres montrés (aucun coché : tous)": "Cifras mostradas (ninguna marcada: todas)",
-  "Graphiques": "Gráficos",
+  Borne: "Cargador",
+  "Chiffres montrés, dans l'ordre": "Cifras mostradas, en su orden",
+  Graphiques: "Gráficos",
   "Retour aux composants": "Volver a los componentes",
   "Rien à ajouter pour l'instant.": "Nada que añadir por ahora.",
+  "Espace vide": "Espacio vacío",
 }
 
 export default es

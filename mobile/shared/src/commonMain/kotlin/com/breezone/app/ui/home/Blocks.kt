@@ -164,6 +164,7 @@ enum class BlockKind(
     SolarToday(BlockTypes.SOLAR_TODAY, Res.string.block_solar_today, FzIcons.Sun, BlockSize.Full),
     SolarPanels(BlockTypes.SOLAR_PANELS, Res.string.block_solar_panels, FzIcons.SolarPanel, BlockSize.Full),
     VentilationHouse(BlockTypes.VENTILATION_HOUSE, Res.string.block_ventilation_house, FzIcons.Fan, BlockSize.Full),
+    Spacer(BlockTypes.SPACER, Res.string.block_spacer, FzIcons.Square, BlockSize.Half),
     ;
 
     /** Worth offering for this home: an energy card needs a measure, a zone card zones… */
@@ -232,6 +233,8 @@ fun BlockContent(b: DashboardBlock, ctx: HomeContext, editing: Boolean) {
         BlockKind.VentilationHouse -> ctx.server.withTrait(TraitIds.VENTILATION_UNIT).firstOrNull()?.let { unit ->
             VentilationHouseCard(ctx.serverId, unit, ctx.server.withTrait(TraitIds.VENTILATION_ROOM).filter { it.sourceId == unit.sourceId })
         } ?: Gone()
+        // An empty cell, to leave room: seen only while arranging.
+        BlockKind.Spacer -> if (editing) SectionCard { Muted(stringResource(Res.string.block_spacer)) }
         null -> if (editing) Waiting(b, ctx, true)
     }
 }

@@ -76,6 +76,8 @@ function Slot({
         "relative min-w-0",
         SPAN[block.size as DashboardSize] ?? SPAN.half,
         isDragging && "z-10 opacity-80",
+        // On a phone, one block per row: an empty cell would only leave a gap.
+        block.type === "spacer" && !editing && "hidden sm:block",
         editing &&
           "rounded-3xl outline-2 outline-offset-4 outline-primary/60 outline-dashed"
       )}

@@ -621,4 +621,6 @@
     <string name="block_settings_measures">Measures</string>
     <string name="block_settings_none">This card has no settings.</string>
     <string name="block_settings_apply">Apply</string>
+    <string name="block_spacer">Empty space</string>
+    <string name="block_spacer_hint">An empty cell, to set the next card apart</string>
 </resources>

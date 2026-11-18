@@ -617,4 +617,6 @@
     <string name="block_settings_measures">Medidas</string>
     <string name="block_settings_none">Esta tarjeta no tiene ajustes.</string>
     <string name="block_settings_apply">Aplicar</string>
+    <string name="block_spacer">Espacio vacío</string>
+    <string name="block_spacer_hint">Una casilla vacía, para separar la tarjeta siguiente</string>
 </resources>
