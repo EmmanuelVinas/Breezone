@@ -334,7 +334,7 @@ async fn replace_in(conn: &mut SqliteConnection, file: &Value, importer: i64, in
         sqlx::query("UPDATE accounts SET secret = ? WHERE kind = ? AND json(config) = json(?)").bind(secret).bind(kind).bind(config).execute(&mut *conn).await?;
     }
     let airzone_password: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM accounts WHERE kind = 'airzone' AND secret IS NULL)").fetch_one(&mut *conn).await?;
-    let to_connect: Vec<String> = sqlx::query_scalar("SELECT kind FROM accounts WHERE secret IS NULL AND kind != 'airzone' ORDER BY id").fetch_all(&mut *conn).await?;
+    let to_connect: Vec<String> = sqlx::query_scalar("SELECT kind FROM accounts WHERE secret IS NULL AND kind NOT IN ('airzone', 'weather') ORDER BY id").fetch_all(&mut *conn).await?;
 
     // What was about rows that are gone: history and links of this server.
     for q in [

@@ -585,20 +585,26 @@ appareils des modules (borne, relais, lumières…) sont réservés aux administ
 
 Le rapport de synchronisation contient `notes` : pourquoi une installation n'a pas été jointe.
 
-## Comptes liés 👑
+## Comptes et services liés 👑
 
 Un compte relie Breezone à un service en ligne, toujours en plus de ce qu'il lit en local. Les
 secrets (mot de passe, secret client, jetons) sont chiffrés avec la clé du serveur et ne sont
 jamais renvoyés. Types : `airzone` (Airzone Cloud, connecté depuis le module Airzone, voir plus
 bas), `rte` (couleur Tempo officielle), `linky` (Conso API, ce qu'Enedis a mesuré), `netatmo`
-(Legrand Home + Control).
+(Legrand Home + Control), et le service `weather` (Open-Meteo, MeteoAlarm : sans identifiants,
+toujours `connected`, `service: true`).
+
+Chacun se désactive sans être oublié : ce qui s'en sert fait comme s'il n'était pas là (Tempo par
+le relais public, le module Netatmo arrêté, plus de synchronisation Airzone, plus de météo :
+`/api/weather` répond `online: false`).
 
 | Méthode | Chemin | Description |
 |---------|--------|-------------|
-| GET 👑 | `/api/accounts` | `[{kind, connected, state, last_error, last_ok, expires_at, config}]`, tous les types ; `state` ∈ `ok \| error \| expired \| unknown \| none` ; `config` : ce qui n'est pas secret (`email`, `client_id`, `prm`, `homes` de Netatmo) |
+| GET 👑 | `/api/accounts` | `[{kind, connected, enabled, service, state, last_error, last_ok, expires_at, config}]`, tous les types ; `state` ∈ `ok \| error \| expired \| unknown \| none` ; `config` : ce qui n'est pas secret (`email`, `client_id`, `prm`, `homes` de Netatmo) |
 | PUT 👑 | `/api/accounts/{kind}` | Connecte après vérification auprès du service (`502` s'il refuse, rien n'est gardé) : `rte` `{client_id, client_secret}` ; `linky` `{token, prm}` (lit l'année passée) ; `netatmo` `{client_id, client_secret, refresh_token}` (jeton du « Token generator », droits `read_magellan write_magellan` ; Breezone garde le nouveau refresh token donné à chaque renouvellement) |
 | POST 👑 | `/api/accounts/{kind}/test` | Utilise le compte une fois de plus → la vue, avec son état et sa dernière erreur |
-| DELETE 👑 | `/api/accounts/{kind}` | Oublie le compte (`airzone` : comme `DELETE /api/cloud`) |
+| PUT 👑 | `/api/accounts/{kind}/enabled` | `{enabled}` : l'active ou le désactive → la vue |
+| DELETE 👑 | `/api/accounts/{kind}` | Oublie le compte (`airzone` : comme `DELETE /api/cloud` ; `weather` : `400`, il se désactive) |
 | GET 🔒 | `/api/energy/linky?days=30&installation_id=` | `{prm, days: [{day, consumption, production, cost, estimated, measured}]}` (kWh) : `cost` au tarif de l'installation, chaque demi-heure à son prix quand la courbe est connue (`estimated` sinon : le total du jour au prix de midi) ; `measured`, ce que les modules ont mesuré tiré du réseau ce jour-là. Pour ceux qui voient l'énergie |
 
 Avec un compte `netatmo`, le module `netatmo` (« Netatmo · Legrand », cloud) est ajouté seul aux
@@ -607,6 +613,18 @@ l'Écocompteur (`energy.power@1`). Un appareil qu'une source locale a déjà (m�
 volet, marche-arrêt…) n'est pas ajouté une seconde fois : il reste celui de la source locale, et
 le cloud ne sert qu'aux actions que le local refuse ou quand il ne répond plus (arrêt d'un volet
 Legrand : `target_position: -1`). Un volet local qui a un tel jumeau se dit `stoppable`.
+Le rapprochement se fait par les mots du nom (sans les mots qui ne disent que le type : volet,
+roulant…), d'abord les noms identiques puis ceux contenus l'un dans l'autre, ou à la main :
+`GET /api/sources/{id}/twins` 👑 → `{devices: [{reference, name, kind, status: own|linked|ignored,
+chosen, twin_of: [source_id, reference] | null, state?}], locals: [{source_id, reference, name, kind,
+source}]}` (`state` : son dernier relevé, pour le reconnaître) ; `PUT /api/sources/{id}/twins` 👑
+`{reference, choice: auto|link|own|ignore, source_id?, local?}` → idem. Un appareil relié ou ignoré
+n'est plus un appareil (sa ligne est supprimée).
+
+Les mêmes routes servent à tout module, local compris : `status` y vaut `own` ou `ignored`, `locals`
+est vide, et seuls `choice: ignore` (le laisser de côté) et `auto` (le rétablir) sont admis. Les
+choix sont gardés dans la configuration du module (`ignored`, `links`, `own`) ; un `PUT
+/api/sources/{id}` qui ne les donne pas les conserve.
 
 Avec un compte `rte`, la couleur des jours Tempo vient de RTE (la saison une fois, puis aujourd'hui
 et demain) ; sans lui, ou si RTE échoue, du relais public. Le compte `linky` est relu toutes les

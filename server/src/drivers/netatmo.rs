@@ -103,7 +103,7 @@ impl Netatmo {
     async fn token(&self) -> Result<String, DriverError> {
         match crate::accounts::netatmo::access_in(&self.db, &self.key, &self.url).await {
             Ok(Some(t)) => Ok(t),
-            Ok(None) => Err(DriverError::Unreachable("aucun compte Netatmo : Réglages › Comptes liés".into())),
+            Ok(None) => Err(DriverError::Unreachable("aucun compte Netatmo : Réglages › Comptes et services".into())),
             Err(e) => Err(unreachable(e.message.en)),
         }
     }

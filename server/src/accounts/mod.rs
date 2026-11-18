@@ -5,7 +5,11 @@
 //! - `airzone`: the Airzone Cloud account (names, groups, schedules), see `cloud`;
 //! - `rte`: RTE's data portal, for the official colour of the Tempo days;
 //! - `linky`: Conso API, which reads what Enedis measured (Linky) with a personal token;
-//! - `netatmo`: Netatmo (Legrand Home + Control), by OAuth with one's own Netatmo app.
+//! - `netatmo`: Netatmo (Legrand Home + Control), by OAuth with one's own Netatmo app;
+//! - `weather`: a service rather than an account (Open-Meteo, MeteoAlarm): no credentials, only
+//!   the switch.
+//!
+//! Each can be switched off without being forgotten: what uses it then does as if it were not set.
 
 pub mod linky;
 pub mod netatmo;
@@ -21,14 +25,21 @@ use serde::Serialize;
 use serde_json::{json, Value};
 
 /// The kinds of accounts, in the order of Settings › Accounts.
-pub const KINDS: &[&str] = &[crate::cloud::ACCOUNT, rte::KIND, linky::KIND, netatmo::KIND];
+pub const KINDS: &[&str] = &[crate::cloud::ACCOUNT, rte::KIND, linky::KIND, netatmo::KIND, WEATHER];
+
+/// The weather: a linked service without credentials.
+pub const WEATHER: &str = "weather";
 
 /// An account as Settings › Accounts shows it: never its secrets.
 #[derive(Debug, Serialize)]
 pub struct AccountView {
     pub kind: &'static str,
-    /// Its credentials are kept: it can be used.
+    /// Its credentials are kept (a service without any: always): it can be used.
     pub connected: bool,
+    /// Switched on (else what uses it does as if it were not set).
+    pub enabled: bool,
+    /// A service that asks no credentials.
+    pub service: bool,
     /// "ok" | "error" | "expired" | "unknown" (and "none" when not set).
     pub state: String,
     pub last_error: Option<Text>,
@@ -47,14 +58,26 @@ pub async fn list(state: &AppState) -> ApiResult<Vec<AccountView>> {
         .map(|kind| match rows.iter().find(|r| r.kind == *kind) {
             Some(r) => AccountView {
                 kind,
-                connected: r.secret.is_some(),
+                connected: r.secret.is_some() || *kind == WEATHER,
+                enabled: r.enabled,
+                service: *kind == WEATHER,
                 state: r.state.clone(),
                 last_error: r.last_error.as_deref().map(Text::load),
                 last_ok: r.last_ok,
                 expires_at: r.expires_at,
                 config: serde_json::from_str(&r.config).unwrap_or_else(|_| json!({})),
             },
-            None => AccountView { kind, connected: false, state: "none".into(), last_error: None, last_ok: None, expires_at: None, config: json!({}) },
+            None => AccountView {
+                kind,
+                connected: *kind == WEATHER,
+                enabled: true,
+                service: *kind == WEATHER,
+                state: "none".into(),
+                last_error: None,
+                last_ok: None,
+                expires_at: None,
+                config: json!({}),
+            },
         })
         .collect())
 }
@@ -63,14 +86,14 @@ pub async fn view(state: &AppState, kind: &str) -> ApiResult<AccountView> {
     list(state).await?.into_iter().find(|a| a.kind == kind).ok_or_else(|| ApiError::not_found("unknown account"))
 }
 
-/// The configuration and decrypted secrets of an account, when it is connected.
+/// The configuration and decrypted secrets of an account, when it is connected and switched on.
 pub async fn load<S: DeserializeOwned>(state: &AppState, kind: &str) -> ApiResult<Option<(Value, S)>> {
     load_in(&state.db, &state.data_key, kind).await
 }
 
 /// Same, from the database and key alone (a module that uses an account).
 pub async fn load_in<S: DeserializeOwned>(db: &db::Db, key: &crate::crypto::Key, kind: &str) -> ApiResult<Option<(Value, S)>> {
-    let Some(row) = db::account(db, kind).await? else { return Ok(None) };
+    let Some(row) = db::account(db, kind).await?.filter(|r| r.enabled) else { return Ok(None) };
     let Some(secret) = row.secret.as_deref().and_then(|s| decrypt(key, s)).and_then(|s| serde_json::from_str(&s).ok()) else { return Ok(None) };
     Ok(Some((serde_json::from_str(&row.config).unwrap_or_else(|_| json!({})), secret)))
 }

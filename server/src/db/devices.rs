@@ -159,3 +159,12 @@ pub async fn update_device(db: &Db, id: i64, name: Option<&str>, room_id: Option
     sqlx::query("UPDATE devices SET name = ?, room_id = ?, position = ? WHERE id = ?").bind(name).bind(room_id).bind(position).bind(id).execute(db).await?;
     Ok(())
 }
+
+/// Removes the devices of a source with these references (those no longer its own).
+pub async fn delete_source_devices(db: &Db, source_id: i64, references: &[String]) -> sqlx::Result<u64> {
+    let mut n = 0;
+    for r in references {
+        n += sqlx::query("DELETE FROM devices WHERE source_id = ? AND source_ref = ?").bind(source_id).bind(format!("{source_id}/{r}")).execute(db).await?.rows_affected();
+    }
+    Ok(n)
+}

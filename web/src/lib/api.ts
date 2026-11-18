@@ -1178,10 +1178,15 @@ export type SurplusView = {
 }
 
 /** A linked account (Settings › Accounts): never its secrets. */
-export type AccountKind = "airzone" | "rte" | "linky" | "netatmo"
+export type AccountKind = "airzone" | "rte" | "linky" | "netatmo" | "weather"
 export type AccountView = {
   kind: AccountKind
+  /** Its credentials are kept (a service without any: always). */
   connected: boolean
+  /** Switched on: what uses it may use it. */
+  enabled: boolean
+  /** A service that asks no credentials (the weather). */
+  service: boolean
   state: "ok" | "error" | "expired" | "unknown" | "none"
   last_error: string | null
   last_ok: number | null
@@ -1207,6 +1212,30 @@ export type LinkyDay = {
   measured: number | null
 }
 export type LinkyView = { prm: string | null; days: LinkyDay[] }
+
+/** A device of a module: its own, the twin of a local device (cloud module), or ignored. */
+export type CloudDevice = {
+  reference: string
+  name: string
+  kind: string
+  status: "own" | "linked" | "ignored"
+  /** Chosen by hand (else found by its name). */
+  chosen: boolean
+  /** The local device it is: [source, reference]. */
+  twin_of: [number, string] | null
+  /** Its last reading, to tell it apart. */
+  state?: Record<string, unknown>
+}
+export type TwinsView = {
+  devices: CloudDevice[]
+  locals: {
+    source_id: number
+    reference: string
+    name: string
+    kind: string
+    source: string
+  }[]
+}
 
 export const api = {
   surplus: () => request<SurplusView>("GET", "/api/surplus"),
@@ -1324,6 +1353,8 @@ export const api = {
     request<AccountView>("PUT", `/api/accounts/${kind}`, input),
   testAccount: (kind: AccountKind) =>
     request<AccountView>("POST", `/api/accounts/${kind}/test`),
+  setAccountEnabled: (kind: AccountKind, enabled: boolean) =>
+    request<AccountView>("PUT", `/api/accounts/${kind}/enabled`, { enabled }),
   deleteAccount: (kind: AccountKind) =>
     request<void>("DELETE", `/api/accounts/${kind}`),
   /** The energy of a local day; its cost at the prices of `installationId` (the home by default). */
@@ -1428,6 +1459,18 @@ export const api = {
       "POST",
       `/api/sources/${sourceId}/rooms`
     ),
+  /** What became of each device of a cloud module, and the local devices it may be linked to. */
+  sourceTwins: (sourceId: number) =>
+    request<TwinsView>("GET", `/api/sources/${sourceId}/twins`),
+  setSourceTwin: (
+    sourceId: number,
+    input: {
+      reference: string
+      choice: "auto" | "link" | "own" | "ignore"
+      source_id?: number
+      local?: string
+    }
+  ) => request<TwinsView>("PUT", `/api/sources/${sourceId}/twins`, input),
   /** What a module's hardware says about itself, raw (support). */
   sourceDiagnostic: (sourceId: number) =>
     request<unknown>("GET", `/api/sources/${sourceId}/diagnostic`),

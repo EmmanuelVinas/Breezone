@@ -6,6 +6,19 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Netatmo · Legrand: each device of the cloud is matched with its local device by the words of its
+  name (« Volet roulant salon institut » is « Volet Institut »: the words that only name a kind,
+  shutter, roller…, are left out), and can be set by hand in the module's card « Matching with your
+  devices »: same as a local device, a device of its own, or ignored. The duplicates made before go.
+- Any device of any module can be ignored (Settings › Modules, the hidden-eye button of its row):
+  it leaves Breezone, and the card « Ignored devices » brings it back. Each line of the matching
+  card shows its last reading (power, position, on/off) to tell the Ecometer's lines apart.
+- Settings › « Accounts and services »: the weather (Open-Meteo, MeteoAlarm) is a linked service,
+  each account or service has a switch to turn it off without forgetting it (the Tempo colours
+  then come from the public relay, the Netatmo module stops…), and a search narrows the list.
+
 ## [0.11.0-beta.39] - 2026-11-18
 
 ### Added

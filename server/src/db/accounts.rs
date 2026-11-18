@@ -12,9 +12,11 @@ pub struct AccountRow {
     pub last_ok: Option<i64>,
     pub expires_at: Option<i64>,
     pub updated_at: i64,
+    /// Switched on: what uses it may use it.
+    pub enabled: bool,
 }
 
-const COLUMNS: &str = "kind, config, secret, state, last_error, last_ok, expires_at, updated_at";
+const COLUMNS: &str = "kind, config, secret, state, last_error, last_ok, expires_at, updated_at, enabled";
 
 pub async fn list_accounts(db: &Db) -> sqlx::Result<Vec<AccountRow>> {
     sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {COLUMNS} FROM accounts ORDER BY id"))).fetch_all(db).await
@@ -54,6 +56,24 @@ pub async fn set_account_state(db: &Db, kind: &str, state: &str, error: Option<&
         .execute(db)
         .await?;
     Ok(())
+}
+
+/// Switches an account or a service on or off, without forgetting it.
+pub async fn set_account_enabled(db: &Db, kind: &str, enabled: bool) -> sqlx::Result<()> {
+    let now = now();
+    sqlx::query("INSERT INTO accounts (kind, enabled, created_at, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT (kind) DO UPDATE SET enabled = excluded.enabled, updated_at = excluded.updated_at")
+        .bind(kind)
+        .bind(enabled)
+        .bind(now)
+        .bind(now)
+        .execute(db)
+        .await?;
+    Ok(())
+}
+
+/// Whether an account or a service is switched on (on when never set).
+pub async fn account_enabled(db: &Db, kind: &str) -> bool {
+    !matches!(account(db, kind).await, Ok(Some(a)) if !a.enabled)
 }
 
 pub async fn delete_account(db: &Db, kind: &str) -> sqlx::Result<bool> {

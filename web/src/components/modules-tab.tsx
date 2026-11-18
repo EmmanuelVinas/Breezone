@@ -7,6 +7,7 @@ import {
   Cloud,
   Download,
   Blinds,
+  EyeOff,
   Fan,
   KeyRound,
   Lightbulb,
@@ -20,6 +21,7 @@ import {
   Search,
   Sun,
   Trash2,
+  Undo2,
   Zap,
 } from "lucide-react"
 import { Link, useSearchParams } from "react-router"
@@ -176,6 +178,19 @@ function DeviceRow({
     onSuccess: () => qc.invalidateQueries({ queryKey: ["devices"] }),
     onError: (e) => toast.error(errorText(e)),
   })
+  const ignore = useMutation({
+    mutationFn: () =>
+      api.setSourceTwin(device.source_id!, {
+        reference: device.reference as string,
+        choice: "ignore",
+      }),
+    onSuccess: (v) => {
+      qc.setQueryData(["twins", device.source_id], v)
+      qc.invalidateQueries({ queryKey: ["devices"] })
+      qc.invalidateQueries({ queryKey: ["sources"] })
+    },
+    onError: (e) => toast.error(errorText(e)),
+  })
   // While saving: what was chosen shows at once, with a spinner on its select.
   const pending = save.isPending ? save.variables : undefined
   const busy = (key: string) => !!pending && key in pending
@@ -250,17 +265,44 @@ function DeviceRow({
   return (
     <div className="grid gap-3 rounded-2xl border p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
       <div className="min-w-0 space-y-1">
-        <Input
-          value={name}
-          aria-label={t("Nom")}
-          className="h-8 max-w-72 font-medium"
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => {
-            if (draft !== null && draft.trim() !== device.name)
-              save.mutate({ name: draft.trim() })
-            setDraft(null)
-          }}
-        />
+        <div className="flex items-center gap-1">
+          <Input
+            value={name}
+            aria-label={t("Nom")}
+            className="h-8 max-w-72 font-medium"
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => {
+              if (draft !== null && draft.trim() !== device.name)
+                save.mutate({ name: draft.trim() })
+              setDraft(null)
+            }}
+          />
+          {device.source_id !== null &&
+            typeof device.reference === "string" && (
+              <Confirm
+                title={t("Ignorer « {name} » ?", { name: device.name })}
+                description={t(
+                  "Il disparaît de Breezone avec son historique et ses réglages. Vous pourrez le rétablir depuis « Appareils ignorés »."
+                )}
+                onConfirm={() => ignore.mutate()}
+              >
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8 text-muted-foreground"
+                  title={t("Ignorer cet appareil")}
+                  aria-label={t("Ignorer cet appareil")}
+                  disabled={ignore.isPending}
+                >
+                  {ignore.isPending ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <EyeOff />
+                  )}
+                </Button>
+              </Confirm>
+            )}
+        </div>
         <div className="tabular text-xs text-muted-foreground">
           {device.available ? values.join(" · ") : t("Indisponible")}
         </div>
@@ -588,7 +630,7 @@ const DRIVER: Record<
     icon: Cloud,
     tone: "bg-cool/15 text-cool",
     connection: t(
-      "Cloud de Netatmo, par le compte lié (Réglages › Comptes liés) : en complément du local"
+      "Cloud de Netatmo, par le compte lié (Réglages › Comptes et services) : en complément du local"
     ),
     every: t("toutes les minutes (le cloud limite les appels)"),
     reads: t(
@@ -874,7 +916,7 @@ function SourceDetail({
               {cloud ? (
                 <Button asChild variant="outline" className="flex-1">
                   <Link to="/settings?tab=accounts">
-                    <Cloud /> {t("Réglages › Comptes liés")}
+                    <Cloud /> {t("Réglages › Comptes et services")}
                   </Link>
                 </Button>
               ) : (
@@ -940,6 +982,8 @@ function SourceDetail({
         </CardContent>
       </Card>
       {charger && <CurrentOwner charger={charger} />}
+      {cloud && <TwinsCard sourceId={source.id} />}
+      {!cloud && <IgnoredCard sourceId={source.id} />}
       {source.driver === "renson" && (
         <RensonKey
           sourceId={source.id}
@@ -1401,6 +1445,213 @@ function AddModuleDialog({
         </div>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** The family of a kind: a cloud device is only the twin of a local device of the same one. */
+function family(kind: string) {
+  if (["shutter", "window", "door", "cover"].includes(kind)) return "cover"
+  if (["light", "switch.relay"].includes(kind)) return "onoff"
+  return kind
+}
+
+/** The last reading of a device, short, to tell it apart in a list. */
+function reading(s: Record<string, unknown> | null | undefined) {
+  if (!s) return null
+  return (
+    [
+      typeof s.position === "number" ? `${s.position} %` : null,
+      typeof s.on === "boolean" ? (s.on ? t("allumé") : t("éteint")) : null,
+      wattsOf(s.power),
+      kwhOf(s.energy_in),
+    ]
+      .filter(Boolean)
+      .join(" · ") || null
+  )
+}
+
+/** The devices of a local module left out by hand, to bring back. */
+function IgnoredCard({ sourceId }: { sourceId: number }) {
+  const qc = useQueryClient()
+  const view = useQuery({
+    queryKey: ["twins", sourceId],
+    queryFn: () => api.sourceTwins(sourceId),
+    refetchInterval: 60_000,
+  })
+  const restore = useMutation({
+    mutationFn: (reference: string) =>
+      api.setSourceTwin(sourceId, { reference, choice: "auto" }),
+    onSuccess: (v) => {
+      qc.setQueryData(["twins", sourceId], v)
+      qc.invalidateQueries({ queryKey: ["devices"] })
+      qc.invalidateQueries({ queryKey: ["sources"] })
+    },
+    onError: (e) => toast.error(errorText(e)),
+  })
+  const ignored = (view.data?.devices ?? []).filter(
+    (d) => d.status === "ignored"
+  )
+  if (ignored.length === 0) return null
+  return (
+    <Card className="rounded-3xl">
+      <CardHeader>
+        <CardTitle>{t("Appareils ignorés")}</CardTitle>
+        <CardDescription>
+          {t(
+            "Le module les voit toujours, Breezone les laisse de côté. Rétablis, ils reviennent sans leur ancien historique."
+          )}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-2">
+        {ignored.map((d) => (
+          <div
+            key={d.reference}
+            className="flex flex-wrap items-center gap-3 rounded-2xl border p-3"
+          >
+            <div className="min-w-0 flex-1">
+              <div className="truncate font-medium">{d.name}</div>
+              {reading(d.state) && (
+                <div className="tabular text-xs text-muted-foreground">
+                  {reading(d.state)}
+                </div>
+              )}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={restore.isPending}
+              onClick={() => restore.mutate(d.reference)}
+            >
+              {restore.isPending && restore.variables === d.reference ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <Undo2 />
+              )}
+              {t("Rétablir")}
+            </Button>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
+ * What became of each device of a cloud module: the twin of a local device (it stays driven
+ * locally, the cloud only does what the local cannot), a device of its own, or ignored.
+ */
+function TwinsCard({ sourceId }: { sourceId: number }) {
+  const qc = useQueryClient()
+  const twins = useQuery({
+    queryKey: ["twins", sourceId],
+    queryFn: () => api.sourceTwins(sourceId),
+    refetchInterval: 60_000,
+  })
+  const set = useMutation({
+    mutationFn: (input: Parameters<typeof api.setSourceTwin>[1]) =>
+      api.setSourceTwin(sourceId, input),
+    onSuccess: (v) => {
+      qc.setQueryData(["twins", sourceId], v)
+      qc.invalidateQueries({ queryKey: ["devices"] })
+      qc.invalidateQueries({ queryKey: ["sources"] })
+    },
+    onError: (e) => toast.error(errorText(e)),
+  })
+  const data = twins.data
+  if (!data || data.devices.length === 0) return null
+  const key = (sid: number, reference: string) => `${sid}:${reference}`
+  const local = (sid: number, reference: string) =>
+    data.locals.find((l) => l.source_id === sid && l.reference === reference)
+  const linked = data.devices.filter((d) => d.status === "linked").length
+  return (
+    <Card className="rounded-3xl">
+      <CardHeader>
+        <CardTitle>{t("Rapprochement avec vos appareils")}</CardTitle>
+        <CardDescription>
+          {t(
+            "Un appareil déjà présent en local n'est pas ajouté une seconde fois : reliez-le à son appareil local (il reste piloté en local, le cloud ne sert qu'à ce que le local ne sait pas faire), ou ignorez-le. {n} relié(s) sur {total}.",
+            { n: linked, total: data.devices.length }
+          )}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-2">
+        {data.devices.map((d) => {
+          const twin = d.twin_of ? local(d.twin_of[0], d.twin_of[1]) : null
+          const value =
+            d.status === "ignored"
+              ? "ignore"
+              : d.status === "own"
+                ? d.chosen
+                  ? "own"
+                  : "auto"
+                : d.chosen && d.twin_of
+                  ? key(d.twin_of[0], d.twin_of[1])
+                  : "auto"
+          const candidates = data.locals.filter(
+            (l) => family(l.kind) === family(d.kind)
+          )
+          return (
+            <div
+              key={d.reference}
+              className="flex flex-wrap items-center gap-3 rounded-2xl border p-3"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-medium">{d.name}</div>
+                <div className="text-xs text-muted-foreground">
+                  {d.status === "linked" && twin
+                    ? t("Même appareil que « {name} » ({source}){how}", {
+                        name: twin.name,
+                        source: twin.source,
+                        how: d.chosen ? "" : t(", trouvé par son nom"),
+                      })
+                    : d.status === "ignored"
+                      ? t("Ignoré")
+                      : t("Appareil à part")}
+                  {reading(d.state) && (
+                    <span className="tabular"> · {reading(d.state)}</span>
+                  )}
+                </div>
+              </div>
+              <Select
+                value={value}
+                onValueChange={(v) => {
+                  if (v === "auto" || v === "own" || v === "ignore")
+                    set.mutate({ reference: d.reference, choice: v })
+                  else {
+                    const [sid, ...rest] = v.split(":")
+                    set.mutate({
+                      reference: d.reference,
+                      choice: "link",
+                      source_id: Number(sid),
+                      local: rest.join(":"),
+                    })
+                  }
+                }}
+              >
+                <SelectTrigger className="w-64">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">
+                    {t("Automatique (par le nom)")}
+                  </SelectItem>
+                  {candidates.map((l) => (
+                    <SelectItem
+                      key={key(l.source_id, l.reference)}
+                      value={key(l.source_id, l.reference)}
+                    >
+                      {t("Même que « {name} »", { name: l.name })}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="own">{t("Appareil à part")}</SelectItem>
+                  <SelectItem value="ignore">{t("Ignorer")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )
+        })}
+      </CardContent>
+    </Card>
   )
 }
 

@@ -1244,7 +1244,7 @@ export function SettingsPage() {
     ...(admin ? [{ id: "servers", label: t("Serveurs") }] : []),
     ...(admin ? [{ id: "users", label: t("Utilisateurs") }] : []),
     ...(admin ? [{ id: "modules", label: t("Modules") }] : []),
-    ...(admin ? [{ id: "accounts", label: t("Comptes liés") }] : []),
+    ...(admin ? [{ id: "accounts", label: t("Comptes et services") }] : []),
     ...(admin ? [{ id: "rooms", label: t("Pièces") }] : []),
     ...(admin ? [{ id: "electricity", label: t("Électricité") }] : []),
     ...(admin ? [{ id: "breezone", label: "Breezone" }] : []),

@@ -174,12 +174,19 @@ async fn accounts_are_linked_used_and_removed() {
     let (_, v) = c.call(reqwest::Method::POST, "/api/setup", Some(json!({"username":"admin","password":"motdepasse1"}))).await;
     c.token = Some(v["access_token"].as_str().unwrap().into());
 
-    // Every kind is listed, none connected.
+    // Every kind is listed, none connected; the weather, a service without credentials, is on.
     let (s, list) = c.call(reqwest::Method::GET, "/api/accounts", None).await;
     assert_eq!(s, StatusCode::OK, "{list}");
     let kinds: Vec<&str> = list.as_array().unwrap().iter().map(|a| a["kind"].as_str().unwrap()).collect();
-    assert_eq!(kinds, ["airzone", "rte", "linky", "netatmo"]);
-    assert!(list.as_array().unwrap().iter().all(|a| a["connected"] == false && a["state"] == "none"));
+    assert_eq!(kinds, ["airzone", "rte", "linky", "netatmo", "weather"]);
+    assert!(list.as_array().unwrap()[..4].iter().all(|a| a["connected"] == false && a["state"] == "none" && a["enabled"] == true));
+    assert_eq!((list[4]["connected"].clone(), list[4]["service"].clone(), list[4]["enabled"].clone()), (json!(true), json!(true), json!(true)));
+    let (s, v) = c.call(reqwest::Method::PUT, "/api/accounts/weather/enabled", Some(json!({"enabled": false}))).await;
+    assert_eq!((s, v["enabled"].clone()), (StatusCode::OK, json!(false)), "{v}");
+    let (_, v) = c.call(reqwest::Method::GET, "/api/weather", None).await;
+    assert_eq!(v["online"], false, "switched off, the weather is not read: {v}");
+    let (s, _) = c.call(reqwest::Method::DELETE, "/api/accounts/weather", None).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST, "a service is switched off, not removed");
 
     // RTE: wrong credentials refused and nothing kept; the right ones read the colours.
     let (s, v) = c.call(reqwest::Method::PUT, "/api/accounts/rte", Some(json!({"client_id": "breezone", "client_secret": "faux"}))).await;
@@ -226,6 +233,28 @@ async fn accounts_are_linked_used_and_removed() {
     let (s, v) = c.call(reqwest::Method::POST, &format!("/api/devices/{}/actions", shutter["id"]), Some(json!({"trait": "cover.position", "action": "stop", "params": {}}))).await;
     assert_eq!(s, StatusCode::OK, "{v}");
     assert_eq!(set.lock().unwrap().last().cloned(), Some(json!({"home": {"id": "h1", "modules": [{"id": "v1", "bridge": "g1", "target_position": -1}]}})));
+
+    // What became of each device of the cloud module, and the line of the Ecometer left out by hand.
+    let path = format!("/api/sources/{}/twins", source["id"]);
+    let (s, v) = c.call(reqwest::Method::GET, &path, None).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    let status = |v: &Value, r: &str| v["devices"].as_array().unwrap().iter().find(|d| d["reference"] == r).unwrap()["status"].clone();
+    assert_eq!((status(&v, "h1/v1"), status(&v, "h1/e1")), (json!("own"), json!("own")));
+    let (s, v) = c.call(reqwest::Method::PUT, &path, Some(json!({"reference": "h1/e1", "choice": "ignore"}))).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    assert_eq!(status(&v, "h1/e1"), "ignored");
+    let (_, devices) = c.call(reqwest::Method::GET, "/api/devices", None).await;
+    assert!(!devices.as_array().unwrap().iter().any(|d| d["name"] == "Chauffage"), "an ignored device is no longer one: {devices}");
+
+    // The account switched off: its module stops, and comes back with it.
+    let (s, v) = c.call(reqwest::Method::PUT, "/api/accounts/netatmo/enabled", Some(json!({"enabled": false}))).await;
+    assert_eq!((s, v["enabled"].clone(), v["connected"].clone()), (StatusCode::OK, json!(false), json!(true)), "{v}");
+    let (_, sources) = c.call(reqwest::Method::GET, "/api/sources", None).await;
+    assert_eq!(sources.as_array().unwrap().iter().find(|s| s["driver"] == "netatmo").unwrap()["enabled"], false);
+    let (s, _) = c.call(reqwest::Method::PUT, "/api/accounts/netatmo/enabled", Some(json!({"enabled": true}))).await;
+    assert_eq!(s, StatusCode::OK);
+    let (_, sources) = c.call(reqwest::Method::GET, "/api/sources", None).await;
+    assert_eq!(sources.as_array().unwrap().iter().find(|s| s["driver"] == "netatmo").unwrap()["enabled"], true);
 
     // A user does not see them.
     let (s, _) = c.call(reqwest::Method::POST, "/api/users", Some(json!({"username":"camille","password":"motdepasse1","role":"user"}))).await;

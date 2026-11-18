@@ -395,10 +395,17 @@ impl Weather {
         report_of(&place.city, &data, db::now())
     }
 
+    /// The weather is read: this server may go on the internet, and the service is switched on
+    /// (Settings › Accounts and services).
+    pub async fn enabled(&self) -> bool {
+        self.online && db::account_enabled(&self.db, crate::accounts::WEATHER).await
+    }
+
     /// Reads the weather of every installation now (one reading per place); keeps their outdoor
-    /// temperature.
+    /// temperature. Switched off, what was read goes.
     pub async fn refresh(&self) {
-        if !self.online {
+        if !self.enabled().await {
+            self.last.write().await.clear();
             return;
         }
         self.locate().await;
@@ -433,6 +440,16 @@ impl Weather {
             }
             reports.insert(place.installation_id, report);
         }
+        let state = match (read.is_empty(), read.values().any(Option::is_some)) {
+            (true, _) => None,
+            (false, true) => Some(("ok", None)),
+            (false, false) => Some(("error", Some(crate::text!("Open-Meteo ne répond pas", "Open-Meteo does not answer", "Open-Meteo no responde").store()))),
+        };
+        if let Some((s, error)) = state {
+            if let Err(e) = db::set_account_state(&self.db, crate::accounts::WEATHER, s, error.as_deref()).await {
+                tracing::warn!("cannot note how the weather went: {e}");
+            }
+        }
         // A reading that failed keeps the last one.
         let mut last = self.last.write().await;
         last.retain(|id, _| !reports.contains_key(id));
@@ -446,10 +463,11 @@ impl Weather {
 
     /// The weather of an installation (or of the home) and the sun of today there.
     pub async fn view(&self, installation_id: Option<i64>) -> View {
-        let Some(place) = self.place(installation_id).await else { return View { weather: None, sun: None, online: self.online } };
+        let online = self.enabled().await;
+        let Some(place) = self.place(installation_id).await else { return View { weather: None, sun: None, online } };
         let weather = self.last.read().await.get(&place.installation_id).cloned();
         let today = chrono::Utc::now().with_timezone(&self.tz).date_naive();
-        View { weather, sun: Some(sun(today, place.lat, place.lon)), online: self.online }
+        View { weather, sun: Some(sun(today, place.lat, place.lon)), online }
     }
 
     /// The outdoor temperature of an installation (or of the home) since `since`: `[ts, °C]`, one

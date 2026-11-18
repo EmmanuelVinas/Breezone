@@ -229,16 +229,176 @@ struct Running {
     last_read: Option<Instant>,
     /// Readings failed in a row: an unreachable source is read less and less often.
     failures: u32,
-    /// For a cloud source: its devices that are also a local source's (same name and kind), by
-    /// that key; they are not devices of their own, only another way to drive the local ones.
-    twins: HashMap<(String, String), String>,
-    /// For a cloud source: every device it described, its twins included (sorted out at each reading).
-    cloud_devices: Vec<DeviceInfo>,
+    /// For a cloud source: its devices that are also a local source's, by that one (source,
+    /// reference); they are not devices of their own, only another way to drive the local ones.
+    twins: HashMap<(i64, String), String>,
+    /// What became of each device it described (see [`CloudDevice`]).
+    cloud_view: Vec<CloudDevice>,
+    /// Every device it described, its twins and those ignored included (sorted out at each reading).
+    described: Vec<DeviceInfo>,
 }
 
 /// A device's name (normalised) and family.
 type TwinKey = (String, String);
 type HashSet<T> = std::collections::HashSet<T>;
+
+/// What became of a device of a cloud source: a device of its own, the twin of a local one
+/// (found by its name, or linked by hand), or left out.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct CloudDevice {
+    pub reference: String,
+    pub name: String,
+    pub kind: String,
+    /// "own" | "linked" | "ignored"
+    pub status: &'static str,
+    /// Chosen by hand (else found by its name, or nothing found).
+    pub chosen: bool,
+    /// The local device it is the twin of: (source, reference).
+    pub twin_of: Option<(i64, String)>,
+    /// Its last reading, to tell it apart (filled when it is shown).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub state: Option<State>,
+}
+
+/// What the user chose for the devices of a source (in its configuration): for a cloud source,
+/// linked to a local device or kept as a device of its own; for any, ignored.
+#[derive(Debug, Default, Clone, serde::Deserialize)]
+struct Choices {
+    #[serde(default)]
+    links: HashMap<String, LocalRef>,
+    #[serde(default)]
+    own: Vec<String>,
+    #[serde(default)]
+    ignored: Vec<String>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct LocalRef {
+    source_id: i64,
+    reference: String,
+}
+
+/// Words that name a kind of device rather than a device: left out when names are compared.
+const GENERIC: &[&str] = &[
+    "volet",
+    "volets",
+    "roulant",
+    "roulants",
+    "store",
+    "stores",
+    "rideau",
+    "prise",
+    "prises",
+    "lumiere",
+    "lumière",
+    "lampe",
+    "eclairage",
+    "éclairage",
+    "interrupteur",
+    "le",
+    "la",
+    "les",
+    "de",
+    "du",
+    "des",
+];
+
+/// The words of a name that tell this device apart (« Volet roulant salon » → « salon »).
+fn words(name: &str) -> Vec<String> {
+    name.to_lowercase().split(|c: char| !c.is_alphanumeric()).filter(|w| w.chars().count() >= 2 && !GENERIC.contains(w)).map(str::to_string).collect()
+}
+
+/// The local device a device of the cloud is, by its name, among those still free: the same words,
+/// else (`loose`) all the words of one in the other (« Volet Institut » and « Volet roulant salon
+/// institut »), in the same family, when only one fits.
+fn found_by_name<'a>(cloud: &DeviceInfo, locals: &'a [(i64, DeviceInfo)], taken: &HashSet<(i64, String)>, loose: bool) -> Option<&'a (i64, DeviceInfo)> {
+    let family = twin_key(cloud).1;
+    let cw = words(&cloud.name);
+    if cw.is_empty() {
+        return None;
+    }
+    let fits: Vec<&(i64, DeviceInfo)> = locals
+        .iter()
+        .filter(|(sid, l)| twin_key(l).1 == family && !taken.contains(&(*sid, l.reference.clone())))
+        .filter(|(_, l)| {
+            let lw = words(&l.name);
+            !lw.is_empty() && if loose { lw.iter().all(|w| cw.contains(w)) || cw.iter().all(|w| lw.contains(w)) } else { lw == cw }
+        })
+        .collect();
+    match fits.as_slice() {
+        [one] => Some(one),
+        _ => None,
+    }
+}
+
+/// A device of a local source: (source, reference).
+type LocalKey = (i64, String);
+type Sorted = (Vec<DeviceInfo>, HashMap<LocalKey, String>, Vec<CloudDevice>);
+
+/// Sorts the devices of a cloud source out: (its own, the twins, what became of each). The
+/// choices made by hand first, then the names that are the same, then those within one another.
+fn sort_cloud(devices: &[DeviceInfo], locals: &[(i64, DeviceInfo)], choices: &Choices) -> Sorted {
+    // cloud reference → (local, chosen by hand)
+    let mut found: HashMap<String, ((i64, String), bool)> = HashMap::new();
+    let mut taken: HashSet<(i64, String)> = HashSet::new();
+    for d in devices {
+        if let Some(l) = choices.links.get(&d.reference).filter(|l| locals.iter().any(|(sid, x)| *sid == l.source_id && x.reference == l.reference)) {
+            let local = (l.source_id, l.reference.clone());
+            taken.insert(local.clone());
+            found.insert(d.reference.clone(), (local, true));
+        }
+    }
+    let free = |d: &DeviceInfo, found: &HashMap<String, ((i64, String), bool)>| {
+        !found.contains_key(&d.reference) && !choices.own.contains(&d.reference) && !choices.ignored.contains(&d.reference)
+    };
+    for loose in [false, true] {
+        for d in devices {
+            if !free(d, &found) {
+                continue;
+            }
+            if let Some((sid, l)) = found_by_name(d, locals, &taken, loose) {
+                let local = (*sid, l.reference.clone());
+                taken.insert(local.clone());
+                found.insert(d.reference.clone(), (local, false));
+            }
+        }
+    }
+    let (mut own, mut twins, mut view) = (vec![], HashMap::new(), vec![]);
+    for d in devices {
+        let item = |status, chosen, twin_of| CloudDevice { reference: d.reference.clone(), name: d.name.clone(), kind: d.kind.clone(), status, chosen, twin_of, state: None };
+        if choices.ignored.contains(&d.reference) {
+            view.push(item("ignored", true, None));
+        } else if let Some((local, chosen)) = found.get(&d.reference) {
+            twins.insert(local.clone(), d.reference.clone());
+            view.push(item("linked", *chosen, Some(local.clone())));
+        } else {
+            own.push(d.clone());
+            view.push(item("own", choices.own.contains(&d.reference), None));
+        }
+    }
+    (own, twins, view)
+}
+
+/// Sorts the devices of a local source out: those ignored are left out.
+fn sort_local(devices: &[DeviceInfo], choices: &Choices) -> Sorted {
+    let (mut own, mut view) = (vec![], vec![]);
+    for d in devices {
+        let ignored = choices.ignored.contains(&d.reference);
+        if !ignored {
+            own.push(d.clone());
+        }
+        view.push(CloudDevice {
+            reference: d.reference.clone(),
+            name: d.name.clone(),
+            kind: d.kind.clone(),
+            status: if ignored { "ignored" } else { "own" },
+            chosen: ignored,
+            twin_of: None,
+            state: None,
+        });
+    }
+    (own, HashMap::new(), view)
+}
 
 /// What tells a device of a cloud source and one of a local source apart from being the same:
 /// its name (as its app names it, the same on both paths) and its family.
@@ -409,7 +569,8 @@ impl Runtime {
                         last_read: None,
                         failures: 0,
                         twins: HashMap::new(),
-                        cloud_devices: vec![],
+                        described: vec![],
+                        cloud_view: vec![],
                     }
                 }
             };
@@ -422,7 +583,7 @@ impl Runtime {
     /// Reads one source: what it has (once, or after an error), then its state.
     pub async fn poll(&self, id: i64) {
         let (driver, known) = match self.sources.read().await.get(&id) {
-            Some(r) if r.source.enabled => (r.driver.clone(), !r.devices.is_empty() && r.status.state == "online"),
+            Some(r) if r.source.enabled => (r.driver.clone(), !r.described.is_empty() && r.status.state == "online"),
             Some(_) => {
                 if let Some(r) = self.sources.write().await.get_mut(&id) {
                     r.status.state = "disabled";
@@ -447,14 +608,16 @@ impl Runtime {
             _ => driver.read().await,
         };
         // The devices of the local sources (for a cloud source), or those the cloud can also drive.
-        let (local, in_cloud): (HashSet<TwinKey>, HashSet<TwinKey>) = {
+        let (locals, in_cloud): (Vec<(i64, DeviceInfo)>, HashSet<LocalKey>) = {
             let sources = self.sources.read().await;
             let is_cloud = |o: &Running| o.driver.as_ref().is_some_and(|d| d.cloud());
             (
-                sources.values().filter(|o| o.source.id != id && !is_cloud(o)).flat_map(|o| o.devices.iter().map(twin_key)).collect(),
+                sources.values().filter(|o| o.source.id != id && !is_cloud(o)).flat_map(|o| o.devices.iter().map(|d| (o.source.id, d.clone()))).collect(),
                 sources.values().filter(|o| is_cloud(o)).flat_map(|o| o.twins.keys().cloned()).collect(),
             )
         };
+        // The devices of a cloud source no longer its own (twins, ignored): their rows go.
+        let mut gone: Vec<String> = vec![];
         let mut new_devices = vec![];
         let mut identity: Option<(db::Source, String)> = None;
         {
@@ -464,26 +627,23 @@ impl Runtime {
                 r.status.model = Some(d.model);
                 r.status.firmware = d.firmware;
                 identity = d.identity.filter(|_| config_identity(&r.source).is_none()).map(|i| (r.source.clone(), i));
-                if driver.cloud() {
-                    r.cloud_devices = d.devices;
-                } else if r.devices != d.devices {
-                    new_devices = d.devices.clone();
-                    r.devices = d.devices;
-                }
+                r.described = d.devices;
             }
             // A cloud source does not repeat a device a local source has: it is that one's twin.
-            if driver.cloud() {
-                r.twins = r.cloud_devices.iter().filter(|x| local.contains(&twin_key(x))).map(|x| (twin_key(x), x.reference.clone())).collect();
-                let own: Vec<DeviceInfo> = r.cloud_devices.iter().filter(|x| !local.contains(&twin_key(x))).cloned().collect();
-                if r.devices != own {
-                    new_devices = own.iter().filter(|x| !r.devices.contains(x)).cloned().collect();
-                    r.devices = own;
-                }
+            // Of any source, an ignored device is left out.
+            let choices: Choices = serde_json::from_str(&r.source.config).unwrap_or_default();
+            let (own, twins, view) = if driver.cloud() { sort_cloud(&r.described, &locals, &choices) } else { sort_local(&r.described, &choices) };
+            gone = view.iter().filter(|v| v.status != "own").map(|v| v.reference.clone()).collect();
+            r.twins = twins;
+            r.cloud_view = view;
+            if r.devices != own {
+                new_devices = own.iter().filter(|x| !r.devices.contains(x)).cloned().collect();
+                r.devices = own;
             }
             match result {
                 Ok(mut states) => {
                     // A local shutter the cloud can stop midway can be stopped.
-                    for d in r.devices.iter().filter(|d| in_cloud.contains(&twin_key(d))) {
+                    for d in r.devices.iter().filter(|d| in_cloud.contains(&(id, d.reference.clone()))) {
                         if let Some(s) = states.get_mut(&d.reference).filter(|s| s.get("stoppable") == Some(&Value::Bool(false))) {
                             s.insert("stoppable".into(), Value::Bool(true));
                         }
@@ -519,6 +679,13 @@ impl Runtime {
                     }
                     r.status.last_error = Some(e.to_string());
                 }
+            }
+        }
+        // A twin of a cloud source or an ignored device is not a device of its own: its row goes
+        // (made before it was known, or before the user chose).
+        if !gone.is_empty() {
+            if let Err(e) = db::delete_source_devices(&self.db, id, &gone).await {
+                tracing::error!("cannot remove the twins of source {id}: {e}");
             }
         }
         // Each device gets its stable id (ADR 0013).
@@ -785,6 +952,14 @@ impl Runtime {
         }
     }
 
+    /// What became of the devices of a source (its own, twins of local ones, ignored), with their
+    /// last reading.
+    pub async fn cloud_view(&self, id: i64) -> Vec<CloudDevice> {
+        let sources = self.sources.read().await;
+        let Some(r) = sources.get(&id) else { return vec![] };
+        r.cloud_view.iter().map(|v| CloudDevice { state: r.states.get(&v.reference).cloned(), ..v.clone() }).collect()
+    }
+
     pub async fn status(&self, id: i64) -> Option<SourceStatus> {
         self.sources.read().await.get(&id).map(|r| r.status.clone())
     }
@@ -848,7 +1023,7 @@ impl Runtime {
     /// The cloud source that can also drive a device of a local source, and its reference there.
     async fn twin_of(&self, source_id: i64, reference: &str) -> Option<(i64, Arc<dyn Driver>, String)> {
         let sources = self.sources.read().await;
-        let key = twin_key(sources.get(&source_id)?.devices.iter().find(|d| d.reference == reference)?);
+        let key = (source_id, reference.to_string());
         sources.values().find_map(|o| {
             let twin = o.twins.get(&key)?;
             Some((o.source.id, o.driver.clone().filter(|d| d.cloud())?, twin.clone()))
@@ -906,6 +1081,51 @@ mod tests {
         assert_eq!(twin_key(&d("Volet  Salon ", "shutter")), twin_key(&d("volet salon", "cover")));
         assert_eq!(twin_key(&d("Lampe", "light")), twin_key(&d("lampe", "switch.relay")));
         assert_ne!(twin_key(&d("Volet salon", "shutter")), twin_key(&d("Volet salon", "switch.relay")));
+    }
+
+    #[test]
+    fn a_cloud_device_is_found_by_the_words_of_its_name_or_chosen_by_hand() {
+        let d = |reference: &str, name: &str, kind: &str| DeviceInfo { reference: reference.into(), kind: kind.into(), traits: vec![], name: name.into() };
+        let locals = vec![
+            (1, d("2.8", "Volet Institut", "shutter")),
+            (1, d("3.8", "Volet entrée", "shutter")),
+            (1, d("4.8", "Volet salon", "shutter")),
+            (1, d("5.8", "Volet salon bas", "shutter")),
+        ];
+        let cloud = vec![
+            d("h/a", "Volet roulant salon institut", "shutter"),
+            d("h/b", "Volet roulant entrée", "shutter"),
+            d("h/c", "Volet roulant salon", "shutter"),
+            d("h/d", "Volet roulant garage", "shutter"),
+            d("h/e", "Chauffage", "energy.power"),
+        ];
+        let (own, twins, view) = sort_cloud(&cloud, &locals, &Choices::default());
+        assert_eq!(twins.get(&(1, "2.8".to_string())).map(String::as_str), Some("h/a"), "all the words of the local name are in the cloud's");
+        assert_eq!(twins.get(&(1, "3.8".to_string())).map(String::as_str), Some("h/b"));
+        assert_eq!(twins.get(&(1, "4.8".to_string())).map(String::as_str), Some("h/c"), "the same words win over a longer name");
+        let own: Vec<&str> = own.iter().map(|x| x.name.as_str()).collect();
+        assert_eq!(own, ["Volet roulant garage", "Chauffage"], "no local garage shutter: a device of its own");
+        assert!(view.iter().all(|v| !v.chosen));
+
+        // By hand: the garage is the « salon bas » one, the Ecometer's line is left out.
+        let choices: Choices = serde_json::from_value(serde_json::json!({"links": {"h/d": {"source_id": 1, "reference": "5.8"}}, "ignored": ["h/e"], "own": ["h/b"]})).unwrap();
+        let (own, twins, view) = sort_cloud(&cloud, &locals, &choices);
+        assert_eq!(twins.get(&(1, "5.8".to_string())).map(String::as_str), Some("h/d"));
+        assert!(!twins.values().any(|r| r == "h/b"), "kept as its own: not found by its name");
+        let own: Vec<&str> = own.iter().map(|x| x.reference.as_str()).collect();
+        assert_eq!(own, ["h/b"]);
+        assert_eq!(view.iter().find(|v| v.reference == "h/e").unwrap().status, "ignored");
+    }
+
+    #[test]
+    fn an_ignored_device_of_a_local_source_is_left_out() {
+        let d = |reference: &str| DeviceInfo { reference: reference.into(), kind: "energy.power".into(), traits: vec![], name: reference.into() };
+        let choices: Choices = serde_json::from_value(serde_json::json!({"ignored": ["gas"]})).unwrap();
+        let (own, twins, view) = sort_local(&[d("total"), d("gas")], &choices);
+        assert_eq!(own, [d("total")]);
+        assert!(twins.is_empty());
+        let status: Vec<&str> = view.iter().map(|v| v.status).collect();
+        assert_eq!(status, ["own", "ignored"]);
     }
 
     /// A local module whose shutter cannot be stopped, or the cloud one that can, with the same shutter.
@@ -967,7 +1187,8 @@ mod tests {
                 last_read: None,
                 failures: 0,
                 twins: HashMap::new(),
-                cloud_devices: vec![],
+                described: vec![],
+                cloud_view: vec![],
             };
             rt.sources.write().await.insert(id, running);
         }

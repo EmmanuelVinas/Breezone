@@ -1,13 +1,15 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Link } from "react-router"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
+  CalendarDays,
   CloudSun,
   ExternalLink,
   Gauge,
   House,
   Loader2,
   RefreshCw,
+  Search,
   Snowflake,
   Trash2,
   type LucideIcon,
@@ -24,6 +26,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 
 /** A field to fill to connect an account. */
 type Field = {
@@ -43,6 +46,8 @@ type Kind = {
   fields: Field[]
   /** Connected from elsewhere (its module). */
   elsewhere?: { to: string; label: string }
+  /** What switching it off does. */
+  off: string
 }
 
 const KINDS: Record<AccountKind, Kind> = {
@@ -59,10 +64,11 @@ const KINDS: Record<AccountKind, Kind> = {
       to: "/settings?tab=modules&airzone=cloud",
       label: t("Gérer dans Modules › Airzone"),
     },
+    off: t("Désactivé : plus de synchronisation avec Airzone Cloud."),
   },
   rte: {
     title: "RTE",
-    icon: CloudSun,
+    icon: CalendarDays,
     description: t(
       "La couleur officielle des jours Tempo, publiée par RTE, pour les prix et les automatismes. Sans compte, Breezone lit un relais public."
     ),
@@ -81,6 +87,7 @@ const KINDS: Record<AccountKind, Kind> = {
       { name: "client_id", label: t("ID client") },
       { name: "client_secret", label: t("ID secret"), secret: true },
     ],
+    off: t("Désactivé : les couleurs Tempo viennent du relais public."),
   },
   linky: {
     title: "Linky",
@@ -108,6 +115,7 @@ const KINDS: Record<AccountKind, Kind> = {
         placeholder: "12345678901234",
       },
     ],
+    off: t("Désactivé : plus de relevés Enedis ; ceux déjà lus restent."),
   },
   netatmo: {
     title: "Netatmo · Legrand Home + Control",
@@ -130,15 +138,37 @@ const KINDS: Record<AccountKind, Kind> = {
       { name: "client_secret", label: t("Secret client"), secret: true },
       { name: "refresh_token", label: t("Refresh token"), secret: true },
     ],
+    off: t(
+      "Désactivé : le module Netatmo s'arrête, les appareils locaux continuent."
+    ),
+  },
+  weather: {
+    title: t("Météo"),
+    icon: CloudSun,
+    description: t(
+      "Prévisions et vigilances de chaque installation, par Open-Meteo (données Météo-France) et MeteoAlarm. Sans compte : seules les coordonnées de la ville sont envoyées."
+    ),
+    steps: [],
+    link: { url: "https://open-meteo.com", label: "open-meteo.com" },
+    fields: [],
+    off: t(
+      "Désactivé : plus de météo ni de température extérieure ; les automatismes qui en dépendent attendent."
+    ),
   },
 }
 
 function StateBadge({ a }: { a: AccountView }) {
-  const [label, tone] = !a.connected
-    ? [t("Non connecté"), "bg-muted-foreground"]
-    : a.state === "error" || a.state === "expired"
-      ? [t("En erreur"), "bg-destructive"]
-      : [t("Connecté"), "bg-success"]
+  const [label, tone] = !a.enabled
+    ? [t("Désactivé"), "bg-muted-foreground"]
+    : a.service
+      ? a.state === "error"
+        ? [t("En erreur"), "bg-destructive"]
+        : [t("Actif"), "bg-success"]
+      : !a.connected
+        ? [t("Non connecté"), "bg-muted-foreground"]
+        : a.state === "error" || a.state === "expired"
+          ? [t("En erreur"), "bg-destructive"]
+          : [t("Connecté"), "bg-success"]
   return (
     <Badge variant="outline" className="gap-1.5">
       <span className={cn("size-2 rounded-full", tone)} />
@@ -199,6 +229,17 @@ function AccountCard({ a }: { a: AccountView }) {
     },
     onError: (e) => toast.error(errorText(e)),
   })
+  const enable = useMutation({
+    mutationFn: (on: boolean) => api.setAccountEnabled(a.kind, on),
+    onSuccess: (v) => {
+      done(v)
+      qc.invalidateQueries({ queryKey: ["sources"] })
+      qc.invalidateQueries({ queryKey: ["weather"] })
+      qc.invalidateQueries({ queryKey: ["cloud"] })
+    },
+    onError: (e) => toast.error(errorText(e)),
+  })
+  const enabled = enable.isPending ? enable.variables : a.enabled
   const remove = useMutation({
     mutationFn: () => api.deleteAccount(a.kind),
     onSuccess: () => {
@@ -226,8 +267,19 @@ function AccountCard({ a }: { a: AccountView }) {
             </div>
             <p className="text-sm text-muted-foreground">{kind.description}</p>
           </div>
+          {(a.connected || a.service) && (
+            <Switch
+              checked={enabled}
+              disabled={enable.isPending}
+              onCheckedChange={(on) => enable.mutate(on)}
+              aria-label={t("Activer {name}", { name: kind.title })}
+            />
+          )}
         </div>
-        {a.connected && (
+        {!enabled && (
+          <p className="text-sm text-muted-foreground">{kind.off}</p>
+        )}
+        {a.connected && enabled && (
           <div className="grid gap-1 text-sm">
             {what && <span>{what}</span>}
             <span className="text-muted-foreground">
@@ -240,7 +292,28 @@ function AccountCard({ a }: { a: AccountView }) {
             )}
           </div>
         )}
-        {kind.elsewhere ? (
+        {a.service ? (
+          enabled && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => test.mutate()}
+                disabled={test.isPending}
+              >
+                <RefreshCw className={test.isPending ? "animate-spin" : ""} />
+                {t("Tester")}
+              </Button>
+              <a
+                href={kind.link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+              >
+                {kind.link.label} <ExternalLink className="size-3.5" />
+              </a>
+            </div>
+          )
+        ) : kind.elsewhere ? (
           <div>
             <Button asChild variant="outline">
               <Link to={kind.elsewhere.to}>{kind.elsewhere.label}</Link>
@@ -322,7 +395,7 @@ function AccountCard({ a }: { a: AccountView }) {
             </Button>
           </div>
         )}
-        {a.kind === "airzone" && a.connected && (
+        {a.kind === "airzone" && a.connected && enabled && (
           <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
@@ -351,21 +424,61 @@ function AccountCard({ a }: { a: AccountView }) {
   )
 }
 
-/** Settings › Accounts: the online services Breezone may use, always in addition to the local. */
+/** Lower case, without accents: « Météo » is found by « meteo ». */
+const plain = (s: string) =>
+  s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+
+/**
+ * Settings › Accounts and services: the online services Breezone may use, always in addition to
+ * the local. Those in use first, then the others; a search narrows them.
+ */
 export function AccountsTab() {
   const accounts = useQuery({ queryKey: ["accounts"], queryFn: api.accounts })
+  const [query, setQuery] = useState("")
+  const shown = useMemo(() => {
+    const words = plain(query).split(/\s+/).filter(Boolean)
+    const list = (accounts.data ?? []).filter((a) => {
+      const k = KINDS[a.kind]
+      const text = plain(`${k.title} ${k.description} ${k.link.label}`)
+      return words.every((w) => text.includes(w))
+    })
+    const rank = (a: AccountView) => (a.connected ? 0 : 1)
+    return [...list].sort((x, y) => rank(x) - rank(y))
+  }, [accounts.data, query])
   return (
     <div className="grid gap-4">
       <p className="text-sm text-muted-foreground">
         {t(
-          "Un compte relie Breezone à un service en ligne, toujours en plus de ce qu'il lit en local : rien n'en dépend pour piloter la maison. Les identifiants restent chiffrés sur ce serveur."
+          "Un compte ou un service relie Breezone à internet, toujours en plus de ce qu'il lit en local : rien n'en dépend pour piloter la maison. Chacun se désactive sans être oublié ; les identifiants restent chiffrés sur ce serveur."
         )}
       </p>
-      <div className="grid gap-4 lg:grid-cols-2">
-        {(accounts.data ?? []).map((a) => (
-          <AccountCard key={`${a.kind}-${a.connected}`} a={a} />
-        ))}
+      <div className="relative max-w-md">
+        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={t("Rechercher un compte ou un service")}
+          aria-label={t("Rechercher un compte ou un service")}
+          className="pl-9"
+        />
       </div>
+      {accounts.data && shown.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          {t("Aucun compte ni service ne correspond à « {query} ».", {
+            query: query.trim(),
+          })}
+        </p>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {shown.map((a) => (
+            <AccountCard key={`${a.kind}-${a.connected}`} a={a} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

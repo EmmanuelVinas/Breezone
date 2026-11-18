@@ -47,6 +47,10 @@ pub async fn test(State(state): State<AppState>, AdminUser(user): AdminUser, Pat
         accounts::linky::KIND => accounts::linky::test(&state).await,
         accounts::netatmo::KIND => accounts::netatmo::test(&state).await,
         crate::cloud::ACCOUNT => crate::cloud::sync_stored(&state, &user.username).await.map(|_| ()),
+        accounts::WEATHER => {
+            state.weather.refresh().await;
+            Ok(())
+        }
         _ => return Err(ApiError::not_found("unknown account")),
     };
     // The view tells what failed (its last error): the test itself answers with it.
@@ -56,9 +60,43 @@ pub async fn test(State(state): State<AppState>, AdminUser(user): AdminUser, Pat
     Ok(Json(accounts::view(&state, &kind).await?))
 }
 
+#[derive(Deserialize)]
+pub struct EnabledInput {
+    pub enabled: bool,
+}
+
+/// Switches an account or a service on or off, without forgetting it: what uses it does as if it
+/// were not set (the Netatmo module stops, the Tempo colours come from the public relay…).
+pub async fn set_enabled(State(state): State<AppState>, AdminUser(user): AdminUser, Path(kind): Path<String>, Json(input): Json<EnabledInput>) -> ApiResult<Json<AccountView>> {
+    if !accounts::KINDS.contains(&kind.as_str()) {
+        return Err(ApiError::not_found("unknown account"));
+    }
+    crate::db::set_account_enabled(&state.db, &kind, input.enabled).await?;
+    if kind == accounts::netatmo::KIND {
+        for s in crate::db::list_sources(&state.db).await?.into_iter().filter(|s| s.driver == kind) {
+            crate::db::update_source(&state.db, s.id, &s.name, &s.config, input.enabled).await?;
+        }
+        state.drivers.reload().await?;
+    }
+    if kind == accounts::WEATHER {
+        let weather = state.weather.clone();
+        tokio::spawn(async move { weather.refresh().await });
+    }
+    let text = if input.enabled {
+        crate::text!("{0} activé", "{0} switched on", "{0} activado", kind.clone())
+    } else {
+        crate::text!("{0} désactivé", "{0} switched off", "{0} desactivado", kind.clone())
+    };
+    state.hub.log("system", "info", None, Some(&user.username), text, None).await;
+    Ok(Json(accounts::view(&state, &kind).await?))
+}
+
 pub async fn delete(State(state): State<AppState>, AdminUser(user): AdminUser, Path(kind): Path<String>) -> ApiResult<StatusCode> {
     if !accounts::KINDS.contains(&kind.as_str()) {
         return Err(ApiError::not_found("unknown account"));
+    }
+    if kind == accounts::WEATHER {
+        return Err(ApiError::bad_request("la météo se désactive, elle ne se retire pas"));
     }
     if kind == crate::cloud::ACCOUNT {
         crate::cloud::forget(&state).await?;

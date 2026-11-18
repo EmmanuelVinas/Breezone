@@ -279,7 +279,7 @@ async fn email(state: &AppState) -> ApiResult<Option<String>> {
 }
 
 pub async fn load_credentials(state: &AppState) -> Option<Credentials> {
-    let account = db::account(&state.db, ACCOUNT).await.ok()??;
+    let account = db::account(&state.db, ACCOUNT).await.ok()?.filter(|a| a.enabled)?;
     let email = serde_json::from_str::<Value>(&account.config).ok()?["email"].as_str()?.to_string();
     let password = decrypt(&state.data_key, &account.secret?)?;
     Some(Credentials { email, password })
@@ -343,7 +343,7 @@ pub struct CloudStatus {
 pub async fn status(state: &AppState, include_email: bool) -> ApiResult<CloudStatus> {
     let account = db::account(&state.db, ACCOUNT).await?;
     let email = email(state).await?;
-    let auto_sync = email.is_some() && account.is_some_and(|a| a.secret.is_some());
+    let auto_sync = email.is_some() && account.is_some_and(|a| a.secret.is_some() && a.enabled);
     let rows = db::list_cloud_installations(&state.db).await?;
     let access: HashMap<String, InstallationAccess> = db::list_access(&state.db).await?.into_iter().map(|a| (a.cloud_id.clone(), a)).collect();
     Ok(CloudStatus {

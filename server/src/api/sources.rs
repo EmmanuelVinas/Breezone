@@ -79,6 +79,18 @@ fn checked(input: &SourceInput) -> ApiResult<(String, String)> {
     Ok((name, input.config.to_string()))
 }
 
+/// The configuration given, with the choices made on its devices (links, own, ignored) kept when
+/// it does not say them: the form of a module only knows its address.
+fn with_choices(config: &str, current: &str) -> String {
+    let (Ok(Value::Object(mut next)), Ok(Value::Object(before))) = (serde_json::from_str(config), serde_json::from_str::<Value>(current)) else { return config.to_string() };
+    for key in ["links", "own", "ignored"] {
+        if let (false, Some(v)) = (next.contains_key(key), before.get(key)) {
+            next.insert(key.into(), v.clone());
+        }
+    }
+    Value::Object(next).to_string()
+}
+
 /// Reads the source at once, so that the answer already tells whether it answers.
 async fn polled(state: &AppState, id: i64) -> ApiResult<SourceView> {
     state.drivers.reload().await?;
@@ -89,7 +101,7 @@ async fn polled(state: &AppState, id: i64) -> ApiResult<SourceView> {
 
 pub async fn create(State(state): State<AppState>, _admin: AdminUser, Json(input): Json<SourceInput>) -> ApiResult<(StatusCode, Json<SourceView>)> {
     if input.driver == crate::accounts::netatmo::KIND {
-        return Err(ApiError::bad_request("le module Netatmo s'ajoute en connectant le compte (Réglages › Comptes liés)"));
+        return Err(ApiError::bad_request("le module Netatmo s'ajoute en connectant le compte (Réglages › Comptes et services)"));
     }
     let (name, config) = checked(&input)?;
     let id = db::insert_source(&state.db, &input.driver, &name, &config).await?;
@@ -102,6 +114,7 @@ pub async fn update(State(state): State<AppState>, _admin: AdminUser, Path(id): 
         return Err(ApiError::bad_request("the driver of a source cannot change"));
     }
     let (name, config) = checked(&input)?;
+    let config = with_choices(&config, &current.config);
     db::update_source(&state.db, id, &name, &config, input.enabled).await?;
     Ok(Json(polled(&state, id).await?))
 }
@@ -456,4 +469,106 @@ pub async fn diagnostic(State(state): State<AppState>, _admin: AdminUser, Path(i
         "states": read,
         "hardware": hardware,
     })))
+}
+
+/// A device of a local module a device of the cloud can be the twin of.
+#[derive(Serialize)]
+pub struct LocalChoice {
+    pub source_id: i64,
+    pub reference: String,
+    /// Its name in Breezone.
+    pub name: String,
+    pub kind: String,
+    /// Its module.
+    pub source: String,
+}
+
+#[derive(Serialize)]
+pub struct TwinsView {
+    pub devices: Vec<crate::drivers::CloudDevice>,
+    pub locals: Vec<LocalChoice>,
+}
+
+/// What became of each device of a module (its own, the twin of a local one, ignored) with its
+/// last reading, and for a cloud module the local devices it may be linked to.
+pub async fn twins(State(state): State<AppState>, _admin: AdminUser, Path(id): Path<i64>) -> ApiResult<Json<TwinsView>> {
+    let source = db::source_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("source not found"))?;
+    if source.driver != crate::accounts::netatmo::KIND {
+        return Ok(Json(TwinsView { devices: state.drivers.cloud_view(id).await, locals: vec![] }));
+    }
+    let names: std::collections::HashMap<String, String> = db::list_devices(&state.db).await?.into_iter().filter_map(|d| Some((d.source_ref, d.name?))).collect();
+    let sources: std::collections::HashMap<i64, String> = db::list_sources(&state.db).await?.into_iter().map(|s| (s.id, s.name)).collect();
+    let locals = state
+        .drivers
+        .devices()
+        .await
+        .into_iter()
+        .filter(|d| d.source_id != id && d.driver != crate::accounts::netatmo::KIND)
+        .map(|d| LocalChoice {
+            name: names.get(&format!("{}/{}", d.source_id, d.info.reference)).cloned().unwrap_or_else(|| d.info.name.clone()),
+            source: sources.get(&d.source_id).cloned().unwrap_or_default(),
+            source_id: d.source_id,
+            reference: d.info.reference,
+            kind: d.info.kind,
+        })
+        .collect();
+    Ok(Json(TwinsView { devices: state.drivers.cloud_view(id).await, locals }))
+}
+
+#[derive(Deserialize)]
+pub struct TwinInput {
+    /// The device of the cloud module.
+    pub reference: String,
+    /// "auto" (found by its name) | "link" | "own" | "ignore"
+    pub choice: String,
+    /// For "link": the local device it is.
+    pub source_id: Option<i64>,
+    pub local: Option<String>,
+}
+
+/// Chooses what a device of a module is: ignored or not; for a cloud module, also the twin of a
+/// local device, a device of its own, or back to what its name finds.
+pub async fn set_twin(State(state): State<AppState>, _admin: AdminUser, Path(id): Path<i64>, Json(input): Json<TwinInput>) -> ApiResult<Json<TwinsView>> {
+    let source = db::source_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("source not found"))?;
+    if source.driver != crate::accounts::netatmo::KIND && !matches!(input.choice.as_str(), "auto" | "ignore") {
+        return Err(ApiError::bad_request("choice: auto or ignore"));
+    }
+    let mut config: serde_json::Map<String, Value> = serde_json::from_str(&source.config).unwrap_or_default();
+    let r = input.reference.as_str();
+    let list = |config: &mut serde_json::Map<String, Value>, key: &str, add: bool| {
+        let mut items: Vec<Value> = config.get(key).and_then(Value::as_array).cloned().unwrap_or_default();
+        items.retain(|v| v.as_str() != Some(r));
+        if add {
+            items.push(Value::from(r));
+        }
+        config.insert(key.into(), Value::Array(items));
+    };
+    let mut links = config.get("links").and_then(Value::as_object).cloned().unwrap_or_default();
+    links.remove(r);
+    list(&mut config, "own", input.choice == "own");
+    list(&mut config, "ignored", input.choice == "ignore");
+    match input.choice.as_str() {
+        "link" => {
+            let (Some(source_id), Some(local)) = (input.source_id, input.local.clone()) else {
+                return Err(ApiError::bad_request("l'appareil local à relier est requis"));
+            };
+            links.insert(r.into(), serde_json::json!({ "source_id": source_id, "reference": local }));
+        }
+        "auto" | "own" | "ignore" => {}
+        _ => return Err(ApiError::bad_request("choice: auto, link, own or ignore")),
+    }
+    config.insert("links".into(), Value::Object(links));
+    db::update_source(&state.db, id, &source.name, &Value::Object(config).to_string(), source.enabled).await?;
+    state.drivers.reload().await?;
+    state.drivers.poll(id).await;
+    twins(State(state), AdminUser(_admin.0), Path(id)).await
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_form_of_a_module_keeps_the_choices_made_on_its_devices() {
+        let kept = super::with_choices(r#"{"host":"10.0.0.2"}"#, r#"{"host":"10.0.0.1","ignored":["gas"]}"#);
+        assert_eq!(serde_json::from_str::<serde_json::Value>(&kept).unwrap(), serde_json::json!({"host": "10.0.0.2", "ignored": ["gas"]}));
+    }
 }

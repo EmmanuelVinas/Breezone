@@ -1829,7 +1829,7 @@ const en: Record<string, string> = {
   "Relevé par Enedis, le lendemain.": "Read by Enedis, the next day.",
   "Consommation Linky": "Linky consumption",
   "90 jours": "90 days",
-  "Comptes liés": "Linked accounts",
+  "Comptes et services": "Accounts and services",
   "Surplus solaire : chauffer ou rafraîchir la maison":
     "Solar surplus: heat or cool the home",
   "Plutôt que de rendre le surplus au réseau, chauffer les pièces choisies quand il fait froid dehors, ou les rafraîchir quand il fait chaud, jusqu'à la température voulue ; tout remettre comme avant quand le surplus s'arrête.":
@@ -1851,8 +1851,8 @@ const en: Record<string, string> = {
   "Créer les {n} automatismes": "Create the {n} automations",
   "Créer l'automatisme": "Create the automation",
   "Retour aux recettes": "Back to the recipes",
-  "Cloud de Netatmo, par le compte lié (Réglages › Comptes liés) : en complément du local":
-    "Netatmo's cloud, through the linked account (Settings › Linked accounts): on top of the local",
+  "Cloud de Netatmo, par le compte lié (Réglages › Comptes et services) : en complément du local":
+    "Netatmo's cloud, through the linked account (Settings › Accounts and services): on top of the local",
   "toutes les minutes (le cloud limite les appels)":
     "every minute (the cloud limits the calls)",
   "lignes de l'Écocompteur, et ce que le local n'a pas : volets, prises, lumières absents de HomeKit":
@@ -1862,7 +1862,45 @@ const en: Record<string, string> = {
   "Un appareil déjà présent en local (même nom et même type, par HomeKit) n'est pas ajouté une seconde fois : il reste piloté en local, et passe par le cloud seulement pour ce que le local ne sait pas faire (arrêter un volet Legrand en cours de route) ou quand le local ne répond plus.":
     "A device already there locally (same name and type, through HomeKit) is not added a second time: it stays driven locally, and goes through the cloud only for what the local cannot do (stopping a Legrand shutter midway) or when the local does not answer.",
   Compte: "Account",
-  "Réglages › Comptes liés": "Settings › Linked accounts",
+  "Réglages › Comptes et services": "Settings › Accounts and services",
+  "Rapprochement avec vos appareils": "Matching with your devices",
+  "Un appareil déjà présent en local n'est pas ajouté une seconde fois : reliez-le à son appareil local (il reste piloté en local, le cloud ne sert qu'à ce que le local ne sait pas faire), ou ignorez-le. {n} relié(s) sur {total}.":
+    "A device already there locally is not added a second time: link it to its local device (it stays driven locally, the cloud only does what the local cannot), or ignore it. {n} linked out of {total}.",
+  "Même appareil que « {name} » ({source}){how}":
+    "Same device as “{name}” ({source}){how}",
+  ", trouvé par son nom": ", found by its name",
+  Ignoré: "Ignored",
+  "Appareil à part": "A device of its own",
+  "Automatique (par le nom)": "Automatic (by the name)",
+  "Même que « {name} »": "Same as “{name}”",
+  Ignorer: "Ignore",
+  "Ignorer « {name} » ?": "Ignore “{name}”?",
+  "Il disparaît de Breezone avec son historique et ses réglages. Vous pourrez le rétablir depuis « Appareils ignorés ».":
+    "It leaves Breezone with its history and settings. You can bring it back from “Ignored devices”.",
+  "Ignorer cet appareil": "Ignore this device",
+  "Appareils ignorés": "Ignored devices",
+  "Le module les voit toujours, Breezone les laisse de côté. Rétablis, ils reviennent sans leur ancien historique.":
+    "The module still sees them, Breezone leaves them out. Brought back, they return without their former history.",
+  Rétablir: "Bring back",
+  "Désactivé : plus de synchronisation avec Airzone Cloud.":
+    "Off: no more sync with Airzone Cloud.",
+  "Désactivé : les couleurs Tempo viennent du relais public.":
+    "Off: the Tempo colours come from the public relay.",
+  "Désactivé : plus de relevés Enedis ; ceux déjà lus restent.":
+    "Off: no more Enedis readings; those already read stay.",
+  "Désactivé : le module Netatmo s'arrête, les appareils locaux continuent.":
+    "Off: the Netatmo module stops, the local devices go on.",
+  "Prévisions et vigilances de chaque installation, par Open-Meteo (données Météo-France) et MeteoAlarm. Sans compte : seules les coordonnées de la ville sont envoyées.":
+    "Forecasts and warnings of each installation, from Open-Meteo (Météo-France data) and MeteoAlarm. No account: only the city's coordinates are sent.",
+  "Désactivé : plus de météo ni de température extérieure ; les automatismes qui en dépendent attendent.":
+    "Off: no more weather nor outdoor temperature; the automations that depend on them wait.",
+  Actif: "On",
+  "Activer {name}": "Turn on {name}",
+  "Un compte ou un service relie Breezone à internet, toujours en plus de ce qu'il lit en local : rien n'en dépend pour piloter la maison. Chacun se désactive sans être oublié ; les identifiants restent chiffrés sur ce serveur.":
+    "An account or a service links Breezone to the internet, always in addition to what it reads locally: nothing depends on it to drive the home. Each can be turned off without being forgotten; credentials stay encrypted on this server.",
+  "Rechercher un compte ou un service": "Search an account or a service",
+  "Aucun compte ni service ne correspond à « {query} ».":
+    "No account or service matches “{query}”.",
 }
 
 export default en
