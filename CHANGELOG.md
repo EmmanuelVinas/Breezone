@@ -6,6 +6,13 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.43] - 2026-11-18
+
+### Fixed
+
+- The mobile app builds again: the types generated for the button's new « press » action no
+  longer declare `ButtonPress` twice (the enum of the press is `ButtonPressValue`).
+
 ## [0.11.0-beta.42] - 2026-11-18
 
 ### Added
