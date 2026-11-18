@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.35] - 2026-11-18
+
 ### Fixed
 
 - HomeKit gateway unreachable after updates (“timed out, before the session was set up”): the
@@ -13,6 +15,9 @@ All notable changes are documented here. The format follows
   (they are found through mDNS only), so it no longer uses up the few connections of a gateway; a
   source is no longer taken for lost right after a restart (it is given 3 minutes to answer); and
   the server ends its HomeKit sessions cleanly before it stops or restarts on a new version.
+- The web interface no longer names a brand of NAS: the image is updated “from your container
+  manager”, and the hint for a reverse proxy without WebSocket gives the headers to add (Upgrade
+  and Connection).
 
 ## [0.11.0-beta.34] - 2026-11-18
 
