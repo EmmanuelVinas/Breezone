@@ -6,6 +6,29 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.33] - 2026-11-18
+
+### Added
+
+- App: a bottom bar with every page of the installation shown (Home, Climate, Energy, Solar,
+  Charging, Lights, Shutters, Ventilation, Routines, Schedules, Settings); it scrolls sideways when
+  they do not all fit. The installation chosen is kept from one launch to the next, and the list of
+  installations opens from the title of Home.
+- App: Home is made of cards each user arranges on the phone, apart from the web's overview (the
+  server keeps it as the dashboard page `mobile`): page shortcuts, weather, presence, an energy
+  figure, energy now, today and by use, climate zones, a room, a type of devices, a device, a chart,
+  scenes. Arrange moves, resizes (half or full width), removes and adds cards; “Back to the
+  suggested view” forgets them. The cards reuse the rows and cards of each page (a light and its
+  brightness, a shutter and its buttons, a zone and its setpoint).
+
+### Fixed
+
+- A source that does not answer is no longer asked again every few seconds: once offline, it is
+  read twice as late after each failure, up to every 5 minutes (“Test” still reads it at once), so
+  that a struggling device — a HomeKit gateway after a restart of the server — can recover.
+- HomeKit: the remotes are listened to only once the gateway answered a reading, so that a starting
+  server no longer opens two sessions at once on a gateway that may still hold the previous ones.
+
 ## [0.11.0-beta.32] - 2026-11-17
 
 ### Added
