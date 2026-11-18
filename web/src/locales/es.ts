@@ -1786,6 +1786,90 @@ const es: Record<string, string> = {
   "Autoconsommation / autonomie": "Autoconsumo / autonomía",
   "de la production utilisée sur place / de la consommation couverte":
     "de la producción usada en casa / del consumo cubierto",
+  "Les noms, les groupes et les programmations de vos installations Airzone. La climatisation, elle, se pilote toujours en local.":
+    "Los nombres, grupos y programaciones de sus instalaciones Airzone. La climatización se maneja siempre en local.",
+  "Gérer dans Modules › Airzone": "Gestionar en Módulos › Airzone",
+  "La couleur officielle des jours Tempo, publiée par RTE, pour les prix et les automatismes. Sans compte, Breezone lit un relais public.":
+    "El color oficial de los días Tempo, publicado por RTE, para los precios y las automatizaciones. Sin cuenta, Breezone lee un relé público.",
+  "Créez un compte gratuit sur data.rte-france.com.":
+    "Cree una cuenta gratuita en data.rte-france.com.",
+  "Créez une application, puis abonnez-la à l'API « Tempo Like Supply Contract ».":
+    "Cree una aplicación y suscríbala a la API «Tempo Like Supply Contract».",
+  "Copiez l'ID client et l'ID secret de l'application ici.":
+    "Copie aquí el ID de cliente y el ID secreto de la aplicación.",
+  "ID client": "ID de cliente",
+  "ID secret": "ID secreto",
+  "Votre consommation relevée par Enedis, jour par jour et à la demi-heure, et ce qu'elle a coûté à votre tarif, sans boîtier. Les journées arrivent le lendemain.":
+    "Su consumo medido por Enedis, día a día y por media hora, y lo que costó con su tarifa, sin ningún aparato. Los días llegan al día siguiente.",
+  "Sur conso.boris.sh, donnez votre accord à Enedis : vous recevez un jeton personnel.":
+    "En conso.boris.sh, dé su consentimiento a Enedis: recibe un token personal.",
+  "Le numéro du compteur (PRM, 14 chiffres) est sur votre facture, ou sur le compteur (touche +).":
+    "El número del contador (PRM, 14 cifras) está en su factura o en el contador (tecla +).",
+  "Pour les demi-heures, activez la collecte de la courbe de charge dans votre espace Enedis.":
+    "Para las medias horas, active la recogida de la curva de carga en su espacio Enedis.",
+  "Jeton Conso API": "Token de Conso API",
+  "Numéro du compteur (PRM)": "Número del contador (PRM)",
+  "Ce que la passerelle Legrand ne donne qu'à son cloud : l'Ecometer, l'arrêt des volets en cours de route, les noms et les pièces. Les volets restent pilotés en local (HomeKit).":
+    "Lo que la pasarela Legrand solo da a su nube: el Ecometer, detener las persianas a medio camino, los nombres y las estancias. Las persianas se siguen manejando en local (HomeKit).",
+  "Sur dev.netatmo.com, créez une application (« Create »).":
+    "En dev.netatmo.com, cree una aplicación («Create»).",
+  "Dans son « Token generator », cochez read_magellan et write_magellan, puis « Generate Token ».":
+    "En su «Token generator», marque read_magellan y write_magellan y luego «Generate Token».",
+  "Copiez ici l'ID client, le secret et le refresh token : Breezone renouvelle l'accès lui-même.":
+    "Copie aquí el ID de cliente, el secreto y el refresh token: Breezone renueva el acceso él mismo.",
+  "Secret client": "Secreto de cliente",
+  "Refresh token": "Refresh token",
+  "Non connecté": "No conectada",
+  "En erreur": "Con error",
+  "Compteur {prm}": "Contador {prm}",
+  "{name} : {rooms} pièces, {modules} modules":
+    "{name}: {rooms} estancias, {modules} módulos",
+  "Application {id}": "Aplicación {id}",
+  "Compte {name} connecté": "Cuenta {name} conectada",
+  "Le compte répond": "La cuenta responde",
+  "Le compte ne répond pas": "La cuenta no responde",
+  "Compte {name} retiré": "Cuenta {name} retirada",
+  "A fonctionné {when}": "Funcionó {when}",
+  "Pas encore utilisé": "Aún no usada",
+  Connecter: "Conectar",
+  "Changer les identifiants": "Cambiar las credenciales",
+  Synchroniser: "Sincronizar",
+  "Retirer le compte {name} ?": "¿Retirar la cuenta {name}?",
+  "Breezone oublie ses identifiants. Ce qu'il a déjà lu reste ; ce qui en dépend s'arrête.":
+    "Breezone olvida sus credenciales. Lo ya leído se queda; lo que depende de ella se detiene.",
+  "Un compte relie Breezone à un service en ligne, toujours en plus de ce qu'il lit en local : rien n'en dépend pour piloter la maison. Les identifiants restent chiffrés sur ce serveur.":
+    "Una cuenta une Breezone a un servicio en línea, siempre además de lo que lee en local: manejar la casa nunca depende de ella. Las credenciales quedan cifradas en este servidor.",
+  "Pas encore de relevé Linky.": "Aún sin lectura Linky.",
+  "Linky · Enedis": "Linky · Enedis",
+  "Consommation jour par jour": "Consumo día a día",
+  "Relevé par Enedis, le lendemain. Vos modules en mesurent {n} %.":
+    "Leído por Enedis, al día siguiente. Sus módulos miden el {n} %.",
+  "Relevé par Enedis, le lendemain.": "Leído por Enedis, al día siguiente.",
+  "Consommation Linky": "Consumo Linky",
+  "90 jours": "90 días",
+  "Comptes liés": "Cuentas vinculadas",
+  "Surplus solaire : chauffer ou rafraîchir la maison":
+    "Excedente solar: calentar o refrescar la casa",
+  "Plutôt que de rendre le surplus au réseau, chauffer les pièces choisies quand il fait froid dehors, ou les rafraîchir quand il fait chaud, jusqu'à la température voulue ; tout remettre comme avant quand le surplus s'arrête.":
+    "En lugar de devolver el excedente a la red, calentar las estancias elegidas cuando hace frío fuera, o refrescarlas cuando hace calor, hasta la temperatura deseada; dejarlo todo como estaba cuando se acaba el excedente.",
+  "Surplus solaire : chauffer la maison": "Excedente solar: calentar la casa",
+  "Surplus solaire : rafraîchir la maison":
+    "Excedente solar: refrescar la casa",
+  "{n} automatismes créés": "{n} automatizaciones creadas",
+  "Pièces à chauffer ou rafraîchir": "Estancias que calentar o refrescar",
+  "Chauffer quand il fait froid dehors": "Calentar cuando hace frío fuera",
+  "Jusqu'à": "Hasta",
+  "Si la température extérieure est sous":
+    "Si la temperatura exterior está por debajo de",
+  "Rafraîchir quand il fait chaud dehors": "Refrescar cuando hace calor fuera",
+  "Si la température extérieure dépasse": "Si la temperatura exterior supera",
+  "À partir d'un surplus de": "A partir de un excedente de",
+  "W rendus au réseau pendant 5 min": "W devueltos a la red durante 5 min",
+  "Le mode de la climatisation (chaud ou froid) reste celui que vous avez choisi : l'automatisme ne chauffe que si elle est en mode chaud, et ne rafraîchit que si elle est en mode froid. Quand la maison tire de nouveau plus de 300 W du réseau pendant 10 min, chaque pièce revient comme avant, sauf si quelqu'un l'a changée entre-temps.":
+    "El modo de la climatización (calor o frío) sigue siendo el que eligió: la automatización solo calienta en modo calor y solo refresca en modo frío. Cuando la casa vuelve a tomar más de 300 W de la red durante 10 min, cada estancia vuelve a como estaba, salvo si alguien la cambió mientras tanto.",
+  "Créer les {n} automatismes": "Crear las {n} automatizaciones",
+  "Créer l'automatisme": "Crear la automatización",
+  "Retour aux recettes": "Volver a las recetas",
 }
 
 export default es

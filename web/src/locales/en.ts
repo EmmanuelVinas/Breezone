@@ -1768,6 +1768,89 @@ const en: Record<string, string> = {
   "Autoconsommation / autonomie": "Self-consumption / autonomy",
   "de la production utilisée sur place / de la consommation couverte":
     "of the production used on site / of the consumption covered",
+  "Les noms, les groupes et les programmations de vos installations Airzone. La climatisation, elle, se pilote toujours en local.":
+    "The names, groups and schedules of your Airzone installations. The climate itself is always driven locally.",
+  "Gérer dans Modules › Airzone": "Manage in Modules › Airzone",
+  "La couleur officielle des jours Tempo, publiée par RTE, pour les prix et les automatismes. Sans compte, Breezone lit un relais public.":
+    "The official colour of the Tempo days, published by RTE, for the prices and automations. Without an account, Breezone reads a public relay.",
+  "Créez un compte gratuit sur data.rte-france.com.":
+    "Create a free account on data.rte-france.com.",
+  "Créez une application, puis abonnez-la à l'API « Tempo Like Supply Contract ».":
+    "Create an application, then subscribe it to the “Tempo Like Supply Contract” API.",
+  "Copiez l'ID client et l'ID secret de l'application ici.":
+    "Copy the application's client ID and secret ID here.",
+  "ID client": "Client ID",
+  "ID secret": "Secret ID",
+  "Votre consommation relevée par Enedis, jour par jour et à la demi-heure, et ce qu'elle a coûté à votre tarif, sans boîtier. Les journées arrivent le lendemain.":
+    "Your consumption as Enedis measured it, day by day and per half hour, and what it cost at your tariff, without any box. The days arrive the next day.",
+  "Sur conso.boris.sh, donnez votre accord à Enedis : vous recevez un jeton personnel.":
+    "On conso.boris.sh, give your consent to Enedis: you get a personal token.",
+  "Le numéro du compteur (PRM, 14 chiffres) est sur votre facture, ou sur le compteur (touche +).":
+    "The meter number (PRM, 14 digits) is on your bill, or on the meter (+ key).",
+  "Pour les demi-heures, activez la collecte de la courbe de charge dans votre espace Enedis.":
+    "For the half hours, turn on the load curve collection in your Enedis account.",
+  "Jeton Conso API": "Conso API token",
+  "Numéro du compteur (PRM)": "Meter number (PRM)",
+  "Ce que la passerelle Legrand ne donne qu'à son cloud : l'Ecometer, l'arrêt des volets en cours de route, les noms et les pièces. Les volets restent pilotés en local (HomeKit).":
+    "What the Legrand gateway only gives its cloud: the Ecometer, stopping shutters midway, the names and rooms. The shutters are still driven locally (HomeKit).",
+  "Sur dev.netatmo.com, créez une application (« Create »).":
+    "On dev.netatmo.com, create an application (“Create”).",
+  "Dans son « Token generator », cochez read_magellan et write_magellan, puis « Generate Token ».":
+    "In its “Token generator”, tick read_magellan and write_magellan, then “Generate Token”.",
+  "Copiez ici l'ID client, le secret et le refresh token : Breezone renouvelle l'accès lui-même.":
+    "Copy the client ID, the secret and the refresh token here: Breezone renews the access itself.",
+  "Secret client": "Client secret",
+  "Refresh token": "Refresh token",
+  "Non connecté": "Not connected",
+  "En erreur": "Failing",
+  "Compteur {prm}": "Meter {prm}",
+  "{name} : {rooms} pièces, {modules} modules":
+    "{name}: {rooms} rooms, {modules} modules",
+  "Application {id}": "Application {id}",
+  "Compte {name} connecté": "{name} account connected",
+  "Le compte répond": "The account answers",
+  "Le compte ne répond pas": "The account does not answer",
+  "Compte {name} retiré": "{name} account removed",
+  "A fonctionné {when}": "Worked {when}",
+  "Pas encore utilisé": "Not used yet",
+  Connecter: "Connect",
+  "Changer les identifiants": "Change the credentials",
+  Synchroniser: "Synchronise",
+  "Retirer le compte {name} ?": "Remove the {name} account?",
+  "Breezone oublie ses identifiants. Ce qu'il a déjà lu reste ; ce qui en dépend s'arrête.":
+    "Breezone forgets its credentials. What it already read stays; what depends on it stops.",
+  "Un compte relie Breezone à un service en ligne, toujours en plus de ce qu'il lit en local : rien n'en dépend pour piloter la maison. Les identifiants restent chiffrés sur ce serveur.":
+    "An account links Breezone to an online service, always on top of what it reads locally: driving the home never depends on it. The credentials stay encrypted on this server.",
+  "Pas encore de relevé Linky.": "No Linky reading yet.",
+  "Linky · Enedis": "Linky · Enedis",
+  "Consommation jour par jour": "Consumption day by day",
+  "Relevé par Enedis, le lendemain. Vos modules en mesurent {n} %.":
+    "Read by Enedis, the next day. Your modules measure {n} % of it.",
+  "Relevé par Enedis, le lendemain.": "Read by Enedis, the next day.",
+  "Consommation Linky": "Linky consumption",
+  "90 jours": "90 days",
+  "Comptes liés": "Linked accounts",
+  "Surplus solaire : chauffer ou rafraîchir la maison":
+    "Solar surplus: heat or cool the home",
+  "Plutôt que de rendre le surplus au réseau, chauffer les pièces choisies quand il fait froid dehors, ou les rafraîchir quand il fait chaud, jusqu'à la température voulue ; tout remettre comme avant quand le surplus s'arrête.":
+    "Rather than give the surplus back to the grid, heat the chosen rooms when it is cold outside, or cool them when it is warm, up to the temperature wanted; put everything back as it was when the surplus stops.",
+  "Surplus solaire : chauffer la maison": "Solar surplus: heat the home",
+  "Surplus solaire : rafraîchir la maison": "Solar surplus: cool the home",
+  "{n} automatismes créés": "{n} automations created",
+  "Pièces à chauffer ou rafraîchir": "Rooms to heat or cool",
+  "Chauffer quand il fait froid dehors": "Heat when it is cold outside",
+  "Jusqu'à": "Up to",
+  "Si la température extérieure est sous":
+    "If the outdoor temperature is below",
+  "Rafraîchir quand il fait chaud dehors": "Cool when it is warm outside",
+  "Si la température extérieure dépasse": "If the outdoor temperature is above",
+  "À partir d'un surplus de": "From a surplus of",
+  "W rendus au réseau pendant 5 min": "W returned to the grid for 5 min",
+  "Le mode de la climatisation (chaud ou froid) reste celui que vous avez choisi : l'automatisme ne chauffe que si elle est en mode chaud, et ne rafraîchit que si elle est en mode froid. Quand la maison tire de nouveau plus de 300 W du réseau pendant 10 min, chaque pièce revient comme avant, sauf si quelqu'un l'a changée entre-temps.":
+    "The climate mode (heating or cooling) stays the one you chose: the automation only heats in heating mode, and only cools in cooling mode. When the home draws more than 300 W from the grid again for 10 min, each room goes back as it was, unless someone changed it meanwhile.",
+  "Créer les {n} automatismes": "Create the {n} automations",
+  "Créer l'automatisme": "Create the automation",
+  "Retour aux recettes": "Back to the recipes",
 }
 
 export default en

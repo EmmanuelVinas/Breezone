@@ -8,6 +8,22 @@ All notable changes are documented here. The format follows
 
 ### Added
 
+- Automations: the recipe “Solar surplus: heat or cool the home” — rather than giving the surplus
+  back to the grid, heat the rooms chosen when it is cold outside (or cool them when it is warm) up
+  to the temperature wanted, and put each room back as it was once the home draws from the grid
+  again. A form sets the rooms, the two temperatures, the outdoor thresholds and the surplus; one
+  rule per Airzone system, each following the mode of its own system (never changing it).
+- Linked accounts (Settings › Linked accounts, administrators): a connection to an online
+  service, always on top of what Breezone reads locally, its secrets encrypted on the server. The
+  Airzone Cloud account moves there without asking anything again. New ones:
+  - **RTE**: the official colour of the Tempo days (the public relay stays when there is none, or
+    when RTE fails);
+  - **Linky** through Conso API: what Enedis measured, day by day and per half hour, read every
+    6 hours, with its cost at the tariff (each half hour at its price), and how much the modules
+    measure of it; a “Linky consumption” block for dashboards;
+  - **Netatmo · Legrand Home + Control**: connected with one's own Netatmo app (client id, secret and
+    a refresh token from its token generator, nothing to open to the internet); Breezone renews the
+    access itself and shows the homes, rooms and modules it reaches.
 - Dashboards: a “Self-consumption / autonomy” figure, the two side by side (“47 % / 13 %”), on its
   own or ticked in the figures of the period (not shown unless chosen).
 - Airzone schedules can be switched off all at once (web and app, administrators), so that

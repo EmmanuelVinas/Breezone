@@ -1,3 +1,4 @@
+import { useState } from "react"
 import type {
   AutomationCondition,
   AutomationInput,
@@ -16,11 +17,14 @@ import {
 import type { Home } from "./fields"
 import { MAX_ACTIONS } from "./fields"
 import { newTrigger } from "./triggers"
+import { SurplusClimateSetup } from "./surplus-climate"
 
 export type Recipe = {
   title: string
   description: string
   rule: AutomationInput
+  /** Set up in a form of its own before its rules are made (instead of opening the editor). */
+  setup?: "surplus_climate"
 }
 
 export function blank(home: Home): AutomationInput {
@@ -113,6 +117,15 @@ export function recipes(home: Home): Recipe[] {
           step(charger, "ev.charger", "stop"),
         ],
       },
+    })
+  if (home.roles.grid && zones.length)
+    out.push({
+      title: t("Surplus solaire : chauffer ou rafraîchir la maison"),
+      description: t(
+        "Plutôt que de rendre le surplus au réseau, chauffer les pièces choisies quand il fait froid dehors, ou les rafraîchir quand il fait chaud, jusqu'à la température voulue ; tout remettre comme avant quand le surplus s'arrête."
+      ),
+      rule: blank(home),
+      setup: "surplus_climate",
     })
   // The mode belongs to the system (its master zone): a surplus rule follows it, never sets it.
   const onSurplus = (
@@ -443,6 +456,29 @@ export function RecipesDialog({
   onClose: () => void
 }) {
   const list = recipes(home)
+  const [setup, setSetup] = useState<Recipe | null>(null)
+  const zones = home.devices.filter(
+    (d) =>
+      home.drivable.has(d.id) &&
+      d.traits.some((x) => x.startsWith("climate.zone@"))
+  )
+  if (setup)
+    return (
+      <Dialog open onOpenChange={(o) => !o && onClose()}>
+        <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{setup.title}</DialogTitle>
+            <DialogDescription>{setup.description}</DialogDescription>
+          </DialogHeader>
+          <SurplusClimateSetup
+            home={home}
+            zones={zones}
+            onDone={onClose}
+            onBack={() => setSetup(null)}
+          />
+        </DialogContent>
+      </Dialog>
+    )
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-2xl">
@@ -461,7 +497,7 @@ export function RecipesDialog({
                 key={r.title}
                 type="button"
                 className="grid gap-1 rounded-2xl border p-3 text-left transition-colors hover:bg-muted/50"
-                onClick={() => onPick(r.rule)}
+                onClick={() => (r.setup ? setSetup(r) : onPick(r.rule))}
               >
                 <span className="font-medium">{r.title}</span>
                 <span className="text-sm text-muted-foreground">
