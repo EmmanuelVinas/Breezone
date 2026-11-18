@@ -53,6 +53,11 @@ fun List<ServerState>.installation(serverId: String, installationId: Long): Inst
     firstOrNull { it.account.id == serverId }?.installations?.firstOrNull { it.id == installationId }
 
 private const val SERVERS_KEY = "servers"
+private const val CURRENT_KEY = "current_installation"
+
+/** The installation the app shows: its pages make the bottom bar. */
+@kotlinx.serialization.Serializable
+data class CurrentInstallation(val serverId: String, val installationId: Long)
 
 class Hub(
     private val http: HttpClient,
@@ -78,6 +83,18 @@ class Hub(
         saved.forEach { a -> a.certificate?.let { TlsTrust.pin(a.url, it) } }
         _servers.value = saved.map { ServerState(it, authRequired = it.refreshToken == null) }
         saved.filter { it.refreshToken != null }.forEach { start(it) }
+    }
+
+    private val _current = MutableStateFlow(
+        store.get(CURRENT_KEY)?.let { runCatching { FzJson.decodeFromString(CurrentInstallation.serializer(), it) }.getOrNull() },
+    )
+    /** The installation chosen last (kept from one launch to the next), if any. */
+    val current: StateFlow<CurrentInstallation?> = _current.asStateFlow()
+
+    fun select(serverId: String, installationId: Long) {
+        val chosen = CurrentInstallation(serverId, installationId)
+        _current.value = chosen
+        store.set(CURRENT_KEY, FzJson.encodeToString(CurrentInstallation.serializer(), chosen))
     }
 
     fun api(serverId: String): BreezoneApi? = apis[serverId]
@@ -144,6 +161,10 @@ class Hub(
         jobs.remove(id)?.cancel()
         _servers.update { list -> list.filterNot { it.account.id == id } }
         _devices.update { it - id }
+        if (_current.value?.serverId == id) {
+            _current.value = null
+            store.remove(CURRENT_KEY)
+        }
         persist()
         scope.launch { api?.logout() }
     }

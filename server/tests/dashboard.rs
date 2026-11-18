@@ -96,6 +96,14 @@ async fn each_user_may_have_an_overview_over_the_installations_one() {
     assert_eq!(s, StatusCode::BAD_REQUEST, "an unknown page");
     user.call(Method::DELETE, &format!("{path}?page=energy"), None).await;
 
+    // The app's home is a page of its own: arranged on the phone, it leaves the web's overview alone.
+    let phone = layout(json!([{"id": "t", "type": "pages", "size": "full", "config": {}}]));
+    let (s, v) = user.call(Method::PUT, &format!("{path}?page=mobile"), Some(phone.clone())).await;
+    assert_eq!((s, v["layout"].clone()), (StatusCode::OK, phone), "{v}");
+    let (_, v) = user.call(Method::GET, &path, None).await;
+    assert_eq!(v["layout"]["blocks"][0]["type"], "weather", "the web's overview is untouched: {v}");
+    user.call(Method::DELETE, &format!("{path}?page=mobile"), None).await;
+
     // Back to the installation's.
     let (_, v) = user.call(Method::DELETE, &path, None).await;
     assert_eq!((v["source"].clone(), v["layout"].clone()), (json!("installation"), energy), "{v}");

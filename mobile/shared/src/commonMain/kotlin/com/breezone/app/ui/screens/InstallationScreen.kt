@@ -47,7 +47,6 @@ import com.breezone.app.ui.components.ZoneCard
 import com.breezone.app.ui.groupZones
 import com.breezone.app.ui.icon
 import com.breezone.app.ui.icons.FzIcons
-import com.breezone.app.ui.installationPlace
 import com.breezone.app.ui.label
 import com.breezone.app.ui.labelRes
 import com.breezone.app.ui.systemModePlacement
@@ -68,7 +67,7 @@ fun InstallationScreen(
     serverId: String,
     installationId: Long,
     section: Int,
-    onBack: () -> Unit,
+    onBack: (() -> Unit)?,
     onOpenZone: (Zone) -> Unit,
 ) {
     val hub = koinInject<Hub>()
@@ -79,8 +78,9 @@ fun InstallationScreen(
     Scaffold(
         topBar = {
             FzTopBar(
-                title = inst?.name ?: stringResource(Res.string.installation_title),
-                subtitle = inst?.let { installationPlace(it) },
+                // A page of the bar: its name, then the installation it shows.
+                title = stringResource(INSTALLATION_SECTIONS[section.coerceIn(0, 2)].first.let { if (section == 0) Res.string.house_climate else it }),
+                subtitle = inst?.let { listOfNotNull(it.name, it.location?.takeIf(String::isNotBlank)).joinToString(" · ") },
                 onBack = onBack,
                 actions = {
                     if (inst != null) {

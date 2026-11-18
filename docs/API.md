@@ -394,6 +394,13 @@ sans pièce) ou `{type}` (un type d'appareil), avec `hidden` (appareils masqués
 `{device_id}` · `chart` `{device_id, field, hours: 24|168}` · `weather` · `scenes`
 `{routine_ids?}` (aucune : toutes). Un client ignore un type qu'il ne connaît pas.
 
+`?page=` choisit la page (vue d'ensemble par défaut) : `overview`, `energy`, `climate`, `lights`,
+`ventilation`, `charging`, `shutters`, et `mobile`, l'accueil de l'app, que chacun arrange dans l'app,
+à part de la vue d'ensemble du web. L'app y ajoute ses propres types : `pages` (raccourcis des pages),
+`presence`, `zones` `{group?}` (cartes des zones, toutes sans `group`), `energy_flow`,
+`energy_curve`, `energy_breakdown` (les parties de son écran Énergie), et `chart`
+`{device_id, fields, hours}`.
+
 `GET /api/devices/charted` 🔒 : `[{device_id, fields}]`, les appareils qui ont un historique et ses
 champs (ce qu'un graphique peut montrer). L'historique d'une zone Airzone se lit aussi par
 `/api/devices/{id}/history` (`room_temp`, `humidity`, `setpoint`). Un bloc `group` peut avoir

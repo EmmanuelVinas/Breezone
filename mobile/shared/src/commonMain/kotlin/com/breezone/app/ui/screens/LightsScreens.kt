@@ -102,10 +102,10 @@ private fun describe(s: LightState): String = when {
 }
 
 /** Sets a light: what is asked shows at once. */
-private fun Hub.setLight(serverId: String, d: DeviceView, params: JsonObject) = act(serverId, d, "light", "set", params, optimistic = params)
+internal fun Hub.setLight(serverId: String, d: DeviceView, params: JsonObject) = act(serverId, d, "light", "set", params, optimistic = params)
 
 @Composable
-fun LightsScreen(serverId: String, onBack: () -> Unit, onOpen: (Long) -> Unit) {
+fun LightsScreen(serverId: String, onBack: (() -> Unit)?, onOpen: (Long) -> Unit) {
     val hub = koinInject<Hub>()
     val all by hub.devices.collectAsState()
     val status by hub.deviceStatus.collectAsState()
@@ -168,7 +168,7 @@ fun LightsScreen(serverId: String, onBack: () -> Unit, onOpen: (Long) -> Unit) {
 }
 
 @Composable
-private fun LightRow(d: DeviceView, status: CommandStatus?, onOpen: () -> Unit, onSet: (JsonObject) -> Unit) {
+internal fun LightRow(d: DeviceView, status: CommandStatus?, onOpen: () -> Unit, onSet: (JsonObject) -> Unit) {
     val s = d.stateAs(LightState.serializer()) ?: LightState()
     val lit = d.available && s.on
     Column(Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(vertical = 8.dp)) {

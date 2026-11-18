@@ -83,6 +83,7 @@ object DemoServer {
     private var nextRoutineId = 3L
     private var schedules = mutableListOf<AirzoneSchedule>()
     private var nextScheduleId = 3L
+private val dashboards = mutableMapOf<String, DashboardLayout>()
     private val user = User(1, "demo", "admin")
 
     private fun now() = Clock.System.now().epochSeconds
@@ -288,6 +289,16 @@ object DemoServer {
                     ?.let { FzJson.decodeFromJsonElement(ListSerializer(Action.serializer()), it) }.orEmpty()
                 val results = actions.map { a -> ActionResult(applyZone(a)) }
                 ok(RunResult.serializer(), RunResult(results))
+            }
+            parts.size == 4 && parts[1] == "installations" && parts[3] == "dashboard" -> {
+                val key = "${parts[2]}/${request.url.parameters["page"] ?: "overview"}"
+                when (request.method) {
+                    HttpMethod.Put -> dashboards[key] = FzJson.decodeFromString(DashboardLayout.serializer(), body(request))
+                    HttpMethod.Delete -> dashboards.remove(key)
+                    else -> Unit
+                }
+                val mine = dashboards[key]
+                ok(DashboardView.serializer(), DashboardView(mine, if (mine != null) "mine" else "generated"))
             }
             parts.size == 4 && parts[1] == "installations" && parts[3] == "trends" -> {
                 val inst = installations?.firstOrNull { it.id == parts[2].toLongOrNull() }

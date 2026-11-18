@@ -13,8 +13,9 @@ use serde_json::{Map, Value};
 pub const VERSION: u32 = 1;
 const MAX_BLOCKS: usize = 60;
 
-/// The pages that are dashboards.
-pub const PAGES: &[&str] = &["overview", "energy", "climate", "lights", "ventilation", "charging", "shutters"];
+/// The pages that are dashboards: the web's, and "mobile", the home of the mobile app (each user
+/// arranges it there, apart from the overview of the web).
+pub const PAGES: &[&str] = &["overview", "energy", "climate", "lights", "ventilation", "charging", "shutters", "mobile"];
 
 /// A type of block: lower case words joined by "_" (the clients define them).
 fn kind_ok(kind: &str) -> bool {

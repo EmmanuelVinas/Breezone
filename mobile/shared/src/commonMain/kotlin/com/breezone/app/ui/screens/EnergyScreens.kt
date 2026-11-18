@@ -92,7 +92,7 @@ fun formatEnergy(kwh: Double?): String {
 
 /** Reads the energy of the home now (every 5 s) and of today (every minute) while shown. */
 @Composable
-private fun rememberEnergy(hub: Hub, serverId: String): Pair<EnergyLive?, EnergyDay?> {
+internal fun rememberEnergy(hub: Hub, serverId: String): Pair<EnergyLive?, EnergyDay?> {
     var live by remember { mutableStateOf<EnergyLive?>(null) }
     var day by remember { mutableStateOf<EnergyDay?>(null) }
     LaunchedEffect(serverId) {
@@ -109,7 +109,7 @@ private fun rememberEnergy(hub: Hub, serverId: String): Pair<EnergyLive?, Energy
 }
 
 @Composable
-private fun FlowTile(icon: ImageVector, label: String, value: String, sub: String?, color: Color, modifier: Modifier = Modifier) {
+internal fun FlowTile(icon: ImageVector, label: String, value: String, sub: String?, color: Color, modifier: Modifier = Modifier) {
     Column(
         modifier.clip(RoundedCornerShape(18.dp)).background(color.copy(alpha = 0.12f)).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -146,11 +146,10 @@ private fun TwoByTwo(tiles: List<@Composable (Modifier) -> Unit>) {
 }
 
 @Composable
-fun EnergyScreen(serverId: String, onBack: () -> Unit) {
+fun EnergyScreen(serverId: String, onBack: (() -> Unit)? = null) {
     val hub = koinInject<Hub>()
     val (live, day) = rememberEnergy(hub, serverId)
     val roles = live?.roles
-    val sun = Fz.colors.warning
     Scaffold(topBar = { FzTopBar(stringResource(Res.string.house_energy), null, onBack) }) { padding ->
         LazyColumn(
             Modifier.fillMaxSize(),
@@ -161,72 +160,85 @@ fun EnergyScreen(serverId: String, onBack: () -> Unit) {
                 item(key = "empty", contentType = "note") { SectionCard { Muted(stringResource(Res.string.energy_empty)) } }
             }
             if (live != null && roles?.any == true) {
-                item(key = "now", contentType = "now") {
-                    val solarShare = if ((live.solar ?: 0.0) > 0 && (live.home ?: 0.0) > 0) ((minOf(live.solar!!, live.home!!) / live.home) * 100).roundToInt() else null
-                    val tiles = buildList<@Composable (Modifier) -> Unit> {
-                        if (roles.solar) add { m -> FlowTile(FzIcons.Sun, stringResource(Res.string.energy_solar), formatPower(live.solar), null, sun, m) }
-                        add { m -> FlowTile(FzIcons.House, stringResource(Res.string.energy_home), formatPower(live.home), solarShare?.let { stringResource(Res.string.energy_solar_share, it) }, MaterialTheme.colorScheme.onSurface, m) }
-                        if (roles.battery) add { m ->
-                            val b = live.battery ?: 0.0
-                            FlowTile(FzIcons.BatteryMedium, stringResource(Res.string.energy_battery), formatPower(live.battery), stringResource(if (b >= 0) Res.string.energy_battery_charging else Res.string.energy_battery_discharging), Fz.colors.success, m)
-                        }
-                        if (roles.grid) add { m ->
-                            val g = live.grid ?: 0.0
-                            FlowTile(FzIcons.Zap, stringResource(Res.string.energy_grid), formatPower(live.grid), stringResource(if (g >= 0) Res.string.energy_grid_buys else Res.string.energy_grid_sells), Fz.colors.muted, m)
-                        }
-                    }
-                    SectionCard {
-                        SectionTitle(stringResource(Res.string.energy_now))
-                        TwoByTwo(tiles)
-                    }
-                }
-                if (day != null) {
-                    item(key = "today", contentType = "today") {
-                        val t = day.totals
-                        val start = day.points.firstOrNull()?.ts ?: 0L
-                        SectionCard {
-                            SectionTitle(stringResource(Res.string.energy_today))
-                            PowerDayChart(
-                                listOf(
-                                    PowerSeries(day.points.mapNotNull { p -> p.solar?.let { p.ts to it } }, sun, area = true),
-                                    PowerSeries(day.points.mapNotNull { p -> p.home?.let { p.ts to it } }, MaterialTheme.colorScheme.onSurface, area = false),
-                                ),
-                                start,
-                                Modifier.fillMaxWidth().height(170.dp),
-                            )
-                            Row(Modifier.fillMaxWidth()) {
-                                if (t.production != null) Stat(stringResource(Res.string.energy_produced), formatEnergy(t.production), sun, Modifier.weight(1f))
-                                Stat(stringResource(Res.string.energy_consumed), formatEnergy(t.consumption), modifier = Modifier.weight(1f))
-                                if (t.production != null && t.production > 0 && t.selfConsumed != null) {
-                                    Stat(stringResource(Res.string.energy_self), stringResource(Res.string.common_percent, (t.selfConsumed / t.production * 100).roundToInt()), MaterialTheme.colorScheme.primary, Modifier.weight(1f))
-                                } else if (t.imported != null) {
-                                    Stat(stringResource(Res.string.energy_imported), formatEnergy(t.imported), modifier = Modifier.weight(1f))
-                                }
-                            }
-                        }
-                    }
-                }
-                val consumers = live.consumers.filter { (it.power ?: 0.0) > 0 }
-                if (consumers.isNotEmpty() || (live.other ?: 0.0) > 0) {
-                    item(key = "uses", contentType = "uses") {
-                        DeviceGroupCard(stringResource(Res.string.energy_uses), null) {
-                            val other = stringResource(Res.string.energy_other)
-                            (consumers.map { it.name to (it.power ?: 0.0) } + listOfNotNull(live.other?.takeIf { it > 0 }?.let { other to it })).forEach { (name, w) ->
-                                Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Text(name, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Text(formatPower(w), fontWeight = FontWeight.Medium)
-                                }
-                            }
-                        }
-                    }
-                }
+                item(key = "now", contentType = "now") { EnergyNowCard(live) }
+                if (day != null) item(key = "today", contentType = "today") { EnergyTodayCard(day) }
+                if (live.hasUses()) item(key = "uses", contentType = "uses") { EnergyUsesCard(live) }
+            }
+        }
+    }
+}
+
+/** What the home draws and makes now: a tile per flow it has a measure of. */
+@Composable
+internal fun EnergyNowCard(live: EnergyLive, titled: Boolean = true) {
+    val roles = live.roles
+    val sun = Fz.colors.warning
+    val solarShare = if ((live.solar ?: 0.0) > 0 && (live.home ?: 0.0) > 0) ((minOf(live.solar!!, live.home!!) / live.home) * 100).roundToInt() else null
+    val tiles = buildList<@Composable (Modifier) -> Unit> {
+        if (roles.solar) add { m -> FlowTile(FzIcons.Sun, stringResource(Res.string.energy_solar), formatPower(live.solar), null, sun, m) }
+        add { m -> FlowTile(FzIcons.House, stringResource(Res.string.energy_home), formatPower(live.home), solarShare?.let { stringResource(Res.string.energy_solar_share, it) }, MaterialTheme.colorScheme.onSurface, m) }
+        if (roles.battery) add { m ->
+            val b = live.battery ?: 0.0
+            FlowTile(FzIcons.BatteryMedium, stringResource(Res.string.energy_battery), formatPower(live.battery), stringResource(if (b >= 0) Res.string.energy_battery_charging else Res.string.energy_battery_discharging), Fz.colors.success, m)
+        }
+        if (roles.grid) add { m ->
+            val g = live.grid ?: 0.0
+            FlowTile(FzIcons.Zap, stringResource(Res.string.energy_grid), formatPower(live.grid), stringResource(if (g >= 0) Res.string.energy_grid_buys else Res.string.energy_grid_sells), Fz.colors.muted, m)
+        }
+    }
+    SectionCard {
+        if (titled) SectionTitle(stringResource(Res.string.energy_now))
+        TwoByTwo(tiles)
+    }
+}
+
+/** The day's curves of solar and home, with what was made, used and drawn. */
+@Composable
+internal fun EnergyTodayCard(day: EnergyDay) {
+    val sun = Fz.colors.warning
+    val t = day.totals
+    val start = day.points.firstOrNull()?.ts ?: 0L
+    SectionCard {
+        SectionTitle(stringResource(Res.string.energy_today))
+        PowerDayChart(
+            listOf(
+                PowerSeries(day.points.mapNotNull { p -> p.solar?.let { p.ts to it } }, sun, area = true),
+                PowerSeries(day.points.mapNotNull { p -> p.home?.let { p.ts to it } }, MaterialTheme.colorScheme.onSurface, area = false),
+            ),
+            start,
+            Modifier.fillMaxWidth().height(170.dp),
+        )
+        Row(Modifier.fillMaxWidth()) {
+            if (t.production != null) Stat(stringResource(Res.string.energy_produced), formatEnergy(t.production), sun, Modifier.weight(1f))
+            Stat(stringResource(Res.string.energy_consumed), formatEnergy(t.consumption), modifier = Modifier.weight(1f))
+            if (t.production != null && t.production > 0 && t.selfConsumed != null) {
+                Stat(stringResource(Res.string.energy_self), stringResource(Res.string.common_percent, (t.selfConsumed / t.production * 100).roundToInt()), MaterialTheme.colorScheme.primary, Modifier.weight(1f))
+            } else if (t.imported != null) {
+                Stat(stringResource(Res.string.energy_imported), formatEnergy(t.imported), modifier = Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+internal fun EnergyLive.hasUses() = consumers.any { (it.power ?: 0.0) > 0 } || (other ?: 0.0) > 0
+
+/** What uses the power now, by measure, and what no measure accounts for. */
+@Composable
+internal fun EnergyUsesCard(live: EnergyLive) {
+    val consumers = live.consumers.filter { (it.power ?: 0.0) > 0 }
+    DeviceGroupCard(stringResource(Res.string.energy_uses), null) {
+        val other = stringResource(Res.string.energy_other)
+        (consumers.map { it.name to (it.power ?: 0.0) } + listOfNotNull(live.other?.takeIf { it > 0 }?.let { other to it })).forEach { (name, w) ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(name, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(formatPower(w), fontWeight = FontWeight.Medium)
             }
         }
     }
 }
 
 @Composable
-fun SolarScreen(serverId: String, onBack: () -> Unit) {
+fun SolarScreen(serverId: String, onBack: (() -> Unit)? = null) {
     val hub = koinInject<Hub>()
     val all by hub.devices.collectAsState()
     LaunchedEffect(serverId) { hub.followDevices(serverId, everyMs = 10_000) }
@@ -293,7 +305,7 @@ fun chargerLabel(shown: ChargerShown): String = stringResource(
 )
 
 @Composable
-fun ChargingScreen(serverId: String, onBack: () -> Unit) {
+fun ChargingScreen(serverId: String, onBack: (() -> Unit)? = null) {
     val hub = koinInject<Hub>()
     val all by hub.devices.collectAsState()
     val status by hub.deviceStatus.collectAsState()

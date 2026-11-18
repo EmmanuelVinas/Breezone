@@ -129,7 +129,7 @@ private fun rememberHistory(hub: Hub, serverId: String, deviceId: Long, hours: I
 }
 
 @Composable
-fun VentilationScreen(serverId: String, onBack: () -> Unit, onOpen: (Long) -> Unit) {
+fun VentilationScreen(serverId: String, onBack: (() -> Unit)?, onOpen: (Long) -> Unit) {
     val hub = koinInject<Hub>()
     val all by hub.devices.collectAsState()
     val status by hub.deviceStatus.collectAsState()
@@ -196,7 +196,7 @@ fun VentilationScreen(serverId: String, onBack: () -> Unit, onOpen: (Long) -> Un
 }
 
 @Composable
-private fun ValveRow(d: DeviceView, demanding: Boolean, cause: String, onClick: () -> Unit) {
+internal fun ValveRow(d: DeviceView, demanding: Boolean, cause: String, onClick: () -> Unit) {
     val s = d.valve()
     val q = s.quality()
     val color = q?.color() ?: if (demanding) Fz.colors.warning else Fz.colors.air
@@ -344,4 +344,11 @@ fun VentilationRoomScreen(serverId: String, deviceId: Long, onBack: () -> Unit) 
             }
         }
     }
+}
+
+/** The level of the house: the air flow of every valve over their nominal flows. */
+fun ventilationLevel(rooms: List<VentilationRoomState>): Int? {
+    val nominal = rooms.sumOf { it.nominal ?: 0.0 }
+    if (nominal <= 0) return null
+    return (rooms.sumOf { it.flow } / nominal * 100).toInt()
 }

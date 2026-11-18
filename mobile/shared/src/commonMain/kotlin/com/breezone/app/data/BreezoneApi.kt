@@ -208,6 +208,15 @@ class BreezoneApi(
     suspend fun deviceHistory(deviceId: Long, hours: Int = 24, points: Int = 96): DeviceHistory =
         call(HttpMethod.Get, "/api/devices/$deviceId/history?hours=$hours&points=$points")
     suspend fun scenes(): List<SceneView> = call(HttpMethod.Get, "/api/scenes")
+    /** The devices that keep a history, and its fields: what a chart can show. */
+    suspend fun charted(): List<Charted> = call(HttpMethod.Get, "/api/devices/charted")
+    /** A page of an installation as cards (the app's home: [MOBILE_PAGE]). */
+    suspend fun dashboard(installationId: Long, page: String): DashboardView =
+        call(HttpMethod.Get, "/api/installations/$installationId/dashboard?page=$page")
+    suspend fun saveDashboard(installationId: Long, page: String, layout: DashboardLayout): DashboardView =
+        call(HttpMethod.Put, "/api/installations/$installationId/dashboard?page=$page", FzJson.encodeToString(DashboardLayout.serializer(), layout))
+    suspend fun resetDashboard(installationId: Long, page: String): DashboardView =
+        call(HttpMethod.Delete, "/api/installations/$installationId/dashboard?page=$page")
     suspend fun act(deviceId: Long, input: DeviceActionInput): DeviceView =
         call(HttpMethod.Post, "/api/devices/$deviceId/actions", FzJson.encodeToString(DeviceActionInput.serializer(), input))
     suspend fun activateScene(sourceId: Long, id: String) =

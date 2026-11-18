@@ -659,4 +659,107 @@ object FzIcons {
             "M9 8V2",
         )
     }
+
+    val DoorOpen: ImageVector by lazy {
+        lucide(
+            "DoorOpen",
+            "M10 21H2",
+            "M10 3H7a2 2 0 00-2 2v16",
+            "M14 12h.01",
+            "M19 21V5a2 2 0 00-1.675-1.974l-6.163-1.013A1 1 0 0010 3v18a1 1 0 001.124.992z",
+            "M22 21h-3",
+        )
+    }
+
+    val Gamepad2: ImageVector by lazy {
+        lucide(
+            "Gamepad2",
+            "M6 11L10 11",
+            "M8 9L8 13",
+            "M15 12L15.01 12",
+            "M18 10L18.01 10",
+            "M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z",
+        )
+    }
+
+    val Box: ImageVector by lazy {
+        lucide(
+            "Box",
+            "M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z",
+            "m3.3 7 8.7 5 8.7-5",
+            "M12 22V12",
+        )
+    }
+
+    val ArrowUp: ImageVector by lazy {
+        lucide(
+            "ArrowUp",
+            "m5 12 7-7 7 7",
+            "M12 19V5",
+        )
+    }
+
+    val ArrowDown: ImageVector by lazy {
+        lucide(
+            "ArrowDown",
+            "M12 5v14",
+            "m19 12-7 7-7-7",
+        )
+    }
+
+    val LayoutGrid: ImageVector by lazy {
+        lucide(
+            "LayoutGrid",
+            "M4 3h5a1 1 0 0 1 1 1v5a1 1 0 0 1 -1 1h-5a1 1 0 0 1 -1 -1v-5a1 1 0 0 1 1 -1Z",
+            "M15 3h5a1 1 0 0 1 1 1v5a1 1 0 0 1 -1 1h-5a1 1 0 0 1 -1 -1v-5a1 1 0 0 1 1 -1Z",
+            "M15 14h5a1 1 0 0 1 1 1v5a1 1 0 0 1 -1 1h-5a1 1 0 0 1 -1 -1v-5a1 1 0 0 1 1 -1Z",
+            "M4 14h5a1 1 0 0 1 1 1v5a1 1 0 0 1 -1 1h-5a1 1 0 0 1 -1 -1v-5a1 1 0 0 1 1 -1Z",
+        )
+    }
+
+    val ChartLine: ImageVector by lazy {
+        lucide(
+            "ChartLine",
+            "M3 3v16a2 2 0 0 0 2 2h16",
+            "m19 9-5 5-4-4-3 3",
+        )
+    }
+
+    val Maximize2: ImageVector by lazy {
+        lucide(
+            "Maximize2",
+            "M15 3h6v6",
+            "m21 3-7 7",
+            "m3 21 7-7",
+            "M9 21H3v-6",
+        )
+    }
+
+    val Minimize2: ImageVector by lazy {
+        lucide(
+            "Minimize2",
+            "m14 10 7-7",
+            "M20 10h-6V4",
+            "m3 21 7-7",
+            "M4 14h6v6",
+        )
+    }
+
+    val RotateCcw: ImageVector by lazy {
+        lucide(
+            "RotateCcw",
+            "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8",
+            "M3 3v5h5",
+        )
+    }
+
+    val Users: ImageVector by lazy {
+        lucide(
+            "Users",
+            "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2",
+            "M16 3.128a4 4 0 0 1 0 7.744",
+            "M22 21v-2a4 4 0 0 0-3-3.87",
+            "M5 7a4 4 0 1 0 8 0a4 4 0 1 0 -8 0",
+        )
+    }
 }

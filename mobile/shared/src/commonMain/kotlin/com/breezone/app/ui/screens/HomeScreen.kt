@@ -53,7 +53,7 @@ private const val TYPE_REMOTE = "remote"
 private const val TYPE_EMPTY = "empty"
 
 @Composable
-fun HomeScreen(onOpenInstallation: (serverId: String, installationId: Long) -> Unit, onReauth: (String) -> Unit, onAddServer: () -> Unit) {
+fun HomeScreen(onOpenInstallation: (serverId: String, installationId: Long) -> Unit, onReauth: (String) -> Unit, onAddServer: () -> Unit, onBack: (() -> Unit)? = null) {
     val hub = koinInject<Hub>()
     val servers by hub.servers.collectAsState()
     var remoteInfo by remember { mutableStateOf<CloudInstallation?>(null) }
@@ -84,6 +84,11 @@ fun HomeScreen(onOpenInstallation: (serverId: String, installationId: Long) -> U
     ) {
         item(key = TYPE_HEADER, contentType = TYPE_HEADER) {
             Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (onBack != null) {
+                    androidx.compose.material3.IconButton(onClick = onBack, modifier = Modifier.padding(end = 4.dp)) {
+                        Icon(FzIcons.ChevronLeft, stringResource(Res.string.common_back))
+                    }
+                }
                 Text(stringResource(Res.string.home_title), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
                 if (servers.isNotEmpty()) {
                     // Installations loaded but no live channel: say why instead of "connecting…".

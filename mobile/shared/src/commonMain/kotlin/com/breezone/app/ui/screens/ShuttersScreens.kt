@@ -133,7 +133,7 @@ private fun Hub.stopCover(serverId: String, d: DeviceView) {
 }
 
 @Composable
-fun ShuttersScreen(serverId: String, onBack: () -> Unit, onOpen: (Long) -> Unit) {
+fun ShuttersScreen(serverId: String, onBack: (() -> Unit)?, onOpen: (Long) -> Unit) {
     val hub = koinInject<Hub>()
     val all by hub.devices.collectAsState()
     val status by hub.deviceStatus.collectAsState()
@@ -199,7 +199,7 @@ private fun CoverButtons(enabled: Boolean, onUp: () -> Unit, onStop: (() -> Unit
 }
 
 @Composable
-private fun ShutterRow(d: DeviceView, status: CommandStatus?, onOpen: () -> Unit, hub: Hub, serverId: String) {
+internal fun ShutterRow(d: DeviceView, status: CommandStatus?, onOpen: () -> Unit, hub: Hub, serverId: String) {
     val s = hub.movingCover(serverId, d)
     val open by animatedOpen(s.position)
     Row(Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
