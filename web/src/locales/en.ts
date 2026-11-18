@@ -1757,6 +1757,9 @@ const en: Record<string, string> = {
   "Retour aux composants": "Back to the components",
   "Rien à ajouter pour l'instant.": "Nothing to add yet.",
   "Espace vide": "Empty space",
+  "Coût réseau / gain solaire": "Grid cost / solar gain",
+  "achetés au réseau / économisés ou revendus":
+    "bought from the grid / saved or sold",
 }
 
 export default en

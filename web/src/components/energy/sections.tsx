@@ -24,6 +24,7 @@ import {
   Euro,
   Leaf,
   PiggyBank,
+  Scale,
   Plug,
   ShieldCheck,
   Sun,
@@ -210,7 +211,7 @@ function Kpi({
 }: {
   icon: LucideIcon
   label: string
-  value: string
+  value: ReactNode
   sub?: ReactNode
   color: string
   /** Values along the period, drawn at the bottom of the tile. */
@@ -258,9 +259,13 @@ export const KPI_IDS = [
   "autonomy",
   "cost",
   "gains",
+  "balance",
   "battery",
 ] as const
 export type KpiId = (typeof KPI_IDS)[number]
+
+/** The figures shown when none is chosen: the balance repeats the cost and the gains, so only on request. */
+export const DEFAULT_KPIS: KpiId[] = KPI_IDS.filter((k) => k !== "balance")
 
 export const KPI_LABEL: Record<KpiId, string> = {
   production: t("Production"),
@@ -270,6 +275,7 @@ export const KPI_LABEL: Record<KpiId, string> = {
   autonomy: t("Autonomie"),
   cost: t("Coût"),
   gains: t("Gagné grâce au solaire"),
+  balance: t("Coût réseau / gain solaire"),
   battery: t("Batterie"),
 }
 
@@ -402,6 +408,24 @@ export function Kpis({
         color={COLOR.solar}
       />
     ),
+    // What the grid cost against what the solar brought, side by side.
+    balance: cost && roles.solar && (
+      <Kpi
+        icon={Scale}
+        label={t("Coût réseau / gain solaire")}
+        value={
+          <>
+            <span style={{ color: COLOR.grid }}>{euros(cost.energy)}</span>
+            <span className="text-muted-foreground"> / </span>
+            <span style={{ color: COLOR.solar }}>
+              {euros(cost.saved + cost.earned)}
+            </span>
+          </>
+        }
+        sub={t("achetés au réseau / économisés ou revendus")}
+        color="var(--foreground)"
+      />
+    ),
     battery: roles.battery && (
       <Kpi
         icon={BatteryCharging}
@@ -420,7 +444,7 @@ export function Kpis({
           : "grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5"
       }
     >
-      {(only?.length ? only : KPI_IDS).map((id) =>
+      {(only?.length ? only : DEFAULT_KPIS).map((id) =>
         tiles[id] ? <Fragment key={id}>{tiles[id]}</Fragment> : null
       )}
     </div>

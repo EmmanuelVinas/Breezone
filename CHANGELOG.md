@@ -8,6 +8,9 @@ All notable changes are documented here. The format follows
 
 ### Added
 
+- Dashboards: a “Grid cost / solar gain” figure, the two side by side (“1,19 € / 0,10 €”): what was
+  bought from the grid, against what the solar saved or sold. Added on its own or ticked in the
+  figures of the period (not shown unless chosen).
 - App: the page shortcuts of Home can show some pages only (chosen in the card's settings), and a
   single page can be added as a half card of its own.
 

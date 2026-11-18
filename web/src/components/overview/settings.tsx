@@ -20,7 +20,12 @@ import { cn } from "@/lib/utils"
 import { ROOM_ICONS, roomIconName } from "@/lib/room-icons"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { KPI_IDS, KPI_LABEL, type KpiId } from "@/components/energy/sections"
+import {
+  DEFAULT_KPIS,
+  KPI_IDS,
+  KPI_LABEL,
+  type KpiId,
+} from "@/components/energy/sections"
 import {
   Dialog,
   DialogContent,
@@ -727,6 +732,7 @@ function catalog(home: Home): Entry[] {
           autonomy: !!roles?.grid && !!(roles?.solar || roles?.battery),
           cost: home.priced,
           gains: home.priced && !!roles?.solar,
+          balance: home.priced && !!roles?.solar,
           battery: !!roles?.battery,
         }
         for (const k of KPI_IDS)
@@ -806,7 +812,7 @@ function KpiOrder({
   value: KpiId[]
   onChange: (kpis: KpiId[]) => void
 }) {
-  const shown = value.length ? value : [...KPI_IDS]
+  const shown = value.length ? value : DEFAULT_KPIS
   const rest = KPI_IDS.filter((k) => !shown.includes(k))
   const move = (i: number, by: number) => {
     const next = [...shown]

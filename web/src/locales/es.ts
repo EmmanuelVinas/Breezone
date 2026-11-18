@@ -1775,6 +1775,9 @@ const es: Record<string, string> = {
   "Retour aux composants": "Volver a los componentes",
   "Rien à ajouter pour l'instant.": "Nada que añadir por ahora.",
   "Espace vide": "Espacio vacío",
+  "Coût réseau / gain solaire": "Coste de la red / ganancia solar",
+  "achetés au réseau / économisés ou revendus":
+    "comprados a la red / ahorrados o vendidos",
 }
 
 export default es
