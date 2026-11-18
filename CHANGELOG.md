@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.38] - 2026-11-18
+
 ### Added
 
 - Automations: the recipe “Solar surplus: heat or cool the home” — rather than giving the surplus
@@ -26,6 +28,11 @@ All notable changes are documented here. The format follows
     access itself and shows the homes, rooms and modules it reaches.
 - Dashboards: a “Self-consumption / autonomy” figure, the two side by side (“47 % / 13 %”), on its
   own or ticked in the figures of the period (not shown unless chosen).
+
+## [0.11.0-beta.37] - 2026-11-18
+
+### Added
+
 - Airzone schedules can be switched off all at once (web and app, administrators), so that
   Breezone's automations and schedules do not compete with them: those that were on are switched
   off in Airzone, and only they come back on when switched on again. While they are all off, the
@@ -33,22 +40,17 @@ All notable changes are documented here. The format follows
 - App: the automations of Breezone come first in Schedules, the Airzone schedules after.
 - Settings › Modules: a Philips Hue bridge and a HomeKit accessory (Legrand, VELUX…) can also be
   added by their address (the bridge's button, or the accessory's code, as when found).
-
-### Changed
-
-- The network searched for modules defaults to the one of the hardware already added (WebServers,
-  modules) when the server runs in a container, instead of asking for it.
-
-## [0.11.0-beta.37] - 2026-11-18
-
-### Added
-
 - Dashboards: a “Grid cost / solar gain” figure, the two side by side (“1,19 € / 0,10 €”): what was
   bought from the grid, against what the solar saved or sold. Added on its own or ticked in the
   figures of the period (not shown unless chosen).
 - App: the page shortcuts of Home can show some pages only (chosen in the card's settings), and a
   single page can be added as a half card of its own.
 
+
+### Changed
+
+- The network searched for modules defaults to the one of the hardware already added (WebServers,
+  modules) when the server runs in a container, instead of asking for it.
 ## [0.11.0-beta.36] - 2026-11-18
 
 ### Added
