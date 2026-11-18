@@ -67,8 +67,22 @@ fn kotlin_type(t: &Trait, f: &Field) -> String {
         "bool" => "Boolean".into(),
         "integer" => "Long".into(),
         "number" => "Double".into(),
+        // `ButtonPress` is the class of the action `press`: its enum is `ButtonPressValue`.
+        "enum" if t.actions.iter().any(|a| pascal(&a.name) == pascal(&f.name)) => format!("{}{}Value", pascal(&t.name), pascal(&f.name)),
         "enum" => format!("{}{}", pascal(&t.name), pascal(&f.name)),
         _ => "String".into(),
+    }
+}
+
+/// Each class or enum of the Kotlin file is declared once (Kotlin refuses a redeclaration).
+#[test]
+fn kotlin_names_are_declared_once() {
+    let text = kotlin();
+    let mut seen = std::collections::HashSet::new();
+    for line in text.lines() {
+        let Some(rest) = ["data class ", "enum class ", "class "].iter().find_map(|k| line.strip_prefix(k)) else { continue };
+        let name: String = rest.chars().take_while(|c| c.is_alphanumeric()).collect();
+        assert!(seen.insert(name.clone()), "{name} is declared twice");
     }
 }
 
