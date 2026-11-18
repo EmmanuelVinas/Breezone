@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.40] - 2026-11-18
+
 ### Added
 
 - Netatmo · Legrand: each device of the cloud is matched with its local device by the words of its

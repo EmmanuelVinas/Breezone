@@ -246,7 +246,7 @@ dependencies = [
 
 [[package]]
 name = "breezone-server"
-version = "0.11.0-beta.39"
+version = "0.11.0-beta.40"
 dependencies = [
  "anyhow",
  "argon2",
