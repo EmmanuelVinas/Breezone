@@ -203,6 +203,8 @@ class BreezoneApi(
     suspend fun weather(installationId: Long): WeatherView = call(HttpMethod.Get, "/api/weather?installation_id=$installationId")
     suspend fun energyLive(): EnergyLive = call(HttpMethod.Get, "/api/energy/live")
     suspend fun energyDay(): EnergyDay = call(HttpMethod.Get, "/api/energy/day")
+    /** The price of electricity of an installation now, and the Tempo colours. */
+    suspend fun price(installationId: Long): PriceView = call(HttpMethod.Get, "/api/installations/$installationId/electricity/price?hours=24")
     suspend fun deviceHistoryOver(deviceId: Long, hours: Int): DeviceHistory =
         call(HttpMethod.Get, "/api/devices/$deviceId/history?hours=$hours&bucket=${Periods.bucket(hours)}")
     suspend fun deviceHistory(deviceId: Long, hours: Int = 24, points: Int = 96): DeviceHistory =

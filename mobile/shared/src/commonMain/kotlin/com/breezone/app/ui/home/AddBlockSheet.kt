@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import com.breezone.app.data.BlockSize
 import com.breezone.app.data.Charted
 import com.breezone.app.data.DashboardBlock
+import com.breezone.app.data.TraitIds
 import com.breezone.app.data.block
 import com.breezone.app.data.groupConfig
 import com.breezone.app.data.shownOnCards
@@ -60,7 +61,7 @@ fun AddBlockSheet(ctx: HomeContext, onDismiss: () -> Unit, onAdd: (DashboardBloc
     var chartDevice by remember { mutableStateOf<Long?>(null) }
     var charted by remember { mutableStateOf<List<Charted>?>(null) }
     LaunchedEffect(kind) {
-        if (kind == BlockKind.Chart && charted == null) charted = runCatching { ctx.hub.api(ctx.serverId)?.charted() }.getOrNull().orEmpty()
+        if ((kind == BlockKind.Chart || kind == BlockKind.VentilationRooms) && charted == null) charted = runCatching { ctx.hub.api(ctx.serverId)?.charted() }.getOrNull().orEmpty()
     }
     val noRoom = stringResource(Res.string.block_no_room)
     val allZones = stringResource(Res.string.block_zones_all)
@@ -113,6 +114,17 @@ fun AddBlockSheet(ctx: HomeContext, onDismiss: () -> Unit, onAdd: (DashboardBloc
         }
         BlockKind.ZoneHistory, BlockKind.AirQuality -> shown.filter { d -> ctx.zoneOf(d)?.let { k != BlockKind.AirQuality || it.airQuality != null } == true }
             .map { d -> Entry("z${d.id}", FzIcons.Thermometer, d.name) { onAdd(block(k.type, k.size, mapOf("device_id" to JsonPrimitive(d.id)))) } }
+        BlockKind.LightPanel -> {
+            val lights = ctx.server.withTrait(TraitIds.LIGHT)
+            ctx.rooms.sortedBy { it.position }.filter { r -> lights.any { it.roomId == r.id } }.map { r ->
+                Entry("lr${r.id}", FzIcons.House, stringResource(Res.string.block_room_lights, r.name)) { onAdd(block(k.type, k.size, mapOf("room_id" to JsonPrimitive(r.id)))) }
+            } + lights.sortedBy { it.name }.map { d ->
+                Entry("l${d.id}", FzIcons.Lightbulb, d.name, ctx.rooms.firstOrNull { it.id == d.roomId }?.name) { onAdd(block(k.type, k.size, mapOf("device_id" to JsonPrimitive(d.id)))) }
+            }
+        }
+        BlockKind.VentilationRooms -> ventilationFields(ctx, charted.orEmpty()).map { f ->
+            Entry("v$f", FzIcons.ChartLine, fieldLabel(f)) { onAdd(block(k.type, k.size, mapOf("field" to JsonPrimitive(f), "hours" to JsonPrimitive(24)))) }
+        }
         BlockKind.Zones -> listOf(Entry("z-all", FzIcons.Thermometer, allZones) { onAdd(block(k.type, k.size)) }) +
             zoneGroups(ctx.installation).filterNotNull().map { g ->
                 Entry("z-$g", FzIcons.Thermometer, g) { onAdd(block(k.type, k.size, mapOf("group" to JsonPrimitive(g)))) }
@@ -135,7 +147,7 @@ fun AddBlockSheet(ctx: HomeContext, onDismiss: () -> Unit, onAdd: (DashboardBloc
                 )
             }
             if (kind != null && entries.isEmpty()) {
-                Muted(stringResource(if (kind == BlockKind.Chart && charted == null) Res.string.block_loading else Res.string.block_nothing_to_choose), Modifier.padding(8.dp))
+                Muted(stringResource(if ((kind == BlockKind.Chart || kind == BlockKind.VentilationRooms) && charted == null) Res.string.block_loading else Res.string.block_nothing_to_choose), Modifier.padding(8.dp))
             }
             LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 items(entries, key = { it.key }) { e ->
@@ -155,6 +167,13 @@ fun AddBlockSheet(ctx: HomeContext, onDismiss: () -> Unit, onAdd: (DashboardBloc
             }
         }
     }
+}
+
+/** The measures of the ventilated rooms that have a history, to compare them on one chart. */
+internal fun ventilationFields(ctx: HomeContext, charted: List<Charted>): List<String> {
+    val rooms = ctx.server.withTrait(TraitIds.VENTILATION_ROOM).map { it.id }.toSet()
+    val has = charted.filter { it.deviceId in rooms }.flatMap { it.fields }.toSet()
+    return listOf("humidity", "flow", "co2", "temperature", "voc", "level").filter { it in has }
 }
 
 /** What a kind of card shows, in a few words. */
@@ -179,5 +198,8 @@ private fun BlockKind.hint() = when (this) {
     BlockKind.SolarToday -> Res.string.block_solar_today_hint
     BlockKind.SolarPanels -> Res.string.block_solar_panels_hint
     BlockKind.VentilationHouse -> Res.string.block_ventilation_house_hint
+    BlockKind.VentilationRooms -> Res.string.block_ventilation_rooms_hint
+    BlockKind.LightPanel -> Res.string.block_light_panel_hint
+    BlockKind.PriceNow -> Res.string.block_price_now_hint
     BlockKind.Spacer -> Res.string.block_spacer_hint
 }

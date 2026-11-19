@@ -33,6 +33,7 @@ import com.breezone.app.data.DashboardBlock
 import com.breezone.app.data.Periods
 import com.breezone.app.data.shownOnCards
 import com.breezone.app.data.withConfig
+import com.breezone.app.data.withoutConfig
 import com.breezone.app.resources.*
 import com.breezone.app.ui.components.IconBadge
 import com.breezone.app.ui.components.periodLabel
@@ -43,7 +44,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.compose.resources.stringResource
 
 /** The cards that have something to set once added. */
-val BlockKind.settable get() = this in setOf(BlockKind.Pages, BlockKind.Room, BlockKind.Kind, BlockKind.Scenes, BlockKind.Chart)
+val BlockKind.settable get() = this in setOf(BlockKind.Pages, BlockKind.Room, BlockKind.Kind, BlockKind.Scenes, BlockKind.Chart, BlockKind.Device, BlockKind.LightPanel, BlockKind.VentilationRooms)
 
 /**
  * What a card shows, set after it was added: the devices of a room or of a type, the scenes, the
@@ -54,9 +55,11 @@ val BlockKind.settable get() = this in setOf(BlockKind.Pages, BlockKind.Room, Bl
 fun BlockSettingsSheet(initial: DashboardBlock, ctx: HomeContext, onDismiss: () -> Unit, onChange: (DashboardBlock) -> Unit) {
     var b by remember(initial.id) { mutableStateOf(initial) }
     var fields by remember { mutableStateOf<List<String>?>(null) }
+    var charted by remember { mutableStateOf<List<com.breezone.app.data.Charted>?>(null) }
     LaunchedEffect(b.long("device_id")) {
+        charted = runCatching { ctx.hub.api(ctx.serverId)?.charted() }.getOrNull().orEmpty()
         val id = b.long("device_id") ?: return@LaunchedEffect
-        if (BlockKind.of(b) == BlockKind.Chart) fields = runCatching { ctx.hub.api(ctx.serverId)?.charted() }.getOrNull()?.firstOrNull { it.deviceId == id }?.fields
+        if (BlockKind.of(b) in setOf(BlockKind.Chart, BlockKind.Device)) fields = charted?.firstOrNull { it.deviceId == id }?.fields
     }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -105,6 +108,49 @@ fun BlockSettingsSheet(initial: DashboardBlock, ctx: HomeContext, onDismiss: () 
                     Checklist(fields.orEmpty().mapIndexed { i, f -> Triple(f, com.breezone.app.ui.icons.FzIcons.ChartLine, labels[i]) }, chosen) { next ->
                         // A chart keeps at least one curve.
                         if (next.isNotEmpty()) b = b.withConfig("fields", JsonArray(fields.orEmpty().filter { it in next }.map { JsonPrimitive(it) }))
+                    }
+                }
+                BlockKind.Device -> {
+                    // A measure with a history can show its curve rather than its controls.
+                    val options = fields.orEmpty()
+                    if (options.isEmpty()) Muted(stringResource(Res.string.block_settings_none))
+                    else {
+                        Caption(stringResource(Res.string.block_settings_curve), Modifier.padding(start = 4.dp))
+                        val curve = b.string("curve")
+                        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            FilterChip(selected = curve == null, onClick = { b = b.withoutConfig("curve") }, label = { Text(stringResource(Res.string.block_curve_none)) })
+                            options.forEach { f ->
+                                FilterChip(selected = curve == f, onClick = { b = b.withConfig("curve", JsonPrimitive(f)) }, label = { Text(fieldLabel(f)) })
+                            }
+                        }
+                    }
+                }
+                BlockKind.LightPanel -> {
+                    Caption(stringResource(Res.string.block_settings_show), Modifier.padding(start = 4.dp))
+                    val shown = setOfNotNull("temperature".takeIf { b.bool("temperature") != false }, "colors".takeIf { b.bool("colors") != false })
+                    Checklist(
+                        listOf(
+                            Triple("temperature", com.breezone.app.ui.icons.FzIcons.Sun, stringResource(Res.string.light_white)),
+                            Triple("colors", com.breezone.app.ui.icons.FzIcons.Palette, stringResource(Res.string.light_colors)),
+                        ),
+                        shown,
+                    ) { next ->
+                        b = b.withConfig("temperature", JsonPrimitive("temperature" in next)).withConfig("colors", JsonPrimitive("colors" in next))
+                    }
+                }
+                BlockKind.VentilationRooms -> {
+                    val hours = b.long("hours")?.toInt() ?: Periods.DAY
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(Periods.DAY, Periods.WEEK).forEach { h ->
+                            FilterChip(selected = hours == h, onClick = { b = b.withConfig("hours", JsonPrimitive(h)) }, label = { Text(periodLabel(h)) })
+                        }
+                    }
+                    Caption(stringResource(Res.string.block_settings_measure), Modifier.padding(start = 4.dp))
+                    val field = b.string("field") ?: "humidity"
+                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        ventilationFields(ctx, charted.orEmpty()).forEach { f ->
+                            FilterChip(selected = field == f, onClick = { b = b.withConfig("field", JsonPrimitive(f)) }, label = { Text(fieldLabel(f)) })
+                        }
                     }
                 }
                 else -> Muted(stringResource(Res.string.block_settings_none))

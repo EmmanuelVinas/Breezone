@@ -1,6 +1,7 @@
 package com.breezone.app.data
 
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -208,6 +209,33 @@ object Periods {
         else -> 30 * 86_400
     }
 }
+
+/** The colour of a Tempo day. */
+@Serializable
+enum class DayColor {
+    @SerialName("blue") Blue,
+    @SerialName("white") White,
+    @SerialName("red") Red,
+}
+
+/** The price of the kWh now: its slot (peak, off-peak…) and its profile (blue day…). */
+@Serializable
+data class PriceAt(
+    val price: Double,
+    val slot: String = "",
+    val profileName: String = "",
+)
+
+@Serializable
+data class TempoView(val today: DayColor? = null, val tomorrow: DayColor? = null)
+
+/** The price of electricity (`/api/installations/{id}/electricity/price`): null without a tariff. */
+@Serializable
+data class PriceView(
+    val currency: String = "EUR",
+    val now: PriceAt? = null,
+    val tempo: TempoView? = null,
+)
 
 /** An hour of the forecast (`/api/weather`). */
 @Serializable

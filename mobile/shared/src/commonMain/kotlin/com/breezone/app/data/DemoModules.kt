@@ -37,6 +37,7 @@ import com.breezone.app.resources.demo_water_heater
 import com.breezone.app.resources.demo_zone_bedroom1
 import com.breezone.app.resources.demo_zone_living
 import com.breezone.app.resources.demo_zone_office
+import com.breezone.app.resources.tempo_blue
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -416,6 +417,17 @@ internal object DemoModules {
             path == "/api/energy/live" -> FzJson.encodeToString(live())
             path == "/api/energy/day" -> FzJson.encodeToString(day())
             path == "/api/weather" -> FzJson.encodeToString(weather())
+            parts.size == 5 && parts[1] == "installations" && parts[3] == "electricity" && parts[4] == "price" -> {
+                val h = hourOf(now())
+                val peak = h in 6.0..22.0
+                FzJson.encodeToString(
+                    PriceView(
+                        currency = "EUR",
+                        now = PriceAt(if (peak) 0.1654 else 0.1356, if (peak) "HP" else "HC", getString(Res.string.tempo_blue)),
+                        tempo = TempoView(DayColor.Blue, DayColor.White),
+                    ),
+                )
+            }
             path == "/api/presence" -> FzJson.encodeToString(Presence(me = true, someoneHome = true))
             path == "/api/automations" -> FzJson.encodeToString(automations.toList())
             path == "/api/automations/settings" -> FzJson.encodeToString(AutomationSettings())

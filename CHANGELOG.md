@@ -6,13 +6,20 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Mobile app, home: the cards of the web overview that it lacked: a light or the lights of a room
+  (brightness, white, colours), the price of the kWh with the Tempo colours of today and tomorrow,
+  a measure with its curve of the last 24 hours (the setting of a device card), and the chart of
+  the ventilated rooms (one measure, one curve per room).
+
 ### Changed
 
 - Mobile app: the demonstration has the modules too: lights and their scenes, shutters, the solar
   production, the grid, a water heater and a charger on the surplus, ventilation room by room, a
   remote, the weather and a few automations; their measures follow the time of day.
-- Showcase site: Breezone is presented as a simple, open source home automation, with the list of
-  its integrations; new screenshots of the app, taken in its demonstration.
+- Showcase site and README: Breezone is presented as a simple, open source home automation, with the
+  list of its integrations; new screenshots of the app, taken in its demonstration.
 
 ## [0.11.0] - 2026-11-19
 

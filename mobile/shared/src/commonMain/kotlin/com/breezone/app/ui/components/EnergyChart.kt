@@ -74,3 +74,57 @@ fun PowerDayChart(series: List<PowerSeries>, dayStart: Long, modifier: Modifier 
         animateIn = false,
     )
 }
+
+/** A curve of a [LinesChart]: `[ts, value]` points and its colour. */
+data class TimeSeries(val points: List<List<Double>>, val color: Color)
+
+/**
+ * Several curves over the same hours (one per room…), from [from] (a timestamp) over [hours];
+ * [label] writes the hours below. Curves without points are left out.
+ */
+@Composable
+fun LinesChart(series: List<TimeSeries>, from: Long, hours: Int, label: (Double) -> String, modifier: Modifier = Modifier) {
+    val shown = remember(series) { series.filter { it.points.size >= 2 } }
+    val producer = remember { CartesianChartModelProducer() }
+    LaunchedEffect(shown, from) {
+        if (shown.isEmpty()) return@LaunchedEffect
+        producer.runTransaction {
+            lineSeries {
+                shown.forEach { s -> series(s.points.map { round((it[0] - from) / 36.0) / 100 }, s.points.map { it[1] }) }
+            }
+        }
+    }
+    if (shown.isEmpty()) return
+    val lines = shown.map { s ->
+        LineCartesianLayer.rememberLine(
+            fill = LineCartesianLayer.LineFill.single(Fill(s.color)),
+            stroke = LineCartesianLayer.LineStroke.Continuous(thickness = 1.75.dp),
+            pointConnector = LineCartesianLayer.PointConnector.cubic(),
+        )
+    }
+    val values = shown.flatMap { s -> s.points.map { it[1] } }
+    val min = values.minOrNull() ?: 0.0
+    val max = (values.maxOrNull() ?: 1.0).coerceAtLeast(min + 1)
+    val formatter = remember(label) { CartesianValueFormatter { _, x, _ -> label(x) } }
+    CartesianChartHost(
+        chart = rememberCartesianChart(
+            rememberLineCartesianLayer(
+                lineProvider = remember(lines) { LineCartesianLayer.LineProvider.series(lines) },
+                pointSpacing = 3.dp,
+                rangeProvider = remember(min, max, hours) { CartesianLayerRangeProvider.fixed(minX = 0.0, maxX = hours.toDouble(), minY = min.coerceAtMost(max - 1), maxY = max) },
+            ),
+            startAxis = VerticalAxis.rememberStart(label = rememberAxisLabel()),
+            bottomAxis = HorizontalAxis.rememberBottom(
+                label = rememberAxisLabel(),
+                valueFormatter = formatter,
+                itemPlacer = remember(hours) { HorizontalAxis.ItemPlacer.aligned(spacing = { if (hours > 24) 24 else 6 }) },
+            ),
+            getXStep = { _, _, _ -> 1.0 },
+        ),
+        modelProducer = producer,
+        modifier = modifier,
+        scrollState = rememberVicoScrollState(scrollEnabled = false),
+        zoomState = rememberVicoZoomState(zoomEnabled = false, initialZoom = Zoom.Content),
+        animateIn = false,
+    )
+}

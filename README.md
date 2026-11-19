@@ -99,9 +99,9 @@ The web UI is available in French, English and Spanish.
 ### Mobile app
 
 
-| Installations                                                                              | Zones by floor                                                                                            | A zone                                                                                        | Airzone schedules                                                                                        |
-| :------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------------------: |
-| <img src="docs/images/mobile/en/1-installations.jpg" width="200" alt="Your installations"> | <img src="docs/images/mobile/en/2-installation.jpg" width="200" alt="Zones of an installation, by floor"> | <img src="docs/images/mobile/en/3-zone.jpg" width="200" alt="A zone: setpoint, on/off, mode"> | <img src="docs/images/mobile/en/4-schedules.jpg" width="200" alt="Airzone schedules of an installation"> |
+| Home | Energy | A zone | Lights |
+| :---: | :---: | :---: | :---: |
+| <img src="docs/images/mobile/en/1-home.jpg" width="200" alt="The home at a glance"> | <img src="docs/images/mobile/en/2-energy.jpg" width="200" alt="Live energy: solar, home, grid"> | <img src="docs/images/mobile/en/3-zone.jpg" width="200" alt="A zone: setpoint, on/off, mode"> | <img src="docs/images/mobile/en/4-lights.jpg" width="200" alt="The lights, room by room"> |
 
 
 ## Install (Docker)

@@ -762,4 +762,13 @@ object FzIcons {
             "M5 7a4 4 0 1 0 8 0a4 4 0 1 0 -8 0",
         )
     }
+
+    val Euro: ImageVector by lazy {
+        lucide(
+            "Euro",
+            "M4 10h12",
+            "M4 14h9",
+            "M19 6a7.7 7.7 0 0 0-5.2-2A7.9 7.9 0 0 0 6 12c0 4.4 3.5 8 7.8 8 2 0 3.8-.8 5.2-2",
+        )
+    }
 }

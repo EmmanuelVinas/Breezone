@@ -49,6 +49,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.breezone.app.data.CommandStatus
@@ -240,27 +241,9 @@ fun LightScreen(serverId: String, deviceId: Long, onBack: () -> Unit) {
             }
             if (s.colorTemp != null || s.colorTempMin != null) {
                 item(key = "white", contentType = "white") {
-                    val min = (s.colorTempMin ?: 2000).toFloat()
-                    val max = (s.colorTempMax ?: 6500).toFloat().coerceAtLeast(min + 100)
-                    val k = s.colorTemp?.toFloat() ?: ((min + max) / 2)
                     SectionCard {
                         SectionTitle(stringResource(Res.string.light_white))
-                        Box(
-                            Modifier.fillMaxWidth().height(18.dp).clip(CircleShape)
-                                .background(Brush.horizontalGradient(listOf(kelvinColor(min.toLong()), kelvinColor(((min + max) / 2).toLong()), kelvinColor(max.toLong())))),
-                        )
-                        FzSlider(
-                            value = k.coerceIn(min, max),
-                            onCommit = { v -> set(buildJsonObject { put("on", true); put("color_temp", v.toInt()) }) },
-                            range = min..max,
-                            enabled = d.usable,
-                            colors = SliderDefaults.colors(thumbColor = kelvinColor(k.toLong()), activeTrackColor = Color.Transparent, inactiveTrackColor = Color.Transparent),
-                        )
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Caption(stringResource(Res.string.light_warm_short))
-                            Caption(stringResource(Res.string.light_kelvin, k.toInt()))
-                            Caption(stringResource(Res.string.light_cool_short))
-                        }
+                        WhiteSlider(s, d.usable) { k -> set(buildJsonObject { put("on", true); put("color_temp", k) }) }
                     }
                 }
             }
@@ -268,20 +251,7 @@ fun LightScreen(serverId: String, deviceId: Long, onBack: () -> Unit) {
                 item(key = "colors", contentType = "colors") {
                     SectionCard {
                         SectionTitle(stringResource(Res.string.light_colors))
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            SWATCHES.forEach { hex ->
-                                val chosen = s.mode == LightMode.Color && s.color.equals(hex, ignoreCase = true)
-                                Box(
-                                    Modifier.size(40.dp).clip(CircleShape).background(hexColor(hex)!!)
-                                        .then(if (chosen) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape) else Modifier)
-                                        .clickable(enabled = d.usable) {
-                                            val params = buildJsonObject { put("on", true); put("color", JsonPrimitive(hex)) }
-                                            // The light turns to its color mode: shown at once.
-                                            hub.act(serverId, d, "light", "set", params, optimistic = JsonObject(params + ("mode" to JsonPrimitive("color"))))
-                                        },
-                                )
-                            }
-                        }
+                        ColorSwatches(s, d.usable, 40.dp) { hex -> hub.setLightColor(serverId, d, hex) }
                     }
                 }
             }
@@ -289,18 +259,103 @@ fun LightScreen(serverId: String, deviceId: Long, onBack: () -> Unit) {
     }
 }
 
+/** A light turned to a colour: its colour mode shows at once. */
+internal fun Hub.setLightColor(serverId: String, d: DeviceView, hex: String) {
+    val params = buildJsonObject { put("on", true); put("color", JsonPrimitive(hex)) }
+    act(serverId, d, "light", "set", params, optimistic = JsonObject(params + ("mode" to JsonPrimitive("color"))))
+}
+
+/** The white of a light, from warm to cool, over its gradient. */
+@Composable
+internal fun WhiteSlider(s: LightState, enabled: Boolean, onSet: (Int) -> Unit) {
+    val min = (s.colorTempMin ?: 2000).toFloat()
+    val max = (s.colorTempMax ?: 6500).toFloat().coerceAtLeast(min + 100)
+    val k = s.colorTemp?.toFloat() ?: ((min + max) / 2)
+    Box(
+        Modifier.fillMaxWidth().height(18.dp).clip(CircleShape)
+            .background(Brush.horizontalGradient(listOf(kelvinColor(min.toLong()), kelvinColor(((min + max) / 2).toLong()), kelvinColor(max.toLong())))),
+    )
+    FzSlider(
+        value = k.coerceIn(min, max),
+        onCommit = { v -> onSet(v.toInt()) },
+        range = min..max,
+        enabled = enabled,
+        colors = SliderDefaults.colors(thumbColor = kelvinColor(k.toLong()), activeTrackColor = Color.Transparent, inactiveTrackColor = Color.Transparent),
+    )
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Caption(stringResource(Res.string.light_warm_short))
+        Caption(stringResource(Res.string.light_kelvin, k.toInt()))
+        Caption(stringResource(Res.string.light_cool_short))
+    }
+}
+
+/** The colours offered, the light's own one ringed. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun ColorSwatches(s: LightState, enabled: Boolean, size: Dp, onPick: (String) -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        SWATCHES.forEach { hex ->
+            val chosen = s.mode == LightMode.Color && s.color.equals(hex, ignoreCase = true)
+            Box(
+                Modifier.size(size).clip(CircleShape).background(hexColor(hex)!!)
+                    .then(if (chosen) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape) else Modifier)
+                    .clickable(enabled = enabled) { onPick(hex) },
+            )
+        }
+    }
+}
+
+/**
+ * One light, or the lights of a room together, as on a light's page: its brightness bar, its
+ * white and its colours (both can be left out). A room shows its first lit light and sets them all.
+ */
+@Composable
+fun LightPanel(serverId: String, lights: List<DeviceView>, title: String, subtitle: String?, temperature: Boolean, colors: Boolean, modifier: Modifier = Modifier) {
+    val hub = koinInject<Hub>()
+    val usable = lights.filter { it.usable && it.stateAs(LightState.serializer())?.reachable != false }
+    val lit = lights.filter { it.available && it.stateAs(LightState.serializer())?.on == true }
+    val s = (lit.firstOrNull() ?: lights.firstOrNull())?.stateAs(LightState.serializer()) ?: LightState()
+    val on = lit.isNotEmpty()
+    val glow = s.glow(Fz.colors.light)
+    val withWhite = usable.filter { it.stateAs(LightState.serializer())?.let { l -> l.colorTemp != null || l.colorTempMin != null } == true }
+    val withColor = usable.filter { it.stateAs(LightState.serializer())?.color != null }
+    val dimmable = usable.filter { it.stateAs(LightState.serializer())?.brightness != null }
+    SectionCard(modifier) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                subtitle?.let { Caption(it, maxLines = 1) }
+            }
+            Switch(checked = on, enabled = usable.isNotEmpty(), onCheckedChange = { v -> usable.forEach { hub.setLight(serverId, it, buildJsonObject { put("on", v) }) } })
+        }
+        if (dimmable.isNotEmpty()) {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                BrightnessBar(s.brightness?.toInt() ?: 100, on, glow, enabled = true, width = 110.dp, height = 210.dp) { v ->
+                    dimmable.forEach { hub.setLight(serverId, it, buildJsonObject { put("on", true); put("brightness", v) }) }
+                }
+            }
+        }
+        if (temperature && withWhite.isNotEmpty()) {
+            WhiteSlider(s, true) { k -> withWhite.forEach { hub.setLight(serverId, it, buildJsonObject { put("on", true); put("color_temp", k) }) } }
+        }
+        if (colors && withColor.isNotEmpty()) {
+            ColorSwatches(s, true, 32.dp) { hex -> withColor.forEach { hub.setLightColor(serverId, it, hex) } }
+        }
+    }
+}
+
 /** The big brightness bar: filled with the light's color; drag or tap to set it. */
 @Composable
-private fun BrightnessBar(value: Int, on: Boolean, color: Color, enabled: Boolean, onSet: (Int) -> Unit) {
+private fun BrightnessBar(value: Int, on: Boolean, color: Color, enabled: Boolean, width: Dp = 140.dp, height: Dp = 300.dp, onSet: (Int) -> Unit) {
     var draft by remember { mutableStateOf<Int?>(null) }
     val lit = on || draft != null
     val shown = if (lit) draft ?: value else 0
     fun at(y: Float, height: Int) = ((1f - y / height) * 100).toInt().coerceIn(1, 100)
     Box(
         Modifier
-            .width(140.dp)
-            .height(300.dp)
-            .clip(RoundedCornerShape(44.dp))
+            .width(width)
+            .height(height)
+            .clip(RoundedCornerShape(width * 0.31f))
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .pointerInput(enabled) {
                 if (!enabled) return@pointerInput

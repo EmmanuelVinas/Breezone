@@ -73,6 +73,8 @@ fun block(type: String, size: BlockSize = BlockSize.Full, config: Map<String, Js
 
 fun DashboardBlock.withConfig(key: String, value: JsonElement) = copy(config = JsonObject(config + (key to value)))
 
+fun DashboardBlock.withoutConfig(key: String) = copy(config = JsonObject(config - key))
+
 /** The kinds of cards the app knows; one of another kind (written by a newer app) is kept, not shown. */
 object BlockTypes {
     const val PAGES = "pages"
@@ -94,6 +96,9 @@ object BlockTypes {
     const val SOLAR_TODAY = "solar_today"
     const val SOLAR_PANELS = "solar_panels"
     const val VENTILATION_HOUSE = "ventilation_house"
+    const val VENTILATION_ROOMS = "ventilation_rooms"
+    const val LIGHT_PANEL = "light_panel"
+    const val PRICE_NOW = "price_now"
     const val SPACER = "spacer"
 }
 

@@ -103,9 +103,9 @@ Ouvrez une issue.
 ### Application mobile
 
 
-| Installations                                                                             | Zones par étage                                                                                                | Une zone                                                                                               | Programmations Airzone                                                                                            |
-| :-----------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------------------------: | :------------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------------------: |
-| <img src="docs/images/mobile/fr/1-installations.jpg" width="200" alt="Vos installations"> | <img src="docs/images/mobile/fr/2-installation.jpg" width="200" alt="Les zones d'une installation, par étage"> | <img src="docs/images/mobile/fr/3-zone.jpg" width="200" alt="Une zone : consigne, marche/arrêt, mode"> | <img src="docs/images/mobile/fr/4-schedules.jpg" width="200" alt="Les programmations Airzone d'une installation"> |
+| Maison | Énergie | Une zone | Lumières |
+| :---: | :---: | :---: | :---: |
+| <img src="docs/images/mobile/fr/1-home.jpg" width="200" alt="La maison d'un coup d'œil"> | <img src="docs/images/mobile/fr/2-energy.jpg" width="200" alt="L'énergie en direct : solaire, maison, réseau"> | <img src="docs/images/mobile/fr/3-zone.jpg" width="200" alt="Une zone : consigne, marche/arrêt, mode"> | <img src="docs/images/mobile/fr/4-lights.jpg" width="200" alt="Les lumières, pièce par pièce"> |
 
 
 ## Installation (Docker)

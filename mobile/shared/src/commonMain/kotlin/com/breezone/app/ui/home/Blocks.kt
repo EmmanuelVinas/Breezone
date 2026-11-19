@@ -1,6 +1,9 @@
 package com.breezone.app.ui.home
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -37,6 +40,8 @@ import com.breezone.app.data.ChargerShown
 import com.breezone.app.data.CommandStatus
 import com.breezone.app.data.CoverPositionState
 import com.breezone.app.data.DashboardBlock
+import com.breezone.app.data.DayColor
+import com.breezone.app.data.PriceView
 import com.breezone.app.data.DeviceHistory
 import com.breezone.app.data.DeviceView
 import com.breezone.app.data.EnergyDay
@@ -60,6 +65,9 @@ import com.breezone.app.data.shown
 import com.breezone.app.data.shownOnCards
 import com.breezone.app.resources.*
 import com.breezone.app.ui.components.DeviceGroupCard
+import com.breezone.app.ui.components.LinesChart
+import com.breezone.app.ui.components.TimeSeries
+import com.breezone.app.ui.screens.LightPanel
 import com.breezone.app.ui.components.Sparkline
 import com.breezone.app.ui.components.TypeTile
 import com.breezone.app.ui.components.WeatherCard
@@ -164,6 +172,9 @@ enum class BlockKind(
     SolarToday(BlockTypes.SOLAR_TODAY, Res.string.block_solar_today, FzIcons.Sun, BlockSize.Full),
     SolarPanels(BlockTypes.SOLAR_PANELS, Res.string.block_solar_panels, FzIcons.SolarPanel, BlockSize.Full),
     VentilationHouse(BlockTypes.VENTILATION_HOUSE, Res.string.block_ventilation_house, FzIcons.Fan, BlockSize.Full),
+    VentilationRooms(BlockTypes.VENTILATION_ROOMS, Res.string.block_ventilation_rooms, FzIcons.ChartLine, BlockSize.Full, BlockChoice.Measure),
+    LightPanel(BlockTypes.LIGHT_PANEL, Res.string.block_light_panel, FzIcons.Lightbulb, BlockSize.Full, BlockChoice.Light),
+    PriceNow(BlockTypes.PRICE_NOW, Res.string.block_price_now, FzIcons.Euro, BlockSize.Half),
     Spacer(BlockTypes.SPACER, Res.string.block_spacer, FzIcons.Square, BlockSize.Half),
     ;
 
@@ -178,6 +189,9 @@ enum class BlockKind(
         Charger, ChargerCurve -> ctx.server.withTrait(TraitIds.CHARGER).isNotEmpty() && AppPage.Charging in ctx.pages
         SolarToday, SolarPanels -> AppPage.Solar in ctx.pages
         VentilationHouse -> ctx.server.withTrait(TraitIds.VENTILATION_UNIT).isNotEmpty() && AppPage.Ventilation in ctx.pages
+        VentilationRooms -> ctx.server.withTrait(TraitIds.VENTILATION_ROOM).isNotEmpty() && AppPage.Ventilation in ctx.pages
+        LightPanel -> ctx.server.withTrait(TraitIds.LIGHT).isNotEmpty() && AppPage.Lights in ctx.pages
+        PriceNow -> ctx.installation != null
         else -> true
     }
 
@@ -191,7 +205,7 @@ enum class BlockKind(
 }
 
 /** What has to be chosen before a card is added. */
-enum class BlockChoice { None, Flow, Room, Kind, Device, Chart, ZoneGroup, Zone, Pages }
+enum class BlockChoice { None, Flow, Room, Kind, Device, Chart, ZoneGroup, Zone, Pages, Light, Measure }
 
 /** The title a card shows while the home is being arranged, so that each can be told apart. */
 @Composable
@@ -206,6 +220,8 @@ fun blockTitle(b: DashboardBlock, ctx: HomeContext): String {
         BlockKind.Pages -> b.strings("pages").mapNotNull { id -> AppPage.entries.firstOrNull { it.name == id } }.takeIf { it.isNotEmpty() }
             ?.map { stringResource(it.label) }?.joinToString(" · ") ?: stringResource(kind.label)
         BlockKind.ZoneHistory, BlockKind.AirQuality -> listOfNotNull(stringResource(kind.label), ctx.devices.firstOrNull { it.id == b.long("device_id") }?.name).joinToString(" · ")
+        BlockKind.LightPanel -> lightPanelTitle(b, ctx) ?: stringResource(kind.label)
+        BlockKind.VentilationRooms -> stringResource(Res.string.block_ventilation_rooms_title, fieldLabel(b.string("field") ?: "humidity"))
         else -> stringResource(kind.label)
     }
 }
@@ -223,7 +239,7 @@ fun BlockContent(b: DashboardBlock, ctx: HomeContext, editing: Boolean) {
         BlockKind.EnergyUses -> ctx.live?.takeIf { it.hasUses() }?.let { EnergyUsesCard(it) } ?: Waiting(b, ctx, editing)
         BlockKind.Zones -> ZonesBlock(b.string("group"), ctx)
         BlockKind.Room, BlockKind.Kind -> GroupBlock(b, ctx)
-        BlockKind.Device -> DeviceBlock(b.long("device_id"), ctx)
+        BlockKind.Device -> b.string("curve")?.let { MeasureBlock(b.long("device_id"), it, ctx) } ?: DeviceBlock(b.long("device_id"), ctx)
         BlockKind.Chart -> ChartBlock(b.long("device_id"), b.strings("fields").ifEmpty { listOfNotNull(b.string("field")) }, b.long("hours")?.toInt() ?: 24, ctx)
         BlockKind.Scenes -> ScenesBlock(b.longs("routine_ids"), ctx)
         BlockKind.ZoneHistory -> zoneBlock(b, ctx)?.let { ZoneHistorySection(ctx.hub, ctx.serverId, it) } ?: Gone()
@@ -235,11 +251,34 @@ fun BlockContent(b: DashboardBlock, ctx: HomeContext, editing: Boolean) {
         BlockKind.VentilationHouse -> ctx.server.withTrait(TraitIds.VENTILATION_UNIT).firstOrNull()?.let { unit ->
             VentilationHouseCard(ctx.serverId, unit, ctx.server.withTrait(TraitIds.VENTILATION_ROOM).filter { it.sourceId == unit.sourceId })
         } ?: Gone()
+        BlockKind.VentilationRooms -> VentilationRoomsBlock(b.string("field") ?: "humidity", b.long("hours")?.toInt() ?: 24, ctx)
+        BlockKind.LightPanel -> lightsOf(b, ctx).takeIf { it.isNotEmpty() }?.let { lights ->
+            LightPanel(
+                ctx.serverId, lights, lightPanelTitle(b, ctx).orEmpty(),
+                if (b.has("room_id")) pluralStringResource(Res.plurals.lights_on_of, lights.count { it.stateAs(LightState.serializer())?.on == true }, lights.count { it.stateAs(LightState.serializer())?.on == true }, lights.size)
+                else ctx.rooms.firstOrNull { it.id == lights.first().roomId }?.name,
+                temperature = b.bool("temperature") != false,
+                colors = b.bool("colors") != false,
+            )
+        } ?: Gone()
+        BlockKind.PriceNow -> PriceBlock(ctx, editing)
         // An empty cell, to leave room: seen only while arranging.
         BlockKind.Spacer -> if (editing) SectionCard { Muted(stringResource(Res.string.block_spacer)) }
         null -> if (editing) Waiting(b, ctx, true)
     }
 }
+
+/** The lights a light card drives: those of its room, or the one chosen. */
+private fun lightsOf(b: DashboardBlock, ctx: HomeContext): List<DeviceView> {
+    val lights = ctx.server.withTrait(TraitIds.LIGHT)
+    return if (b.has("room_id")) lights.filter { it.roomId == b.long("room_id") } else lights.filter { it.id == b.long("device_id") }
+}
+
+/** The name of a light card: its room's, or its light's. */
+@Composable
+private fun lightPanelTitle(b: DashboardBlock, ctx: HomeContext): String? =
+    if (b.has("room_id")) ctx.rooms.firstOrNull { it.id == b.long("room_id") }?.name
+    else ctx.server.withTrait(TraitIds.LIGHT).firstOrNull { it.id == b.long("device_id") }?.name
 
 /** The zone a card shows (its device). */
 private fun zoneBlock(b: DashboardBlock, ctx: HomeContext): Zone? = ctx.devices.firstOrNull { it.id == b.long("device_id") }?.let { ctx.zoneOf(it) }
@@ -493,6 +532,160 @@ private fun ChartBlock(id: Long?, fields: List<String>, hours: Int, ctx: HomeCon
         }
         if (history != null && fields.all { history?.series?.get(it).isNullOrEmpty() }) Muted(stringResource(Res.string.block_chart_empty))
     }
+}
+
+/** A measure alone: its value large and its curve of the last 24 hours, as the figures of a page. */
+@Composable
+private fun MeasureBlock(id: Long?, field: String, ctx: HomeContext) {
+    val d = ctx.devices.firstOrNull { it.id == id }
+    var history by remember(id) { mutableStateOf<DeviceHistory?>(null) }
+    LaunchedEffect(ctx.serverId, id) {
+        if (id == null) return@LaunchedEffect
+        while (true) {
+            runCatching { ctx.hub.api(ctx.serverId)?.deviceHistory(id, 24, 96) }.getOrNull()?.let { history = it }
+            delay(300_000)
+        }
+    }
+    if (d == null) return Gone()
+    val points = history?.series?.get(field).orEmpty()
+    val now = (d.state?.get(field) as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull() ?: points.lastOrNull()?.getOrNull(1)
+    val color = if (d.role == "solar") Fz.colors.warning else MaterialTheme.colorScheme.primary
+    SectionCard(Modifier.clickable { ctx.nav.openDevice(d) }) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(d.deviceKind.icon, null, Modifier.size(14.dp), tint = color)
+            Spacer(Modifier.width(6.dp))
+            Text(d.name, fontSize = 12.sp, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Text(now?.let { fieldValue(field, it) } ?: "–", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+        if (points.size > 1) Sparkline(points, color, Modifier.fillMaxWidth().height(48.dp))
+        else if (history != null) Caption(stringResource(Res.string.block_curve_later))
+    }
+}
+
+/** One measure of every ventilated room, one curve each, with what each says now. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun VentilationRoomsBlock(field: String, hours: Int, ctx: HomeContext) {
+    val rooms = ctx.server.withTrait(TraitIds.VENTILATION_ROOM).sortedBy { it.name }
+    var histories by remember(field, hours) { mutableStateOf<Map<Long, DeviceHistory>>(emptyMap()) }
+    LaunchedEffect(ctx.serverId, rooms.map { it.id }, hours) {
+        while (true) {
+            val api = ctx.hub.api(ctx.serverId) ?: break
+            histories = rooms.mapNotNull { r -> runCatching { api.deviceHistory(r.id, hours, if (hours > 24) 168 else 96) }.getOrNull()?.let { r.id to it } }.toMap()
+            delay(300_000)
+        }
+    }
+    val palette = listOf(MaterialTheme.colorScheme.primary, Fz.colors.warning, Fz.colors.cool, Fz.colors.success, Fz.colors.heat, Fz.colors.air, Fz.colors.light)
+    val curves = rooms.mapIndexed { i, r -> Triple(r, palette[i % palette.size], histories[r.id]?.series?.get(field).orEmpty()) }.filter { it.third.isNotEmpty() }
+    val from = remember(hours, histories) { kotlin.time.Clock.System.now().epochSeconds - hours * 3600L }
+    SectionCard(Modifier.clickable { ctx.nav.openPage(AppPage.Ventilation) }) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(Res.string.block_ventilation_rooms_title, fieldLabel(field)), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Caption(com.breezone.app.ui.components.periodLabel(hours))
+        }
+        val hoursAgo = stringResource(Res.string.chart_hours_ago, "{n}")
+        val daysAgo = stringResource(Res.string.chart_days_ago, "{n}")
+        if (curves.isEmpty()) {
+            Muted(stringResource(if (histories.isEmpty()) Res.string.block_loading else Res.string.block_chart_empty))
+        } else {
+            LinesChart(
+                curves.map { TimeSeries(it.third, it.second) },
+                from, hours,
+                label = { x ->
+                    val ago = if (hours > 24) ((hours - x) / 24).roundToInt() else (hours - x).roundToInt()
+                    when {
+                        ago == 0 -> "0"
+                        hours > 24 -> daysAgo.replace("{n}", ago.toString())
+                        else -> hoursAgo.replace("{n}", ago.toString())
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().height(160.dp),
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                curves.forEach { (r, color, points) ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(8.dp).background(color, CircleShape))
+                        Spacer(Modifier.width(4.dp))
+                        Text(r.name, fontSize = 12.sp)
+                        points.lastOrNull()?.getOrNull(1)?.let {
+                            Spacer(Modifier.width(4.dp))
+                            Text(fieldValue(field, it), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** The price of the kWh now, with the Tempo colours of today and tomorrow. */
+@Composable
+private fun PriceBlock(ctx: HomeContext, editing: Boolean) {
+    val id = ctx.installation?.id
+    var price by remember(id) { mutableStateOf<PriceView?>(null) }
+    LaunchedEffect(ctx.serverId, id) {
+        if (id == null) return@LaunchedEffect
+        while (true) {
+            runCatching { ctx.hub.api(ctx.serverId)?.price(id) }.getOrNull()?.let { price = it }
+            delay(60_000)
+        }
+    }
+    val now = price?.now
+    if (now == null) {
+        if (editing) SectionCard { Muted(stringResource(Res.string.price_none)) }
+        return
+    }
+    SectionCard(Modifier.clickable { ctx.nav.openPage(AppPage.Energy) }) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(FzIcons.Euro, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(6.dp))
+            Text(stringResource(Res.string.price_now), fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, maxLines = 1)
+        }
+        Text(formatPrice(now.price, price?.currency.orEmpty()), fontSize = 22.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        listOf(now.slot, now.profileName).filter { it.isNotBlank() }.takeIf { it.isNotEmpty() }?.let { Caption(it.joinToString(" · "), maxLines = 1) }
+        price?.tempo?.let { t ->
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                TempoDay(stringResource(Res.string.tempo_today), t.today, Modifier.weight(1f))
+                TempoDay(stringResource(Res.string.tempo_tomorrow), t.tomorrow, Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun TempoDay(label: String, color: DayColor?, modifier: Modifier) {
+    Column(modifier) {
+        Caption(label, maxLines = 1)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            val tone = when (color) {
+                DayColor.Blue -> Fz.colors.cool
+                DayColor.White -> MaterialTheme.colorScheme.onSurface
+                DayColor.Red -> MaterialTheme.colorScheme.error
+                null -> Fz.colors.muted
+            }
+            Box(Modifier.size(9.dp).background(tone, CircleShape))
+            Spacer(Modifier.width(5.dp))
+            Text(
+                stringResource(
+                    when (color) {
+                        DayColor.Blue -> Res.string.tempo_blue
+                        DayColor.White -> Res.string.tempo_white
+                        DayColor.Red -> Res.string.tempo_red
+                        null -> Res.string.tempo_unknown
+                    },
+                ),
+                fontSize = 13.sp, fontWeight = if (color != null) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/** A price of the kWh: four decimals, as on a bill. */
+fun formatPrice(v: Double, currency: String): String {
+    val tenThousandths = kotlin.math.round(v * 10_000).toLong()
+    val text = "${tenThousandths / 10_000},${(tenThousandths % 10_000).toString().padStart(4, '0')}"
+    return if (currency == "EUR" || currency.isEmpty()) "$text €" else "$text $currency"
 }
 
 /** The name of a measure kept in history. */
