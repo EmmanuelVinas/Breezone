@@ -6,6 +6,12 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-19
+
+The first stable release of 0.11: everything of its betas below (linked accounts and services,
+Netatmo · Legrand, EZVIZ and the cameras page, the configurable overview and mobile home, the
+solar surplus for the air conditioning…), and what follows.
+
 ### Added
 
 - Overview: a small block « Price and Tempo colour » (a quarter of a row): the price of the kWh
@@ -1220,7 +1226,8 @@ All notable changes are documented here. The format follows
 - Project renamed from FreeZone to Breezone (former `FREEZONE_*` variables and `freezone.db` are
   still recognised).
 
-[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.10.1...HEAD
+[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/EmmanuelVinas/breezone/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/EmmanuelVinas/breezone/compare/v0.9.0...v0.9.1
