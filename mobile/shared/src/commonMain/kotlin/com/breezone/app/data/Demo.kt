@@ -382,7 +382,9 @@ private val dashboards = mutableMapOf<String, DashboardLayout>()
                 }
                 scope.schedulesState()
             }
-            else -> unavailable()
+            else -> DemoModules.handle(path, { request.url.parameters[it] }, { body(request) })
+                ?.let { json(it) }
+                ?: unavailable()
         }
     }
 

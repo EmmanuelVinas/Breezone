@@ -6,6 +6,14 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Mobile app: the demonstration has the modules too: lights and their scenes, shutters, the solar
+  production, the grid, a water heater and a charger on the surplus, ventilation room by room, a
+  remote, the weather and a few automations; their measures follow the time of day.
+- Showcase site: Breezone is presented as a simple, open source home automation, with the list of
+  its integrations; new screenshots of the app, taken in its demonstration.
+
 ## [0.11.0] - 2026-11-19
 
 The first stable release of 0.11: everything of its betas below (linked accounts and services,
