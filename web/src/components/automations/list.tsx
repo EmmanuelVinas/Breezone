@@ -266,6 +266,14 @@ export function AutomationCard({
               )}
             </p>
           )}
+          {(a.surplus ?? []).length > 0 && (
+            <p className="rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-xs">
+              {t(
+                "{names} suit aussi le pilotage sur surplus solaire : les deux se contrediraient. Retirez-le de l'un ou de l'autre.",
+                { names: a.surplus!.join(", ") }
+              )}
+            </p>
+          )}
           {(a.summary.over ?? []).length > 0 && (
             <Line badge={t("Ensuite")} tone={THEN_TONE}>
               <div className="text-muted-foreground">

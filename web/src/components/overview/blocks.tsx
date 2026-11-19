@@ -26,10 +26,13 @@ import { t, tn } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { Sparkline } from "@/components/sparkline"
 import { WeatherCard } from "@/components/weather-card"
-import { PriceNow } from "@/components/electricity/electricity-tab"
+import {
+  PriceCompact,
+  PriceNow,
+} from "@/components/electricity/electricity-tab"
 import { usePrice, useTariff } from "@/components/electricity/hooks"
 import { ZoneCard } from "@/components/zone-card"
-import { LightCard, LightScenes } from "@/pages/lights"
+import { LIGHT_BRAND, LightCard, LightPanel, LightScenes } from "@/pages/lights"
 import { ShutterCard } from "@/pages/shutters"
 import { House, isRoom, isUnit, RoomCard } from "@/pages/ventilation"
 import { ChargerCard, PowerCurve } from "@/pages/charging"
@@ -42,7 +45,7 @@ import { RoomIcon } from "@/lib/room-icons"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
-import { ChartBlock } from "./chart-block"
+import { ChartBlock, VentilationRoomsChart } from "./chart-block"
 import {
   EnergyBarsBlock,
   EnergyBreakdownBlock,
@@ -761,6 +764,53 @@ function PriceBlock() {
   )
 }
 
+/** One light, or the lights of a room together, with their brightness, whites and colours. */
+function LightPanelBlock({ config }: { config: Record<string, unknown> }) {
+  const { devices, rooms } = useOverview()
+  const isLight = (d: DeviceView) => d.traits.includes("light@1")
+  const room =
+    typeof config.room_id === "number"
+      ? rooms.find((r) => r.id === config.room_id)
+      : undefined
+  const lights = room
+    ? devices.filter((d) => isLight(d) && d.room_id === room.id)
+    : devices.filter((d) => isLight(d) && d.id === config.device_id)
+  if (lights.length === 0)
+    return (
+      <Card className="h-full rounded-3xl">
+        <CardContent className="text-sm text-muted-foreground">
+          {t("Lumière indisponible")}
+        </CardContent>
+      </Card>
+    )
+  const one = lights[0]
+  const subtitle = room
+    ? t("{n} lumière(s)", { n: lights.length })
+    : [
+        rooms.find((r) => r.id === one.room_id)?.name,
+        LIGHT_BRAND[one.source] ?? one.source,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+  return (
+    <LightPanel
+      lights={lights}
+      title={room ? room.name : one.name}
+      subtitle={subtitle}
+      temperature={config.temperature !== false}
+      colors={config.colors !== false}
+      compact
+      className="h-full"
+    />
+  )
+}
+
+function PriceCompactBlock() {
+  const price = usePrice()
+  if (!price.data?.now) return null
+  return <PriceCompact price={price.data} className="h-full" />
+}
+
 function ScenesBlock({ ids }: { ids?: number[] }) {
   const { routines, installation } = useOverview()
   const run = useMutation({
@@ -1023,6 +1073,8 @@ export function BlockView({
       return <ScenesBlock ids={c.routine_ids as number[] | undefined} />
     case "price":
       return <PriceBlock />
+    case "price_now":
+      return <PriceCompactBlock />
     case "energy_kpis":
       return <EnergyKpisBlock config={c} />
     case "energy_flow":
@@ -1043,6 +1095,8 @@ export function BlockView({
       return <AirQualityBlock id={Number(c.device_id)} />
     case "light_scenes":
       return <LightScenesBlock />
+    case "light_panel":
+      return <LightPanelBlock config={c} />
     case "charger":
     case "charger_curve":
       return (
@@ -1059,6 +1113,14 @@ export function BlockView({
       return <SolarPanelsBlock />
     case "ventilation_house":
       return <VentilationBlock />
+    case "ventilation_rooms":
+      return (
+        <VentilationRoomsChart
+          field={typeof c.field === "string" ? c.field : "humidity"}
+          hours={Number(c.hours ?? 24)}
+          tall={c.tall === true}
+        />
+      )
     // An empty cell, to leave room: seen only while arranging.
     case "linky":
       return <LinkyBlock days={Number(c.days ?? 30)} />

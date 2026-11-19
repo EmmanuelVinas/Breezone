@@ -1949,6 +1949,35 @@ const en: Record<string, string> = {
   "Courbe des dernières 24 h": "Curve of the last 24 h",
   "Sans courbe : ses commandes": "No curve: its controls",
   "Dans Netatmo : {name}": "In Netatmo: {name}",
+  "Prix et couleur Tempo (petit)": "Price and Tempo colour (small)",
+  "Lumière indisponible": "Light unavailable",
+  "{n} lumière(s)": "{n} light(s)",
+  "Lumière ou pièce, intensité et couleurs":
+    "Light or room, brightness and colours",
+  "Lumière ou pièce": "Light or room",
+  Montrer: "Show",
+  "Pièce · {name}": "Room · {name}",
+  "Ventilation · {measure}": "Ventilation · {measure}",
+  "Graphique des pièces ventilées": "Chart of the ventilated rooms",
+  "Pièces ventilées · {measure}": "Ventilated rooms · {measure}",
+  "{names} suit aussi le pilotage sur surplus solaire : les deux se contrediraient. Retirez-le de l'un ou de l'autre.":
+    "{names} also follows the solar surplus steering: the two would contradict each other. Remove it from one or the other.",
+  "chauffe à {sp}° sous {t}° dehors": "heats to {sp}° below {t}° outside",
+  "rafraîchit à {sp}° au-dessus de {t}°": "cools to {sp}° above {t}°",
+  "Quand le surplus couvre sa puissance, Breezone allume la zone : en chauffage s'il fait froid dehors, en froid s'il fait chaud, selon le mode du système. Il la remet comme avant quand le surplus manque. Une zone déjà allumée ou réglée à la main n'est pas touchée.":
+    "When the surplus covers its power, Breezone switches the zone on: heating when it is cold outside, cooling when it is hot, as its system's mode allows. It puts it back as it was when the surplus runs short. A zone already on, or set by hand, is not touched.",
+  "Chauffer à (°C)": "Heat to (°C)",
+  "quand il fait moins de (°C dehors)": "when it is below (°C outside)",
+  "Rafraîchir à (°C)": "Cool to (°C)",
+  "quand il fait plus de (°C dehors)": "when it is above (°C outside)",
+  "Puissance estimée (W)": "Estimated power (W)",
+  "Aucun appareil ne suit le surplus. Ajoutez la borne, un chauffe-eau sur une prise pilotée, ou une zone de climatisation.":
+    "No device follows the surplus. Add the charger, a water heater on a smart plug, or a zone of the air conditioning.",
+  "Aussi piloté par {names} : les deux se contrediraient.":
+    "Also driven by {names}: the two would contradict each other.",
+  "Tourne tout seul, par ordre de priorité. Il se règle dans Énergie ; un automatisme ne doit pas piloter les mêmes appareils.":
+    "Runs on its own, in order of priority. It is set in Energy; an automation must not drive the same devices.",
+  Régler: "Set up",
 }
 
 export default en

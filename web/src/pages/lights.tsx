@@ -199,37 +199,84 @@ export function LightCard({
   )
 }
 
-/** The brand of a light's module, for the detail's subtitle. */
-const BRAND: Record<string, string> = { hue: "Philips Hue" }
+/** Sends one change to several lights at once (a room). */
+function useSetMany() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      ids,
+      params,
+    }: {
+      ids: number[]
+      params: Record<string, unknown>
+    }) => Promise.all(ids.map((id) => api.act(id, "light", "set", params))),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["devices"] }),
+    onError: (e) => toast.error(errorText(e)),
+  })
+}
 
-/** The detail of a light, as in the mockups: big brightness bar, white gradient, colors. */
-function Detail({
-  light,
-  room,
-  canDrive,
+/**
+ * One light, or the lights of a room together, as in the mockups: big brightness bar, white
+ * gradient, colors (the last two can be left out). A room shows its first lit light and sets them
+ * all.
+ */
+export function LightPanel({
+  lights,
+  title,
+  subtitle,
+  temperature = true,
+  colors = true,
+  compact = false,
+  className,
 }: {
-  light: DeviceView
-  room: string | null
-  canDrive: boolean
+  lights: DeviceView[]
+  title: string
+  subtitle?: string | null
+  temperature?: boolean
+  colors?: boolean
+  /** Smaller brightness bar (a block of the overview). */
+  compact?: boolean
+  className?: string
 }) {
-  const s = stateOf(light)
-  const set = useSet()
+  const set = useSetMany()
   const [brightness, setBrightness] = useState<number | null>(null)
   const [temp, setTemp] = useState<number | null>(null)
-  const lit = !!s.on && light.available
+  const usable = lights.filter((l) => l.available && l.can_control)
+  const lit = lights.filter((l) => l.available && stateOf(l).on)
+  // What the panel shows: the first lit light, else the first one.
+  const s = stateOf(lit[0] ?? lights[0])
+  const on = lit.length > 0
   const color = glow(s)
-  const min = s.color_temp_min ?? 2000
-  const max = s.color_temp_max ?? 6500
-  const disabled = !canDrive || !light.available || set.isPending
+  const withTemp = lights.filter(
+    (l) => typeof stateOf(l).color_temp === "number"
+  )
+  const withColor = lights.filter((l) => stateOf(l).color !== undefined)
+  const dimmable = lights.some((l) => typeof stateOf(l).brightness === "number")
+  const min = Math.min(
+    ...withTemp.map((l) => stateOf(l).color_temp_min ?? 2000),
+    6500
+  )
+  const max = Math.max(
+    ...withTemp.map((l) => stateOf(l).color_temp_max ?? 6500),
+    2000
+  )
+  const disabled = usable.length === 0 || set.isPending
   const level = brightness ?? s.brightness ?? 0
   const kelvin = temp ?? s.color_temp ?? min
-  const send = (params: Record<string, unknown>, done: () => void) =>
-    set.mutate({ id: light.id, params }, { onSettled: done })
+  const send = (
+    to: DeviceView[],
+    params: Record<string, unknown>,
+    done?: () => void
+  ) =>
+    set.mutate(
+      { ids: to.filter((l) => usable.includes(l)).map((l) => l.id), params },
+      { onSettled: done }
+    )
   return (
     <Card
-      className="rounded-3xl lg:sticky lg:top-4"
+      className={cn("rounded-3xl", className)}
       style={
-        lit
+        on
           ? {
               background: `radial-gradient(90% 60% at 50% 0%, color-mix(in oklch, ${color} 16%, transparent), transparent 70%), var(--card)`,
             }
@@ -238,23 +285,19 @@ function Detail({
     >
       <CardHeader className="flex flex-row items-start justify-between gap-3">
         <div className="min-w-0">
-          <CardTitle className="truncate">{light.name}</CardTitle>
-          <CardDescription>
-            {[room, BRAND[light.source] ?? light.source]
-              .filter(Boolean)
-              .join(" · ")}
-          </CardDescription>
+          <CardTitle className="truncate">{title}</CardTitle>
+          {subtitle && <CardDescription>{subtitle}</CardDescription>}
         </div>
         <Switch
-          checked={!!s.on}
-          disabled={!canDrive || !light.available}
+          checked={on}
+          disabled={usable.length === 0}
           loading={set.isPending}
-          onCheckedChange={(on) => set.mutate({ id: light.id, params: { on } })}
-          aria-label={light.name}
+          onCheckedChange={(v) => send(lights, { on: v })}
+          aria-label={title}
         />
       </CardHeader>
-      <CardContent className="grid gap-6">
-        {typeof s.brightness === "number" && (
+      <CardContent className={cn("grid", compact ? "gap-4" : "gap-6")}>
+        {dimmable && (
           <div className="flex justify-center py-2">
             <Level
               vertical
@@ -262,28 +305,40 @@ function Detail({
               max={100}
               value={level}
               disabled={disabled}
-              label={t("Intensité de {name}", { name: light.name })}
+              label={t("Intensité de {name}", { name: title })}
               valueText={`${level} %`}
               onChange={setBrightness}
               onCommit={(v) =>
-                send({ brightness: v }, () => setBrightness(null))
+                send(
+                  lights.filter(
+                    (l) => typeof stateOf(l).brightness === "number"
+                  ),
+                  { brightness: v },
+                  () => setBrightness(null)
+                )
               }
-              className="h-64 w-30 overflow-hidden rounded-[36px] bg-muted"
+              className={cn(
+                "overflow-hidden bg-muted",
+                compact
+                  ? "h-40 w-24 rounded-[28px]"
+                  : "h-64 w-30 rounded-[36px]"
+              )}
             >
               <div
                 className="absolute inset-x-0 bottom-0 transition-[height] duration-150"
                 style={{
-                  height: `${lit ? level : 0}%`,
+                  height: `${on ? level : 0}%`,
                   background: `linear-gradient(180deg, color-mix(in oklch, ${color} 70%, white), ${color})`,
                 }}
               />
               <div
                 className={cn(
-                  "tabular absolute inset-0 grid place-items-center font-heading text-3xl font-bold",
-                  lit && level > 45 ? "text-neutral-800" : "text-foreground"
+                  "tabular absolute inset-0 grid place-items-center font-heading font-bold",
+                  compact ? "text-2xl" : "text-3xl",
+                  on && level > 45 ? "text-neutral-800" : "text-foreground"
                 )}
               >
-                {lit ? (
+                {on ? (
                   `${level} %`
                 ) : (
                   <LightbulbOff
@@ -295,7 +350,7 @@ function Detail({
             </Level>
           </div>
         )}
-        {typeof s.color_temp === "number" && (
+        {temperature && withTemp.length > 0 && (
           <div className="grid gap-2">
             <span className="text-xs text-muted-foreground">
               {t("Température de blanc · {k} K", {
@@ -311,7 +366,9 @@ function Detail({
               label={t("Température de blanc")}
               valueText={`${kelvin} K`}
               onChange={setTemp}
-              onCommit={(v) => send({ color_temp: v }, () => setTemp(null))}
+              onCommit={(v) =>
+                send(withTemp, { color_temp: v }, () => setTemp(null))
+              }
               className="h-3.5 rounded-full"
               style={{
                 background: `linear-gradient(90deg, ${kelvinColor(min)}, ${kelvinColor((min + max) / 2)}, ${kelvinColor(max)})`,
@@ -319,7 +376,9 @@ function Detail({
             >
               <span
                 className="absolute top-1/2 size-5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground shadow-[0_0_0_3px_oklch(0_0_0/30%)]"
-                style={{ left: `${((kelvin - min) / (max - min)) * 100}%` }}
+                style={{
+                  left: `${((kelvin - min) / (max - min || 1)) * 100}%`,
+                }}
               />
             </Level>
             <div className="flex justify-between text-xs text-muted-foreground">
@@ -328,7 +387,7 @@ function Detail({
             </div>
           </div>
         )}
-        {s.color !== undefined && (
+        {colors && withColor.length > 0 && (
           <div className="grid gap-2">
             <span className="text-xs text-muted-foreground">
               {t("Couleurs")}
@@ -343,9 +402,7 @@ function Detail({
                   aria-pressed={
                     s.mode === "color" && s.color?.toLowerCase() === c
                   }
-                  onClick={() =>
-                    set.mutate({ id: light.id, params: { color: c } })
-                  }
+                  onClick={() => send(withColor, { color: c })}
                   className={cn(
                     "size-8 rounded-full transition-transform hover:scale-110 disabled:opacity-50",
                     s.mode === "color" &&
@@ -362,6 +419,9 @@ function Detail({
     </Card>
   )
 }
+
+/** The brand of a light's module, for the detail's subtitle. */
+export const LIGHT_BRAND: Record<string, string> = { hue: "Philips Hue" }
 
 /** The scenes of the Hue app, one button each. */
 export function LightScenes({
@@ -583,13 +643,17 @@ export function LightsPage() {
             })}
           </div>
           {shown && (
-            <Detail
+            <LightPanel
               key={shown.id}
-              light={shown}
-              room={
-                rooms.data?.find((r) => r.id === shown.room_id)?.name ?? null
-              }
-              canDrive={shown.can_control}
+              lights={[shown]}
+              title={shown.name}
+              subtitle={[
+                rooms.data?.find((r) => r.id === shown.room_id)?.name,
+                LIGHT_BRAND[shown.source] ?? shown.source,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+              className="lg:sticky lg:top-4"
             />
           )}
         </div>

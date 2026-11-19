@@ -133,7 +133,7 @@ pub(super) fn facing(degrees: u32) -> Text {
 }
 
 impl Context {
-    pub(super) fn device_name(&self, id: i64) -> Text {
+    pub(crate) fn device_name(&self, id: i64) -> Text {
         match self.device(id) {
             Some(d) => Text::plain(d.name.clone()),
             None => crate::text!("appareil {0} (supprimé)", "device {0} (deleted)", "dispositivo {0} (eliminado)", id),

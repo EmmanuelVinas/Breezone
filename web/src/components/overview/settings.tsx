@@ -52,6 +52,7 @@ import {
 } from "@/components/ui/select"
 import type { BlockType, EnergyFlow } from "./model"
 import { BlockView } from "./blocks"
+import { VENTILATION_FIELDS } from "./chart-block"
 import {
   BLOCK_GROUP,
   BLOCK_LABEL,
@@ -179,18 +180,21 @@ function available(home: Home): BlockType[] {
     if (b === "surplus") return (home.surplus?.loads.length ?? 0) > 0
     if (b === "chart") return home.charted.length > 0
     if (b === "scenes") return home.routines.length > 0
-    if (b === "price") return home.priced
+    if (b === "price" || b === "price_now") return home.priced
     // The parts of the energy page: with a measure of the energy of this server.
     if (b.startsWith("energy_")) return home.energy
     // The parts of the other pages: with the devices they show.
     const has = (trait: string) =>
       home.devices.some((d) => d.traits.includes(trait))
-    if (b === "zone_history" || b === "air_quality")
+    if (b === "zone_history")
       return home.devices.some((d) => zoneOf(d) !== undefined)
-    if (b === "light_scenes") return has("light@1")
+    if (b === "air_quality")
+      return home.devices.some((d) => measuresAir(d, home))
+    if (b === "light_scenes" || b === "light_panel") return has("light@1")
     if (b === "charger" || b === "charger_curve") return has("ev.charger@1")
     if (b.startsWith("solar_")) return has("solar.inverter@1")
     if (b === "ventilation_house") return has("ventilation.unit@1")
+    if (b === "ventilation_rooms") return ventilationFields(home).length > 0
     if (b === "linky") return !!home.linky
     return true
   })
@@ -208,6 +212,8 @@ export function complete(b: DashboardBlock) {
       (c.view === "comfort" || chartSeries(c).length > 0)
     )
   if (b.type === "group") return "room_id" in c || "type" in c
+  if (b.type === "light_panel")
+    return typeof c.device_id === "number" || typeof c.room_id === "number"
   if (b.type === "energy" && Array.isArray(c.flows)) return c.flows.length > 0
   return true
 }
@@ -447,6 +453,94 @@ function Settings({
           />
         </Field>
       )
+    case "ventilation_rooms":
+      return (
+        <>
+          <Field label={t("Mesure")}>
+            <Pick
+              value={typeof c.field === "string" ? c.field : "humidity"}
+              onChange={(v) => set({ field: v })}
+              choices={ventilationFields(home).map((f) => ({
+                value: f.name,
+                label: f.label,
+              }))}
+            />
+          </Field>
+          <Field label={t("Période")}>
+            <Pick
+              value={String(c.hours ?? 24)}
+              onChange={(v) => set({ hours: Number(v) })}
+              choices={[
+                { value: "24", label: t("24 dernières heures") },
+                { value: "168", label: t("7 derniers jours") },
+              ]}
+            />
+          </Field>
+        </>
+      )
+    case "light_panel": {
+      const lights = home.devices.filter((d) => d.traits.includes("light@1"))
+      const value =
+        typeof c.room_id === "number"
+          ? `room:${c.room_id}`
+          : typeof c.device_id === "number"
+            ? `device:${c.device_id}`
+            : undefined
+      return (
+        <>
+          <Field label={t("Lumière ou pièce")}>
+            <Pick
+              value={value}
+              placeholder={t("Choisir")}
+              onChange={(v) => {
+                const [kind, id] = v.split(":")
+                onChange({
+                  ...block,
+                  config: {
+                    temperature: c.temperature,
+                    colors: c.colors,
+                    ...(kind === "room"
+                      ? { room_id: Number(id) }
+                      : { device_id: Number(id) }),
+                  },
+                })
+              }}
+              choices={[
+                ...home.rooms
+                  .filter((r) => lights.some((d) => d.room_id === r.id))
+                  .map((r): Choice => ({
+                    value: `room:${r.id}`,
+                    label: r.name,
+                    group: t("Pièces"),
+                  })),
+                ...deviceChoices(lights).map((d) => ({
+                  ...d,
+                  value: `device:${d.value}`,
+                })),
+              ]}
+            />
+          </Field>
+          <Field label={t("Montrer")}>
+            <div className="grid gap-2 text-sm">
+              <label className="flex items-center gap-2">
+                <Checkbox
+                  checked={c.temperature !== false}
+                  onCheckedChange={(v) => set({ temperature: v === true })}
+                />
+                {t("Température de blanc")}
+              </label>
+              <label className="flex items-center gap-2">
+                <Checkbox
+                  checked={c.colors !== false}
+                  onCheckedChange={(v) => set({ colors: v === true })}
+                />
+                {t("Couleurs")}
+              </label>
+            </div>
+          </Field>
+        </>
+      )
+    }
     case "zone_history":
     case "air_quality":
       return (
@@ -456,7 +550,11 @@ function Settings({
             placeholder={t("Choisir")}
             onChange={(v) => set({ device_id: Number(v) })}
             choices={deviceChoices(
-              home.devices.filter((d) => zoneOf(d) !== undefined)
+              home.devices.filter(
+                (d) =>
+                  zoneOf(d) !== undefined &&
+                  (block.type === "zone_history" || measuresAir(d, home))
+              )
             )}
           />
         </Field>
@@ -827,6 +925,33 @@ function catalog(home: Home): Entry[] {
             )
         }
         break
+      case "ventilation_rooms":
+        for (const f of ventilationFields(home))
+          add(
+            group,
+            `ventilation_rooms:${f.name}`,
+            t("Pièces ventilées · {measure}", { measure: f.label }),
+            type,
+            { field: f.name, hours: 24 }
+          )
+        break
+      case "light_panel": {
+        const lights = home.devices.filter((d) => d.traits.includes("light@1"))
+        for (const r of home.rooms)
+          if (lights.some((d) => d.room_id === r.id))
+            add(
+              group,
+              `light_panel:room:${r.id}`,
+              t("Pièce · {name}", { name: r.name }),
+              type,
+              {
+                room_id: r.id,
+              }
+            )
+        for (const d of lights)
+          add(group, `light_panel:${d.id}`, d.name, type, { device_id: d.id })
+        break
+      }
       case "zone_history":
       case "air_quality":
         for (const d of home.devices)
@@ -912,13 +1037,32 @@ function KpiOrder({
 }
 
 /** Whether the zone a device is measures its air (a card of its air has something to show). */
+/** The measures of the ventilated rooms that have a history, to compare them on one chart. */
+function ventilationFields(home: Home) {
+  const rooms = home.devices.filter((d) =>
+    d.traits.includes("ventilation.room@1")
+  )
+  if (rooms.length === 0) return []
+  const has = new Set(
+    home.charted
+      .filter((c) => rooms.some((d) => d.id === c.device_id))
+      .flatMap((c) => c.fields)
+  )
+  const labels = chartFields(rooms[0], home.traits)
+  return VENTILATION_FIELDS.filter((f) => has.has(f)).map((name) => ({
+    name,
+    label: labels.find((l) => l.name === name)?.label ?? name,
+  }))
+}
+
+/** The zone's sensor measures the air now (as its card asks, else it shows nothing). */
 function measuresAir(d: DeviceView, home: Home) {
   const ref = zoneOf(d)
   return !!home.installation?.zones.some(
     (z) =>
       z.system_id === ref?.system_id &&
       z.zone_id === ref?.zone_id &&
-      z.air_quality != null
+      z.air_quality?.level != null
   )
 }
 

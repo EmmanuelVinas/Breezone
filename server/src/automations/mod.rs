@@ -510,6 +510,20 @@ impl Automation {
     }
 
     /// The devices the rule drives.
+    /// The devices it drives, those of its groups included (as they are now).
+    pub fn expanded_devices(&self, ctx: &Context) -> Vec<i64> {
+        let mut ids: Vec<i64> = ctx
+            .expand(&self.steps().cloned().collect::<Vec<_>>())
+            .into_iter()
+            .filter_map(|s| match s {
+                Step::Device { device_id, .. } => Some(device_id),
+                _ => None,
+            })
+            .collect();
+        ids.dedup();
+        ids
+    }
+
     pub fn driven_devices(&self) -> Vec<i64> {
         self.steps()
             .filter_map(|s| match s {

@@ -1,6 +1,8 @@
 import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { Link } from "react-router"
 import {
+  AirVent,
   ArrowDown,
   ArrowUp,
   Pencil,
@@ -56,6 +58,18 @@ const TONE: Record<SurplusStatus["state"], string> = {
   no_car: "var(--muted-foreground)",
   unavailable: "var(--destructive)",
   no_meter: "var(--destructive)",
+  idle: "var(--muted-foreground)",
+  manual: "var(--primary)",
+}
+
+const ICON = { charger: PlugZap, relay: Power, climate: AirVent }
+
+/** What a zone is given when it follows the surplus, until changed. */
+const CLIMATE_DEFAULTS = {
+  heat_setpoint: 20,
+  cool_setpoint: 24,
+  heat_below: 14,
+  cool_above: 25,
 }
 
 export function useSurplus() {
@@ -87,11 +101,29 @@ function inputOf(l: SurplusLoad): SurplusLoadInput {
     guarantee_by: l.guarantee_by,
     min_on_minutes: l.min_on_minutes,
     tolerance: l.tolerance,
+    heat_setpoint: l.heat_setpoint,
+    cool_setpoint: l.cool_setpoint,
+    heat_below: l.heat_below,
+    cool_above: l.cool_above,
   }
 }
 
 /** "6 à 16 A · +20 kWh garantis avant 07:00", "2 kW · 10 min au moins". */
 function summary(l: SurplusLoad) {
+  if (l.kind === "climate")
+    return [
+      l.power ? kw(l.power) : null,
+      t("chauffe à {sp}° sous {t}° dehors", {
+        sp: l.heat_setpoint ?? CLIMATE_DEFAULTS.heat_setpoint,
+        t: l.heat_below ?? CLIMATE_DEFAULTS.heat_below,
+      }),
+      t("rafraîchit à {sp}° au-dessus de {t}°", {
+        sp: l.cool_setpoint ?? CLIMATE_DEFAULTS.cool_setpoint,
+        t: l.cool_above ?? CLIMATE_DEFAULTS.cool_above,
+      }),
+    ]
+      .filter(Boolean)
+      .join(" · ")
   if (l.kind === "relay")
     return [
       l.power ? kw(l.power) : null,
@@ -139,9 +171,13 @@ function LoadDialog({
               ? t(
                   "Breezone règle l'intensité selon le surplus, entre un minimum et un maximum. Sous le minimum, la charge est suspendue."
                 )
-              : t(
-                  "Breezone allume l'appareil quand le surplus couvre sa puissance, et l'éteint quand il manque."
-                )}
+              : load.kind === "climate"
+                ? t(
+                    "Quand le surplus couvre sa puissance, Breezone allume la zone : en chauffage s'il fait froid dehors, en froid s'il fait chaud, selon le mode du système. Il la remet comme avant quand le surplus manque. Une zone déjà allumée ou réglée à la main n'est pas touchée."
+                  )
+                : t(
+                    "Breezone allume l'appareil quand le surplus couvre sa puissance, et l'éteint quand il manque."
+                  )}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
@@ -204,31 +240,93 @@ function LoadDialog({
               </div>
             </>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
-              <div className="grid gap-1.5">
-                <Label htmlFor="power">{t("Puissance (W)")}</Label>
-                <Input
-                  id="power"
-                  type="number"
-                  min={1}
-                  placeholder="2000"
-                  value={draft.power ?? ""}
-                  onChange={(e) => set({ power: num(e.target.value) })}
-                />
+            <>
+              {load.kind === "climate" && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="hs">{t("Chauffer à (°C)")}</Label>
+                    <Input
+                      id="hs"
+                      type="number"
+                      step={0.5}
+                      value={
+                        draft.heat_setpoint ?? CLIMATE_DEFAULTS.heat_setpoint
+                      }
+                      onChange={(e) =>
+                        set({ heat_setpoint: num(e.target.value) })
+                      }
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="hb">
+                      {t("quand il fait moins de (°C dehors)")}
+                    </Label>
+                    <Input
+                      id="hb"
+                      type="number"
+                      step={0.5}
+                      value={draft.heat_below ?? CLIMATE_DEFAULTS.heat_below}
+                      onChange={(e) => set({ heat_below: num(e.target.value) })}
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="cs">{t("Rafraîchir à (°C)")}</Label>
+                    <Input
+                      id="cs"
+                      type="number"
+                      step={0.5}
+                      value={
+                        draft.cool_setpoint ?? CLIMATE_DEFAULTS.cool_setpoint
+                      }
+                      onChange={(e) =>
+                        set({ cool_setpoint: num(e.target.value) })
+                      }
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="ca">
+                      {t("quand il fait plus de (°C dehors)")}
+                    </Label>
+                    <Input
+                      id="ca"
+                      type="number"
+                      step={0.5}
+                      value={draft.cool_above ?? CLIMATE_DEFAULTS.cool_above}
+                      onChange={(e) => set({ cool_above: num(e.target.value) })}
+                    />
+                  </div>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="power">
+                    {load.kind === "climate"
+                      ? t("Puissance estimée (W)")
+                      : t("Puissance (W)")}
+                  </Label>
+                  <Input
+                    id="power"
+                    type="number"
+                    min={1}
+                    placeholder={load.kind === "climate" ? "1500" : "2000"}
+                    value={draft.power ?? ""}
+                    onChange={(e) => set({ power: num(e.target.value) })}
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="minon">{t("Marche minimale (min)")}</Label>
+                  <Input
+                    id="minon"
+                    type="number"
+                    min={0}
+                    value={draft.min_on_minutes ?? 0}
+                    onChange={(e) =>
+                      set({ min_on_minutes: Number(e.target.value) || 0 })
+                    }
+                  />
+                </div>
               </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="minon">{t("Marche minimale (min)")}</Label>
-                <Input
-                  id="minon"
-                  type="number"
-                  min={0}
-                  value={draft.min_on_minutes ?? 0}
-                  onChange={(e) =>
-                    set({ min_on_minutes: Number(e.target.value) || 0 })
-                  }
-                />
-              </div>
-            </div>
+            </>
           )}
           <div className="grid gap-1.5">
             <Label htmlFor="tol">{t("Tolérance réseau (W)")}</Label>
@@ -328,12 +426,17 @@ export function SurplusCard() {
             value=""
             onValueChange={(id) => {
               const c = v.candidates.find((x) => x.device_id === Number(id))!
-              // A relay needs its power: asked in the settings.
-              if (c.kind === "relay")
+              // A relay or a zone needs its power: asked in the settings.
+              if (c.kind === "relay" || c.kind === "climate")
                 setEditing({
                   device_id: c.device_id,
                   name: c.name,
-                  kind: "relay",
+                  kind: c.kind,
+                  automations: [],
+                  heat_setpoint: null,
+                  cool_setpoint: null,
+                  heat_below: null,
+                  cool_above: null,
                   position: v.loads.length,
                   enabled: true,
                   min_amps: null,
@@ -341,7 +444,7 @@ export function SurplusCard() {
                   power: null,
                   guarantee_kwh: null,
                   guarantee_by: null,
-                  min_on_minutes: 10,
+                  min_on_minutes: c.kind === "climate" ? 30 : 10,
                   tolerance: 0,
                   limit_min: null,
                   limit_max: null,
@@ -367,13 +470,13 @@ export function SurplusCard() {
         {v.loads.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             {t(
-              "Aucun appareil ne suit le surplus. Ajoutez la borne, ou un chauffe-eau sur une prise pilotée."
+              "Aucun appareil ne suit le surplus. Ajoutez la borne, un chauffe-eau sur une prise pilotée, ou une zone de climatisation."
             )}
           </p>
         ) : (
           <ol className="grid">
             {v.loads.map((l, i) => {
-              const Icon = l.kind === "charger" ? PlugZap : Power
+              const Icon = ICON[l.kind]
               return (
                 <li
                   key={l.device_id}
@@ -394,6 +497,18 @@ export function SurplusCard() {
                       {summary(l)}
                     </span>
                     <StatusLine status={l.enabled ? l.status : null} />
+                    {l.enabled && l.automations.length > 0 && (
+                      <span className="text-xs text-warning">
+                        {t(
+                          "Aussi piloté par {names} : les deux se contrediraient.",
+                          {
+                            names: l.automations
+                              .map((n) => t("« {name} »", { name: n }))
+                              .join(", "),
+                          }
+                        )}
+                      </span>
+                    )}
                   </div>
                   {admin && (
                     <div className="flex items-center gap-1">
@@ -456,6 +571,66 @@ export function SurplusCard() {
           onClose={() => setEditing(null)}
         />
       )}
+    </Card>
+  )
+}
+
+/**
+ * The surplus steering as the automations page shows it: what it runs, in order, and what each
+ * does now. Changed on the energy page only: one place sets what follows the surplus.
+ */
+export function SurplusProgramme() {
+  const surplus = useSurplus()
+  const loads = (surplus.data?.loads ?? []).filter((l) => l.enabled)
+  if (loads.length === 0) return null
+  return (
+    <Card className="rounded-3xl border-dashed">
+      <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
+        <div className="grid gap-1.5">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Sun className="size-4 text-warning" />
+            {t("Pilotage sur surplus solaire")}
+          </CardTitle>
+          <CardDescription>
+            {t(
+              "Tourne tout seul, par ordre de priorité. Il se règle dans Énergie ; un automatisme ne doit pas piloter les mêmes appareils."
+            )}
+          </CardDescription>
+        </div>
+        <Button asChild variant="outline" size="sm">
+          <Link to="/energie">{t("Régler")}</Link>
+        </Button>
+      </CardHeader>
+      <CardContent>
+        <ol className="grid">
+          {loads.map((l, i) => {
+            const Icon = ICON[l.kind]
+            return (
+              <li
+                key={l.device_id}
+                className="flex items-center gap-3 border-b py-2 last:border-b-0"
+              >
+                <span className="grid size-6 place-items-center rounded-md bg-muted text-xs text-muted-foreground">
+                  {i + 1}
+                </span>
+                <Icon
+                  className="size-4"
+                  style={{
+                    color: l.status ? TONE[l.status.state] : undefined,
+                  }}
+                />
+                <div className="grid min-w-0 flex-1">
+                  <span className="text-sm font-medium">{l.name}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {summary(l)}
+                  </span>
+                </div>
+                <StatusLine status={l.status} />
+              </li>
+            )
+          })}
+        </ol>
+      </CardContent>
     </Card>
   )
 }

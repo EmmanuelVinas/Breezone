@@ -9,6 +9,7 @@ import type {
 } from "@/lib/api"
 import { api, currentUser, isDeviceAction } from "@/lib/api"
 import { t } from "@/lib/i18n"
+import { SurplusProgramme } from "@/components/surplus"
 import {
   useChosenInstallations,
   useModulesHere,
@@ -161,6 +162,7 @@ export function AutomationsSection() {
       </div>
       <AutomationsBar admin={admin} />
       {admin && <UnreadableAutomations />}
+      {here && <SurplusProgramme />}
       {automations.isLoading ? (
         <div className="grid gap-4 md:grid-cols-2">
           <Skeleton className="h-40 rounded-3xl" />

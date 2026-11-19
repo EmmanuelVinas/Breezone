@@ -6,6 +6,29 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Overview: a small block « Price and Tempo colour » (a quarter of a row): the price of the kWh
+  now, its slot, and the colour of today and of tomorrow.
+- Overview: a block « Light or room, brightness and colours », as the detail of the lights page:
+  its big brightness bar, the white temperature and the colours (each can be left out), for one
+  light or for all the lights of a room at once.
+- Overview: a chart of the ventilated rooms (section Ventilation): one measure (humidity, flow,
+  CO₂, temperature, VOC, level) of every room, one curve each, over 24 hours or 7 days; a curve
+  hides by its legend.
+- Solar surplus steering: a zone of the air conditioning can follow the surplus, in the same order
+  of priority as the charger and the relays. It heats to its setpoint when it is cold outside and
+  its system heats, cools when it is hot and its system cools, and is put back as it was when the
+  surplus runs short; a zone set by hand is left alone. Programmations show the steering as a card
+  of its own (set on the energy page), and an automation that drives a device it runs too is
+  flagged on both sides. The recipe « heat or cool on the surplus » waits for the car to be
+  unplugged (the charger first).
+
+### Fixed
+
+- Overview › « Add a block »: the air quality of a zone is offered only for the zones whose sensor
+  measures it; the others showed an empty preview (their card stays hidden without a measure).
+
 ## [0.11.0-beta.44] - 2026-11-19
 
 ### Added

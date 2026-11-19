@@ -197,11 +197,22 @@ pub struct SurplusLoadRow {
     pub guarantee_by: Option<String>,
     pub min_on_minutes: i64,
     pub tolerance: i64,
+    /// A zone of the air conditioning: the setpoints it is given, and the outdoor temperatures
+    /// below which it heats, above which it cools.
+    #[serde(default)]
+    pub heat_setpoint: Option<f64>,
+    #[serde(default)]
+    pub cool_setpoint: Option<f64>,
+    #[serde(default)]
+    pub heat_below: Option<f64>,
+    #[serde(default)]
+    pub cool_above: Option<f64>,
 }
 
 pub async fn list_surplus_loads(db: &Db) -> sqlx::Result<Vec<SurplusLoadRow>> {
     sqlx::query_as(
-        "SELECT device_id, position, enabled, min_amps, max_amps, power, guarantee_kwh, guarantee_by, min_on_minutes, tolerance FROM surplus_loads ORDER BY position, device_id",
+        "SELECT device_id, position, enabled, min_amps, max_amps, power, guarantee_kwh, guarantee_by, min_on_minutes, tolerance, heat_setpoint, cool_setpoint, heat_below, cool_above \
+         FROM surplus_loads ORDER BY position, device_id",
     )
     .fetch_all(db)
     .await
@@ -209,10 +220,12 @@ pub async fn list_surplus_loads(db: &Db) -> sqlx::Result<Vec<SurplusLoadRow>> {
 
 pub async fn upsert_surplus_load(db: &Db, l: &SurplusLoadRow) -> sqlx::Result<()> {
     sqlx::query(
-        "INSERT INTO surplus_loads (device_id, position, enabled, min_amps, max_amps, power, guarantee_kwh, guarantee_by, min_on_minutes, tolerance, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        "INSERT INTO surplus_loads (device_id, position, enabled, min_amps, max_amps, power, guarantee_kwh, guarantee_by, min_on_minutes, tolerance, created_at,
+           heat_setpoint, cool_setpoint, heat_below, cool_above)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (device_id) DO UPDATE SET position = excluded.position, enabled = excluded.enabled, min_amps = excluded.min_amps, max_amps = excluded.max_amps,
-           power = excluded.power, guarantee_kwh = excluded.guarantee_kwh, guarantee_by = excluded.guarantee_by, min_on_minutes = excluded.min_on_minutes, tolerance = excluded.tolerance",
+           power = excluded.power, guarantee_kwh = excluded.guarantee_kwh, guarantee_by = excluded.guarantee_by, min_on_minutes = excluded.min_on_minutes, tolerance = excluded.tolerance,
+           heat_setpoint = excluded.heat_setpoint, cool_setpoint = excluded.cool_setpoint, heat_below = excluded.heat_below, cool_above = excluded.cool_above",
     )
     .bind(l.device_id)
     .bind(l.position)
@@ -225,6 +238,10 @@ pub async fn upsert_surplus_load(db: &Db, l: &SurplusLoadRow) -> sqlx::Result<()
     .bind(l.min_on_minutes)
     .bind(l.tolerance)
     .bind(now())
+    .bind(l.heat_setpoint)
+    .bind(l.cool_setpoint)
+    .bind(l.heat_below)
+    .bind(l.cool_above)
     .execute(db)
     .await?;
     Ok(())

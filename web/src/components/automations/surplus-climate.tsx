@@ -82,6 +82,15 @@ export function surplusClimateRules(
     conditions: [
       outdoor,
       { kind: "state", device_id: group[0].id, field: "mode", value: mode },
+      // The car first: no heating or cooling while it is plugged in, it takes the surplus.
+      ...home.devices
+        .filter((d) => d.traits.includes("ev.charger@1"))
+        .map((d): AutomationCondition => ({
+          kind: "state",
+          device_id: d.id,
+          field: "status",
+          value: "available",
+        })),
     ],
     actions: [
       ...group.map((z): AutomationStep => ({

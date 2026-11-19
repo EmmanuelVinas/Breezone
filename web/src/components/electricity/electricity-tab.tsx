@@ -158,6 +158,58 @@ function TempoTiles({ tempo }: { tempo: TempoView }) {
   )
 }
 
+/** The price now and the Tempo colours of today and tomorrow, small (a quarter of a row). */
+export function PriceCompact({
+  price,
+  className,
+}: {
+  price: PriceView
+  className?: string
+}) {
+  const now = price.now
+  if (!now) return null
+  const day = (label: string, c: DayColor | null | undefined) => (
+    <div className="min-w-0">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="flex items-center gap-1.5 text-sm font-medium">
+        <span
+          className={cn("size-2.5 shrink-0 rounded-full", !c && "bg-muted")}
+          style={c ? { background: TEMPO_COLOR[c] } : undefined}
+        />
+        <span className="truncate">
+          {c ? TEMPO_LABEL[c] : t("pas encore annoncé")}
+        </span>
+      </div>
+    </div>
+  )
+  return (
+    <Card className={cn("rounded-3xl", className)}>
+      <CardContent className="grid h-full content-start gap-1">
+        <div className="flex items-center gap-2 text-sm font-medium text-primary">
+          <Euro className="size-4" aria-hidden />
+          {t("Prix maintenant")}
+        </div>
+        <div className="font-heading text-3xl font-semibold tabular-nums">
+          {money(now.price, price.currency)}
+          <span className="text-sm font-normal text-muted-foreground">
+            {" "}
+            / kWh
+          </span>
+        </div>
+        <div className="truncate text-sm text-muted-foreground">
+          {[now.slot, now.profile_name].filter(Boolean).join(" · ")}
+        </div>
+        {price.tempo && (
+          <div className="mt-2 grid grid-cols-2 gap-3">
+            {day(t("Aujourd'hui"), price.tempo.today)}
+            {day(t("Demain"), price.tempo.tomorrow)}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 /** The price now, and the stretches of the next 24 hours as a bar. */
 export function PriceNow({
   price,

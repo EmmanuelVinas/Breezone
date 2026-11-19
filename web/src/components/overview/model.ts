@@ -20,6 +20,7 @@ export type BlockType =
   | "weather"
   | "scenes"
   | "price"
+  | "price_now"
   | "energy_kpis"
   | "energy_flow"
   | "energy_curve"
@@ -30,12 +31,14 @@ export type BlockType =
   | "zone_history"
   | "air_quality"
   | "light_scenes"
+  | "light_panel"
   | "charger"
   | "charger_curve"
   | "solar_today"
   | "solar_days"
   | "solar_panels"
   | "ventilation_house"
+  | "ventilation_rooms"
   | "spacer"
   | "linky"
 
@@ -49,6 +52,7 @@ export const BLOCK_LABEL: Record<BlockType, string> = {
   chart: t("Graphique"),
   weather: t("Météo"),
   price: t("Prix de l'électricité"),
+  price_now: t("Prix et couleur Tempo (petit)"),
   scenes: t("Scènes"),
   energy_kpis: t("Chiffres de la période"),
   energy_flow: t("Flux en direct"),
@@ -60,12 +64,14 @@ export const BLOCK_LABEL: Record<BlockType, string> = {
   zone_history: t("Historique d'une zone"),
   air_quality: t("Qualité de l'air d'une zone"),
   light_scenes: t("Scènes des lumières"),
+  light_panel: t("Lumière ou pièce, intensité et couleurs"),
   charger: t("Borne, avec ses commandes"),
   charger_curve: t("Puissance de la borne"),
   solar_today: t("Production de la journée"),
   solar_days: t("Production jour par jour"),
   solar_panels: t("Micro-onduleurs et panneaux"),
   ventilation_house: t("Ventilation de la maison"),
+  ventilation_rooms: t("Graphique des pièces ventilées"),
   spacer: t("Espace vide"),
   linky: t("Consommation Linky"),
 }
@@ -80,6 +86,7 @@ export const BLOCK_GROUP: Record<BlockType, string> = {
   weather: t("Vue d'ensemble"),
   scenes: t("Vue d'ensemble"),
   price: t("Énergie"),
+  price_now: t("Énergie"),
   energy_kpis: t("Énergie"),
   energy_flow: t("Énergie"),
   energy_curve: t("Énergie"),
@@ -90,12 +97,14 @@ export const BLOCK_GROUP: Record<BlockType, string> = {
   zone_history: t("Climatisation"),
   air_quality: t("Climatisation"),
   light_scenes: t("Lumières"),
+  light_panel: t("Lumières"),
   charger: t("Recharge"),
   charger_curve: t("Recharge"),
   solar_today: t("Solaire"),
   solar_days: t("Solaire"),
   solar_panels: t("Solaire"),
   ventilation_house: t("Ventilation"),
+  ventilation_rooms: t("Ventilation"),
   spacer: t("Vue d'ensemble"),
   linky: t("Énergie"),
 }
@@ -122,6 +131,7 @@ export const DEFAULT_SIZE: Record<BlockType, DashboardSize> = {
   chart: "half",
   weather: "full",
   price: "half",
+  price_now: "quarter",
   scenes: "full",
   energy_kpis: "full",
   energy_flow: "full",
@@ -133,12 +143,14 @@ export const DEFAULT_SIZE: Record<BlockType, DashboardSize> = {
   zone_history: "half",
   air_quality: "half",
   light_scenes: "full",
+  light_panel: "quarter",
   charger: "full",
   charger_curve: "half",
   solar_today: "half",
   solar_days: "half",
   solar_panels: "full",
   ventilation_house: "full",
+  ventilation_rooms: "full",
   spacer: "quarter",
   linky: "half",
 }

@@ -1118,6 +1118,8 @@ export type Automation = AutomationInput & {
   }
   /** Enabled rules that may set the same device otherwise at the same time. */
   conflicts: { id: number; name: string; what: string }[]
+  /** The devices it drives that the solar surplus steering runs too. */
+  surplus?: string[]
   last_run_at: number | null
   last_reason: string | null
   created_at: number
@@ -1158,7 +1160,16 @@ export type AutomationRun = {
 /** What a load does now on the solar surplus. */
 export type SurplusStatus = {
   state:
-    "solar" | "guarantee" | "waiting" | "no_car" | "unavailable" | "no_meter"
+    | "solar"
+    | "guarantee"
+    | "waiting"
+    | "no_car"
+    | "unavailable"
+    | "no_meter"
+    /** A zone: no need now (mild outside, or its system in another mode). */
+    | "idle"
+    /** A zone: set by hand, left alone. */
+    | "manual"
   amps: number | null
   power: number
   text: string
@@ -1177,17 +1188,26 @@ export type SurplusLoadInput = {
   min_on_minutes?: number
   /** What may be drawn from the grid before cutting back (W). */
   tolerance?: number
+  /** A zone of the air conditioning: its setpoints, and the outdoor temperatures below which it
+   * heats, above which it cools. */
+  heat_setpoint?: number | null
+  cool_setpoint?: number | null
+  heat_below?: number | null
+  cool_above?: number | null
 }
 
 export type SurplusLoad = Required<SurplusLoadInput> & {
   device_id: number
   name: string
-  kind: "charger" | "relay"
+  kind: SurplusKind
   position: number
   limit_min: number | null
   limit_max: number | null
   status: SurplusStatus | null
+  /** The enabled automations that drive it too: they would contradict the steering. */
+  automations: string[]
 }
+export type SurplusKind = "charger" | "relay" | "climate"
 
 export type SurplusView = {
   /** The home has a grid meter (null: not looked at yet). */
@@ -1196,7 +1216,7 @@ export type SurplusView = {
   export: number | null
   /** In order of priority. */
   loads: SurplusLoad[]
-  candidates: { device_id: number; name: string; kind: "charger" | "relay" }[]
+  candidates: { device_id: number; name: string; kind: SurplusKind }[]
 }
 
 /** A linked account (Settings › Accounts): never its secrets. */

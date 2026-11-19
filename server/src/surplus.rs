@@ -12,6 +12,10 @@
 //!   charger runs at its maximum current just in time.
 //! * Only the loads and the grid meter of this server count: the surplus is physical, it is that of
 //!   this site.
+//! * A **zone of the air conditioning** (of an installation of this server) heats to its setpoint
+//!   while it is cold outside and its system heats, cools while it is hot and its system cools; it
+//!   is switched on only if it was off, and put back as it was (off, its setpoint) when the surplus
+//!   runs short. A zone switched on, off or set otherwise by hand is left alone.
 
 use crate::db::{self, SurplusLoadRow};
 use crate::devices::{self, DeviceView};
@@ -21,7 +25,7 @@ use chrono::{NaiveTime, TimeZone};
 use chrono_tz::Tz;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 use tokio::sync::RwLock;
 
@@ -46,6 +50,24 @@ const VOLTAGE: f64 = 230.0;
 pub enum Kind {
     Charger,
     Relay,
+    Climate,
+}
+
+/// When a zone of the air conditioning runs on the surplus, and to which setpoint.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ClimatePlan {
+    pub heat_setpoint: f64,
+    pub cool_setpoint: f64,
+    /// It heats while the outdoor temperature is below this…
+    pub heat_below: f64,
+    /// …and cools while it is above this.
+    pub cool_above: f64,
+}
+
+impl Default for ClimatePlan {
+    fn default() -> Self {
+        Self { heat_setpoint: 20.0, cool_setpoint: 24.0, heat_below: 14.0, cool_above: 25.0 }
+    }
 }
 
 /// A load and how it is run.
@@ -63,6 +85,8 @@ pub struct Load {
     pub min_on: i64,
     /// What may be drawn from the grid before cutting back (W).
     pub tolerance: f64,
+    /// A zone of the air conditioning.
+    pub climate: ClimatePlan,
 }
 
 /// A load now.
@@ -82,10 +106,17 @@ pub struct Reading {
     pub session_energy: f64,
     /// A charger: current asked (A).
     pub amps: Option<i64>,
+    /// A zone: its system heats (or is in auto), cools (or is in auto).
+    pub heats: bool,
+    pub cools: bool,
+    /// A zone: its setpoint now.
+    pub setpoint: Option<f64>,
+    /// A zone: the outdoor temperature where it is.
+    pub outdoor: Option<f64>,
 }
 
 /// What Breezone tells a load.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Command {
     /// A charger: charge at this current.
     Start(i64),
@@ -94,13 +125,18 @@ pub enum Command {
     Stop,
     On,
     Off,
+    /// A zone: on, at this setpoint.
+    ClimateOn(f64),
+    /// A zone: off, its setpoint put back.
+    ClimateOff(Option<f64>),
 }
 
 /// What a load does, for the pages.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Status {
     /// "solar" (runs on the surplus) | "guarantee" (runs from the grid to keep the guarantee) |
-    /// "waiting" (not enough surplus) | "no_car" | "unavailable" | "no_meter" | "off" (not steered)
+    /// "waiting" (not enough surplus) | "no_car" | "unavailable" | "no_meter" | "off" (not steered) |
+    /// "idle" (a zone: no need now) | "manual" (a zone: set by hand, left alone)
     pub state: &'static str,
     /// A charger: the current Breezone asks.
     pub amps: Option<i64>,
@@ -123,6 +159,12 @@ struct Memory {
     on_since: Option<i64>,
     /// The current Breezone last asked.
     amps: Option<i64>,
+    /// A zone: Breezone switched it on (else it was on by hand, or is off).
+    ours: bool,
+    /// A zone: its setpoint before, put back after.
+    before: Option<f64>,
+    /// A zone: the setpoint Breezone gave it.
+    asked: Option<f64>,
 }
 
 /// Decides, look after look, what each load does.
@@ -149,8 +191,10 @@ impl Regulator {
         self.memory.retain(|id, _| loads.iter().any(|(l, _)| l.device_id == *id));
         // What the loads Breezone runs use is part of the surplus.
         // A relay that measures nothing counts for its power.
-        let used = |l: &Load, r: &Reading| if l.kind == Kind::Relay && r.power <= 0.0 { l.power } else { r.power.max(0.0) };
-        let mut budget = export + loads.iter().filter(|(_, r)| r.online && r.running).map(|(l, r)| used(l, r)).sum::<f64>();
+        let used = |l: &Load, r: &Reading| if matches!(l.kind, Kind::Relay | Kind::Climate) && r.power <= 0.0 { l.power } else { r.power.max(0.0) };
+        // A zone counts only when Breezone runs it (one on by hand is not part of the surplus).
+        let ours = |l: &Load| l.kind != Kind::Climate || self.memory.get(&l.device_id).is_some_and(|m| m.ours);
+        let mut budget = export + loads.iter().filter(|(l, r)| r.online && r.running && ours(l)).map(|(l, r)| used(l, r)).sum::<f64>();
         let mut commands = vec![];
         let mut statuses = HashMap::new();
         for (load, r) in loads {
@@ -283,6 +327,90 @@ impl Regulator {
                         statuses.insert(load.device_id, status("waiting", None, wait_text(need)));
                     }
                 }
+                Kind::Climate => {
+                    let plan = load.climate;
+                    let need = load.power.max(1.0);
+                    // What it should do now: heat, cool, or nothing (and why).
+                    let want: Result<f64, Text> = match r.outdoor {
+                        None => Err(crate::text!("Température extérieure inconnue", "Outdoor temperature unknown", "Temperatura exterior desconocida")),
+                        Some(t) if t < plan.heat_below && r.heats => Ok(plan.heat_setpoint),
+                        Some(t) if t > plan.cool_above && r.cools => Ok(plan.cool_setpoint),
+                        Some(t) if t < plan.heat_below => Err(crate::text!(
+                            "Froid dehors ({0}°), mais le système n'est pas en chauffage",
+                            "Cold outside ({0}°), but the system does not heat",
+                            "Frío fuera ({0}°), pero el sistema no está en calefacción",
+                            t.round()
+                        )),
+                        Some(t) if t > plan.cool_above => Err(crate::text!(
+                            "Chaud dehors ({0}°), mais le système n'est pas en froid",
+                            "Hot outside ({0}°), but the system does not cool",
+                            "Calor fuera ({0}°), pero el sistema no está en frío",
+                            t.round()
+                        )),
+                        Some(t) => Err(crate::text!("Pas besoin : {0}° dehors", "No need: {0}° outside", "Sin necesidad: {0}° fuera", t.round())),
+                    };
+                    let running_text = |sp: f64| {
+                        if r.outdoor.is_some_and(|t| t < plan.heat_below) {
+                            crate::text!("Chauffe à {0}° sur le surplus", "Heating to {0}° on the surplus", "Calienta a {0}° con el excedente", sp)
+                        } else {
+                            crate::text!("Rafraîchit à {0}° sur le surplus", "Cooling to {0}° on the surplus", "Enfría a {0}° con el excedente", sp)
+                        }
+                    };
+                    if m.ours {
+                        // Switched off, or set otherwise, by hand: left alone from now on.
+                        let moved = matches!((m.asked, r.setpoint), (Some(a), Some(s)) if (a - s).abs() > 0.05);
+                        if !r.running || moved {
+                            *m = Memory { changed_at: m.changed_at, ..Memory::default() };
+                            let text = crate::text!("Réglée à la main : le surplus la laisse", "Set by hand: the surplus leaves it", "Ajustada a mano: el excedente la deja");
+                            statuses.insert(load.device_id, status("manual", None, text));
+                            continue;
+                        }
+                        let held = m.on_since.is_none_or(|t| now - t >= load.min_on);
+                        if want.is_ok() && budget + load.tolerance >= need {
+                            m.short_since = None;
+                        } else {
+                            let since = *m.short_since.get_or_insert(now);
+                            if now - since >= STOP_DELAY && held {
+                                commands.push((load.device_id, Command::ClimateOff(m.before)));
+                                *m = Memory { changed_at: Some(now), ..Memory::default() };
+                                let text = match want {
+                                    Ok(_) => wait_text(need),
+                                    Err(why) => why,
+                                };
+                                statuses.insert(load.device_id, status("waiting", None, text));
+                                continue;
+                            }
+                        }
+                        budget -= need;
+                        statuses.insert(load.device_id, status("solar", None, running_text(m.asked.unwrap_or(plan.heat_setpoint))));
+                    } else if r.running {
+                        m.enough_since = None;
+                        let text = crate::text!("Allumée à la main : le surplus la laisse", "On by hand: the surplus leaves it", "Encendida a mano: el excedente la deja");
+                        statuses.insert(load.device_id, status("manual", None, text));
+                    } else {
+                        match want {
+                            Err(why) => {
+                                m.enough_since = None;
+                                statuses.insert(load.device_id, status("idle", None, why));
+                            }
+                            Ok(sp) => {
+                                if budget + load.tolerance >= need {
+                                    let since = *m.enough_since.get_or_insert(now);
+                                    if now - since >= START_DELAY && rested {
+                                        commands.push((load.device_id, Command::ClimateOn(sp)));
+                                        *m = Memory { changed_at: Some(now), on_since: Some(now), ours: true, before: r.setpoint, asked: Some(sp), ..Memory::default() };
+                                        budget -= need;
+                                        statuses.insert(load.device_id, status("solar", None, running_text(sp)));
+                                        continue;
+                                    }
+                                } else {
+                                    m.enough_since = None;
+                                }
+                                statuses.insert(load.device_id, status("waiting", None, wait_text(need)));
+                            }
+                        }
+                    }
+                }
             }
         }
         (commands, statuses)
@@ -321,11 +449,14 @@ impl Surplus {
     }
 }
 
-/// The kind of a device that can be steered on the surplus: a charger, or a relay of this server.
-pub fn kind_of(d: &DeviceView) -> Option<Kind> {
-    if d.installation_id.is_some() || d.source_id.is_none() {
-        return None;
+/// The kind of a device that can be steered on the surplus: a charger, a relay of this server, or
+/// a zone of an installation of this server (`local`: their ids).
+pub fn kind_of(d: &DeviceView, local: &HashSet<i64>) -> Option<Kind> {
+    if let Some(inst) = d.installation_id {
+        let zone = d.traits.iter().any(|t| t.starts_with("climate.zone@"));
+        return (zone && local.contains(&inst)).then_some(Kind::Climate);
     }
+    d.source_id?;
     if d.traits.iter().any(|t| t.starts_with("ev.charger@")) {
         Some(Kind::Charger)
     } else if d.traits.iter().any(|t| t.starts_with("switch.relay@")) {
@@ -355,10 +486,25 @@ pub fn load_of(row: &SurplusLoadRow, d: &DeviceView, kind: Kind) -> Load {
         },
         min_on: row.min_on_minutes * 60,
         tolerance: row.tolerance.max(0) as f64,
+        climate: {
+            let d = ClimatePlan::default();
+            ClimatePlan {
+                heat_setpoint: row.heat_setpoint.unwrap_or(d.heat_setpoint),
+                cool_setpoint: row.cool_setpoint.unwrap_or(d.cool_setpoint),
+                heat_below: row.heat_below.unwrap_or(d.heat_below),
+                cool_above: row.cool_above.unwrap_or(d.cool_above),
+            }
+        },
     }
 }
 
-fn reading_of(d: &DeviceView, kind: Kind) -> Reading {
+/// The installations of this server (not those reached through another one): their zones can
+/// follow the surplus of this site.
+pub async fn local_installations(state: &AppState) -> HashSet<i64> {
+    db::list_installations(&state.db).await.unwrap_or_default().into_iter().filter(|i| i.node_id.is_none()).map(|i| i.id).collect()
+}
+
+fn reading_of(d: &DeviceView, kind: Kind, outdoor: Option<f64>) -> Reading {
     let s = &d.state;
     let flag = |f: &str| s.get(f).and_then(Value::as_bool);
     match kind {
@@ -373,14 +519,47 @@ fn reading_of(d: &DeviceView, kind: Kind) -> Reading {
                 phases: num(s, "phases").unwrap_or(1.0) as u32,
                 session_energy: num(s, "session_energy").unwrap_or(0.0),
                 amps: num(s, "limit").map(|a| a as i64),
+                ..Reading::default()
             }
         }
         Kind::Relay => Reading { online: d.available, plugged: true, running: flag("on").unwrap_or(false), power: num(s, "power").unwrap_or(0.0), ..Reading::default() },
+        Kind::Climate => {
+            let mode = s.get("mode").and_then(Value::as_str);
+            Reading {
+                online: d.available,
+                plugged: true,
+                running: flag("on").unwrap_or(false),
+                heats: matches!(mode, Some("heating" | "aux_heating" | "auto")),
+                cools: matches!(mode, Some("cooling" | "auto")),
+                setpoint: num(s, "setpoint"),
+                outdoor,
+                ..Reading::default()
+            }
+        }
     }
 }
 
 /// Sends a command to a device.
 async fn send(state: &AppState, d: &DeviceView, c: Command) -> Result<(), String> {
+    // A zone: as any change of a zone, through its installation.
+    if let Command::ClimateOn(_) | Command::ClimateOff(_) = c {
+        let mut params = Map::new();
+        match c {
+            Command::ClimateOn(sp) => {
+                params.insert("on".into(), json!(true));
+                params.insert("setpoint".into(), json!(sp));
+            }
+            Command::ClimateOff(before) => {
+                params.insert("on".into(), json!(false));
+                if let Some(sp) = before {
+                    params.insert("setpoint".into(), json!(sp));
+                }
+            }
+            _ => {}
+        }
+        let input = devices::ActionInput { trait_name: "climate.zone".into(), action: "set".into(), params };
+        return devices::apply(state, d, &input, "Breezone").await.map_err(|e| e.message.en);
+    }
     let source = d.source_id.ok_or("no source")?;
     let reference = d.reference.as_str().unwrap_or_default();
     let params = |v: Value| v.as_object().cloned().unwrap_or_else(Map::new);
@@ -390,6 +569,7 @@ async fn send(state: &AppState, d: &DeviceView, c: Command) -> Result<(), String
         Command::Stop => ("ev.charger", "stop", Map::new()),
         Command::On => ("switch.relay", "set", params(json!({ "on": true }))),
         Command::Off => ("switch.relay", "set", params(json!({ "on": false }))),
+        Command::ClimateOn(_) | Command::ClimateOff(_) => return Ok(()),
     };
     state.drivers.act(source, reference, trait_name, action, &p).await.map_err(|e| e.to_string())
 }
@@ -408,8 +588,9 @@ pub async fn tick(state: &AppState, now: i64) {
         Ok(live) => live.live.flows.grid,
         Err(e) => return tracing::error!("surplus: {e}"),
     };
+    let local = local_installations(state).await;
     let steered: Vec<(&SurplusLoadRow, &DeviceView, Kind)> =
-        rows.iter().filter(|r| r.enabled).filter_map(|r| devices.iter().find(|d| d.id == r.device_id).and_then(|d| kind_of(d).map(|k| (r, d, k)))).collect();
+        rows.iter().filter(|r| r.enabled).filter_map(|r| devices.iter().find(|d| d.id == r.device_id).and_then(|d| kind_of(d, &local).map(|k| (r, d, k)))).collect();
     let Some(grid) = grid else {
         let statuses = steered
             .iter()
@@ -422,7 +603,17 @@ pub async fn tick(state: &AppState, now: i64) {
         *state.surplus.snapshot.write().await = Snapshot { meter: false, export: None, statuses };
         return;
     };
-    let loads: Vec<(Load, Reading)> = steered.iter().map(|(r, d, k)| (load_of(r, d, *k), reading_of(d, *k))).collect();
+    // The outdoor temperature of each installation of a zone that follows the surplus.
+    let mut outdoor: HashMap<i64, Option<f64>> = HashMap::new();
+    for (_, d, _) in &steered {
+        if let Some(inst) = d.installation_id {
+            if let std::collections::hash_map::Entry::Vacant(e) = outdoor.entry(inst) {
+                e.insert(state.weather.view(Some(inst)).await.weather.and_then(|w| w.temperature));
+            }
+        }
+    }
+    let loads: Vec<(Load, Reading)> =
+        steered.iter().map(|(r, d, k)| (load_of(r, d, *k), reading_of(d, *k, d.installation_id.and_then(|i| outdoor.get(&i).copied().flatten())))).collect();
     let (commands, statuses) = state.surplus.regulator.lock().await.step(now, state.cfg.timezone, -grid, &loads);
     for (id, c) in commands {
         let Some(d) = devices.iter().find(|d| d.id == id) else { continue };
@@ -437,6 +628,12 @@ pub async fn tick(state: &AppState, now: i64) {
             }
             Command::On => crate::text!("{0} : en marche sur le surplus solaire", "{0}: on, on the solar surplus", "{0}: en marcha con el excedente solar", name),
             Command::Off => crate::text!("{0} : arrêté, plus assez de surplus", "{0}: off, not enough surplus", "{0}: apagado, excedente insuficiente", name),
+            Command::ClimateOn(sp) => {
+                crate::text!("{0} : allumée à {1}° sur le surplus solaire", "{0}: on at {1}° on the solar surplus", "{0}: encendida a {1}° con el excedente solar", name, sp)
+            }
+            Command::ClimateOff(_) => {
+                crate::text!("{0} : remise comme avant, plus de surplus", "{0}: put back as it was, no more surplus", "{0}: devuelta como estaba, sin excedente", name)
+            }
             Command::Amps(_) => {
                 if let Err(e) = send(state, d, c).await {
                     tracing::warn!("surplus: {name}: {e}");
@@ -495,11 +692,33 @@ mod tests {
             guarantee: guarantee.map(|(k, t)| (k, NaiveTime::parse_from_str(t, "%H:%M").unwrap())),
             min_on: 0,
             tolerance: 0.0,
+            climate: ClimatePlan::default(),
         }
     }
 
     fn heater() -> Load {
-        Load { device_id: 2, kind: Kind::Relay, name: "Chauffe-eau".into(), min_amps: 0, max_amps: 0, power: 2000.0, guarantee: None, min_on: 600, tolerance: 0.0 }
+        Load {
+            device_id: 2,
+            kind: Kind::Relay,
+            name: "Chauffe-eau".into(),
+            min_amps: 0,
+            max_amps: 0,
+            power: 2000.0,
+            guarantee: None,
+            min_on: 600,
+            tolerance: 0.0,
+            climate: ClimatePlan::default(),
+        }
+    }
+
+    /// A zone of the air conditioning reckoned at 1.5 kW.
+    fn zone() -> Load {
+        Load { device_id: 3, kind: Kind::Climate, name: "Salon".into(), power: 1500.0, ..heater() }
+    }
+
+    /// The zone: on or off, its system heating, its setpoint, the outdoor temperature.
+    fn salon(on: bool, setpoint: f64, outdoor: f64) -> Reading {
+        Reading { online: true, plugged: true, running: on, heats: true, setpoint: Some(setpoint), outdoor: Some(outdoor), ..Reading::default() }
     }
 
     fn car(running: bool, amps: i64, energy: f64) -> Reading {
@@ -512,6 +731,7 @@ mod tests {
             phases: 1,
             session_energy: energy,
             amps: Some(amps),
+            ..Reading::default()
         }
     }
 
@@ -598,5 +818,45 @@ mod tests {
         let three = Reading { phases: 3, ..car(false, 0, 0.0) };
         r.step(at(12, 2), PARIS, 5000.0, &[(charger(None), three)]);
         assert_eq!(r.step(at(12, 3), PARIS, 5000.0, &[(charger(None), three)]).0, vec![(1, Command::Start(7))]);
+    }
+
+    #[test]
+    fn a_zone_heats_on_the_surplus_then_is_put_back() {
+        let mut r = Regulator::default();
+        let plan = |o: f64| [(zone(), salon(false, 18.0, o))];
+        // Mild outside: no need, whatever the surplus.
+        let (c, s) = r.step(at(12, 0), PARIS, 3000.0, &plan(16.0));
+        assert!(c.is_empty());
+        assert_eq!(s[&3].state, "idle");
+        // Cold outside, the system heats, 2 kW go back to the grid: on at 20° after a minute.
+        assert!(r.step(at(12, 1), PARIS, 2000.0, &plan(9.0)).0.is_empty());
+        assert_eq!(r.step(at(12, 2), PARIS, 2000.0, &plan(9.0)).0, vec![(3, Command::ClimateOn(20.0))]);
+        // It runs: its 1.5 kW are part of the surplus; still 500 W going back, it stays.
+        let on = [(zone(), salon(true, 20.0, 9.0))];
+        let (c, s) = r.step(at(12, 3), PARIS, 500.0, &on);
+        assert!(c.is_empty());
+        assert_eq!(s[&3].state, "solar");
+        // The surplus goes: put back off at 18° once its minimum time and the stop delay are over.
+        assert!(r.step(at(12, 12), PARIS, -800.0, &on).0.is_empty());
+        assert_eq!(r.step(at(12, 16), PARIS, -800.0, &on).0, vec![(3, Command::ClimateOff(Some(18.0)))]);
+    }
+
+    #[test]
+    fn a_zone_set_by_hand_is_left_alone() {
+        let mut r = Regulator::default();
+        // On by hand: never touched, and not part of the surplus.
+        let by_hand = [(zone(), salon(true, 22.0, 9.0))];
+        let (c, s) = r.step(at(12, 0), PARIS, 3000.0, &by_hand);
+        assert!(c.is_empty());
+        assert_eq!(s[&3].state, "manual");
+        // Started by Breezone, then set to 23° by hand: Breezone lets it go, nothing put back.
+        let off = [(zone(), salon(false, 18.0, 9.0))];
+        r.step(at(13, 0), PARIS, 2000.0, &off);
+        assert_eq!(r.step(at(13, 1), PARIS, 2000.0, &off).0, vec![(3, Command::ClimateOn(20.0))]);
+        let moved = [(zone(), salon(true, 23.0, 9.0))];
+        let (c, s) = r.step(at(13, 2), PARIS, -2000.0, &moved);
+        assert!(c.is_empty());
+        assert_eq!(s[&3].state, "manual");
+        assert!(r.step(at(13, 20), PARIS, -2000.0, &moved).0.is_empty(), "no longer its own");
     }
 }

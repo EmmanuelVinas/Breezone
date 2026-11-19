@@ -54,6 +54,8 @@ pub struct AutomationView {
     pub status: Status,
     /// Enabled rules that may set the same device otherwise at the same time.
     pub conflicts: Vec<Conflict>,
+    /// The devices it drives that the solar surplus steering runs too (their names).
+    pub surplus: Vec<Text>,
     pub last_run_at: Option<i64>,
     pub last_reason: Option<Text>,
     pub created_at: i64,
@@ -102,6 +104,7 @@ pub fn view(row: &AutomationRow, rule: Automation, ctx: &Context, running: bool)
         mode: rule.mode,
         over: rule.over,
         conflicts: vec![],
+        surplus: vec![],
         last_run_at: row.last_run_at,
         last_reason: row.last_reason.as_deref().map(Text::load),
         created_at: row.created_at,

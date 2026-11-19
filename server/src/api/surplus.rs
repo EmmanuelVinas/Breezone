@@ -23,6 +23,8 @@ pub struct LoadView {
     pub limit_max: Option<i64>,
     /// What it does now (`None`: not steered, or not looked at yet).
     pub status: Option<Status>,
+    /// The enabled automations that drive it too: they would contradict the steering.
+    pub automations: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -47,18 +49,37 @@ fn limit(d: &DeviceView, field: &str) -> Option<i64> {
     d.state.get(field).and_then(serde_json::Value::as_i64)
 }
 
+/// The enabled automations that drive each device (a group expanded), by device.
+pub async fn driven_by_automations(state: &AppState) -> ApiResult<std::collections::HashMap<i64, Vec<String>>> {
+    let ctx = crate::automations::Context::load(state).await?;
+    let mut out: std::collections::HashMap<i64, Vec<String>> = std::collections::HashMap::new();
+    for row in db::list_automations(&state.db).await?.into_iter().filter(|r| r.enabled) {
+        let Some(rule) = crate::automations::Automation::of(&row) else { continue };
+        for id in rule.expanded_devices(&ctx) {
+            let names = out.entry(id).or_default();
+            if !names.contains(&row.name) {
+                names.push(row.name.clone());
+            }
+        }
+    }
+    Ok(out)
+}
+
 async fn view(state: &AppState) -> ApiResult<SurplusView> {
     let devices = devices::list(state).await?;
     let rows = db::list_surplus_loads(&state.db).await?;
+    let local = surplus::local_installations(state).await;
+    let mut driven = driven_by_automations(state).await?;
     let snapshot = state.surplus.snapshot().await;
     let looked = !snapshot.statuses.is_empty() || snapshot.meter;
     let loads = rows
         .into_iter()
         .filter_map(|config| {
             let d = devices.iter().find(|d| d.id == config.device_id)?;
-            let kind = surplus::kind_of(d)?;
+            let kind = surplus::kind_of(d, &local)?;
             Some(LoadView {
                 device_id: d.id,
+                automations: driven.remove(&d.id).unwrap_or_default(),
                 name: d.name.clone(),
                 kind,
                 limit_min: limit(d, "limit_min"),
@@ -71,7 +92,7 @@ async fn view(state: &AppState) -> ApiResult<SurplusView> {
     let candidates = devices
         .iter()
         .filter(|d| !loads.iter().any(|l| l.device_id == d.id))
-        .filter_map(|d| surplus::kind_of(d).map(|kind| Candidate { device_id: d.id, name: d.name.clone(), kind }))
+        .filter_map(|d| surplus::kind_of(d, &local).map(|kind| Candidate { device_id: d.id, name: d.name.clone(), kind }))
         .collect();
     Ok(SurplusView { meter: looked.then_some(snapshot.meter), export: snapshot.export, loads, candidates })
 }
@@ -97,17 +118,22 @@ pub struct LoadInput {
     pub min_on_minutes: i64,
     #[serde(default)]
     pub tolerance: i64,
+    /// A zone of the air conditioning (see `surplus::ClimatePlan`).
+    pub heat_setpoint: Option<f64>,
+    pub cool_setpoint: Option<f64>,
+    pub heat_below: Option<f64>,
+    pub cool_above: Option<f64>,
 }
 
 /// Adds a load (last in priority) or changes how it is run.
 pub async fn save(State(state): State<AppState>, _admin: AdminUser, Path(device_id): Path<i64>, Json(input): Json<LoadInput>) -> ApiResult<Json<SurplusView>> {
     let devices = devices::list(&state).await?;
     let d = devices.iter().find(|d| d.id == device_id).ok_or_else(|| ApiError::not_found("device not found"))?;
-    let kind = surplus::kind_of(d).ok_or_else(|| {
+    let kind = surplus::kind_of(d, &surplus::local_installations(&state).await).ok_or_else(|| {
         ApiError::bad_request(crate::text!(
-            "seules une borne ou une prise pilotée de ce serveur peuvent suivre le surplus",
-            "only a charger or a relay of this server can follow the surplus",
-            "solo un cargador o un relé de este servidor pueden seguir el excedente"
+            "seules une borne, une prise pilotée ou une zone de climatisation de ce serveur peuvent suivre le surplus",
+            "only a charger, a relay or a zone of the air conditioning of this server can follow the surplus",
+            "solo un cargador, un relé o una zona de climatización de este servidor pueden seguir el excedente"
         ))
     })?;
     let bad = |fr: &str, en: &str, es: &str| ApiError::bad_request(crate::i18n::Text { fr: fr.into(), en: en.into(), es: es.into() });
@@ -118,7 +144,22 @@ pub async fn save(State(state): State<AppState>, _admin: AdminUser, Path(device_
             return Err(bad(&format!("intensité de {lo} à {hi} A"), &format!("current from {lo} to {hi} A"), &format!("intensidad de {lo} a {hi} A")));
         }
     }
-    if kind == Kind::Relay && !input.power.is_some_and(|p| (1..=20_000).contains(&p)) {
+    if kind == Kind::Climate {
+        let plan = surplus::ClimatePlan::default();
+        let (hs, cs) = (input.heat_setpoint.unwrap_or(plan.heat_setpoint), input.cool_setpoint.unwrap_or(plan.cool_setpoint));
+        let (hb, ca) = (input.heat_below.unwrap_or(plan.heat_below), input.cool_above.unwrap_or(plan.cool_above));
+        if !(10.0..=32.0).contains(&hs) || !(10.0..=32.0).contains(&cs) {
+            return Err(bad("consignes de 10 à 32 °C", "setpoints from 10 to 32 °C", "consignas de 10 a 32 °C"));
+        }
+        if !(-30.0..=45.0).contains(&hb) || !(-30.0..=45.0).contains(&ca) || hb > ca {
+            return Err(bad(
+                "températures extérieures de -30 à 45 °C, le chauffage sous le froid",
+                "outdoor temperatures from -30 to 45 °C, heating below cooling",
+                "temperaturas exteriores de -30 a 45 °C, la calefacción por debajo del frío",
+            ));
+        }
+    }
+    if matches!(kind, Kind::Relay | Kind::Climate) && !input.power.is_some_and(|p| (1..=20_000).contains(&p)) {
         return Err(bad("donnez la puissance de l'appareil (W)", "give the power of the device (W)", "indique la potencia del aparato (W)"));
     }
     let by = input.guarantee_by.as_deref().map(str::trim).filter(|t| !t.is_empty());
@@ -139,11 +180,15 @@ pub async fn save(State(state): State<AppState>, _admin: AdminUser, Path(device_
             enabled: input.enabled,
             min_amps: input.min_amps.filter(|_| kind == Kind::Charger),
             max_amps: input.max_amps.filter(|_| kind == Kind::Charger),
-            power: input.power.filter(|_| kind == Kind::Relay),
+            power: input.power.filter(|_| matches!(kind, Kind::Relay | Kind::Climate)),
             guarantee_kwh: input.guarantee_kwh.filter(|_| guarantee),
             guarantee_by: by.filter(|_| guarantee).map(str::to_string),
             min_on_minutes: input.min_on_minutes,
             tolerance: input.tolerance,
+            heat_setpoint: input.heat_setpoint.filter(|_| kind == Kind::Climate),
+            cool_setpoint: input.cool_setpoint.filter(|_| kind == Kind::Climate),
+            heat_below: input.heat_below.filter(|_| kind == Kind::Climate),
+            cool_above: input.cool_above.filter(|_| kind == Kind::Climate),
         },
     )
     .await?;

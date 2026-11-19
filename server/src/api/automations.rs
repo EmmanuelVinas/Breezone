@@ -130,13 +130,17 @@ pub async fn list(State(state): State<AppState>, user: AuthUser) -> ApiResult<Js
     let ctx = Context::load(&state).await?;
     let rules: Vec<(AutomationRow, Automation)> = rows.into_iter().filter_map(|row| Automation::of(&row).map(|rule| (row, rule))).collect();
     let mut conflicts = automations::conflicts(&rules, &ctx);
+    // The devices the surplus steering runs: a rule that drives them too would fight it.
+    let steered: Vec<i64> = db::list_surplus_loads(&state.db).await?.into_iter().filter(|l| l.enabled).map(|l| l.device_id).collect();
     let mut out = vec![];
     for (row, rule) in rules {
         if sees(&state, &access, &rule, &ctx).await? {
             let running = state.automations.is_running(row.id);
             let here = ctx.at(rule.place(&ctx));
+            let surplus = rule.expanded_devices(&ctx).into_iter().filter(|id| steered.contains(id)).map(|id| ctx.device_name(id)).collect();
             let mut view = automations::view(&row, rule, &here, running);
             view.conflicts = conflicts.remove(&row.id).unwrap_or_default();
+            view.surplus = surplus;
             out.push(view);
         }
     }

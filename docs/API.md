@@ -439,23 +439,34 @@ scènes qui pilotent des appareils de modules sont visibles de tous, comme `/api
 
 Ce qui repartirait au réseau fait tourner des appareils de la maison, par ordre de priorité : une
 borne (`ev.charger`, intensité réglée entre un minimum et un maximum) ou une prise pilotée
-(`switch.relay`, chauffe-eau, pompe… allumée quand sa puissance tient dans le surplus). Il faut un
-compteur avec le rôle `grid`. Seuls les appareils des modules de ce serveur peuvent suivre le
-surplus (le surplus est celui de ce site). Le serveur regarde toutes les 10 s.
+(`switch.relay`, chauffe-eau, pompe… allumée quand sa puissance tient dans le surplus), ou une zone
+de climatisation (`climate.zone` d'une installation de ce serveur). Il faut un compteur avec le rôle
+`grid`. Seuls les appareils de ce serveur peuvent suivre le surplus (le surplus est celui de ce
+site). Le serveur regarde toutes les 10 s.
+
+Une zone chauffe à `heat_setpoint` quand il fait moins de `heat_below` dehors et que son système est
+en chauffage (ou auto), rafraîchit à `cool_setpoint` au-dessus de `cool_above` en mode froid (ou
+auto) ; elle compte pour `power` (W estimés, requis). Breezone ne l'allume que si elle était éteinte,
+et la remet comme avant (éteinte, sa consigne d'avant) quand le surplus manque ; une zone allumée,
+éteinte ou réglée autrement à la main est laissée telle quelle (`manual`). Un automatisme qui pilote
+aussi un appareil suivi le contredirait : `Load.automations` les nomme, et `GET /api/automations`
+donne pour chaque règle `surplus` (les appareils qu'elle partage avec le pilotage).
 
 | Méthode | Chemin | Description |
 |---------|--------|-------------|
 | GET 🔒 | `/api/surplus` | `{meter, export, loads:[Load], candidates:[{device_id, name, kind}]}` |
-| PUT 👑 | `/api/surplus/loads/{device_id}` | `{enabled?, min_amps?, max_amps?, power?, guarantee_kwh?, guarantee_by?, min_on_minutes?, tolerance?}` : ajoute l'appareil (en dernier) ou change ses réglages → la vue |
+| PUT 👑 | `/api/surplus/loads/{device_id}` | `{enabled?, min_amps?, max_amps?, power?, guarantee_kwh?, guarantee_by?, min_on_minutes?, tolerance?, heat_setpoint?, cool_setpoint?, heat_below?, cool_above?}` : ajoute l'appareil (en dernier) ou change ses réglages → la vue |
 | DELETE 👑 | `/api/surplus/loads/{device_id}` | Il ne suit plus le surplus (laissé tel quel) |
 | PUT 👑 | `/api/surplus/order` | `{device_ids}` : les priorités, la première d'abord → la vue |
 
 `meter` : la maison a un compteur réseau (`null` : pas encore regardé) ; `export` : ce qui part au
-réseau (W, négatif : tiré). `Load` : `{device_id, name, kind: "charger"|"relay", position, enabled,
-min_amps, max_amps, power, guarantee_kwh, guarantee_by, min_on_minutes, tolerance, limit_min,
-limit_max, status: {state, amps, power, text} | null}` ; `state` ∈ `solar` (tourne sur le surplus),
+réseau (W, négatif : tiré). `Load` : `{device_id, name, kind: "charger"|"relay"|"climate", position,
+enabled, min_amps, max_amps, power, guarantee_kwh, guarantee_by, min_on_minutes, tolerance,
+heat_setpoint, cool_setpoint, heat_below, cool_above, limit_min, limit_max, automations: [nom],
+status: {state, amps, power, text} | null}` ; `state` ∈ `solar` (tourne sur le surplus),
 `guarantee` (tourne sur le réseau pour tenir la garantie), `waiting`, `no_car`, `unavailable`,
-`no_meter`.
+`no_meter`, `idle` (une zone : pas besoin, ou mode du système contraire), `manual` (une zone
+réglée à la main, laissée).
 
 Régulation :
 - budget = ce qui part au réseau + ce que tirent déjà les appareils pilotés (une prise qui ne mesure

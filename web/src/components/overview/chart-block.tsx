@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useQueries, useQuery } from "@tanstack/react-query"
 import { Bar, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from "recharts"
 import { api } from "@/lib/api"
 import { dateTime, formatTemp, number, percent, time } from "@/lib/format"
@@ -272,6 +272,205 @@ function Curves({
                 {c.label}
                 {v !== undefined && (
                   <span className="tabular font-medium">{show(v, c.unit)}</span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+/** The measures of the ventilated rooms one chart can compare. */
+export const VENTILATION_FIELDS = [
+  "humidity",
+  "flow",
+  "co2",
+  "temperature",
+  "voc",
+  "level",
+] as const
+
+const ROOM_COLORS = [
+  ...PALETTE,
+  "var(--cool)",
+  "var(--heat)",
+  "var(--warning)",
+  "var(--success)",
+  "var(--primary)",
+]
+
+/** One measure of every ventilated room (`ventilation.room@1`), one curve each, to compare them. */
+export function VentilationRoomsChart({
+  field,
+  hours,
+  tall,
+}: {
+  field: string
+  hours: number
+  tall: boolean
+}) {
+  const { devices, traits } = useOverview()
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set())
+  const rooms = devices
+    .filter((d) => d.traits.includes("ventilation.room@1"))
+    .sort((a, b) => a.name.localeCompare(b.name))
+  const histories = useQueries({
+    queries: rooms.map((d) => ({
+      queryKey: ["device-history", d.id, hours],
+      queryFn: () => api.deviceHistory(d.id, hours, hours > 24 ? 168 : 96),
+      refetchInterval: 5 * 60_000,
+    })),
+  })
+  const info = rooms.length ? chartFields(rooms[0], traits) : []
+  const label = info.find((f) => f.name === field)?.label ?? field
+  const unit = info.find((f) => f.name === field)?.unit ?? ""
+  const curves = rooms
+    .map((d, i) => ({
+      key: `r${d.id}`,
+      label: d.name,
+      color: ROOM_COLORS[i % ROOM_COLORS.length],
+      points: histories[i]?.data?.series[field] ?? [],
+    }))
+    .filter((c) => c.points.length > 0)
+  const rows = new Map<number, Record<string, number>>()
+  for (const c of curves)
+    for (const [ts, v] of c.points) {
+      const row = rows.get(ts) ?? { ts }
+      row[c.key] = v
+      rows.set(ts, row)
+    }
+  const data = [...rows.values()].sort((a, b) => a.ts - b.ts)
+  const config = Object.fromEntries(
+    curves.map((c) => [c.key, { label: c.label, color: c.color }])
+  ) satisfies ChartConfig
+  const loading = histories.some((h) => h.isLoading)
+  const toggle = (key: string) =>
+    setHidden((h) => {
+      const next = new Set(h)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  const tick = (ts: number) =>
+    hours > 24
+      ? new Date(ts * 1000).toLocaleDateString(locale(), { weekday: "short" })
+      : time(ts)
+  return (
+    <Card className="h-full rounded-3xl">
+      <CardContent className="flex flex-col gap-2">
+        <div className="flex items-baseline justify-between gap-3">
+          <h3 className="truncate font-heading text-lg font-semibold">
+            {t("Ventilation · {measure}", { measure: label })}
+          </h3>
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {hours > 24 ? t("7 derniers jours") : t("24 dernières heures")}
+          </span>
+        </div>
+        {data.length > 1 ? (
+          <ChartContainer
+            config={config}
+            className={cn("aspect-auto w-full", tall ? "h-72" : "h-40")}
+          >
+            <ComposedChart data={data} margin={{ left: 0, right: 4, top: 4 }}>
+              <CartesianGrid vertical={false} />
+              <XAxis
+                dataKey="ts"
+                type="number"
+                scale="time"
+                domain={["dataMin", "dataMax"]}
+                tickFormatter={tick}
+                tickLine={false}
+                axisLine={false}
+                minTickGap={40}
+              />
+              <YAxis
+                width={40}
+                tickLine={false}
+                axisLine={false}
+                domain={
+                  unit === "%" ? [0, 100] : ["dataMin - 1", "dataMax + 1"]
+                }
+                tickCount={3}
+                allowDecimals={false}
+                tickFormatter={(v: number) =>
+                  `${Math.round(v)}${suffix(unit).trim()}`
+                }
+              />
+              <ChartTooltip
+                content={
+                  <ChartTooltipContent
+                    labelFormatter={(_, p) =>
+                      p?.[0] ? dateTime(Number(p[0].payload.ts)) : ""
+                    }
+                    formatter={(value, name, item) => {
+                      const c = curves.find((x) => x.key === name)
+                      if (!c) return null
+                      return (
+                        <div className="flex w-full items-center justify-between gap-4">
+                          <span className="flex items-center gap-1.5 text-muted-foreground">
+                            <span
+                              className="size-2 rounded-[2px]"
+                              style={{ background: item.color }}
+                            />
+                            {c.label}
+                          </span>
+                          <span className="tabular font-medium">
+                            {show(Number(value), unit)}
+                          </span>
+                        </div>
+                      )
+                    }}
+                  />
+                }
+              />
+              {curves.map((c) => (
+                <Line
+                  key={c.key}
+                  dataKey={c.key}
+                  type="monotone"
+                  stroke={`var(--color-${c.key})`}
+                  strokeWidth={2}
+                  dot={false}
+                  connectNulls
+                  isAnimationActive={false}
+                  hide={hidden.has(c.key)}
+                />
+              ))}
+            </ComposedChart>
+          </ChartContainer>
+        ) : (
+          <p
+            className={cn(
+              "grid place-items-center text-sm text-muted-foreground",
+              tall ? "h-72" : "h-40"
+            )}
+          >
+            {loading ? "…" : t("Pas encore d'historique.")}
+          </p>
+        )}
+        <div className="flex flex-wrap gap-1.5">
+          {curves.map((c) => {
+            const v = c.points.at(-1)?.[1]
+            return (
+              <button
+                key={c.key}
+                type="button"
+                onClick={() => toggle(c.key)}
+                aria-pressed={!hidden.has(c.key)}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-opacity",
+                  hidden.has(c.key) && "opacity-40"
+                )}
+              >
+                <span
+                  className="size-2.5 rounded-sm"
+                  style={{ background: c.color }}
+                />
+                {c.label}
+                {v !== undefined && (
+                  <span className="tabular font-medium">{show(v, unit)}</span>
                 )}
               </button>
             )

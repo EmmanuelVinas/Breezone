@@ -1969,6 +1969,36 @@ const es: Record<string, string> = {
   "Courbe des dernières 24 h": "Curva de las últimas 24 h",
   "Sans courbe : ses commandes": "Sin curva: sus mandos",
   "Dans Netatmo : {name}": "En Netatmo: {name}",
+  "Prix et couleur Tempo (petit)": "Precio y color Tempo (pequeño)",
+  "Lumière indisponible": "Luz no disponible",
+  "{n} lumière(s)": "{n} luz(ces)",
+  "Lumière ou pièce, intensité et couleurs":
+    "Luz o estancia, intensidad y colores",
+  "Lumière ou pièce": "Luz o estancia",
+  Montrer: "Mostrar",
+  "Pièce · {name}": "Estancia · {name}",
+  "Ventilation · {measure}": "Ventilación · {measure}",
+  "Graphique des pièces ventilées": "Gráfico de las estancias ventiladas",
+  "Pièces ventilées · {measure}": "Estancias ventiladas · {measure}",
+  "{names} suit aussi le pilotage sur surplus solaire : les deux se contrediraient. Retirez-le de l'un ou de l'autre.":
+    "{names} también sigue el pilotaje por excedente solar: ambos se contradirían. Quítelo de uno o del otro.",
+  "chauffe à {sp}° sous {t}° dehors":
+    "calienta a {sp}° por debajo de {t}° fuera",
+  "rafraîchit à {sp}° au-dessus de {t}°": "enfría a {sp}° por encima de {t}°",
+  "Quand le surplus couvre sa puissance, Breezone allume la zone : en chauffage s'il fait froid dehors, en froid s'il fait chaud, selon le mode du système. Il la remet comme avant quand le surplus manque. Une zone déjà allumée ou réglée à la main n'est pas touchée.":
+    "Cuando el excedente cubre su potencia, Breezone enciende la zona: en calefacción si hace frío fuera, en frío si hace calor, según el modo del sistema. La devuelve como estaba cuando falta excedente. Una zona ya encendida o ajustada a mano no se toca.",
+  "Chauffer à (°C)": "Calentar a (°C)",
+  "quand il fait moins de (°C dehors)": "cuando hace menos de (°C fuera)",
+  "Rafraîchir à (°C)": "Enfriar a (°C)",
+  "quand il fait plus de (°C dehors)": "cuando hace más de (°C fuera)",
+  "Puissance estimée (W)": "Potencia estimada (W)",
+  "Aucun appareil ne suit le surplus. Ajoutez la borne, un chauffe-eau sur une prise pilotée, ou une zone de climatisation.":
+    "Ningún aparato sigue el excedente. Añada el cargador, un calentador en un enchufe pilotado o una zona de climatización.",
+  "Aussi piloté par {names} : les deux se contrediraient.":
+    "También pilotado por {names}: ambos se contradirían.",
+  "Tourne tout seul, par ordre de priorité. Il se règle dans Énergie ; un automatisme ne doit pas piloter les mêmes appareils.":
+    "Funciona solo, por orden de prioridad. Se ajusta en Energía; una automatización no debe pilotar los mismos aparatos.",
+  Régler: "Ajustar",
 }
 
 export default es
