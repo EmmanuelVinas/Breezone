@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0-beta.44] - 2026-11-19
+
 ### Added
 
 - Overview: the « Device » block of a measure can show its curve of the last 24 hours, its value
