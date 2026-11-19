@@ -556,7 +556,12 @@ function DeviceBlock({ id, curve }: { id: number; curve?: string }) {
       const zone = installation.zones.find(
         (z) => z.system_id === ref.system_id && z.zone_id === ref.zone_id
       )
-      if (zone) return <ZoneCard zone={zone} readOnly={!d.can_control} />
+      if (zone)
+        return (
+          <div className="h-full *:h-full">
+            <ZoneCard zone={zone} readOnly={!d.can_control} />
+          </div>
+        )
       break
     }
   }

@@ -18,6 +18,8 @@ All notable changes are documented here. The format follows
 
 ### Fixed
 
+- Overview: the block of a shutter, a light, a ventilated room or a zone is as high as the others
+  of its row (the shutter's window in the middle, its buttons below).
 - Automations and scenes: those of the modules alone (shutters, lights…) are this server's: they are
   no longer shown on an installation reached through another server, as if they were its own (one
   rule, one switch, on both). Web and mobile.
