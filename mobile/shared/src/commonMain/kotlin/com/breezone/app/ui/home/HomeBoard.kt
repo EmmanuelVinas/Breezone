@@ -5,11 +5,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -26,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -54,6 +58,7 @@ import com.breezone.app.data.modulesHere
 import com.breezone.app.resources.*
 import com.breezone.app.ui.icons.FzIcons
 import com.breezone.app.ui.screens.ConfirmDialog
+import com.breezone.app.ui.screens.LocalCardFillsHeight
 import com.breezone.app.ui.screens.LoadingWave
 import com.breezone.app.ui.screens.Muted
 import com.breezone.app.ui.screens.SectionCard
@@ -239,8 +244,10 @@ fun HomeBoard(serverId: String, installationId: Long, nav: HomeNav, onInstallati
                     if (row.size == 1) {
                         BlockContent(row.first(), ctx, editing = false)
                     } else {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            row.forEach { b -> Column(Modifier.weight(1f)) { BlockContent(b, ctx, editing = false) } }
+                        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            CompositionLocalProvider(LocalCardFillsHeight provides true) {
+                                row.forEach { b -> Column(Modifier.weight(1f).fillMaxHeight()) { BlockContent(b, ctx, editing = false) } }
+                            }
                         }
                     }
                 }

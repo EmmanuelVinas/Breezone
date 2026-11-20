@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -30,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -73,11 +75,19 @@ fun FzTopBar(title: String, subtitle: String? = null, onBack: (() -> Unit)? = nu
     )
 }
 
+/** True for the two half cards of a row on the home: each takes the height of the taller one. */
+val LocalCardFillsHeight = staticCompositionLocalOf { false }
+
+/** The height of a card in a row of two half cards (see [LocalCardFillsHeight]). */
+@Composable
+fun Modifier.cardHeight(): Modifier = if (LocalCardFillsHeight.current) fillMaxHeight() else this
+
 @Composable
 fun SectionCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Column(
         modifier
             .fillMaxWidth()
+            .cardHeight()
             .clip(RoundedCornerShape(24.dp))
             .background(Fz.colors.card)
             .padding(18.dp),

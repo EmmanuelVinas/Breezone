@@ -61,6 +61,7 @@ import com.breezone.app.ui.installationPlace
 import com.breezone.app.ui.icon
 import com.breezone.app.ui.icons.FzIcons
 import com.breezone.app.ui.label
+import com.breezone.app.ui.screens.cardHeight
 import com.breezone.app.ui.theme.Fz
 import com.breezone.app.ui.theme.TempStyle
 import com.breezone.app.ui.tone
@@ -237,6 +238,7 @@ fun ZoneCard(
     val on = zone.on
     Column(
         modifier
+            .cardHeight()
             .clip(CardShape)
             .drawWithCache {
                 val radius = CornerRadius(26.dp.toPx())
