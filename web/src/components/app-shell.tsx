@@ -357,7 +357,15 @@ export function AppShell({
           <LiveIndicator state={live} />
           {version && (
             <span className="text-xs text-muted-foreground/70">
-              Breezone {version}
+              Breezone {version} ·{" "}
+              <a
+                href="/third-party-licenses.txt"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-foreground hover:underline"
+              >
+                {t("Licences")}
+              </a>
             </span>
           )}
           {update?.available && update.latest && (

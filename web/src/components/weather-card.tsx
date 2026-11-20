@@ -86,6 +86,14 @@ export function WeatherCard({ className = "mb-6" }: { className?: string }) {
               )
             })}
         </div>
+        <a
+          href="https://open-meteo.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-full text-right text-[11px] text-muted-foreground/70 hover:underline"
+        >
+          {t("Données météo : Open-Meteo.com")}
+        </a>
       </CardContent>
     </Card>
   )

@@ -2050,6 +2050,8 @@ const es: Record<string, string> = {
   "{value} prévus aujourd'hui": "{value} previstos hoy",
   "{value} restants": "{value} restantes",
   "{value} demain": "{value} mañana",
+  Licences: "Licencias",
+  "Données météo : Open-Meteo.com": "Datos meteorológicos: Open-Meteo.com",
 }
 
 export default es

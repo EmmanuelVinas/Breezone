@@ -6,12 +6,6 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
-### Changed
-
-- Settings › Accounts and services: a grid of small tiles (state, a line, the switch), four by row
-  on a wide screen; the steps and the credentials of an account open in a dialog on a click.
-- Settings: the tabs in a new order (Breezone first), « Devices » renamed « Connected devices ».
-
 ## [0.12.0-beta.1] - 2026-11-20
 
 ### Added
@@ -37,14 +31,26 @@ All notable changes are documented here. The format follows
   (brightness, white, colours), the price of the kWh with the Tempo colours of today and tomorrow,
   a measure with its curve of the last 24 hours (the setting of a device card), and the chart of
   the ventilated rooms (one measure, one curve per room).
+- The licences of the software Breezone includes: those of the server's crates and of the web UI's
+  packages in `third-party-licenses.txt`, linked at the bottom of the menu; those of the app's
+  libraries in its Settings › Licences. Breezone's own licence is in the Docker image.
+- Weather: « Weather data: Open-Meteo.com » under the forecasts (web and app), as Open-Meteo asks.
+- Energy page of the app: Day, 7 days, 30 days, Year and 5 years as on the web; the day's curve goes
+  to the previous or next day, or any day chosen in a calendar; the other periods in bars.
+- Mobile app, home: the wave turns in the middle while the home loads, instead of « Installation
+  not found ».
 
 ### Changed
 
 - Mobile app: the demonstration has the modules too: lights and their scenes, shutters, the solar
   production, the grid, a water heater and a charger on the surplus, ventilation room by room, a
   remote, the weather and a few automations; their measures follow the time of day.
-- Showcase site and README: Breezone is presented as a simple, open source home automation, with the
-  list of its integrations; new screenshots of the app, taken in its demonstration.
+- Showcase site and README: Breezone is presented as a simple home automation, its source code
+  available (« au code ouvert », not « open source », as its licence is), with the list of its
+  integrations; new screenshots of the app, taken in its demonstration.
+- Settings › Accounts and services: a grid of small tiles (state, a line, the switch), four by row
+  on a wide screen; the steps and the credentials of an account open in a dialog on a click.
+- Settings: the tabs in a new order (Breezone first), « Devices » renamed « Connected devices ».
 
 ## [0.11.0] - 2026-11-19
 

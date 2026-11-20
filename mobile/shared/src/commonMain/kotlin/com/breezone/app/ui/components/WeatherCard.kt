@@ -29,6 +29,7 @@ import com.breezone.app.resources.weather_cloudy
 import com.breezone.app.resources.weather_drizzle
 import com.breezone.app.resources.weather_fog
 import com.breezone.app.resources.weather_max_min
+import com.breezone.app.resources.weather_source
 import com.breezone.app.resources.weather_rain
 import com.breezone.app.resources.weather_snow
 import com.breezone.app.resources.weather_spells
@@ -100,5 +101,6 @@ fun WeatherCard(view: WeatherView?, modifier: Modifier = Modifier) {
                 }
             }
         }
+        Text(stringResource(Res.string.weather_source), fontSize = 10.sp, color = Fz.colors.muted, modifier = Modifier.align(Alignment.End))
     }
 }

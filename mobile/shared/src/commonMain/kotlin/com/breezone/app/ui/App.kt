@@ -67,6 +67,7 @@ import com.breezone.app.ui.icons.FzIcons
 import com.breezone.app.ui.screens.AddServerScreen
 import com.breezone.app.ui.screens.ChargingScreen
 import com.breezone.app.ui.screens.EnergyScreen
+import com.breezone.app.ui.screens.LicensesScreen
 import com.breezone.app.ui.screens.HomeScreen
 import com.breezone.app.ui.screens.InstallationScreen
 import com.breezone.app.ui.screens.LightScreen
@@ -88,6 +89,7 @@ import org.koin.compose.koinInject
 /** The list of the installations, to choose the one the app shows. */
 @Serializable object HomeRoute
 @Serializable object SettingsRoute
+@Serializable object LicensesRoute
 @Serializable data class AddServerRoute(val reauthServerId: String? = null)
 @Serializable data class HouseRoute(val serverId: String, val installationId: Long)
 @Serializable data class InstallationRoute(val serverId: String, val installationId: Long)
@@ -253,8 +255,10 @@ fun App() {
                     SettingsScreen(
                         onAddServer = { nav.navigate(AddServerRoute()) },
                         onReauth = { nav.navigate(AddServerRoute(it)) },
+                        onLicenses = { nav.navigate(LicensesRoute) },
                     )
                 }
+                composable<LicensesRoute> { LicensesScreen(onBack = { nav.popBackStack() }) }
                 composable<AddServerRoute> { entry ->
                     val r = entry.toRoute<AddServerRoute>()
                     AddServerScreen(

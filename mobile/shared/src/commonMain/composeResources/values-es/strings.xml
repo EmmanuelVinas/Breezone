@@ -279,6 +279,8 @@
     <string name="settings_security_title">Seguridad</string>
     <string name="settings_security_text">Este dispositivo sigue conectado sin volver a pedir la contraseña: la sesión se guarda en el llavero seguro del teléfono (Llavero de iOS / Android Keystore). Solo se pierde si ese llavero cambia, o si desconecta el dispositivo desde la interfaz web de Breezone (Ajustes › Dispositivos).</string>
     <string name="settings_version">Breezone %1$s</string>
+    <string name="settings_licenses">Licencias</string>
+    <string name="licenses_intro">Breezone está bajo la licencia PolyForm Noncommercial 1.0.0. Está construido con las bibliotecas de código abierto siguientes, cada una con su propia licencia.</string>
     <string name="cloud_title">Cuenta Airzone</string>
     <string name="cloud_title_server">Cuenta Airzone · %1$s</string>
     <string name="cloud_hint">Opcional. Solo sirve para recuperar sus instalaciones y sus ajustes (nombres, ciudad, grupos de zonas); el control siempre es local.</string>
@@ -516,6 +518,7 @@
     <string name="weather_snow">Nieve</string>
     <string name="weather_storm">Tormenta</string>
     <string name="weather_max_min">%1$s · máx. %2$s · mín. %3$s</string>
+    <string name="weather_source">Datos meteorológicos: Open-Meteo.com</string>
     <string name="automations_title">Automatismos</string>
     <string name="automations_home">Estoy en casa</string>
     <string name="automations_paused">Pausa de vacaciones: ningún automatismo se activa.</string>

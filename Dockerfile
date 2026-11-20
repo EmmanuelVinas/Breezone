@@ -60,6 +60,8 @@ RUN apk add --no-cache ca-certificates tzdata \
  && chown breezone:breezone /data
 COPY --from=server /src/target/release/breezone-server /src/target/release/mock-airzone /usr/local/bin/
 COPY --from=web /web/dist /app/web
+# Breezone's licence; those of the software it includes are in the web UI (third-party-licenses.txt).
+COPY LICENSE.md /app/LICENSE.md
 ENV BREEZONE_DATA_DIR=/data \
     BREEZONE_WEB_DIR=/app/web \
     BREEZONE_PORT=8427 \

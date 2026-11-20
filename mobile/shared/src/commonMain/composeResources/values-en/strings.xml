@@ -279,6 +279,8 @@
     <string name="settings_security_title">Security</string>
     <string name="settings_security_text">This device stays signed in without asking for your password again: the session is kept in the phone’s secure keychain (iOS Keychain / Android Keystore). It is only lost if that keychain changes, or if you sign the device out from the Breezone web interface (Settings › Devices).</string>
     <string name="settings_version">Breezone %1$s</string>
+    <string name="settings_licenses">Licenses</string>
+    <string name="licenses_intro">Breezone is under the PolyForm Noncommercial License 1.0.0. It is built with the open source libraries below, each under its own licence.</string>
     <string name="cloud_title">Airzone account</string>
     <string name="cloud_title_server">Airzone account · %1$s</string>
     <string name="cloud_hint">Optional. Only used to retrieve your installations and their settings (names, city, zone groups); control always stays local.</string>
@@ -520,6 +522,7 @@
     <string name="weather_snow">Snow</string>
     <string name="weather_storm">Storm</string>
     <string name="weather_max_min">%1$s · max %2$s · min %3$s</string>
+    <string name="weather_source">Weather data: Open-Meteo.com</string>
     <string name="automations_title">Automations</string>
     <string name="automations_home">I am home</string>
     <string name="automations_paused">Holiday pause: no automation starts.</string>

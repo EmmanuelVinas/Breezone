@@ -2029,6 +2029,8 @@ const en: Record<string, string> = {
   "{value} prévus aujourd'hui": "{value} expected today",
   "{value} restants": "{value} to come",
   "{value} demain": "{value} tomorrow",
+  Licences: "Licenses",
+  "Données météo : Open-Meteo.com": "Weather data: Open-Meteo.com",
 }
 
 export default en

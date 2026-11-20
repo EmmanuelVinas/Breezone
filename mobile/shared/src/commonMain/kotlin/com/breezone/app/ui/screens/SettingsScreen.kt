@@ -57,7 +57,7 @@ import org.koin.compose.koinInject
 
 
 @Composable
-fun SettingsScreen(onAddServer: () -> Unit, onReauth: (String) -> Unit) {
+fun SettingsScreen(onAddServer: () -> Unit, onReauth: (String) -> Unit, onLicenses: () -> Unit) {
     val hub = koinInject<Hub>()
     val servers by hub.servers.collectAsState()
     var removing by remember { mutableStateOf<ServerState?>(null) }
@@ -112,7 +112,10 @@ fun SettingsScreen(onAddServer: () -> Unit, onReauth: (String) -> Unit) {
             SectionTitle(stringResource(Res.string.settings_security_title), FzIcons.CircleCheck)
             Muted(stringResource(Res.string.settings_security_text))
         }
-        Muted(stringResource(Res.string.settings_version, APP_VERSION), Modifier.padding(start = 4.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Muted(stringResource(Res.string.settings_version, APP_VERSION), Modifier.padding(start = 4.dp).weight(1f))
+            TextButton(onClick = onLicenses) { Text(stringResource(Res.string.settings_licenses)) }
+        }
         Spacer(Modifier.height(24.dp))
     }
 

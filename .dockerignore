@@ -6,6 +6,7 @@ data
 .git
 .env
 *.md
+!LICENSE.md
 !web/**/*.md
 docs
 mobile

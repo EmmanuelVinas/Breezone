@@ -43,6 +43,11 @@ cd mobile && ./gradlew :androidApp:assembleDebug :shared:iosSimulatorArm64Test
   start. Add a new one and append its hash in `server/tests/migrations.rs`.
 - API changes: update `docs/API.md`, the web types (`web/src/lib/api.ts`) and the mobile models
   (`mobile/shared/.../data/Models.kt`) together.
+- Dependencies: Breezone ships the licences of the software it includes. After adding or updating
+  one, regenerate them: `node scripts/third-party-licenses.mjs` (server and web, served at
+  `/third-party-licenses.txt`) and `cd mobile && node scripts/third-party-licenses.mjs` (the app's
+  Settings › Licences). Only permissive licences (MIT, Apache, BSD, ISC…): nothing under GPL, LGPL or
+  AGPL, whose terms do not allow the noncommercial restriction of Breezone's licence.
 
 ## Android release signing (maintainers)
 
