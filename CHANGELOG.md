@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.12.0-beta.3] - 2026-11-20
+
 ### Added
 
 - Matter bridge, experimental (ADR 0015), off unless `BREEZONE_MATTER=1`: Breezone answers as a
