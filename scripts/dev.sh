@@ -4,6 +4,8 @@
 #   ./scripts/dev.sh            # http://localhost:5173 (Vite) → proxies /api to :8427
 #   ./scripts/dev.sh --reset    # start from an empty database (data/dev)
 #   ./scripts/dev.sh --real     # no fake Airzone: use BREEZONE_* from .env (real WebServers)
+#   ./scripts/dev.sh --modules  # also one fake module of each kind (lights, shutters, energy…), added
+#                               # for the admin (BREEZONE_ADMIN_USER / _PASSWORD, admin / motdepasse1)
 #   BREEZONE_DEV_PORT=8091 ./scripts/dev.sh   # server on another port (e.g. for the mobile E2E test)
 
 set -euo pipefail
@@ -14,11 +16,13 @@ cd "${PROJECT_DIR}"
 
 FAKE=true
 RESET=false
+MODULES=false
 for arg in "$@"; do
   case $arg in
     --reset) RESET=true ;;
     --real) FAKE=false ;;
-    -h|--help) sed -n '2,7p' "$0"; exit 0 ;;
+    --modules) MODULES=true ;;
+    -h|--help) sed -n '2,9p' "$0"; exit 0 ;;
     *) echo "Unknown option: $arg" >&2; exit 1 ;;
   esac
 done
@@ -46,7 +50,11 @@ export BREEZONE_PORT="${DEV_PORT}" BREEZONE_DATA_DIR="${DATA_DIR}" BREEZONE_WEB_
 export BREEZONE_DEV_SERVER="http://localhost:${DEV_PORT}"
 if [ "${FAKE}" = "true" ]; then
   echo "▸ Fake Airzone WebServer :3000 + fake Airzone Cloud :3900 (demo@breezone.local / demo-password)"
-  (cd server && MOCK_PORT=3000 MOCK_CLOUD_PORT=3900 cargo run -q --bin mock-airzone) &
+  MOCK_DEVICES=""
+  # With the modules, the weather too (Open-Meteo is asked for the city of the installation).
+  [ "${MODULES}" = "true" ] && export BREEZONE_WEATHER="${BREEZONE_WEATHER:-1}"
+  [ "${MODULES}" = "true" ] && MOCK_DEVICES=3100 && echo "▸ Fake modules :3100-3106 (Shelly, Hue, Trydan, Renson, Tasmota, ESPHome, Forecast.Solar)"
+  (cd server && MOCK_PORT=3000 MOCK_CLOUD_PORT=3900 MOCK_DEVICES_PORT="${MOCK_DEVICES}" cargo run -q --bin mock-airzone) &
   PIDS+=($!)
   export BREEZONE_AIRZONE_CLOUD_URL="http://127.0.0.1:3900" BREEZONE_SCAN_SUBNET="127.0.0.0/30" BREEZONE_POLL_INTERVAL_SECS=5
 fi
@@ -56,6 +64,13 @@ echo "▸ Breezone server :${DEV_PORT}"
 PIDS+=($!)
 
 until curl -sf "http://localhost:${DEV_PORT}/health" > /dev/null 2>&1; do sleep 1; done
+if [ "${MODULES}" = "true" ] && [ "${FAKE}" = "true" ]; then
+  ADMIN_USER="${BREEZONE_ADMIN_USER:-admin}" ADMIN_PASSWORD="${BREEZONE_ADMIN_PASSWORD:-motdepasse1}"
+  # A new database: the admin first, as the first-run page would.
+  curl -sf -X POST "http://localhost:${DEV_PORT}/api/setup" -H 'Content-Type: application/json' \
+    -d "{\"username\":\"${ADMIN_USER}\",\"password\":\"${ADMIN_PASSWORD}\"}" > /dev/null 2>&1 || true
+  python3 scripts/demo-modules.py "http://localhost:${DEV_PORT}" "${ADMIN_USER}" "${ADMIN_PASSWORD}" 3100 "${DATA_DIR}/breezone.db" || true
+fi
 echo "▸ Web UI (Vite) → http://localhost:5173"
 (cd web && npm run dev -- --host) &
 PIDS+=($!)

@@ -448,7 +448,10 @@ fn kelvin(mireds: f32) -> i64 {
 }
 
 /// The state of each device, from the last state of each entity (`kind`, its fields).
-pub fn states_of(entities: &[Entity], states: &HashMap<u32, (u16, Vec<(u32, Field)>)>) -> HashMap<String, State> {
+/// The last state message of each entity, by key: its kind and its fields.
+pub type States = HashMap<u32, (u16, Vec<(u32, Field)>)>;
+
+pub fn states_of(entities: &[Entity], states: &States) -> HashMap<String, State> {
     let mut out: HashMap<String, State> = HashMap::new();
     let mut air = Map::new();
     for e in entities {
@@ -525,10 +528,13 @@ struct Shared {
     mac: Option<String>,
     entities: Vec<Entity>,
     listed: bool,
-    states: HashMap<u32, (u16, Vec<(u32, Field)>)>,
+    states: States,
     connected: bool,
     error: Option<DriverError>,
 }
+
+/// A message to send to the node: its type and its body.
+type Command = (u16, Vec<u8>);
 
 pub struct EspHome {
     host: String,
@@ -536,7 +542,7 @@ pub struct EspHome {
     password: Option<String>,
     shared: Arc<Mutex<Shared>>,
     listed: Arc<Notify>,
-    commands: Mutex<Option<mpsc::UnboundedSender<(u16, Vec<u8>)>>>,
+    commands: Mutex<Option<mpsc::UnboundedSender<Command>>>,
     task: std::sync::Mutex<Option<tokio::task::JoinHandle<()>>>,
 }
 
@@ -647,7 +653,7 @@ async fn session(
     password: Option<&str>,
     shared: &Mutex<Shared>,
     listed: &Notify,
-    commands: &mut mpsc::UnboundedReceiver<(u16, Vec<u8>)>,
+    commands: &mut mpsc::UnboundedReceiver<Command>,
 ) -> Result<(), DriverError> {
     let stream = tokio::time::timeout(Duration::from_secs(10), tokio::net::TcpStream::connect(address)).await.map_err(|_| io("no answer"))?.map_err(io)?;
     let mut frames = match key {

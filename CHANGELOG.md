@@ -39,6 +39,9 @@ All notable changes are documented here. The format follows
   to the previous or next day, or any day chosen in a calendar; the other periods in bars.
 - Mobile app, home: the wave turns in the middle while the home loads, instead of « Installation
   not found ».
+- Development: `./scripts/dev.sh --modules` starts one fake module of each kind (Shelly, Philips
+  Hue, V2C Trydan, Renson, Tasmota, ESPHome, Forecast.Solar), adds them with 30 days of history:
+  every kind of device to try Breezone with, and the screenshots of the README.
 
 ### Changed
 
@@ -51,6 +54,14 @@ All notable changes are documented here. The format follows
 - Settings › Accounts and services: a grid of small tiles (state, a line, the switch), four by row
   on a wide screen; the steps and the credentials of an account open in a dialog on a click.
 - Settings: the tabs in a new order (Breezone first), « Devices » renamed « Connected devices ».
+- README: new screenshots of the web UI, one per kind of device (overview, air conditioning,
+  energy, lights, shutters, ventilation, charging, modules).
+
+### Fixed
+
+- Overview: the sensors (temperature, humidity, CO₂…) show their readings on their line.
+- Lights: the percentage stays readable when the bar of a light is half filled (web and app); the
+  product of a Tasmota or ESPHome light is named as it should be.
 
 ## [0.11.0] - 2026-11-19
 

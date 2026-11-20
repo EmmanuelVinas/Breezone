@@ -1,4 +1,4 @@
-import { t } from "@/lib/i18n"
+import { locale, t } from "@/lib/i18n"
 
 /** An event a camera tells by a key (Reolink), in words; other drivers give words already. */
 export function cameraEvent(event: string) {
@@ -14,7 +14,7 @@ export function cameraEvent(event: string) {
 
 const num = (v: unknown) => (typeof v === "number" ? v : null)
 const fmt = (v: number, digits = 1) =>
-  v.toLocaleString(undefined, { maximumFractionDigits: digits })
+  v.toLocaleString(locale(), { maximumFractionDigits: digits })
 
 /** The readings of an environment sensor (environment.sensor@1), short. */
 export function sensorText(s: Record<string, unknown>) {

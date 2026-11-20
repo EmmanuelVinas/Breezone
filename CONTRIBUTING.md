@@ -24,6 +24,10 @@ Requirements: Rust (stable), Node 24, Docker; for the app, JDK 21 and Android SD
 The fake WebServer (`cargo run --bin mock-airzone`) implements the Airzone local API
 (`POST/PUT /api/v1/hvac`, `/api/v1/webserver`); `MOCK_CLOUD_PORT=3900` adds a fake Airzone Cloud.
 
+Every kind of device without the hardware: `./scripts/dev.sh --modules` adds a fake module of each
+(Shelly, Hue, Trydan, Renson, Tasmota, ESPHome, Forecast.Solar), with 30 days of history, to the
+development server (admin / motdepasse1 unless `BREEZONE_ADMIN_USER` / `_PASSWORD` say otherwise).
+
 ## Checks (also run by CI)
 
 ```bash

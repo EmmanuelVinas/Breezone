@@ -1,4 +1,5 @@
 // The parts of the energy page, each a block of a dashboard (the energy page, the overview).
+import { BRAND } from "@/lib/brands"
 import { Fragment, type ReactNode } from "react"
 import { Link } from "react-router"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
@@ -78,12 +79,7 @@ export const PERIOD_DAYS: Record<Period, number> = {
 }
 
 /** Products providing the measures, as named in the page header. */
-export const DRIVER_LABEL: Record<string, string> = {
-  shelly: "Shelly",
-  hoymiles: "Hoymiles",
-  trydan: "V2C Trydan",
-  netatmo: "Legrand Écocompteur",
-}
+export const DRIVER_LABEL: Record<string, string> = BRAND
 
 /** Downloads rows as a CSV file (separator `;`, read by spreadsheets in every language). */
 export function downloadCsv(name: string, rows: (string | number | null)[][]) {

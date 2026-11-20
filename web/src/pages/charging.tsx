@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { BRAND } from "@/lib/brands"
 import { Link } from "react-router"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts"
@@ -87,7 +88,7 @@ type ChargerState = {
   current?: number
 }
 
-const DRIVER_LABEL: Record<string, string> = { trydan: "V2C Trydan" }
+const DRIVER_LABEL: Record<string, string> = BRAND
 
 function Tile({
   label,

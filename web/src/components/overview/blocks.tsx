@@ -26,6 +26,7 @@ import { t, tn } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { Sparkline } from "@/components/sparkline"
 import { WeatherCard } from "@/components/weather-card"
+import { sensorText } from "@/lib/sensors"
 import {
   PriceCompact,
   PriceNow,
@@ -216,6 +217,8 @@ function look(d: DeviceView): {
               : null,
       }
     }
+    case "sensor":
+      return { ...none, value: sensorText(s) }
     default: {
       const p = num(s.power)
       return { ...none, value: p !== null ? watts(p) : null }

@@ -373,7 +373,7 @@ private fun BrightnessBar(value: Int, on: Boolean, color: Color, enabled: Boolea
         Box(Modifier.fillMaxWidth().fillMaxHeight(shown / 100f).background(Brush.verticalGradient(listOf(color, color.copy(alpha = 0.8f)))))
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             if (lit) {
-                Text(stringResource(Res.string.common_percent, shown), fontSize = 32.sp, fontWeight = FontWeight.Bold, color = if (shown > 45) Color.Black.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onSurface)
+                Text(stringResource(Res.string.common_percent, shown), fontSize = 32.sp, fontWeight = FontWeight.Bold, color = if (shown > 56) Color.Black.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onSurface)
             } else {
                 Icon(FzIcons.LightbulbOff, stringResource(Res.string.light_off), Modifier.size(40.dp), tint = Fz.colors.muted)
             }

@@ -77,24 +77,26 @@ Modbus SunSpec inverters, EZVIZ cameras, garden watering… A common device is m
 
 <picture>
 
-  <source media="(prefers-color-scheme: light)" srcset="docs/images/web/dashboard-light.webp">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/web/overview-light.webp">
 
-  <img alt="Breezone dashboard: two installations and their zones" src="docs/images/web/dashboard.webp">
+  <img alt="Breezone overview: each room with its air conditioning, lights, shutters, measures and sensors" src="docs/images/web/overview.webp">
 
 </picture>
 
 
-|                                                                           |                                                                                           |
-| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| ![Zone: setpoint, mode, fan speed and history](docs/images/web/zone.webp) | ![Airzone schedules](docs/images/web/schedules.webp)                                      |
-| **Zone**: setpoint, mode, fan speed, sleep and history                    | **Schedules** of the Airzone account, editable here                                       |
-| ![Routines: timers and scenes](docs/images/web/routines.webp)             | ![Scene editor](docs/images/web/scene-editor.webp)                                        |
-| **Routines**: timers and scenes                                           | **Scene** with delayed actions                                                            |
-| ![Activity feed](docs/images/web/activity.webp)                           | ![Installations: Airzone account and access](docs/images/web/settings-installations.webp) |
-| Real-time **activity**                                                    | **Installations**: on this network or through another site                                |
+| | |
+| --- | --- |
+| ![Air conditioning: the Airzone zones](docs/images/web/climate.webp) | ![Energy: production, consumption and grid](docs/images/web/energy.webp) |
+| **Air conditioning**: each zone, its setpoint and its curve | **Energy**: solar production, consumption, grid, by day or by year |
+| ![Lights: brightness, white and colours](docs/images/web/lights.webp) | ![Shutters](docs/images/web/shutters.webp) |
+| **Lights** (Hue, Tasmota, ESPHome…): brightness, white, colours and scenes | **Shutters**: position, open and close by room |
+| ![Ventilation: flow and humidity of each room](docs/images/web/ventilation.webp) | ![Vehicle charging](docs/images/web/charging.webp) |
+| **Ventilation**: flow, humidity and CO₂ of each room, boosts | **Charging**: the charger, its session and the solar surplus |
+| ![Zone: setpoint, mode and history](docs/images/web/zone.webp) | ![Routines: timers and scenes](docs/images/web/routines.webp) |
+| **Zone**: setpoint, mode, fan speed, sleep and history | **Routines**: timers and scenes |
+| ![Modules: an ESPHome module](docs/images/web/modules.webp) | ![Installations: Airzone account and access](docs/images/web/settings-installations.webp) |
+| **Modules**: Shelly, Hue, ESPHome, Tasmota, TP-Link, Reolink… found on the network | **Installations**: on this network or through another site |
 
-
-The web UI is available in French, English and Spanish.
 
 ### Mobile app
 

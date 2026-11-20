@@ -83,21 +83,25 @@ Ouvrez une issue.
 
 <picture>
 
-  <source media="(prefers-color-scheme: light)" srcset="docs/images/web/dashboard-light.webp">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/web/overview-light.webp">
 
-  <img alt="Tableau de bord de Breezone : deux installations et leurs zones" src="docs/images/web/dashboard.webp">
+  <img alt="Vue d'ensemble de Breezone : chaque pièce avec sa climatisation, ses lumières, ses volets, ses mesures et ses capteurs" src="docs/images/web/overview.webp">
 
 </picture>
 
 
-|                                                                                |                                                                                         |
-| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
-| ![Zone : consigne, mode, ventilation et historique](docs/images/web/zone.webp) | ![Programmations Airzone](docs/images/web/schedules.webp)                               |
-| **Zone** : consigne, mode, ventilation, veille et historique                   | **Programmations** du compte Airzone, modifiables ici                                   |
-| ![Routines : minuteries et scènes](docs/images/web/routines.webp)              | ![Éditeur de scène](docs/images/web/scene-editor.webp)                                  |
-| **Routines** : minuteries et scènes                                            | **Scène** dont certaines actions attendent                                              |
-| ![Journal d'activité](docs/images/web/activity.webp)                           | ![Installations : compte Airzone et accès](docs/images/web/settings-installations.webp) |
-| **Activité** en temps réel                                                     | **Installations** : sur ce réseau ou via un autre site                                  |
+| | |
+| --- | --- |
+| ![Climatisation : les zones Airzone](docs/images/web/climate.webp) | ![Énergie : production, consommation et réseau](docs/images/web/energy.webp) |
+| **Climatisation** : chaque zone, sa consigne et sa courbe | **Énergie** : production solaire, consommation, réseau, par jour ou par an |
+| ![Lumières : intensité, blanc et couleurs](docs/images/web/lights.webp) | ![Volets](docs/images/web/shutters.webp) |
+| **Lumières** (Hue, Tasmota, ESPHome…) : intensité, blanc, couleurs et scènes | **Volets** : position, ouverture et fermeture par pièce |
+| ![Ventilation : débit et humidité de chaque pièce](docs/images/web/ventilation.webp) | ![Recharge du véhicule](docs/images/web/charging.webp) |
+| **Ventilation** : débit, humidité et CO₂ de chaque pièce, boosts | **Recharge** : la borne, sa session et le surplus solaire |
+| ![Zone : consigne, mode et historique](docs/images/web/zone.webp) | ![Routines : minuteries et scènes](docs/images/web/routines.webp) |
+| **Zone** : consigne, mode, ventilation, veille et historique | **Routines** : minuteries et scènes |
+| ![Modules : un module ESPHome](docs/images/web/modules.webp) | ![Installations : compte Airzone et accès](docs/images/web/settings-installations.webp) |
+| **Modules** : Shelly, Hue, ESPHome, Tasmota, TP-Link, Reolink… trouvés sur le réseau | **Installations** : sur ce réseau ou via un autre site |
 
 
 ### Application mobile

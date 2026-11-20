@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { BRAND } from "@/lib/brands"
 import { Link } from "react-router"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
@@ -335,7 +336,8 @@ export function LightPanel({
                 className={cn(
                   "tabular absolute inset-0 grid place-items-center font-heading font-bold",
                   compact ? "text-2xl" : "text-3xl",
-                  on && level > 45 ? "text-neutral-800" : "text-foreground"
+                  // Dark once the fill covers the whole figure, in the middle of the bar.
+                  on && level > 56 ? "text-neutral-800" : "text-foreground"
                 )}
               >
                 {on ? (
@@ -421,7 +423,7 @@ export function LightPanel({
 }
 
 /** The brand of a light's module, for the detail's subtitle. */
-export const LIGHT_BRAND: Record<string, string> = { hue: "Philips Hue" }
+export const LIGHT_BRAND: Record<string, string> = BRAND
 
 /** The scenes of the Hue app, one button each. */
 export function LightScenes({
