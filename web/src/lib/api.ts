@@ -83,7 +83,7 @@ export type InstallationInput = {
   enabled: boolean
   /** Left out: unchanged. */
   record_demand?: boolean
-  /** City ("Labège, Haute-Garonne"); empty: back to the Airzone account's. Left out: unchanged. */
+  /** City ("Annecy, Haute-Savoie"); empty: back to the Airzone account's. Left out: unchanged. */
   location?: string
   /** ISO 3166-1 alpha-2 ("FR"). Left out: unchanged. */
   country?: string
@@ -1234,7 +1234,13 @@ export type SurplusView = {
 
 /** A linked account (Settings › Accounts): never its secrets. */
 export type AccountKind =
-  "airzone" | "rte" | "linky" | "netatmo" | "ezviz" | "weather"
+  | "airzone"
+  | "rte"
+  | "linky"
+  | "netatmo"
+  | "ezviz"
+  | "weather"
+  | "forecast_solar"
 export type AccountView = {
   kind: AccountKind
   /** Its credentials are kept (a service without any: always). */
@@ -1255,6 +1261,10 @@ export type AccountView = {
     homes?: { name: string; rooms: number; modules: number }[]
     /** EZVIZ: the names of the devices of the account. */
     devices?: string[]
+    /** Forecast.Solar: the panels. */
+    kwp?: number
+    declination?: number
+    azimuth?: number
   }
 }
 

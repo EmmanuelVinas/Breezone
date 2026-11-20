@@ -7,6 +7,7 @@
 #   ./scripts/dev.sh --modules  # also one fake module of each kind (lights, shutters, energy…), added
 #                               # for the admin (BREEZONE_ADMIN_USER / _PASSWORD, admin / motdepasse1)
 #   BREEZONE_DEV_PORT=8091 ./scripts/dev.sh   # server on another port (e.g. for the mobile E2E test)
+#   BREEZONE_DEV_DATA=data/screenshots ./scripts/dev.sh --reset --modules   # a fresh demonstration home
 
 set -euo pipefail
 
@@ -22,7 +23,7 @@ for arg in "$@"; do
     --reset) RESET=true ;;
     --real) FAKE=false ;;
     --modules) MODULES=true ;;
-    -h|--help) sed -n '2,9p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
     *) echo "Unknown option: $arg" >&2; exit 1 ;;
   esac
 done
@@ -34,7 +35,10 @@ if [ -f .env ]; then
   set +a
 fi
 
-DATA_DIR="${PROJECT_DIR}/data/dev"
+# BREEZONE_DEV_DATA: another database (screenshots on a fresh one, without your own data).
+DATA_DIR="${BREEZONE_DEV_DATA:-${PROJECT_DIR}/data/dev}"
+# Absolute: the server runs from server/.
+case "${DATA_DIR}" in /*) ;; *) DATA_DIR="$(pwd)/${DATA_DIR}" ;; esac
 if [ "${RESET}" = "true" ]; then
   rm -rf "${DATA_DIR}"
   echo "▸ Database reset"
@@ -52,7 +56,7 @@ if [ "${FAKE}" = "true" ]; then
   echo "▸ Fake Airzone WebServer :3000 + fake Airzone Cloud :3900 (demo@breezone.local / demo-password)"
   MOCK_DEVICES=""
   # With the modules, the weather too (Open-Meteo is asked for the city of the installation).
-  [ "${MODULES}" = "true" ] && export BREEZONE_WEATHER="${BREEZONE_WEATHER:-1}"
+  [ "${MODULES}" = "true" ] && export BREEZONE_WEATHER="${BREEZONE_WEATHER:-1}" BREEZONE_FORECAST_SOLAR_URL="http://127.0.0.1:3106"
   [ "${MODULES}" = "true" ] && MOCK_DEVICES=3100 && echo "▸ Fake modules :3100-3106 (Shelly, Hue, Trydan, Renson, Tasmota, ESPHome, Forecast.Solar)"
   (cd server && MOCK_PORT=3000 MOCK_CLOUD_PORT=3900 MOCK_DEVICES_PORT="${MOCK_DEVICES}" cargo run -q --bin mock-airzone) &
   PIDS+=($!)

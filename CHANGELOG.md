@@ -6,6 +6,33 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- The small curves (overview, energy figures, zones, ventilation) tell, under the mouse, the time
+  and the value of the point, as the large charts do.
+- Play Store listing: seven screenshots of the app (French and English) in
+  `fastlane/metadata/android/*/images/phoneScreenshots`, at the 2:1 ratio the store accepts.
+
+### Fixed
+
+- App: the decimals follow the language (« 4.0 kW » in English, « 4,0 kW » in French and Spanish),
+  and the power axis of the day's chart reads in kW.
+
+### Changed
+
+- Colours: the heating orange leans to red, apart from the solar yellow, on the web and in the app;
+  the selected period of the energy page and the selected chips of the app take the accent (teal).
+- Screenshots of the README, of the showcase site and of the store made on a fresh demonstration
+  home (« Maison », Annecy): no place nor data of a real home; the example city in the forms and the
+  API is Annecy.
+- Development: `BREEZONE_DEV_DATA` gives `dev.sh` another database (`--reset --modules` on it: a
+  fresh demonstration home, for the screenshots).
+- Forecast.Solar is set in Settings › Accounts and services, as the online service it is (like the
+  weather), no longer added as a module by hand: the panels (peak power, tilt, orientation) and an
+  optional key; connecting it adds or sets again its module, removing it removes the module, and
+  its switch stops it. A module added in 0.12.0 betas keeps working and is set again at the next
+  connection.
+
 ## [0.12.0-beta.2] - 2026-11-20
 
 ### Added

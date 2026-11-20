@@ -37,7 +37,7 @@ data class FzColors(
 )
 
 private val DarkFz = FzColors(
-    heat = Color(0xFFF89A45),
+    heat = Color(0xFFFF7643),
     cool = Color(0xFF5DB7EE),
     fan = Color(0xFFB395F0),
     air = Color(0xFF95D7E7),
@@ -51,7 +51,7 @@ private val DarkFz = FzColors(
 )
 
 private val LightFz = FzColors(
-    heat = Color(0xFFE0701F),
+    heat = Color(0xFFE84C1D),
     cool = Color(0xFF2F86C9),
     fan = Color(0xFF8A5FD6),
     air = Color(0xFF3C8CA3),
@@ -69,6 +69,9 @@ private val DarkScheme = darkColorScheme(
     onPrimary = Color(0xFF07262B),
     secondary = Color(0xFF26304A),
     onSecondary = Color(0xFFF2F4F8),
+    // Selected chips and segments: the accent, as on the web.
+    secondaryContainer = Color(0xFF15434A),
+    onSecondaryContainer = Color(0xFF9BEFF3),
     background = Color(0xFF0B1220),
     onBackground = Color(0xFFF2F4F8),
     surface = Color(0xFF0B1220),
@@ -86,6 +89,8 @@ private val DarkScheme = darkColorScheme(
 private val LightScheme = lightColorScheme(
     primary = Color(0xFF0F8F98),
     onPrimary = Color.White,
+    secondaryContainer = Color(0xFFCDEFF1),
+    onSecondaryContainer = Color(0xFF06454A),
     background = Color(0xFFF6F8FB),
     surface = Color(0xFFF6F8FB),
     surfaceVariant = Color(0xFFE9EDF3),

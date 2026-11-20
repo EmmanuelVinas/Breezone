@@ -50,7 +50,7 @@ pub async fn history(State(state): State<AppState>, user: AuthUser, Query(q): Qu
 
 #[derive(Deserialize)]
 pub struct PlaceInput {
-    /// "Labège, Haute-Garonne"; empty: the city of the first installation.
+    /// "Annecy, Haute-Savoie"; empty: the city of the first installation.
     pub place: String,
 }
 

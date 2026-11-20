@@ -75,7 +75,7 @@
     --border: oklch(0.91 0.01 250);
     --input: oklch(0.9 0.012 250);
     --ring: oklch(0.58 0.13 200);
-    --heat: oklch(0.66 0.19 45);
+    --heat: oklch(0.63 0.2 36);
     --cool: oklch(0.6 0.15 235);
     --fan: oklch(0.6 0.16 300);
     /* Ventilation (VMC): a pale sky blue, the air. */
@@ -83,7 +83,7 @@
     --dry: oklch(0.62 0.12 175);
     --success: oklch(0.62 0.16 150);
     --warning: oklch(0.72 0.16 75);
-    --chart-1: oklch(0.66 0.19 45);
+    --chart-1: oklch(0.63 0.2 36);
     --chart-2: oklch(0.6 0.15 235);
     --chart-3: oklch(0.62 0.12 175);
     --chart-4: oklch(0.6 0.16 300);
@@ -119,14 +119,14 @@
     --border: oklch(1 0 0 / 9%);
     --input: oklch(1 0 0 / 13%);
     --ring: oklch(0.78 0.13 195);
-    --heat: oklch(0.76 0.17 55);
+    --heat: oklch(0.72 0.18 40);
     --cool: oklch(0.76 0.13 225);
     --fan: oklch(0.74 0.14 300);
     --air: oklch(0.84 0.07 215);
     --dry: oklch(0.78 0.11 175);
     --success: oklch(0.76 0.16 150);
     --warning: oklch(0.82 0.15 80);
-    --chart-1: oklch(0.76 0.17 55);
+    --chart-1: oklch(0.72 0.18 40);
     --chart-2: oklch(0.76 0.13 225);
     --chart-3: oklch(0.78 0.11 175);
     --chart-4: oklch(0.74 0.14 300);

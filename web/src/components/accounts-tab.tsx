@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Search,
   Snowflake,
+  Sun,
   Trash2,
   type LucideIcon,
 } from "lucide-react"
@@ -198,6 +199,50 @@ const KINDS: Record<AccountKind, Kind> = {
       "Désactivé : plus de météo ni de température extérieure ; les automatismes qui en dépendent attendent."
     ),
   },
+  forecast_solar: {
+    title: "Forecast.Solar",
+    icon: Sun,
+    description: t(
+      "La production solaire prévue selon la météo : maintenant, aujourd'hui, ce qui reste à produire et demain. Sans compte : seules la position de la ville et la description des panneaux sont envoyées."
+    ),
+    steps: [
+      t(
+        "Donnez la puissance crête des panneaux (en kWc, sur la facture de l'installateur), leur inclinaison et leur orientation."
+      ),
+      t(
+        "La prévision est faite pour la ville de l'installation. Une clé d'API Forecast.Solar, facultative, donne des prévisions plus fines."
+      ),
+    ],
+    link: { url: "https://forecast.solar", label: "forecast.solar" },
+    fields: [
+      {
+        name: "kwp",
+        label: t("Puissance crête (kWc)"),
+        placeholder: "4,5",
+      },
+      {
+        name: "declination",
+        label: t("Inclinaison (°, 0 = à plat)"),
+        placeholder: "30",
+        optional: true,
+      },
+      {
+        name: "azimuth",
+        label: t("Orientation (°, 0 = sud, -90 = est, 90 = ouest)"),
+        placeholder: "0",
+        optional: true,
+      },
+      {
+        name: "api_key",
+        label: t("Clé d'API (facultative)"),
+        secret: true,
+        optional: true,
+      },
+    ],
+    off: t(
+      "Désactivé : plus de prévision de production ; les automatismes qui en dépendent attendent."
+    ),
+  },
 }
 
 function StateBadge({ a }: { a: AccountView }) {
@@ -241,6 +286,12 @@ function summary(a: AccountView): string | null {
         })
       )
       .join(" · ")
+  if (a.kind === "forecast_solar" && typeof c.kwp === "number")
+    return t("{kwp} kWc · inclinaison {dec}° · orientation {az}°", {
+      kwp: c.kwp,
+      dec: c.declination ?? 30,
+      az: c.azimuth ?? 0,
+    })
   return c.client_id ? t("Application {id}", { id: c.client_id }) : null
 }
 

@@ -1204,7 +1204,7 @@ const en: Record<string, string> = {
     "What the hardware says about itself, to understand a behaviour: without any secret",
   Diagnostic: "Diagnostic",
   Ville: "City",
-  "Labège, Haute-Garonne": "Labège, Haute-Garonne",
+  "Annecy, Haute-Savoie": "Annecy, Haute-Savoie",
   Pays: "Country",
   "Pour la météo et le soleil. Ajoutez le département ou la région s'il y a plusieurs villes du même nom. Vide : celle du compte Airzone.":
     "For the weather and the sun. Add the county or region if several cities have the same name. Empty: the one of the Airzone account.",
@@ -2032,6 +2032,26 @@ const en: Record<string, string> = {
   Licences: "Licenses",
   "Données météo : Open-Meteo.com": "Weather data: Open-Meteo.com",
   "Compte Netatmo": "Netatmo account",
+  "La production solaire prévue selon la météo : maintenant, aujourd'hui, ce qui reste à produire et demain. Sans compte : seules la position de la ville et la description des panneaux sont envoyées.":
+    "The solar production expected from the weather: now, today, what is still to come and tomorrow. No account: only the position of the city and the description of the panels are sent.",
+  "Donnez la puissance crête des panneaux (en kWc, sur la facture de l'installateur), leur inclinaison et leur orientation.":
+    "Give the peak power of the panels (in kWp, on the installer's invoice), their tilt and their orientation.",
+  "La prévision est faite pour la ville de l'installation. Une clé d'API Forecast.Solar, facultative, donne des prévisions plus fines.":
+    "The forecast is made for the city of the installation. A Forecast.Solar API key, optional, gives finer forecasts.",
+  "Puissance crête (kWc)": "Peak power (kWp)",
+  "Inclinaison (°, 0 = à plat)": "Tilt (°, 0 = flat)",
+  "Orientation (°, 0 = sud, -90 = est, 90 = ouest)":
+    "Orientation (°, 0 = south, -90 = east, 90 = west)",
+  "Clé d'API (facultative)": "API key (optional)",
+  "Désactivé : plus de prévision de production ; les automatismes qui en dépendent attendent.":
+    "Off: no production forecast; the automations that depend on it wait.",
+  "{kwp} kWc · inclinaison {dec}° · orientation {az}°":
+    "{kwp} kWp · tilt {dec}° · orientation {az}°",
+  "Service en ligne Forecast.Solar, réglé dans Réglages › Comptes et services : la prévision de production selon la météo":
+    "Forecast.Solar online service, set in Settings › Accounts and services: the production forecast from the weather",
+  "Ses panneaux (puissance, inclinaison, orientation) se règlent dans Comptes et services ; la prévision est faite pour la ville de l'installation.":
+    "Its panels (power, tilt, orientation) are set in Accounts and services; the forecast is made for the city of the installation.",
+  "Compte ou service": "Account or service",
 }
 
 export default en

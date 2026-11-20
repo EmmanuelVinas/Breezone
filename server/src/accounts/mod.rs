@@ -7,12 +7,15 @@
 //! - `linky`: Conso API, which reads what Enedis measured (Linky) with a personal token;
 //! - `netatmo`: Netatmo (Legrand Home + Control), by OAuth with one's own Netatmo app;
 //! - `ezviz`: EZVIZ (cameras, doorbells), with the account of its app;
+//! - `forecast_solar`: Forecast.Solar, the forecast of the solar production (the panels, a key
+//!   optional), which comes with its module;
 //! - `weather`: a service rather than an account (Open-Meteo, MeteoAlarm): no credentials, only
 //!   the switch.
 //!
 //! Each can be switched off without being forgotten: what uses it then does as if it were not set.
 
 pub mod ezviz;
+pub mod forecast_solar;
 pub mod linky;
 pub mod netatmo;
 pub mod rte;
@@ -27,7 +30,11 @@ use serde::Serialize;
 use serde_json::{json, Value};
 
 /// The kinds of accounts, in the order of Settings › Accounts.
-pub const KINDS: &[&str] = &[crate::cloud::ACCOUNT, rte::KIND, linky::KIND, netatmo::KIND, ezviz::KIND, WEATHER];
+pub const KINDS: &[&str] = &[crate::cloud::ACCOUNT, rte::KIND, linky::KIND, netatmo::KIND, ezviz::KIND, WEATHER, forecast_solar::KIND];
+
+/// The services set here whose module reads them (switched on and off with it), apart from the
+/// cloud modules whose devices may be the twins of local ones.
+pub const SERVICE_MODULES: &[&str] = &[forecast_solar::KIND];
 
 /// The modules that come with an account (added when it is connected, never by hand).
 pub const MODULES: &[&str] = &[netatmo::KIND, ezviz::KIND];

@@ -123,7 +123,7 @@ pub struct Vigilance {
     pub level: u8,
     /// What the warnings are about ("Wind", "Rain-flood"…), the highest first.
     pub events: Vec<String>,
-    /// The area they are for ("Haute-Garonne").
+    /// The area they are for ("Haute-Savoie").
     pub area: String,
 }
 
@@ -257,11 +257,11 @@ pub fn report_of(place: &str, data: &Value, now: i64) -> Option<Report> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Place {
     pub installation_id: i64,
-    /// Its city ("Labège, Haute-Garonne").
+    /// Its city ("Annecy, Haute-Savoie").
     pub city: String,
     pub lat: f64,
     pub lon: f64,
-    /// Its area ("Haute-Garonne") and country ("FR"), for the weather warnings.
+    /// Its area ("Haute-Savoie") and country ("FR"), for the weather warnings.
     pub area: Option<String>,
     pub country: Option<String>,
 }
@@ -315,7 +315,7 @@ impl Weather {
     /// Where `city` is (in `country` when known), from Open-Meteo's geocoding: (latitude,
     /// longitude, area, country).
     async fn geocode(&self, city: &str, country: Option<&str>) -> Option<(f64, f64, Option<String>, Option<String>)> {
-        // "Labège, Haute-Garonne": the city is asked, the region helps to choose.
+        // "Annecy, Haute-Savoie": the city is asked, the region helps to choose.
         let (name, region) = city.split_once(',').map_or((city.trim(), ""), |(c, r)| (c.trim(), r.trim()));
         let answer: Value = self
             .http
@@ -566,7 +566,7 @@ mod tests {
             "hourly": {"time": [now - 7200, now - 1800, now + 1800, now + 90_000], "temperature_2m": [10.0, 13.5, 14.0, 9.0], "weather_code": [0, 1, 2, 61], "precipitation_probability": [0, 0, 10, 80]},
             "daily": {"temperature_2m_min": [8.0, 6.5], "temperature_2m_max": [18.0, 15.0], "weather_code": [2, 61]}
         });
-        let r = report_of("Labège, Haute-Garonne", &data, now).unwrap();
+        let r = report_of("Annecy, Haute-Savoie", &data, now).unwrap();
         assert_eq!((r.temperature, r.code, r.today_min, r.today_max), (Some(14.2), Some(2), Some(8.0), Some(18.0)));
         assert_eq!((r.tomorrow_code, r.tomorrow_min), (Some(61), Some(6.5)));
         assert_eq!(r.hours.iter().map(|h| h.ts).collect::<Vec<_>>(), vec![now - 1800, now + 1800], "the hour under way and the next 24 hours");

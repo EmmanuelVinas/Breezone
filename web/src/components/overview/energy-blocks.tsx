@@ -1,6 +1,7 @@
 import { createContext, useContext, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { api } from "@/lib/api"
+import { api, type DayEnergy, type EnergyDay } from "@/lib/api"
+import { kwh, number, time, watts } from "@/lib/format"
 import { useChosenInstallation } from "@/lib/selected-installation"
 import { tn } from "@/lib/i18n"
 import { SurplusCard } from "@/components/surplus"
@@ -10,6 +11,7 @@ import {
   DayBars,
   DayCurve,
   FlowCard,
+  dayLabel,
   isoDay,
   Kpis,
   Measures,
@@ -92,10 +94,21 @@ export function useEnergy(period: Period, date: string) {
   }
 }
 
-/** The values measured along the day (the quarters of an hour without any are left out). */
-function measured<P>(points: P[] | undefined, value: (p: P) => number | null) {
-  return (points ?? []).map(value).filter((v): v is number => v !== null)
+type EnergyPoint = EnergyDay["points"][number]
+
+/** The values measured along the day, with their time (the quarters of an hour without any are
+ * left out). */
+function timed(
+  points: EnergyPoint[] | undefined,
+  value: (p: EnergyPoint) => number | null
+) {
+  return (points ?? [])
+    .map((p): [number, number | null] => [p.ts, value(p)])
+    .filter((p): p is [number, number] => p[1] !== null)
 }
+
+/** Local noon of a day ("2026-11-20"), as a time. */
+const dayTs = (day: string) => new Date(`${day}T12:00:00`).getTime() / 1000
 
 const Waiting = ({ className = "h-40" }: { className?: string }) => (
   <Skeleton className={`${className} w-full rounded-3xl`} />
@@ -110,24 +123,48 @@ export function EnergyKpisBlock({
   const e = useEnergy(period, date ?? isoDay(new Date()))
   if (!e.live || !e.totals) return <Waiting className="h-28" />
   let curves: KpiCurves | undefined
-  if (config.curves === true)
+  if (config.curves === true) {
+    // The power of the day, quarter by quarter; over a period, the energy (or cost) of each day.
+    const power = (value: (p: EnergyPoint) => number | null) => ({
+      points: timed(e.day?.points, value),
+      format: (v: number) => watts(v),
+      at: time,
+    })
+    const daily = (
+      value: (d: DayEnergy) => number,
+      format: (v: number) => string
+    ) => ({
+      points: e.shown.map((d): [number, number] => [dayTs(d.day), value(d)]),
+      format,
+      at: (ts: number) => dayLabel(isoDay(new Date(ts * 1000)), "long"),
+    })
     curves =
       period === "day"
         ? {
-            production: measured(e.day?.points, (p) => p.solar),
-            consumption: measured(e.day?.points, (p) => p.home),
-            grid: measured(e.day?.points, (p) =>
-              p.grid === null ? null : Math.max(0, p.grid)
-            ),
+            production: power((p) => p.solar),
+            consumption: power((p) => p.home),
+            grid: power((p) => (p.grid === null ? null : Math.max(0, p.grid))),
           }
         : {
-            production: e.shown.map((d) => d.production ?? 0),
-            consumption: e.shown.map((d) => d.consumption ?? 0),
-            grid: e.shown.map((d) => d.imported ?? 0),
-            cost: e.shown.map((d) =>
-              d.cost ? d.cost.energy + d.cost.subscription : 0
+            production: daily(
+              (d) => d.production ?? 0,
+              (v) => kwh(v)
+            ),
+            consumption: daily(
+              (d) => d.consumption ?? 0,
+              (v) => kwh(v)
+            ),
+            grid: daily(
+              (d) => d.imported ?? 0,
+              (v) => kwh(v)
+            ),
+            cost: daily(
+              (d) => (d.cost ? d.cost.energy + d.cost.subscription : 0),
+              // In the currency of the contract: set by the tile.
+              (v) => number(v, 2)
             ),
           }
+  }
   return (
     <Kpis
       totals={e.totals}

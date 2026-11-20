@@ -213,7 +213,7 @@ function Kpi({
   sub?: ReactNode
   color: string
   /** Values along the period, drawn at the bottom of the tile. */
-  curve?: number[]
+  curve?: KpiCurve
 }) {
   return (
     <Card className="gap-2 rounded-3xl py-4">
@@ -229,10 +229,12 @@ function Kpi({
           {value}
         </div>
         {sub && <div className="text-xs text-muted-foreground">{sub}</div>}
-        {curve && curve.length > 1 && (
+        {curve && curve.points.length > 1 && (
           <div className="mt-auto pt-1" style={{ color }}>
             <Sparkline
-              points={curve.map((v, i): [number, number] => [i, v])}
+              points={curve.points}
+              format={curve.format}
+              at={curve.at}
               className="h-10"
               label={label}
             />
@@ -244,8 +246,15 @@ function Kpi({
 }
 
 /** What the tiles may draw: each flow along the period (per quarter of an hour, or per day). */
+/** A curve of a figure along the period: `[ts, value]` points, how a value and a time read. */
+export type KpiCurve = {
+  points: [number, number][]
+  format: (v: number) => string
+  at?: (ts: number) => string
+}
+
 export type KpiCurves = Partial<
-  Record<"production" | "consumption" | "grid" | "cost", number[]>
+  Record<"production" | "consumption" | "grid" | "cost", KpiCurve>
 >
 
 /** The figures of the period, each of which a block may show alone. */
@@ -391,7 +400,7 @@ export function Kpis({
           price: euros(cost.subscription),
         })}
         color={COLOR.grid}
-        curve={curves?.cost}
+        curve={curves?.cost && { ...curves.cost, format: euros }}
       />
     ),
     gains: cost && roles.solar && (

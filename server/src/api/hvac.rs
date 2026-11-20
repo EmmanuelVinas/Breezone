@@ -53,7 +53,7 @@ pub struct InstallationInput {
     /// Unchanged when absent.
     #[serde(default)]
     pub record_demand: Option<bool>,
-    /// City ("Labège, Haute-Garonne"): set by hand; empty goes back to the Airzone account's.
+    /// City ("Annecy, Haute-Savoie"): set by hand; empty goes back to the Airzone account's.
     /// Unchanged when absent.
     #[serde(default)]
     pub location: Option<String>,

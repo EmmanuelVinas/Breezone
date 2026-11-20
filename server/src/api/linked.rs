@@ -36,6 +36,15 @@ pub struct ConnectInput {
     /// The verification code of the cameras, for their encrypted pictures.
     #[serde(default)]
     pub image_code: String,
+    /// Forecast.Solar: the panels (peak power in kWp, tilt, orientation) and its optional key.
+    #[serde(default)]
+    pub kwp: String,
+    #[serde(default)]
+    pub declination: String,
+    #[serde(default)]
+    pub azimuth: String,
+    #[serde(default)]
+    pub api_key: String,
 }
 
 pub async fn connect(State(state): State<AppState>, AdminUser(user): AdminUser, Path(kind): Path<String>, Json(input): Json<ConnectInput>) -> ApiResult<Json<AccountView>> {
@@ -44,6 +53,7 @@ pub async fn connect(State(state): State<AppState>, AdminUser(user): AdminUser, 
         accounts::linky::KIND => accounts::linky::connect(&state, &input.token, &input.prm).await?,
         accounts::netatmo::KIND => accounts::netatmo::connect(&state, &input.client_id, &input.client_secret, &input.refresh_token).await?,
         accounts::ezviz::KIND => accounts::ezviz::connect(&state, &input.account, &input.password, &input.code, &input.image_code).await?,
+        accounts::forecast_solar::KIND => accounts::forecast_solar::connect(&state, &input.kwp, &input.declination, &input.azimuth, &input.api_key).await?,
         crate::cloud::ACCOUNT => return Err(ApiError::bad_request("le compte Airzone se connecte depuis Réglages › Modules › Airzone")),
         _ => return Err(ApiError::not_found("unknown account")),
     }
@@ -58,6 +68,7 @@ pub async fn test(State(state): State<AppState>, AdminUser(user): AdminUser, Pat
         accounts::linky::KIND => accounts::linky::test(&state).await,
         accounts::netatmo::KIND => accounts::netatmo::test(&state).await,
         accounts::ezviz::KIND => accounts::ezviz::test(&state).await,
+        accounts::forecast_solar::KIND => accounts::forecast_solar::test(&state).await,
         crate::cloud::ACCOUNT => crate::cloud::sync_stored(&state, &user.username).await.map(|_| ()),
         accounts::WEATHER => {
             state.weather.refresh().await;
@@ -84,7 +95,7 @@ pub async fn set_enabled(State(state): State<AppState>, AdminUser(user): AdminUs
         return Err(ApiError::not_found("unknown account"));
     }
     crate::db::set_account_enabled(&state.db, &kind, input.enabled).await?;
-    if accounts::MODULES.contains(&kind.as_str()) {
+    if accounts::MODULES.contains(&kind.as_str()) || accounts::SERVICE_MODULES.contains(&kind.as_str()) {
         for s in crate::db::list_sources(&state.db).await?.into_iter().filter(|s| s.driver == kind) {
             crate::db::update_source(&state.db, s.id, &s.name, &s.config, input.enabled).await?;
         }
@@ -113,6 +124,9 @@ pub async fn delete(State(state): State<AppState>, AdminUser(user): AdminUser, P
     if kind == crate::cloud::ACCOUNT {
         crate::cloud::forget(&state).await?;
     } else {
+        if kind == accounts::forecast_solar::KIND {
+            accounts::forecast_solar::forget(&state).await?;
+        }
         crate::db::delete_account(&state.db, &kind).await?;
     }
     log(&state, &user.username, &kind, false).await;

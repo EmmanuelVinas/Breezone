@@ -20,11 +20,12 @@ import {
   kwh,
   MODE_LABEL,
   number,
+  time,
   watts,
 } from "@/lib/format"
 import { t, tn } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
-import { Sparkline } from "@/components/sparkline"
+import { Sparkline, fieldFormat } from "@/components/sparkline"
 import { WeatherCard } from "@/components/weather-card"
 import { sensorText } from "@/lib/sensors"
 import {
@@ -251,7 +252,11 @@ function DeviceLine({ d, curve }: { d: DeviceView; curve?: string }) {
         {text && <span className="text-muted-foreground"> · {text}</span>}
       </span>
       {points.length > 1 && (
-        <Sparkline points={points} className="h-6 w-20 shrink-0 text-primary" />
+        <Sparkline
+          points={points}
+          format={fieldFormat(curve ?? "")}
+          className="h-6 w-20 shrink-0 text-primary"
+        />
       )}
       {value && (
         <span className="tabular shrink-0 text-sm text-muted-foreground">
@@ -478,6 +483,7 @@ function MeasureTile({ d, curve }: { d: DeviceView; curve: string }) {
         {points.length > 1 ? (
           <Sparkline
             points={points}
+            format={fieldFormat(curve)}
             className={cn("mt-2 h-14 w-full", tone ?? "text-primary")}
             label={t("Dernières 24 h")}
           />
@@ -673,6 +679,8 @@ function EnergyBlock({ flow }: { flow: EnergyFlow }) {
         {points.length > 1 && (
           <Sparkline
             points={points}
+            format={(v) => watts(v)}
+            at={time}
             className={cn("mt-auto h-14 pt-2", color)}
             label={t("Aujourd'hui")}
           />

@@ -13,7 +13,7 @@ import { t, tn } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { PageHeader } from "@/components/app-shell"
 import { RoomSelect } from "@/components/room-select"
-import { Sparkline } from "@/components/sparkline"
+import { Sparkline, fieldFormat } from "@/components/sparkline"
 import { PeriodPicker } from "@/components/period-picker"
 import type { HistoryPeriod } from "@/lib/periods"
 import {
@@ -242,6 +242,7 @@ export function RoomCard({
         <Measures s={s} />
         <Sparkline
           points={flow}
+          format={fieldFormat("flow")}
           className="h-10 text-air"
           label={t("Débit des dernières 24 h")}
         />
@@ -371,6 +372,7 @@ function Detail({
           </span>
           <Sparkline
             points={history?.flow ?? []}
+            format={fieldFormat("flow")}
             className="h-16 text-air"
             label={curve}
           />
@@ -385,6 +387,7 @@ function Detail({
             </div>
             <Sparkline
               points={history?.humidity ?? []}
+              format={fieldFormat("humidity")}
               className="h-16 text-cool"
               label={curve}
             />
@@ -567,6 +570,7 @@ export function House({
         </div>
         <Sparkline
           points={flow}
+          format={fieldFormat("flow")}
           className="h-20 text-air"
           label={t("Débit des dernières 24 h")}
         />

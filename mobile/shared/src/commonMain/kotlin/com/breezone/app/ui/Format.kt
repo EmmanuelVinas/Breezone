@@ -108,6 +108,9 @@ fun airQualityColor(level: String?): Color = when (level) {
 fun Zone.tone(): Color = if (on && mode != null) mode.color() else Fz.colors.muted
 
 /** Temperature with a decimal comma and a degree sign ("19,5°"); numbers are not translated. */
+/** The decimal separator of the phone's language: "19,5" in French and Spanish, "19.5" in English. */
+fun decimalSeparator(): Char = if (androidx.compose.ui.text.intl.Locale.current.language == "en") '.' else ','
+
 fun formatTemp(value: Double?, digits: Int = 1): String {
     if (value == null) return "–"
     val factor = if (digits == 0) 1.0 else 10.0
@@ -115,7 +118,7 @@ fun formatTemp(value: Double?, digits: Int = 1): String {
     val text = if (digits == 0) rounded.roundToInt().toString() else {
         val whole = rounded.toLong()
         val decimal = abs(((rounded - whole) * 10).roundToInt())
-        "${if (rounded < 0 && whole == 0L) "-" else ""}$whole,$decimal"
+        "${if (rounded < 0 && whole == 0L) "-" else ""}$whole${decimalSeparator()}$decimal"
     }
     return "$text°"
 }

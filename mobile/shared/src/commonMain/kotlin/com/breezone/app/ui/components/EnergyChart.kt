@@ -27,6 +27,7 @@ import com.patrykandpatrick.vico.multiplatform.cartesian.rememberVicoScrollState
 import com.patrykandpatrick.vico.multiplatform.cartesian.rememberVicoZoomState
 import com.patrykandpatrick.vico.multiplatform.common.Fill
 import com.patrykandpatrick.vico.multiplatform.common.component.rememberLineComponent
+import com.breezone.app.ui.screens.formatPower
 import kotlin.math.round
 import kotlin.math.roundToInt
 
@@ -69,8 +70,14 @@ fun PowerDayChart(series: List<PowerSeries>, dayStart: Long, modifier: Modifier 
                 pointSpacing = 3.dp,
                 rangeProvider = remember(max) { CartesianLayerRangeProvider.fixed(minX = 0.0, maxX = 24.0, minY = 0.0, maxY = max) },
             ),
-            startAxis = VerticalAxis.rememberStart(label = rememberAxisLabel()),
-            bottomAxis = HorizontalAxis.rememberBottom(label = rememberAxisLabel(), valueFormatter = hours, itemPlacer = remember { HorizontalAxis.ItemPlacer.aligned(spacing = { 6 }) }),
+            startAxis = VerticalAxis.rememberStart(
+                label = rememberAxisLabel(),
+                line = null,
+                tick = null,
+                valueFormatter = remember { CartesianValueFormatter { _, y, _ -> formatPower(y * 1000) } },
+                itemPlacer = remember { VerticalAxis.ItemPlacer.count({ 4 }) },
+            ),
+            bottomAxis = HorizontalAxis.rememberBottom(label = rememberAxisLabel(), guideline = null, valueFormatter = hours, itemPlacer = remember { HorizontalAxis.ItemPlacer.aligned(spacing = { 6 }) }),
             getXStep = { _, _, _ -> 1.0 },
         ),
         modelProducer = producer,

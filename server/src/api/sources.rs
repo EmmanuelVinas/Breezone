@@ -146,7 +146,7 @@ async fn polled(state: &AppState, id: i64) -> ApiResult<SourceView> {
 }
 
 pub async fn create(State(state): State<AppState>, _admin: AdminUser, Json(input): Json<SourceInput>) -> ApiResult<(StatusCode, Json<SourceView>)> {
-    if crate::accounts::MODULES.contains(&input.driver.as_str()) {
+    if crate::accounts::MODULES.contains(&input.driver.as_str()) || crate::accounts::SERVICE_MODULES.contains(&input.driver.as_str()) {
         return Err(ApiError::bad_request("ce module s'ajoute en connectant son compte (Réglages › Comptes et services)"));
     }
     let input = SourceInput { config: placed(&state, &input.driver, input.config.clone()).await, ..input };

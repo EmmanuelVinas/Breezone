@@ -11,6 +11,7 @@ With the database (data/dev/breezone.db), it also writes 30 days of history of t
 
 import json
 import sys
+import time
 import urllib.error
 import urllib.request
 
@@ -38,6 +39,19 @@ token = call("POST", "/api/auth/login", {"username": user, "password": password}
 call("PUT", "/api/me/language", {"language": "fr"})
 host = lambda n: f"127.0.0.1:{first + n}"
 
+# A fresh database: the home of the demonstration, on the fake WebServer, in a city that is
+# nobody's (the screenshots must not tell where one lives).
+if not call("GET", "/api/installations"):
+    print("▸ Maison (Airzone)")
+    call("POST", "/api/installations", {"name": "Maison", "host": "127.0.0.1", "port": 3000, "location": "Annecy, Haute-Savoie"})
+
+# The city is placed on the map in the background: the forecast of the solar production needs it.
+call("POST", "/api/accounts/weather/test")
+for _ in range(30):
+    if (call("GET", "/api/weather") or {}).get("weather"):
+        break
+    time.sleep(1)
+
 existing = {s["driver"] for s in call("GET", "/api/sources") or []}
 modules = [
     ("shelly", "Tableau électrique", {"host": host(0)}),
@@ -45,13 +59,17 @@ modules = [
     ("renson", "VMC", {"host": host(3)}),
     ("tasmota", "Salon", {"host": host(4)}),
     ("esphome", "Volets et jardin", {"host": host(5)}),
-    ("forecast_solar", "Prévision solaire", {"kwp": 4.5, "declination": 30, "azimuth": 0, "latitude": 45.9, "longitude": 6.13, "url": f"http://{host(6)}"}),
 ]
 for driver, name, config in modules:
     if driver in existing:
         continue
     print(f"▸ {name} ({driver})")
     call("POST", "/api/sources", {"driver": driver, "name": name, "config": config})
+if "forecast_solar" not in existing:
+    # A service (Settings › Accounts and services): the server asks the fake one
+    # (BREEZONE_FORECAST_SOLAR_URL, set by dev.sh --modules).
+    print("▸ Prévision solaire (forecast_solar)")
+    call("PUT", "/api/accounts/forecast_solar", {"kwp": "4,5", "declination": "30", "azimuth": "0"})
 if "hue" not in existing:
     print("▸ Pont Hue (hue)")
     call("POST", "/api/hue/link", {"host": host(1), "name": "Pont Hue"})

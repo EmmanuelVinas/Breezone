@@ -130,6 +130,8 @@ export function EnergyPage() {
               size="sm"
               value={period}
               onValueChange={(v) => v && setPeriod(v as Period)}
+              // The period chosen in the accent colour, as the other choices of the pages.
+              className="[&_[data-state=on]]:border-primary [&_[data-state=on]]:bg-primary [&_[data-state=on]]:text-primary-foreground"
             >
               <ToggleGroupItem value="day">{t("Jour")}</ToggleGroupItem>
               <ToggleGroupItem value="week">{t("7 jours")}</ToggleGroupItem>

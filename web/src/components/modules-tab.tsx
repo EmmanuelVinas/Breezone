@@ -111,11 +111,7 @@ const BY_ADDRESS = [
   { driver: "tasmota", label: "Tasmota" },
   { driver: "tplink", label: "TP-Link (Kasa, Tapo)" },
   { driver: "reolink", label: "Reolink" },
-  { driver: "forecast_solar", label: "Forecast.Solar" },
 ]
-
-/** Drivers without an address: a web service. */
-const NO_HOST = ["forecast_solar"]
 
 /** A product typed by its address, as if the search had found it (a Hue bridge, a HomeKit accessory). */
 function typed(driver: string, label: string, host: string): FoundProduct {
@@ -752,7 +748,7 @@ const DRIVER: Record<
     icon: CloudSun,
     tone: "bg-warning/15 text-warning",
     connection: t(
-      "Service en ligne Forecast.Solar : la prévision de production selon la météo, sans compte (une clé d'API, facultative, donne plus de détail)"
+      "Service en ligne Forecast.Solar, réglé dans Réglages › Comptes et services : la prévision de production selon la météo"
     ),
     every: t("toutes les 30 min"),
     reads: t(
@@ -760,7 +756,7 @@ const DRIVER: Record<
     ),
     writes: t("rien : lecture seule"),
     note: t(
-      "Sans latitude ni longitude, celles de la ville de l'installation sont prises. Une installation sur deux pans s'ajoute en deux fois."
+      "Ses panneaux (puissance, inclinaison, orientation) se règlent dans Comptes et services ; la prévision est faite pour la ville de l'installation."
     ),
   },
 }
@@ -991,8 +987,8 @@ function SourceDetail({
   const Icon = d?.icon ?? Zap
   const host = typeof source.config.host === "string" ? source.config.host : ""
   // Reached through its maker's cloud, by a linked account: no address of its own.
-  const cloud = source.driver === "netatmo" || source.driver === "ezviz"
-  const online = NO_HOST.includes(source.driver)
+  // Set in Settings › Accounts and services: a linked account, or an online service.
+  const cloud = ["netatmo", "ezviz", "forecast_solar"].includes(source.driver)
   const charger = devices.find((x) => x.traits.includes("ev.charger@1"))
   return (
     <>
@@ -1033,11 +1029,7 @@ function SourceDetail({
         <CardContent className="grid gap-4">
           <div className="grid gap-1.5">
             <span className="text-xs text-muted-foreground">
-              {cloud
-                ? t("Compte")
-                : online
-                  ? t("Service en ligne")
-                  : t("Adresse IP ou nom")}
+              {cloud ? t("Compte ou service") : t("Adresse IP ou nom")}
             </span>
             <div className="flex flex-wrap gap-2">
               {cloud ? (
@@ -1046,7 +1038,7 @@ function SourceDetail({
                     <Cloud /> {t("Réglages › Comptes et services")}
                   </Link>
                 </Button>
-              ) : online ? null : (
+              ) : (
                 <>
                   <span className="tabular min-w-40 flex-1 rounded-2xl bg-muted/60 px-3 py-2 font-mono text-sm text-primary">
                     {host || "–"}
@@ -1111,7 +1103,7 @@ function SourceDetail({
       {charger && <CurrentOwner charger={charger} />}
       {source.driver === "netatmo" && <TwinsCard sourceId={source.id} />}
       {source.driver !== "netatmo" && <IgnoredCard sourceId={source.id} />}
-      <ModuleSettingsCard key={source.id} source={source} />
+      {!cloud && <ModuleSettingsCard key={source.id} source={source} />}
       {source.driver === "renson" && (
         <RensonKey
           sourceId={source.id}
@@ -1589,24 +1581,18 @@ function AddModuleDialog({
                 ))}
               </SelectContent>
             </Select>
-            {NO_HOST.includes(driver) ? (
-              <p className="flex-1 self-center text-xs text-muted-foreground">
-                {t("Un service en ligne : sans adresse sur le réseau")}
-              </p>
-            ) : (
-              <Input
-                id="module-host"
-                value={host}
-                placeholder={
-                  driver === "homekit" ? "192.168.1.30:5001" : "192.168.1.40"
-                }
-                onChange={(e) => setHost(e.target.value)}
-              />
-            )}
+            <Input
+              id="module-host"
+              value={host}
+              placeholder={
+                driver === "homekit" ? "192.168.1.30:5001" : "192.168.1.40"
+              }
+              onChange={(e) => setHost(e.target.value)}
+            />
             <Button
               variant="outline"
               disabled={
-                (!host.trim() && !NO_HOST.includes(driver)) ||
+                !host.trim() ||
                 add.isPending ||
                 // A HomeKit accessory listens on a port of its own.
                 (driver === "homekit" && !/:\d+$/.test(host.trim()))
@@ -1623,7 +1609,7 @@ function AddModuleDialog({
                   setConfiguring({
                     driver,
                     name: label,
-                    host: NO_HOST.includes(driver) ? undefined : host.trim(),
+                    host: host.trim(),
                   })
                 else add.mutate({ driver, name: label, host: host.trim() })
               }}

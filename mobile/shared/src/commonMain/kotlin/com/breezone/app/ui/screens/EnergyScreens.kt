@@ -58,6 +58,7 @@ import com.breezone.app.data.TraitIds
 import com.breezone.app.data.shown
 import com.breezone.app.resources.*
 import com.breezone.app.ui.components.CommandIndicator
+import com.breezone.app.ui.decimalSeparator
 import com.breezone.app.ui.components.DeviceGroupCard
 import com.breezone.app.ui.components.FzSlider
 import com.breezone.app.ui.components.IconBadge
@@ -80,13 +81,13 @@ import kotlin.math.roundToInt
 fun formatPower(watts: Double?): String {
     if (watts == null) return "–"
     val w = abs(watts)
-    return if (w >= 1000) "${((w / 100).roundToInt() / 10.0).toString().replace('.', ',')} kW" else "${w.roundToInt()} W"
+    return if (w >= 1000) "${((w / 100).roundToInt() / 10.0).toString().replace('.', decimalSeparator())} kW" else "${w.roundToInt()} W"
 }
 
 /** "18,2 kWh". */
 fun formatEnergy(kwh: Double?): String {
     if (kwh == null) return "–"
-    val v = if (kwh >= 100) kwh.roundToInt().toString() else ((kwh * 10).roundToInt() / 10.0).toString().replace('.', ',')
+    val v = if (kwh >= 100) kwh.roundToInt().toString() else ((kwh * 10).roundToInt() / 10.0).toString().replace('.', decimalSeparator())
     return "$v kWh"
 }
 

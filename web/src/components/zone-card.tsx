@@ -152,6 +152,7 @@ export function ZoneCard({
       {trend && trend.length > 1 && (
         <Sparkline
           points={trend}
+          format={(v) => formatTemp(v)}
           className={cn(
             "relative mt-4 h-9 w-full",
             zone.on ? tone.text : "text-muted-foreground/70"

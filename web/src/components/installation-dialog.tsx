@@ -189,7 +189,7 @@ export function InstallationDialog({
                   id="iv"
                   value={form.location}
                   maxLength={120}
-                  placeholder={t("Labège, Haute-Garonne")}
+                  placeholder={t("Annecy, Haute-Savoie")}
                   onChange={(e) => set({ location: e.target.value })}
                 />
               </div>

@@ -72,6 +72,7 @@ import com.breezone.app.ui.components.Sparkline
 import com.breezone.app.ui.components.TypeTile
 import com.breezone.app.ui.components.WeatherCard
 import com.breezone.app.ui.components.ZoneCard
+import com.breezone.app.ui.decimalSeparator
 import com.breezone.app.ui.formatTemp
 import com.breezone.app.ui.groupZones
 import com.breezone.app.ui.icons.FzIcons
@@ -710,7 +711,7 @@ fun fieldValue(field: String, v: Double): String = when (field) {
     "humidity", "level", "brightness", "position" -> "${v.roundToInt()} %"
     "co2" -> "${v.roundToInt()} ppm"
     "flow" -> "${v.roundToInt()} m³/h"
-    else -> ((v * 10).roundToInt() / 10.0).toString().replace('.', ',')
+    else -> ((v * 10).roundToInt() / 10.0).toString().replace('.', decimalSeparator())
 }
 
 /** Scenes launched in one tap: those chosen, else those of this installation. */

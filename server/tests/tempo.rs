@@ -66,11 +66,17 @@ async fn a_red_day_is_priced_as_red() {
     });
     let r = http.put(format!("{e}/prices/2020-01-01")).bearer_auth(&token).json(&tariff).send().await.unwrap();
     assert!(r.status().is_success(), "{}", r.text().await.unwrap());
-    let price: Value = http.get(format!("{e}/price")).bearer_auth(&token).send().await.unwrap().json().await.unwrap();
-    assert_eq!(price["now"]["profile"], "blue", "no colour known yet: the day of the week: {price}");
-
-    breezone_server::tempo::refresh(&state).await.unwrap();
-    let price: Value = http.get(format!("{e}/price")).bearer_auth(&token).send().await.unwrap().json().await.unwrap();
+    // A tariff that follows the colours has them read at once, in the background: the day of the
+    // week (blue) until they are known, then red.
+    let mut price = Value::Null;
+    for _ in 0..100 {
+        price = http.get(format!("{e}/price")).bearer_auth(&token).send().await.unwrap().json().await.unwrap();
+        if price["now"]["profile"] == "red" {
+            break;
+        }
+        assert_eq!(price["now"]["profile"], "blue", "no colour known yet: the day of the week: {price}");
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
     assert_eq!((price["now"]["profile"].as_str(), price["now"]["price"].as_f64()), (Some("red"), Some(0.7)), "{price}");
     assert_eq!(price["tempo"]["today"], "red");
     assert!(price["tempo"]["tomorrow"].is_null(), "not announced yet: {price}");
