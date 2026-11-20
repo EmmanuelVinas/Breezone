@@ -1,1 +1,1 @@
-Control your Airzone locally
+Control your home locally: AC, lights, shutters, energy.

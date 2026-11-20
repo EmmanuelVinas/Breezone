@@ -2,6 +2,9 @@
 //! local API, with users, routines, history, an activity feed, a REST + WebSocket API for
 //! the mobile app, and the web UI served as static files.
 
+// The Matter bridge chains a handler per cluster of each light slot: the types are deep.
+#![recursion_limit = "512"]
+
 pub mod access;
 pub mod accounts;
 pub mod airzone;
@@ -27,6 +30,7 @@ pub mod homekit;
 pub mod hub;
 pub mod i18n;
 pub mod incidents;
+pub mod matter;
 pub mod mock;
 pub mod mock_devices;
 pub mod price;
@@ -199,6 +203,7 @@ pub fn spawn_background(state: &AppState) {
     tokio::spawn(state.weather.clone().run());
     tokio::spawn(tempo::run_loop(state.clone()));
     tokio::spawn(accounts::linky::run_loop(state.clone()));
+    tokio::spawn(matter::spawn(state.clone()));
     tokio::spawn(cre::run_loop(state.clone()));
 }
 

@@ -1,12 +1,32 @@
-Breezone controls your Airzone heating and air conditioning through your own Breezone server, installed at home (Docker, NAS, Raspberry Pi), which uses the local API of your Airzone WebServer.
+Breezone controls your home from your phone, locally, through your own Breezone server, installed at home (NAS, Raspberry Pi, Docker). It talks to your Airzone WebServer and your devices through their local API.
 
+AIR CONDITIONING (AIRZONE)
 • Zones: on/off, setpoint, mode, fan speed, sleep; groups per floor
-• Routines and timers: "in 2 hours, switch the first floor off", one-tap scenes
 • Schedules of the Airzone app, editable from Breezone
-• Several sites and servers in the same app
-• History and real-time activity feed
-• No ads, no trackers; your data stays on your server
+• Temperature, setpoint and humidity history
 
-The app requires a Breezone server (free, see github.com/EmmanuelVinas/breezone).
+LIGHTS, SHUTTERS AND VENTILATION
+• Lights: on/off, brightness, white temperature and colours, room by room
+• Shutters: open and close, per room or per floor
+• Ventilation: readings of each room (humidity, CO₂, VOC, airflow) over 24 hours or 7 days
 
-Breezone is an independent project, not affiliated with Airzone. "Airzone" is a trademark of its owner, used only to describe compatibility.
+ENERGY AND CHARGING
+• Electricity price, and the Tempo colours of today and tomorrow
+• Solar: surplus tracking, which can drive the air conditioning
+• Charging: follow and control your charger
+
+ROUTINES
+• One-tap scenes, with delayed steps ("switch the first floor off in 2 hours")
+• A remote control button can start an automation
+
+LINKED ACCOUNTS AND CAMERAS
+• Linky, RTE Tempo, Netatmo, Legrand and EZVIZ cameras
+• Several sites and servers in the same app, no VPN
+• Remote access through your server's HTTPS address
+• Users with rights per installation (read-only or control)
+• French, English and Spanish
+
+PRIVACY
+The app only contacts the Breezone servers you add. No ads, no statistics, no tracking. The password is not kept: the session is stored in the phone's secure keystore.
+
+Breezone is an independent project, not affiliated with Airzone (Corporación Empresarial Altra S.L.) or any other brand mentioned. Brand names are used only to indicate compatibility.

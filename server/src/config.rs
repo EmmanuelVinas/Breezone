@@ -42,6 +42,10 @@ pub struct Config {
     /// `BREEZONE_WEATHER`, on by default in a release build, off in a development build and the
     /// tests, so that working on the server sends nothing out.
     pub weather: bool,
+    /// `BREEZONE_MATTER`: Breezone answers as a Matter bridge (ADR 0015), off unless asked.
+    pub matter: bool,
+    /// `BREEZONE_MATTER_PORT`: its UDP port (5540, the port of Matter).
+    pub matter_port: u16,
     /// Where the colours of the Tempo days are read (`BREEZONE_TEMPO_URL`): the public relay
     /// api-couleur-tempo.fr when the server may look things up on the internet (`weather`), else
     /// none.
@@ -109,6 +113,8 @@ impl Config {
             airzone_hosts: var("BREEZONE_AIRZONE_HOSTS").map(|v| parse_bootstrap(&v)).unwrap_or_default(),
             self_update: flag("BREEZONE_SELF_UPDATE").unwrap_or(true),
             weather: flag("BREEZONE_WEATHER").unwrap_or(!cfg!(debug_assertions)),
+            matter: flag("BREEZONE_MATTER").unwrap_or(false),
+            matter_port: num("BREEZONE_MATTER_PORT", 5540),
             cre_url: var("BREEZONE_CRE_URL")
                 .or_else(|| flag("BREEZONE_WEATHER").unwrap_or(!cfg!(debug_assertions)).then(|| "https://www.cre.fr/fileadmin/Documents/Open_data/Marches_de_detail".into())),
             tempo_url: var("BREEZONE_TEMPO_URL").or_else(|| flag("BREEZONE_WEATHER").unwrap_or(!cfg!(debug_assertions)).then(|| "https://www.api-couleur-tempo.fr".into())),
@@ -154,6 +160,8 @@ impl Config {
             airzone_hosts: vec![],
             self_update: false,
             weather: false,
+            matter: false,
+            matter_port: 5540,
             tempo_url: None,
             cre_url: None,
             rte_url: "http://127.0.0.1:9".into(),

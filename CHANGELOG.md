@@ -8,6 +8,11 @@ All notable changes are documented here. The format follows
 
 ### Added
 
+- Matter bridge, experimental (ADR 0015), off unless `BREEZONE_MATTER=1`: Breezone answers as a
+  Matter bridge, and the lights it knows (up to 8, on and off) can be added to Google Home (Nest Hub),
+  Apple Home, Alexa or SmartThings and driven from them, in local; a light switched in Breezone is
+  told to them. The codes to add the bridge are written in the log; its fabrics are kept in
+  `<data>/matter`. It uses the test identity of the Matter standard for now.
 - The small curves (overview, energy figures, zones, ventilation) tell, under the mouse, the time
   and the value of the point, as the large charts do.
 - Play Store listing: seven screenshots of the app (French and English) in

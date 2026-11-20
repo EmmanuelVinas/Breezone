@@ -54,6 +54,15 @@ aes = "0.9.4"
 cbc = "0.2.1"
 sha1 = "0.11.0"
 snow = "0.10.0"
+# Matter bridge (ADR 0015): the Matter stack, its executor pieces and the mDNS socket.
+rs-matter = { version = "=0.4.1", features = ["async-io", "groups", "persistent-subscriptions", "max-groups-per-fabric-12", "max-group-keys-per-fabric-3", "max-group-endpoints-per-fabric-3", "max-sessions-32"] }
+embassy-futures = "0.1"
+embassy-time = { version = "0.5", features = ["std"] }
+embassy-time-queue-utils = { version = "0.3", features = ["generic-queue-64"] }
+async-io = "2"
+futures-lite = "2"
+if-addrs = "0.15"
+socket2 = { version = "0.6", features = ["all"] }
 
 [profile.release]
 opt-level = "z"
@@ -61,6 +70,9 @@ lto = true
 strip = true
 codegen-units = 1
 panic = "abort"
+# On a Mac (development), the Matter service is announced by Bonjour, which holds the mDNS port.
+[target.'cfg(target_os = "macos")'.dependencies]
+rs-matter = { version = "=0.4.1", features = ["astro-dnssd"] }
 
 [dev-dependencies]
 tokio-tungstenite = "0.30.0"
