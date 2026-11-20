@@ -25,6 +25,13 @@ import { ConfirmDialog } from "@/components/confirm"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -237,13 +244,9 @@ function summary(a: AccountView): string | null {
   return c.client_id ? t("Application {id}", { id: c.client_id }) : null
 }
 
-function AccountCard({ a }: { a: AccountView }) {
+function useDone() {
   const qc = useQueryClient()
-  const kind = KINDS[a.kind]
-  const [editing, setEditing] = useState(!a.connected)
-  const [values, setValues] = useState<Record<string, string>>({})
-  const [removing, setRemoving] = useState(false)
-  const done = (v?: AccountView) => {
+  return (v?: AccountView) => {
     qc.invalidateQueries({ queryKey: ["accounts"] })
     qc.invalidateQueries({ queryKey: ["linky"] })
     if (v)
@@ -251,6 +254,126 @@ function AccountCard({ a }: { a: AccountView }) {
         list?.map((x) => (x.kind === v.kind ? v : x))
       )
   }
+}
+
+/** Switching an account or a service on and off, from its tile or its detail. */
+function useEnable(a: AccountView) {
+  const qc = useQueryClient()
+  const done = useDone()
+  const enable = useMutation({
+    mutationFn: (on: boolean) => api.setAccountEnabled(a.kind, on),
+    onSuccess: (v) => {
+      done(v)
+      qc.invalidateQueries({ queryKey: ["sources"] })
+      qc.invalidateQueries({ queryKey: ["weather"] })
+      qc.invalidateQueries({ queryKey: ["cloud"] })
+    },
+    onError: (e) => toast.error(errorText(e)),
+  })
+  return { enable, enabled: enable.isPending ? enable.variables : a.enabled }
+}
+
+/** An account or a service in the grid: what it is and its state; its detail opens on a click. */
+function AccountTile({ a }: { a: AccountView }) {
+  const kind = KINDS[a.kind]
+  const [open, setOpen] = useState(false)
+  const { enable, enabled } = useEnable(a)
+  const what = a.connected && enabled ? summary(a) : null
+  const failed =
+    enabled && (a.state === "error" || a.state === "expired") && a.connected
+  return (
+    <>
+      <Card
+        role="button"
+        tabIndex={0}
+        onClick={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault()
+            setOpen(true)
+          }
+        }}
+        className="cursor-pointer rounded-3xl py-4 transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      >
+        <CardContent className="flex items-start gap-3 px-4">
+          <span
+            className={cn(
+              "grid size-10 shrink-0 place-items-center rounded-2xl",
+              (a.connected || a.service) && enabled
+                ? "bg-primary/15 text-primary"
+                : "bg-muted text-muted-foreground"
+            )}
+          >
+            <kind.icon className="size-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="truncate font-medium">{kind.title}</div>
+            <div className="mt-1">
+              <StateBadge a={a} />
+            </div>
+            <p
+              className={cn(
+                "mt-2 line-clamp-2 text-xs",
+                failed ? "text-destructive" : "text-muted-foreground"
+              )}
+            >
+              {failed && a.last_error
+                ? a.last_error
+                : (what ?? kind.description)}
+            </p>
+          </div>
+          {(a.connected || a.service) && (
+            <Switch
+              checked={enabled}
+              disabled={enable.isPending}
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+              onCheckedChange={(on) => enable.mutate(on)}
+              aria-label={t("Activer {name}", { name: kind.title })}
+            />
+          )}
+        </CardContent>
+      </Card>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
+          <DialogHeader>
+            <div className="flex items-center gap-3 pr-6">
+              <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary/15 text-primary">
+                <kind.icon className="size-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <DialogTitle className="flex flex-wrap items-center gap-2">
+                  {kind.title} <StateBadge a={a} />
+                </DialogTitle>
+              </div>
+              {(a.connected || a.service) && (
+                <Switch
+                  checked={enabled}
+                  disabled={enable.isPending}
+                  onCheckedChange={(on) => enable.mutate(on)}
+                  aria-label={t("Activer {name}", { name: kind.title })}
+                />
+              )}
+            </div>
+            <DialogDescription>{kind.description}</DialogDescription>
+          </DialogHeader>
+          <AccountDetail
+            key={`${a.kind}-${a.connected}`}
+            a={a}
+            enabled={enabled}
+          />
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
+function AccountDetail({ a, enabled }: { a: AccountView; enabled: boolean }) {
+  const kind = KINDS[a.kind]
+  const [editing, setEditing] = useState(!a.connected)
+  const [values, setValues] = useState<Record<string, string>>({})
+  const [removing, setRemoving] = useState(false)
+  const done = useDone()
   const connect = useMutation({
     mutationFn: () => api.connectAccount(a.kind, values),
     onSuccess: (v) => {
@@ -270,17 +393,6 @@ function AccountCard({ a }: { a: AccountView }) {
     },
     onError: (e) => toast.error(errorText(e)),
   })
-  const enable = useMutation({
-    mutationFn: (on: boolean) => api.setAccountEnabled(a.kind, on),
-    onSuccess: (v) => {
-      done(v)
-      qc.invalidateQueries({ queryKey: ["sources"] })
-      qc.invalidateQueries({ queryKey: ["weather"] })
-      qc.invalidateQueries({ queryKey: ["cloud"] })
-    },
-    onError: (e) => toast.error(errorText(e)),
-  })
-  const enabled = enable.isPending ? enable.variables : a.enabled
   const remove = useMutation({
     mutationFn: () => api.deleteAccount(a.kind),
     onSuccess: () => {
@@ -293,129 +405,24 @@ function AccountCard({ a }: { a: AccountView }) {
   const filled = kind.fields.every((f) => f.optional || values[f.name]?.trim())
   const what = summary(a)
   return (
-    <Card className="rounded-3xl">
-      <CardContent className="grid gap-4">
-        <div className="flex flex-wrap items-start gap-3">
-          <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary/15 text-primary">
-            <kind.icon className="size-5" />
+    <div className="grid gap-4">
+      {!enabled && <p className="text-sm text-muted-foreground">{kind.off}</p>}
+      {a.connected && enabled && (
+        <div className="grid gap-1 text-sm">
+          {what && <span>{what}</span>}
+          <span className="text-muted-foreground">
+            {a.last_ok
+              ? t("A fonctionné {when}", { when: relativeTime(a.last_ok) })
+              : t("Pas encore utilisé")}
           </span>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="font-heading text-lg font-semibold">
-                {kind.title}
-              </h3>
-              <StateBadge a={a} />
-            </div>
-            <p className="text-sm text-muted-foreground">{kind.description}</p>
-          </div>
-          {(a.connected || a.service) && (
-            <Switch
-              checked={enabled}
-              disabled={enable.isPending}
-              onCheckedChange={(on) => enable.mutate(on)}
-              aria-label={t("Activer {name}", { name: kind.title })}
-            />
+          {a.state === "error" && a.last_error && (
+            <span className="text-destructive">{a.last_error}</span>
           )}
         </div>
-        {!enabled && (
-          <p className="text-sm text-muted-foreground">{kind.off}</p>
-        )}
-        {a.connected && enabled && (
-          <div className="grid gap-1 text-sm">
-            {what && <span>{what}</span>}
-            <span className="text-muted-foreground">
-              {a.last_ok
-                ? t("A fonctionné {when}", { when: relativeTime(a.last_ok) })
-                : t("Pas encore utilisé")}
-            </span>
-            {a.state === "error" && a.last_error && (
-              <span className="text-destructive">{a.last_error}</span>
-            )}
-          </div>
-        )}
-        {a.service ? (
-          enabled && (
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                variant="outline"
-                onClick={() => test.mutate()}
-                disabled={test.isPending}
-              >
-                <RefreshCw className={test.isPending ? "animate-spin" : ""} />
-                {t("Tester")}
-              </Button>
-              <a
-                href={kind.link.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-              >
-                {kind.link.label} <ExternalLink className="size-3.5" />
-              </a>
-            </div>
-          )
-        ) : kind.elsewhere ? (
-          <div>
-            <Button asChild variant="outline">
-              <Link to={kind.elsewhere.to}>{kind.elsewhere.label}</Link>
-            </Button>
-          </div>
-        ) : editing ? (
-          <form
-            className="grid gap-3"
-            onSubmit={(e) => {
-              e.preventDefault()
-              if (filled) connect.mutate()
-            }}
-          >
-            <ol className="grid list-decimal gap-1 pl-5 text-sm text-muted-foreground">
-              {kind.steps.map((s) => (
-                <li key={s}>{s}</li>
-              ))}
-            </ol>
-            <a
-              href={kind.link.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-            >
-              {kind.link.label} <ExternalLink className="size-3.5" />
-            </a>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {kind.fields.map((f) => (
-                <div key={f.name} className="grid gap-1.5">
-                  <Label htmlFor={`${a.kind}-${f.name}`}>{f.label}</Label>
-                  <Input
-                    id={`${a.kind}-${f.name}`}
-                    type={f.secret ? "password" : "text"}
-                    autoComplete="off"
-                    placeholder={f.placeholder}
-                    value={values[f.name] ?? ""}
-                    onChange={(e) =>
-                      setValues({ ...values, [f.name]: e.target.value })
-                    }
-                  />
-                </div>
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button type="submit" disabled={!filled || connect.isPending}>
-                {connect.isPending && <Loader2 className="animate-spin" />}
-                {t("Connecter")}
-              </Button>
-              {a.connected && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setEditing(false)}
-                >
-                  {t("Annuler")}
-                </Button>
-              )}
-            </div>
-          </form>
-        ) : (
-          <div className="flex flex-wrap gap-2">
+      )}
+      {a.service ? (
+        enabled && (
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               onClick={() => test.mutate()}
@@ -424,31 +431,110 @@ function AccountCard({ a }: { a: AccountView }) {
               <RefreshCw className={test.isPending ? "animate-spin" : ""} />
               {t("Tester")}
             </Button>
-            <Button variant="outline" onClick={() => setEditing(true)}>
-              {t("Changer les identifiants")}
-            </Button>
-            <Button
-              variant="ghost"
-              className="text-destructive"
-              onClick={() => setRemoving(true)}
+            <a
+              href={kind.link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
             >
-              <Trash2 /> {t("Retirer")}
-            </Button>
+              {kind.link.label} <ExternalLink className="size-3.5" />
+            </a>
           </div>
-        )}
-        {a.kind === "airzone" && a.connected && enabled && (
+        )
+      ) : kind.elsewhere ? (
+        <div>
+          <Button asChild variant="outline">
+            <Link to={kind.elsewhere.to}>{kind.elsewhere.label}</Link>
+          </Button>
+        </div>
+      ) : editing ? (
+        <form
+          className="grid gap-3"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (filled) connect.mutate()
+          }}
+        >
+          <ol className="grid list-decimal gap-1 pl-5 text-sm text-muted-foreground">
+            {kind.steps.map((s) => (
+              <li key={s}>{s}</li>
+            ))}
+          </ol>
+          <a
+            href={kind.link.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+          >
+            {kind.link.label} <ExternalLink className="size-3.5" />
+          </a>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {kind.fields.map((f) => (
+              <div key={f.name} className="grid gap-1.5">
+                <Label htmlFor={`${a.kind}-${f.name}`}>{f.label}</Label>
+                <Input
+                  id={`${a.kind}-${f.name}`}
+                  type={f.secret ? "password" : "text"}
+                  autoComplete="off"
+                  placeholder={f.placeholder}
+                  value={values[f.name] ?? ""}
+                  onChange={(e) =>
+                    setValues({ ...values, [f.name]: e.target.value })
+                  }
+                />
+              </div>
+            ))}
+          </div>
           <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              onClick={() => test.mutate()}
-              disabled={test.isPending}
-            >
-              <RefreshCw className={test.isPending ? "animate-spin" : ""} />
-              {t("Synchroniser")}
+            <Button type="submit" disabled={!filled || connect.isPending}>
+              {connect.isPending && <Loader2 className="animate-spin" />}
+              {t("Connecter")}
             </Button>
+            {a.connected && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setEditing(false)}
+              >
+                {t("Annuler")}
+              </Button>
+            )}
           </div>
-        )}
-      </CardContent>
+        </form>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            onClick={() => test.mutate()}
+            disabled={test.isPending}
+          >
+            <RefreshCw className={test.isPending ? "animate-spin" : ""} />
+            {t("Tester")}
+          </Button>
+          <Button variant="outline" onClick={() => setEditing(true)}>
+            {t("Changer les identifiants")}
+          </Button>
+          <Button
+            variant="ghost"
+            className="text-destructive"
+            onClick={() => setRemoving(true)}
+          >
+            <Trash2 /> {t("Retirer")}
+          </Button>
+        </div>
+      )}
+      {a.kind === "airzone" && a.connected && enabled && (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            onClick={() => test.mutate()}
+            disabled={test.isPending}
+          >
+            <RefreshCw className={test.isPending ? "animate-spin" : ""} />
+            {t("Synchroniser")}
+          </Button>
+        </div>
+      )}
       <ConfirmDialog
         open={removing}
         title={t("Retirer le compte {name} ?", { name: kind.title })}
@@ -461,7 +547,7 @@ function AccountCard({ a }: { a: AccountView }) {
         }}
         onCancel={() => setRemoving(false)}
       />
-    </Card>
+    </div>
   )
 }
 
@@ -514,9 +600,9 @@ export function AccountsTab() {
           })}
         </p>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {shown.map((a) => (
-            <AccountCard key={`${a.kind}-${a.connected}`} a={a} />
+            <AccountTile key={a.kind} a={a} />
           ))}
         </div>
       )}

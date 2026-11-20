@@ -6,6 +6,14 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Settings › Accounts and services: a grid of small tiles (state, a line, the switch), four by row
+  on a wide screen; the steps and the credentials of an account open in a dialog on a click.
+- Settings: the tabs in a new order (Breezone first), « Devices » renamed « Connected devices ».
+
+## [0.12.0-beta.1] - 2026-11-20
+
 ### Added
 
 - New integrations, all local except the forecast:
