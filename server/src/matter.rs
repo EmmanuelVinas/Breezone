@@ -282,8 +282,9 @@ pub async fn spawn(state: AppState) {
 
     let dir = state.cfg.data_dir.join("matter");
     let port = state.cfg.matter_port;
+    let interface = state.cfg.matter_interface.clone();
     let spawned = std::thread::Builder::new().name("matter".into()).spawn(move || {
-        if let Err(e) = run(lights, count, dir, port) {
+        if let Err(e) = run(lights, count, dir, port, interface) {
             tracing::error!("Matter bridge stopped: {e:?}");
         }
     });
@@ -293,7 +294,7 @@ pub async fn spawn(state: AppState) {
 }
 
 /// The Matter node, on the thread of the bridge.
-fn run(lights: &'static [Light; SLOTS], count: usize, dir: std::path::PathBuf, port: u16) -> Result<(), Error> {
+fn run(lights: &'static [Light; SLOTS], count: usize, dir: std::path::PathBuf, port: u16, interface: Option<String>) -> Result<(), Error> {
     std::fs::create_dir_all(&dir).map_err(|_| rs_matter::error::ErrorCode::StdIoError)?;
     let matter = Matter::new(&DETAILS, TEST_DEV_COMM, &TEST_DEV_ATT, port);
     let store = DirKvBlobStore::new(dir);
@@ -319,7 +320,7 @@ fn run(lights: &'static [Light; SLOTS], count: usize, dir: std::path::PathBuf, p
     let mut respond = pin!(responder.run::<4, 4>());
     let mut im_job = pin!(im.run());
     let socket = async_io::Async::<UdpSocket>::bind(std::net::SocketAddr::from((std::net::Ipv6Addr::UNSPECIFIED, port)))?;
-    let mut mdns = pin!(mdns::run(&matter, &crypto));
+    let mut mdns = pin!(mdns::run(&matter, &crypto, interface.as_deref()));
     let mut transport = pin!(matter.run(&crypto, &socket, &socket, &socket));
 
     if !matter.has_fabrics() {
@@ -367,6 +368,52 @@ fn data_model<'a, H: OnOffHooks, L: LevelControlHooks>(
     (node, chain)
 }
 
+/// Interfaces that are not the home network: containers, bridges, VPNs, tunnels.
+#[cfg_attr(target_os = "macos", allow(dead_code))]
+fn is_virtual(name: &str) -> bool {
+    ["docker", "veth", "br-", "virbr", "lxc", "lxd", "tun", "tap", "tailscale", "zt", "wg", "dummy", "sit", "ip6tnl", "gre"].iter().any(|p| name.starts_with(p))
+}
+
+/// The interface Matter is announced on, among `(name, address)`: the one asked for, else the
+/// first real one with an IPv4 and an IPv6 address. The error says what is missing.
+#[cfg_attr(target_os = "macos", allow(dead_code))]
+fn choose_interface(all: &[(String, std::net::IpAddr)], wanted: Option<&str>) -> Result<String, String> {
+    let has = |name: &str, v6: bool| all.iter().any(|(n, ip)| n == name && ip.is_ipv6() == v6 && !ip.is_loopback());
+    let mut names: Vec<&str> = all.iter().filter(|(_, ip)| !ip.is_loopback()).map(|(n, _)| n.as_str()).collect();
+    names.dedup();
+    let seen = names
+        .iter()
+        .map(|n| {
+            format!(
+                "{n} ({}{})",
+                if has(n, false) { "IPv4" } else { "" },
+                if has(n, true) {
+                    if has(n, false) {
+                        "+IPv6"
+                    } else {
+                        "IPv6"
+                    }
+                } else {
+                    ", no IPv6"
+                }
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    if let Some(wanted) = wanted {
+        return if has(wanted, false) && has(wanted, true) {
+            Ok(wanted.to_string())
+        } else {
+            Err(format!("the interface {wanted} (BREEZONE_MATTER_INTERFACE) needs an IPv4 and an IPv6 address; interfaces: {seen}"))
+        };
+    }
+    names
+        .iter()
+        .find(|n| !is_virtual(n) && has(n, false) && has(n, true))
+        .map(|n| n.to_string())
+        .ok_or_else(|| format!("no network interface has both IPv4 and IPv6, and Matter needs IPv6 on the local network: turn IPv6 on (automatic, or link-local only) in the network settings of the host; interfaces: {seen}"))
+}
+
 /// The Matter service announced on the network: by Bonjour on a Mac (development), else by the
 /// stack's own mDNS on port 5353, shared with the host's (Avahi on a NAS).
 mod mdns {
@@ -375,27 +422,29 @@ mod mdns {
     use rs_matter::Matter;
 
     #[cfg(target_os = "macos")]
-    pub async fn run<C: Crypto>(matter: &Matter<'_>, _crypto: C) -> Result<(), Error> {
+    pub async fn run<C: Crypto>(matter: &Matter<'_>, _crypto: C, _interface: Option<&str>) -> Result<(), Error> {
         rs_matter::transport::network::mdns::astro::AstroMdns::new().run(matter).await
     }
 
     #[cfg(not(target_os = "macos"))]
-    pub async fn run<C: Crypto>(matter: &Matter<'_>, crypto: C) -> Result<(), Error> {
+    pub async fn run<C: Crypto>(matter: &Matter<'_>, crypto: C, interface: Option<&str>) -> Result<(), Error> {
         use rs_matter::error::ErrorCode;
         use rs_matter::transport::network::mdns::builtin::{BuiltinMdns, Host};
         use rs_matter::transport::network::mdns::{MDNS_IPV4_BROADCAST_ADDR, MDNS_IPV6_BROADCAST_ADDR, MDNS_SOCKET_DEFAULT_BIND_ADDR};
         use socket2::{Domain, Protocol, Socket, Type};
-        use std::net::UdpSocket;
+        use std::net::{IpAddr, UdpSocket};
 
-        // The interface of the home network: one with an IPv4 address and an IPv6 one.
-        let all = if_addrs::get_if_addrs().map_err(|_| ErrorCode::StdIoError)?;
-        let (name, ipv4, index) = all
+        let fail = |what: &str, e: &dyn std::fmt::Display| {
+            tracing::error!("Matter: {what}: {e}");
+            Error::from(ErrorCode::StdIoError)
+        };
+        let all = if_addrs::get_if_addrs().map_err(|e| fail("network interfaces not readable", &e))?;
+        let pairs: Vec<(String, IpAddr)> = all.iter().map(|a| (a.name.clone(), a.ip())).collect();
+        let name = super::choose_interface(&pairs, interface).map_err(|e| fail("not announced", &e))?;
+        let (ipv4, index) = all
             .iter()
-            .filter(|a| !a.is_loopback())
             .find_map(|a| match a.addr {
-                if_addrs::IfAddr::V4(ref v4) if all.iter().any(|b| b.name == a.name && matches!(b.addr, if_addrs::IfAddr::V6(_))) => {
-                    Some((a.name.clone(), v4.ip, a.index.unwrap_or(0)))
-                }
+                if_addrs::IfAddr::V4(ref v4) if a.name == name => Some((v4.ip, a.index.unwrap_or(0))),
                 _ => None,
             })
             .ok_or(ErrorCode::StdIoError)?;
@@ -409,14 +458,18 @@ mod mdns {
             .collect();
         tracing::info!("Matter: announced on {name} ({ipv4})");
 
-        let socket = Socket::new(Domain::IPV6, Type::DGRAM, Some(Protocol::UDP))?;
-        socket.set_reuse_address(true)?;
-        socket.set_reuse_port(true)?;
-        socket.set_only_v6(false)?;
-        socket.bind(&MDNS_SOCKET_DEFAULT_BIND_ADDR.into())?;
-        let socket = async_io::Async::<UdpSocket>::new_nonblocking(socket.into())?;
-        socket.get_ref().join_multicast_v6(&MDNS_IPV6_BROADCAST_ADDR, index)?;
-        socket.get_ref().join_multicast_v4(&MDNS_IPV4_BROADCAST_ADDR, &ipv4)?;
+        let mdns_socket = || -> std::io::Result<async_io::Async<UdpSocket>> {
+            let socket = Socket::new(Domain::IPV6, Type::DGRAM, Some(Protocol::UDP))?;
+            socket.set_reuse_address(true)?;
+            socket.set_reuse_port(true)?;
+            socket.set_only_v6(false)?;
+            socket.bind(&MDNS_SOCKET_DEFAULT_BIND_ADDR.into())?;
+            let socket = async_io::Async::<UdpSocket>::new_nonblocking(socket.into())?;
+            socket.get_ref().join_multicast_v6(&MDNS_IPV6_BROADCAST_ADDR, index)?;
+            socket.get_ref().join_multicast_v4(&MDNS_IPV4_BROADCAST_ADDR, &ipv4)?;
+            Ok(socket)
+        };
+        let socket = mdns_socket().map_err(|e| fail("mDNS port 5353 not opened", &e))?;
         let ipv4 = ipv4.octets().into();
         BuiltinMdns::new().run(&socket, &socket, &Host { hostname: "breezone", ip: ipv4, ipv6: &ipv6 }, Some(ipv4), Some(index), matter, crypto).await
     }
@@ -433,5 +486,24 @@ mod tests {
         let mut list: Vec<(i64, &[String])> = (1..=12).rev().map(|id| (id, light.as_slice())).collect();
         list.push((0, relay.as_slice()));
         assert_eq!(pick(list.into_iter()), (1..=SLOTS as i64).collect::<Vec<_>>());
+    }
+
+    fn addrs(list: &[(&str, &str)]) -> Vec<(String, std::net::IpAddr)> {
+        list.iter().map(|(n, ip)| (n.to_string(), ip.parse().unwrap())).collect()
+    }
+
+    #[test]
+    fn matter_is_announced_on_the_home_network_not_on_docker() {
+        let all = addrs(&[("lo", "127.0.0.1"), ("docker0", "172.17.0.1"), ("docker0", "fe80::1"), ("eth0", "192.168.1.10"), ("eth0", "fe80::2")]);
+        assert_eq!(choose_interface(&all, None), Ok("eth0".into()));
+        assert_eq!(choose_interface(&all, Some("docker0")), Ok("docker0".into()));
+    }
+
+    #[test]
+    fn without_ipv6_the_error_says_so() {
+        let all = addrs(&[("lo", "127.0.0.1"), ("lo", "::1"), ("eth0", "192.168.1.10")]);
+        let error = choose_interface(&all, None).unwrap_err();
+        assert!(error.contains("turn IPv6 on") && error.contains("eth0 (IPv4, no IPv6)"), "{error}");
+        assert!(choose_interface(&all, Some("eth0")).unwrap_err().contains("BREEZONE_MATTER_INTERFACE"));
     }
 }

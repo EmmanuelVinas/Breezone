@@ -6,6 +6,13 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Matter bridge: on a host without IPv6 on its network (Matter needs it), the bridge stopped with a
+  bare `StdIoError`; the log now says which interfaces were seen and that IPv6 must be turned on. The
+  bridge is announced on the home network, never on a Docker, bridge or VPN interface, and
+  `BREEZONE_MATTER_INTERFACE` (`eth0`…) chooses the interface when needed.
+
 ## [0.12.0-beta.3] - 2026-11-20
 
 ### Added

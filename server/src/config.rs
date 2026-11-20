@@ -46,6 +46,9 @@ pub struct Config {
     pub matter: bool,
     /// `BREEZONE_MATTER_PORT`: its UDP port (5540, the port of Matter).
     pub matter_port: u16,
+    /// `BREEZONE_MATTER_INTERFACE`: the network interface Matter is announced on (`eth0`…), when the
+    /// one found by itself is not the right one.
+    pub matter_interface: Option<String>,
     /// Where the colours of the Tempo days are read (`BREEZONE_TEMPO_URL`): the public relay
     /// api-couleur-tempo.fr when the server may look things up on the internet (`weather`), else
     /// none.
@@ -115,6 +118,7 @@ impl Config {
             weather: flag("BREEZONE_WEATHER").unwrap_or(!cfg!(debug_assertions)),
             matter: flag("BREEZONE_MATTER").unwrap_or(false),
             matter_port: num("BREEZONE_MATTER_PORT", 5540),
+            matter_interface: var("BREEZONE_MATTER_INTERFACE"),
             cre_url: var("BREEZONE_CRE_URL")
                 .or_else(|| flag("BREEZONE_WEATHER").unwrap_or(!cfg!(debug_assertions)).then(|| "https://www.cre.fr/fileadmin/Documents/Open_data/Marches_de_detail".into())),
             tempo_url: var("BREEZONE_TEMPO_URL").or_else(|| flag("BREEZONE_WEATHER").unwrap_or(!cfg!(debug_assertions)).then(|| "https://www.api-couleur-tempo.fr".into())),
@@ -162,6 +166,7 @@ impl Config {
             weather: false,
             matter: false,
             matter_port: 5540,
+            matter_interface: None,
             tempo_url: None,
             cre_url: None,
             rte_url: "http://127.0.0.1:9".into(),
