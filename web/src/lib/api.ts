@@ -813,7 +813,20 @@ export type SourceInput = {
 
 /** A supported product found on the network. */
 export type FoundProduct = {
-  brand: "airzone" | "shelly" | "v2c" | "hoymiles" | "homekit" | "hue"
+  brand:
+    | "airzone"
+    | "shelly"
+    | "v2c"
+    | "hoymiles"
+    | "homekit"
+    | "hue"
+    | "renson"
+    | "tasmota"
+    | "reolink"
+    | "esphome"
+    | "tplink"
+    /** An Ecometer: its measures come through the Netatmo account. */
+    | "netatmo"
   driver: string
   model: string
   host: string

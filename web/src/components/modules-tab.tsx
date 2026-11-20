@@ -1347,6 +1347,15 @@ function AddModuleDialog({
           {t("Module Airzone")}
         </span>
       )
+    // An Ecometer: its measures come through the Netatmo account, not HomeKit.
+    if (p.brand === "netatmo")
+      return (
+        <Button asChild size="sm" variant="outline">
+          <Link to="/settings?tab=accounts" onClick={onClose}>
+            <Cloud /> {t("Compte Netatmo")}
+          </Link>
+        </Button>
+      )
     if (p.brand === "homekit" && !p.supported)
       return <Badge variant="outline">{t("Appairé ailleurs")}</Badge>
     if (!p.supported)

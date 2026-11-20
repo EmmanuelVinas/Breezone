@@ -2031,6 +2031,7 @@ const en: Record<string, string> = {
   "{value} demain": "{value} tomorrow",
   Licences: "Licenses",
   "Données météo : Open-Meteo.com": "Weather data: Open-Meteo.com",
+  "Compte Netatmo": "Netatmo account",
 }
 
 export default en

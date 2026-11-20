@@ -119,7 +119,7 @@ pub async fn probe(host: &str, port: u16) -> Option<Found> {
 #[derive(Debug, Clone, Serialize)]
 pub struct Product {
     /// "airzone" | "shelly" | "v2c" | "hoymiles" | "homekit" | "hue" | "renson" | "tasmota" |
-    /// "reolink" | "esphome" | "tplink"
+    /// "reolink" | "esphome" | "tplink" | "netatmo" (an Ecometer: through the linked account)
     pub brand: &'static str,
     /// What adds it: "airzone" (an installation) or the driver of a source.
     pub driver: &'static str,
@@ -343,10 +343,28 @@ pub async fn scan_products(subnet: &str, airzone_port: u16, quiet: &[std::net::I
             Some(5) => "lumière",
             _ => "accessoire",
         };
+        let model = a.model.clone().filter(|m| !m.is_empty()).unwrap_or_else(|| a.name.clone());
+        // The Legrand Ecometer gives HomeKit nothing it measures: its lines come from the cloud.
+        if format!("{model} {}", a.name).to_lowercase().contains("ecometer") {
+            found.push(Product {
+                brand: "netatmo",
+                driver: "netatmo",
+                model,
+                port: a.host.rsplit(':').next().and_then(|p| p.parse().ok()).unwrap_or(0),
+                host: a.host,
+                mac: None,
+                device_id: Some(a.id),
+                firmware: None,
+                note: Some("ses mesures ne passent pas par HomeKit : elles viennent du compte Netatmo".into()),
+                supported: false,
+                flags: a.flags,
+            });
+            continue;
+        }
         found.push(Product {
             brand: "homekit",
             driver: "homekit",
-            model: a.model.clone().filter(|m| !m.is_empty()).unwrap_or_else(|| a.name.clone()),
+            model,
             port: a.host.rsplit(':').next().and_then(|p| p.parse().ok()).unwrap_or(0),
             host: a.host,
             mac: None,
