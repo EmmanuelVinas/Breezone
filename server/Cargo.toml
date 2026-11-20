@@ -52,6 +52,8 @@ x25519-dalek = { version = "3.0.0", features = ["static_secrets"] }
 md-5 = "0.11.0"
 aes = "0.9.4"
 cbc = "0.2.1"
+sha1 = "0.11.0"
+snow = "0.10.0"
 
 [profile.release]
 opt-level = "z"

@@ -4,6 +4,7 @@ import { BellRing, Cctv, ImageOff, RefreshCw } from "lucide-react"
 import type { DeviceView } from "@/lib/api"
 import { ApiError, api, devicePicture } from "@/lib/api"
 import { relativeTime } from "@/lib/format"
+import { cameraEvent } from "@/lib/sensors"
 import { t } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { PageHeader } from "@/components/app-shell"
@@ -96,7 +97,7 @@ function CameraCard({ device }: { device: DeviceView }) {
         <div className="text-sm text-muted-foreground">
           {typeof s.last_event === "string" && lastAt
             ? t("{event}, {when}", {
-                event: s.last_event,
+                event: cameraEvent(s.last_event),
                 when: relativeTime(lastAt),
               })
             : t("Aucun événement aujourd'hui")}

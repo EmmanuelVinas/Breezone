@@ -49,6 +49,20 @@
         <item>S</item>
         <item>S</item>
     </string-array>
+    <string-array name="months_short">
+        <item>Jan</item>
+        <item>Feb</item>
+        <item>Mar</item>
+        <item>Apr</item>
+        <item>May</item>
+        <item>Jun</item>
+        <item>Jul</item>
+        <item>Aug</item>
+        <item>Sep</item>
+        <item>Oct</item>
+        <item>Nov</item>
+        <item>Dec</item>
+    </string-array>
     <string-array name="days_names">
         <item>Mon</item>
         <item>Tue</item>
@@ -465,6 +479,15 @@
     <string name="energy_imported">Bought</string>
     <string name="energy_uses">By use, right now</string>
     <string name="energy_other">Other uses</string>
+    <string name="energy_period_day">Day</string>
+    <string name="energy_period_week">7 days</string>
+    <string name="energy_period_month">30 days</string>
+    <string name="energy_period_year">Year</string>
+    <string name="energy_period_years">5 years</string>
+    <string name="energy_previous_day">Previous day</string>
+    <string name="energy_next_day">Next day</string>
+    <string name="energy_pick_day">Choose a day</string>
+    <string name="energy_no_data">No readings that day.</string>
     <string name="solar_now">Producing now</string>
     <string name="solar_today">%1$s today</string>
     <string name="solar_temperature">Inverter at %1$d °C</string>
@@ -532,6 +555,7 @@
     <string name="kind_room_air">Room ventilation</string>
     <string name="kind_switches">Plugs and relays</string>
     <string name="kind_remotes">Remotes</string>
+    <string name="kind_sensors">Sensors</string>
     <string name="kind_other">Others</string>
     <string name="switch_on">On</string>
     <string name="switch_off">Off</string>

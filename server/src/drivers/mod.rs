@@ -6,13 +6,18 @@
 //! whose zones are still read by the hub for now (they are already devices, and their actions go
 //! through the same generic route). The future WASM modules (ADR 0012) will be drivers too.
 
+pub mod esphome;
 pub mod ezviz;
+pub mod forecast_solar;
 pub mod homekit;
 pub mod hoymiles;
 pub mod hue;
 pub mod netatmo;
 pub mod renson;
+pub mod reolink;
 pub mod shelly;
+pub mod tasmota;
+pub mod tplink;
 pub mod trydan;
 
 use crate::db::{self, Db};
@@ -170,7 +175,8 @@ pub struct Scene {
 #[derive(Debug, Clone, Serialize)]
 pub struct ConfigField {
     pub name: &'static str,
-    /// "string" | "integer"
+    /// "string" | "integer" | "number" | "password" (kept encrypted, in the source's secret: never
+    /// shown again, left as it is when not given)
     #[serde(rename = "type")]
     pub kind: &'static str,
     pub optional: bool,
@@ -190,7 +196,21 @@ pub struct DriverInfo {
 }
 
 pub fn available() -> Vec<DriverInfo> {
-    vec![shelly::info(), trydan::info(), hoymiles::info(), homekit::info(), hue::info(), renson::info(), netatmo::info(), ezviz::info()]
+    vec![
+        shelly::info(),
+        trydan::info(),
+        hoymiles::info(),
+        homekit::info(),
+        hue::info(),
+        renson::info(),
+        netatmo::info(),
+        ezviz::info(),
+        forecast_solar::info(),
+        tasmota::info(),
+        reolink::info(),
+        tplink::info(),
+        esphome::info(),
+    ]
 }
 
 /// The driver of a source, from its configuration and its secret (decrypted).
@@ -202,6 +222,11 @@ pub fn create(driver: &str, config: &Value, secret: Option<&str>) -> Result<Arc<
         "homekit" => Ok(Arc::new(homekit::HomeKit::new(config, secret)?)),
         "hue" => Ok(Arc::new(hue::Hue::new(config, secret)?)),
         "renson" => Ok(Arc::new(renson::Renson::new(config)?)),
+        "esphome" => Ok(Arc::new(esphome::EspHome::new(config, secret)?)),
+        "tplink" => Ok(Arc::new(tplink::TpLink::new(config, secret)?)),
+        "reolink" => Ok(Arc::new(reolink::Reolink::new(config, secret)?)),
+        "tasmota" => Ok(Arc::new(tasmota::Tasmota::new(config, secret)?)),
+        "forecast_solar" => Ok(Arc::new(forecast_solar::ForecastSolar::new(config, secret)?)),
         // Created by the runtime, which holds what reaches its account (see `Runtime::reload`).
         "netatmo" => Err("the Netatmo module comes with its linked account".into()),
         other => Err(format!("unknown driver: {other}")),

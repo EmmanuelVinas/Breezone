@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularWavyProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -176,3 +178,9 @@ fun fzNavigationColors() = NavigationBarItemDefaults.colors(
     unselectedIconColor = Fz.colors.muted,
     unselectedTextColor = Fz.colors.muted,
 )
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun LoadingWave(modifier: Modifier = Modifier) {
+    CircularWavyProgressIndicator(modifier)
+}

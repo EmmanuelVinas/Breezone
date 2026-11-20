@@ -983,8 +983,6 @@ const en: Record<string, string> = {
     "on and off, brightness, white temperature and color",
   "Les lampes, pièces et scènes restent gérées par l'application Hue : Breezone les lit et les pilote, sans rien y changer.":
     "Lamps, rooms and scenes stay managed by the Hue app: Breezone reads and drives them without changing anything there.",
-  "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan, clés Wi-Fi Hoymiles, ponts Philips Hue, VMC Renson Healthbox et accessoires HomeKit (Legrand, VELUX…).":
-    "Breezone looks on the network for the products it can drive: Airzone WebServers, Shelly (Plus, Pro, Gen3, Gen4), V2C Trydan chargers, Hoymiles Wi-Fi sticks, Philips Hue bridges, Renson Healthbox ventilation units and HomeKit accessories (Legrand, VELUX…).",
   "Ajouter « {name} »": "Add “{name}”",
   "Appuyez sur le bouton rond, au centre du pont Hue, puis cliquez sur « Ajouter » dans les 30 secondes. Vos lampes, pièces et scènes restent comme dans l'application Hue.":
     "Press the round button in the middle of the Hue bridge, then click “Add” within 30 seconds. Your lamps, rooms and scenes stay as in the Hue app.",
@@ -1978,6 +1976,59 @@ const en: Record<string, string> = {
   "Tourne tout seul, par ordre de priorité. Il se règle dans Énergie ; un automatisme ne doit pas piloter les mêmes appareils.":
     "Runs on its own, in order of priority. It is set in Energy; an automation must not drive the same devices.",
   Régler: "Set up",
+  inchangé: "unchanged",
+  "Réglages enregistrés": "Settings saved",
+  "Les mots de passe et clés restent chiffrés sur le serveur : laissés vides, ils ne changent pas.":
+    "Passwords and keys stay encrypted on the server: left blank, they do not change.",
+  "API native d'ESPHome (port 6053), chiffrée avec la clé de l'appareil : une connexion gardée ouverte, l'appareil envoie chaque changement":
+    "ESPHome native API (port 6053), encrypted with the device's key: a connection kept open, the device sends every change",
+  "en direct": "live",
+  "interrupteurs, lumières, volets, puissances, et température, humidité, pression, CO₂ et luminosité":
+    "switches, lights, shutters, power, and temperature, humidity, pressure, CO₂ and illuminance",
+  "marche et arrêt, intensité, température de blanc et couleur des lumières, position et arrêt des volets":
+    "on and off, brightness, white temperature and colour of the lights, position and stop of the shutters",
+  "La clé est celle de la section « api: encryption: key » de la configuration ESPHome de l'appareil. Un appareil sans chiffrement s'ajoute sans clé.":
+    "The key is the one in the “api: encryption: key” section of the device's ESPHome configuration. A device without encryption is added without a key.",
+  "API HTTP locale de Tasmota : aucun compte nécessaire":
+    "Tasmota's local HTTP API: no account needed",
+  "état des relais et des lumières, puissance, tension, intensité et énergie, capteurs de température, humidité, pression, CO₂ et luminosité":
+    "state of the relays and lights, power, voltage, current and energy, temperature, humidity, pressure, CO₂ and illuminance sensors",
+  "marche et arrêt des relais, intensité, température de blanc et couleur des lumières":
+    "on and off of the relays, brightness, white temperature and colour of the lights",
+  "Protocole local des prises et ampoules TP-Link (Kasa, Tapo) : le compte TP-Link sert seulement à ouvrir la session locale, rien ne passe par le cloud":
+    "Local protocol of TP-Link plugs and bulbs (Kasa, Tapo): the TP-Link account only opens the local session, nothing goes through the cloud",
+  "état des prises et des multiprises voie par voie, intensité et couleur des ampoules, puissance et énergie du jour":
+    "state of the plugs and of each outlet of the power strips, brightness and colour of the bulbs, power and today's energy",
+  "Les Tapo et les Kasa récentes demandent l'adresse e-mail et le mot de passe du compte TP-Link (celui de l'application) : ils restent chiffrés sur le serveur.":
+    "Tapo and recent Kasa devices ask for the e-mail address and password of the TP-Link account (the app's): they stay encrypted on the server.",
+  "API locale de la caméra ou du NVR Reolink, avec son identifiant : aucun compte Reolink nécessaire":
+    "Local API of the Reolink camera or NVR, with its login: no Reolink account needed",
+  "chaque caméra : mouvement et ce qui l'a causé (personne, véhicule, animal), coups de sonnette, image":
+    "each camera: motion and what caused it (person, vehicle, animal), doorbell rings, picture",
+  "Un coup de sonnette Reolink est un appui de bouton : il peut déclencher un automatisme.":
+    "A Reolink doorbell ring is a button press: it can trigger an automation.",
+  "Service en ligne Forecast.Solar : la prévision de production selon la météo, sans compte (une clé d'API, facultative, donne plus de détail)":
+    "Forecast.Solar online service: the production forecast from the weather, without an account (an optional API key gives more detail)",
+  "toutes les 30 min": "every 30 min",
+  "puissance prévue maintenant, production prévue aujourd'hui, restant à produire et demain":
+    "power expected now, production expected today, still to come and tomorrow",
+  "Sans latitude ni longitude, celles de la ville de l'installation sont prises. Une installation sur deux pans s'ajoute en deux fois.":
+    "Without latitude and longitude, those of the installation's city are used. Panels on two roof sides are added twice.",
+  "Service en ligne": "Online service",
+  "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan, clés Wi-Fi Hoymiles, ponts Philips Hue, VMC Renson Healthbox, accessoires HomeKit (Legrand, VELUX…), modules ESPHome et Tasmota, prises Kasa et caméras Reolink. Les prises et ampoules Tapo s'ajoutent par leur adresse.":
+    "Breezone looks on the network for the products it can drive: Airzone WebServers, Shelly (Plus, Pro, Gen3, Gen4), V2C Trydan chargers, Hoymiles Wi-Fi sticks, Philips Hue bridges, Renson Healthbox ventilation, HomeKit accessories (Legrand, VELUX…), ESPHome and Tasmota modules, Kasa plugs and Reolink cameras. Tapo plugs and bulbs are added by their address.",
+  "Un service en ligne : sans adresse sur le réseau":
+    "An online service: no address on the network",
+  Capteurs: "Sensors",
+  "Personne détectée": "Person detected",
+  "Véhicule détecté": "Vehicle detected",
+  "Animal détecté": "Animal detected",
+  "Mouvement détecté": "Motion detected",
+  "Coup de sonnette": "Doorbell ring",
+  "batterie {n} %": "battery {n} %",
+  "{value} prévus aujourd'hui": "{value} expected today",
+  "{value} restants": "{value} to come",
+  "{value} demain": "{value} tomorrow",
 }
 
 export default en

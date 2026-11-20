@@ -53,7 +53,10 @@ import kotlin.math.max
 import kotlin.math.round
 import kotlin.math.sin
 import kotlin.time.Clock
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.minus
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.toLocalDateTime
@@ -258,10 +261,9 @@ internal object DemoModules {
     }
 
     /** Energy since midnight (kWh) of a power over the day. */
-    private fun energyOf(power: (Long) -> Double): Double {
+    private fun energyOf(power: (Long) -> Double, start: Long = midnight(), end: Long = now()): Double {
         var wh = 0.0
-        var ts = midnight()
-        val end = now()
+        var ts = start
         while (ts < end) {
             wh += power(ts) * 0.25
             ts += 900
@@ -286,9 +288,9 @@ internal object DemoModules {
         )
     }
 
-    private fun day(): EnergyDay {
-        val start = midnight()
-        val end = now()
+    private fun day(date: LocalDate = Clock.System.now().toLocalDateTime(zone).date): EnergyDay {
+        val start = date.atStartOfDayIn(zone).epochSeconds
+        val end = minOf(now(), start + 86_400 - 900)
         val points = generateSequence(start) { it + 900 }.takeWhile { it <= end }.map { ts ->
             EnergyPoint(ts, grid = home(ts) - solar(ts), solar = solar(ts), home = home(ts))
         }.toList()
@@ -296,14 +298,14 @@ internal object DemoModules {
         val exported = points.sumOf { max(0.0, -(it.grid ?: 0.0)) } * 0.25 / 1000
         val production = points.sumOf { it.solar ?: 0.0 } * 0.25 / 1000
         val consumption = points.sumOf { it.home ?: 0.0 } * 0.25 / 1000
-        val heater = energyOf { if (heaterOn(it)) 1800.0 else 0.0 }
-        val car = energyOf(::carPower)
+        val heater = energyOf({ if (heaterOn(it)) 1800.0 else 0.0 }, start, end)
+        val car = energyOf(::carPower, start, end)
         return EnergyDay(
-            date = Clock.System.now().toLocalDateTime(zone).date.toString(),
+            date = date.toString(),
             bucket = 900,
             points = points,
             totals = DayEnergy(
-                day = Clock.System.now().toLocalDateTime(zone).date.toString(),
+                day = date.toString(),
                 imported = r1(imported), exported = r1(exported), production = r1(production), consumption = r1(consumption),
                 selfConsumed = r1(production - exported),
                 consumers = listOf(
@@ -415,7 +417,13 @@ internal object DemoModules {
                 act(parts[2].toLongOrNull() ?: return null, input)?.let { FzJson.encodeToString(it) }
             }
             path == "/api/energy/live" -> FzJson.encodeToString(live())
-            path == "/api/energy/day" -> FzJson.encodeToString(day())
+            path == "/api/energy/day" -> FzJson.encodeToString(query("date")?.let { runCatching { LocalDate.parse(it) }.getOrNull() }?.let { day(it) } ?: day())
+            path == "/api/energy/days" -> {
+                val today = Clock.System.now().toLocalDateTime(zone).date
+                val n = (query("days")?.toIntOrNull() ?: 30).coerceIn(1, 400)
+                FzJson.encodeToString((n - 1 downTo 0).map { day(today.minus(it, DateTimeUnit.DAY)).totals })
+            }
+            path == "/api/energy/range" -> FzJson.encodeToString(EnergyRange(Clock.System.now().toLocalDateTime(zone).date.minus(400, DateTimeUnit.DAY).toString()))
             path == "/api/weather" -> FzJson.encodeToString(weather())
             parts.size == 5 && parts[1] == "installations" && parts[3] == "electricity" && parts[4] == "price" -> {
                 val h = hourOf(now())

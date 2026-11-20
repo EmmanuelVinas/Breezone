@@ -225,6 +225,34 @@ export type EnergyPowerState = {
   current: number | null
 }
 
+/** Environment sensor (`environment.sensor@1`): state. */
+export type EnvironmentSensorState = {
+  /** Temperature (°C) */
+  temperature: number | null
+  /** Humidity (%) */
+  humidity: number | null
+  /** Pressure (hPa) */
+  pressure: number | null
+  /** CO₂ (ppm) */
+  co2: number | null
+  /** Illuminance (lx) */
+  illuminance: number | null
+  /** Battery (%) */
+  battery: number | null
+}
+
+/** Solar forecast (`solar.forecast@1`): state. */
+export type SolarForecastState = {
+  /** Power expected now (W) */
+  power: number
+  /** Production expected today (kWh) */
+  energy_today: number | null
+  /** Still to produce today (kWh) */
+  energy_remaining: number | null
+  /** Production expected tomorrow (kWh) */
+  energy_tomorrow: number | null
+}
+
 /** Relay (`switch.relay@1`): state. */
 export type SwitchRelayState = {
   /** On */
@@ -304,4 +332,4 @@ export type VentilationUnitBoost = {
 export type VentilationUnitStopBoost = Record<string, never>
 
 /** Traits described by this version (`trait@version`). */
-export const TRAITS = ["button@1", "camera@1", "climate.zone@1", "cover.position@1", "energy.meter@1", "ev.charger@1", "light@1", "solar.inverter@1", "solar.panel@1", "energy.power@1", "switch.relay@1", "ventilation.room@1", "ventilation.unit@1"] as const
+export const TRAITS = ["button@1", "camera@1", "climate.zone@1", "cover.position@1", "energy.meter@1", "ev.charger@1", "light@1", "solar.inverter@1", "solar.panel@1", "energy.power@1", "environment.sensor@1", "solar.forecast@1", "switch.relay@1", "ventilation.room@1", "ventilation.unit@1"] as const

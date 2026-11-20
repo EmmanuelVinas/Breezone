@@ -125,7 +125,7 @@ internal fun FlowTile(icon: ImageVector, label: String, value: String, sub: Stri
 }
 
 @Composable
-private fun Stat(label: String, value: String, color: Color = MaterialTheme.colorScheme.onSurface, modifier: Modifier = Modifier) {
+internal fun Stat(label: String, value: String, color: Color = MaterialTheme.colorScheme.onSurface, modifier: Modifier = Modifier) {
     Column(modifier) {
         Caption(label)
         Text(value, fontWeight = FontWeight.SemiBold, color = color)
@@ -161,7 +161,7 @@ fun EnergyScreen(serverId: String, onBack: (() -> Unit)? = null) {
             }
             if (live != null && roles?.any == true) {
                 item(key = "now", contentType = "now") { EnergyNowCard(live) }
-                if (day != null) item(key = "today", contentType = "today") { EnergyTodayCard(day) }
+                item(key = "history", contentType = "history") { EnergyHistoryCard(hub, serverId, live.roles) }
                 if (live.hasUses()) item(key = "uses", contentType = "uses") { EnergyUsesCard(live) }
             }
         }

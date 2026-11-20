@@ -19,6 +19,8 @@ const FILES: &[(&str, &str)] = &[
     ("solar.inverter.json", include_str!("../contracts/traits/solar.inverter.json")),
     ("solar.panel.json", include_str!("../contracts/traits/solar.panel.json")),
     ("energy.power.json", include_str!("../contracts/traits/energy.power.json")),
+    ("environment.sensor.json", include_str!("../contracts/traits/environment.sensor.json")),
+    ("solar.forecast.json", include_str!("../contracts/traits/solar.forecast.json")),
     ("switch.relay.json", include_str!("../contracts/traits/switch.relay.json")),
     ("ventilation.room.json", include_str!("../contracts/traits/ventilation.room.json")),
     ("ventilation.unit.json", include_str!("../contracts/traits/ventilation.unit.json")),

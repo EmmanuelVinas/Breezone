@@ -1241,14 +1241,14 @@ export function SettingsPage() {
           ? "installations"
           : null
   const tabs = [
+    ...(admin ? [{ id: "breezone", label: "Breezone" }] : []),
     ...(admin ? [{ id: "servers", label: t("Serveurs") }] : []),
     ...(admin ? [{ id: "users", label: t("Utilisateurs") }] : []),
     ...(admin ? [{ id: "modules", label: t("Modules") }] : []),
     ...(admin ? [{ id: "accounts", label: t("Comptes et services") }] : []),
     ...(admin ? [{ id: "rooms", label: t("Pièces") }] : []),
     ...(admin ? [{ id: "electricity", label: t("Électricité") }] : []),
-    ...(admin ? [{ id: "breezone", label: "Breezone" }] : []),
-    { id: "devices", label: t("Appareils") },
+    { id: "devices", label: t("Appareils connectés") },
     { id: "account", label: t("Mon compte") },
   ]
   // Nodes and shares are one tab now: the old links lead to it.

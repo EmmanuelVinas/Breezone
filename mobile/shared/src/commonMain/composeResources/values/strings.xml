@@ -50,6 +50,20 @@
         <item>S</item>
         <item>D</item>
     </string-array>
+    <string-array name="months_short">
+        <item>janv.</item>
+        <item>févr.</item>
+        <item>mars</item>
+        <item>avr.</item>
+        <item>mai</item>
+        <item>juin</item>
+        <item>juil.</item>
+        <item>août</item>
+        <item>sept.</item>
+        <item>oct.</item>
+        <item>nov.</item>
+        <item>déc.</item>
+    </string-array>
     <string-array name="days_names">
         <item>Lun</item>
         <item>Mar</item>
@@ -478,6 +492,15 @@
     <string name="energy_imported">Acheté</string>
     <string name="energy_uses">Par usage, en ce moment</string>
     <string name="energy_other">Autres usages</string>
+    <string name="energy_period_day">Jour</string>
+    <string name="energy_period_week">7 jours</string>
+    <string name="energy_period_month">30 jours</string>
+    <string name="energy_period_year">Année</string>
+    <string name="energy_period_years">5 ans</string>
+    <string name="energy_previous_day">Jour précédent</string>
+    <string name="energy_next_day">Jour suivant</string>
+    <string name="energy_pick_day">Choisir un jour</string>
+    <string name="energy_no_data">Pas de relevés ce jour-là.</string>
     <string name="solar_now">Production en ce moment</string>
     <string name="solar_today">%1$s aujourd’hui</string>
     <string name="solar_temperature">Onduleur à %1$d °C</string>
@@ -546,6 +569,7 @@
     <string name="kind_room_air">Ventilation des pièces</string>
     <string name="kind_switches">Prises et relais</string>
     <string name="kind_remotes">Télécommandes</string>
+    <string name="kind_sensors">Capteurs</string>
     <string name="kind_other">Autres</string>
     <string name="switch_on">Allumé</string>
     <string name="switch_off">Éteint</string>

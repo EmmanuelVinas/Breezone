@@ -8,6 +8,23 @@ All notable changes are documented here. The format follows
 
 ### Added
 
+- New integrations, all local except the forecast:
+  - **ESPHome**, by its native API (port 6053, encrypted with the device's API key, or in clear):
+    a connection kept open, each change pushed by the device; switches, lights (brightness, white,
+    colours), covers, power sensors and the air sensors (temperature, humidity, pressure, CO₂,
+    illuminance).
+  - **Tasmota**, by its HTTP API: relays, lights, energy metering, air sensors.
+  - **TP-Link Kasa and Tapo** plugs, power strips and bulbs: the old Kasa protocol (port 9999)
+    or KLAP with the TP-Link account (it only opens the local session); power and energy of the day.
+  - **Reolink** cameras, doorbells and NVR: motion and what caused it (person, vehicle, animal),
+    the picture, and a doorbell's ring as a button press for the automations.
+  - **Forecast.Solar**: the solar production expected now, today, still to come and tomorrow.
+- The search on the network finds ESPHome and Tasmota modules, Kasa plugs and Reolink cameras.
+- Settings › Modules: a module whose driver asks more than its address (credentials, a key, its
+  panels) is added with a form, and a « Settings » card changes them later; passwords and keys stay
+  encrypted on the server and are never shown again.
+- New traits `environment.sensor@1` and `solar.forecast@1`; new device types « Sensors » and
+  « Cameras ».
 - Mobile app, home: the cards of the web overview that it lacked: a light or the lights of a room
   (brightness, white, colours), the price of the kWh with the Tempo colours of today and tomorrow,
   a measure with its curve of the last 24 hours (the setting of a device card), and the chart of

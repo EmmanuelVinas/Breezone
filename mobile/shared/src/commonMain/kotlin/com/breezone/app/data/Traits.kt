@@ -239,6 +239,26 @@ data class EnergyPowerState(
     val current: Double? = null,
 )
 
+/** Environment sensor (`environment.sensor@1`): state. */
+@Serializable
+data class EnvironmentSensorState(
+    val temperature: Double? = null,
+    val humidity: Double? = null,
+    val pressure: Double? = null,
+    val co2: Double? = null,
+    val illuminance: Double? = null,
+    val battery: Double? = null,
+)
+
+/** Solar forecast (`solar.forecast@1`): state. */
+@Serializable
+data class SolarForecastState(
+    val power: Double = 0.0,
+    val energyToday: Double? = null,
+    val energyRemaining: Double? = null,
+    val energyTomorrow: Double? = null,
+)
+
 /** Relay (`switch.relay@1`): state. */
 @Serializable
 data class SwitchRelayState(
@@ -330,4 +350,4 @@ data class VentilationUnitBoost(
 class VentilationUnitStopBoost
 
 /** Traits described by this version (`trait@version`). */
-val TRAITS = listOf("button@1", "camera@1", "climate.zone@1", "cover.position@1", "energy.meter@1", "ev.charger@1", "light@1", "solar.inverter@1", "solar.panel@1", "energy.power@1", "switch.relay@1", "ventilation.room@1", "ventilation.unit@1")
+val TRAITS = listOf("button@1", "camera@1", "climate.zone@1", "cover.position@1", "energy.meter@1", "ev.charger@1", "light@1", "solar.inverter@1", "solar.panel@1", "energy.power@1", "environment.sensor@1", "solar.forecast@1", "switch.relay@1", "ventilation.room@1", "ventilation.unit@1")

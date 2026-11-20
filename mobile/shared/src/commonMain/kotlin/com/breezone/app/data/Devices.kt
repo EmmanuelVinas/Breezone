@@ -182,6 +182,9 @@ data class EnergyDay(
     val totals: DayEnergy = DayEnergy(),
 )
 
+@Serializable
+data class EnergyRange(val firstDay: String? = null)
+
 /** The oldest point of a history (seconds): the periods offered stop there. */
 @Serializable
 data class HistoryRange(val oldest: Long? = null)

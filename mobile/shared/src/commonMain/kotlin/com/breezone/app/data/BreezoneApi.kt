@@ -202,7 +202,12 @@ class BreezoneApi(
     /** The weather of an installation (servers before 0.11.0-beta.19 give that of the home). */
     suspend fun weather(installationId: Long): WeatherView = call(HttpMethod.Get, "/api/weather?installation_id=$installationId")
     suspend fun energyLive(): EnergyLive = call(HttpMethod.Get, "/api/energy/live")
-    suspend fun energyDay(): EnergyDay = call(HttpMethod.Get, "/api/energy/day")
+    /** The energy of a local day ("YYYY-MM-DD"), today by default. */
+    suspend fun energyDay(date: String? = null): EnergyDay = call(HttpMethod.Get, "/api/energy/day" + (date?.let { "?date=$it" } ?: ""))
+    /** The energy day by day, over the last [days]. */
+    suspend fun energyDays(days: Int): List<DayEnergy> = call(HttpMethod.Get, "/api/energy/days?days=$days")
+    /** The first day the home has an energy measure of. */
+    suspend fun energyRange(): EnergyRange = call(HttpMethod.Get, "/api/energy/range")
     /** The price of electricity of an installation now, and the Tempo colours. */
     suspend fun price(installationId: Long): PriceView = call(HttpMethod.Get, "/api/installations/$installationId/electricity/price?hours=24")
     suspend fun deviceHistoryOver(deviceId: Long, hours: Int): DeviceHistory =

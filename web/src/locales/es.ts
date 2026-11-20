@@ -991,8 +991,6 @@ const es: Record<string, string> = {
     "encendido y apagado, intensidad, temperatura de blanco y color",
   "Les lampes, pièces et scènes restent gérées par l'application Hue : Breezone les lit et les pilote, sans rien y changer.":
     "Las lámparas, habitaciones y escenas siguen gestionadas por la aplicación Hue: Breezone las lee y controla, sin cambiar nada.",
-  "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan, clés Wi-Fi Hoymiles, ponts Philips Hue, VMC Renson Healthbox et accessoires HomeKit (Legrand, VELUX…).":
-    "Breezone busca en la red los productos que sabe controlar: WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), cargadores V2C Trydan, llaves Wi-Fi Hoymiles, puentes Philips Hue, ventilaciones Renson Healthbox y accesorios HomeKit (Legrand, VELUX…).",
   "Ajouter « {name} »": "Añadir «{name}»",
   "Appuyez sur le bouton rond, au centre du pont Hue, puis cliquez sur « Ajouter » dans les 30 secondes. Vos lampes, pièces et scènes restent comme dans l'application Hue.":
     "Pulse el botón redondo en el centro del puente Hue y haga clic en «Añadir» en 30 segundos. Sus lámparas, habitaciones y escenas siguen como en la aplicación Hue.",
@@ -1999,6 +1997,59 @@ const es: Record<string, string> = {
   "Tourne tout seul, par ordre de priorité. Il se règle dans Énergie ; un automatisme ne doit pas piloter les mêmes appareils.":
     "Funciona solo, por orden de prioridad. Se ajusta en Energía; una automatización no debe pilotar los mismos aparatos.",
   Régler: "Ajustar",
+  inchangé: "sin cambios",
+  "Réglages enregistrés": "Ajustes guardados",
+  "Les mots de passe et clés restent chiffrés sur le serveur : laissés vides, ils ne changent pas.":
+    "Las contraseñas y claves quedan cifradas en el servidor: si se dejan vacías, no cambian.",
+  "API native d'ESPHome (port 6053), chiffrée avec la clé de l'appareil : une connexion gardée ouverte, l'appareil envoie chaque changement":
+    "API nativa de ESPHome (puerto 6053), cifrada con la clave del dispositivo: una conexión mantenida abierta, el dispositivo envía cada cambio",
+  "en direct": "en directo",
+  "interrupteurs, lumières, volets, puissances, et température, humidité, pression, CO₂ et luminosité":
+    "interruptores, luces, persianas, potencias, y temperatura, humedad, presión, CO₂ y luminosidad",
+  "marche et arrêt, intensité, température de blanc et couleur des lumières, position et arrêt des volets":
+    "encendido y apagado, intensidad, temperatura de blanco y color de las luces, posición y parada de las persianas",
+  "La clé est celle de la section « api: encryption: key » de la configuration ESPHome de l'appareil. Un appareil sans chiffrement s'ajoute sans clé.":
+    "La clave es la de la sección «api: encryption: key» de la configuración ESPHome del dispositivo. Un dispositivo sin cifrado se añade sin clave.",
+  "API HTTP locale de Tasmota : aucun compte nécessaire":
+    "API HTTP local de Tasmota: no se necesita cuenta",
+  "état des relais et des lumières, puissance, tension, intensité et énergie, capteurs de température, humidité, pression, CO₂ et luminosité":
+    "estado de los relés y las luces, potencia, tensión, intensidad y energía, sensores de temperatura, humedad, presión, CO₂ y luminosidad",
+  "marche et arrêt des relais, intensité, température de blanc et couleur des lumières":
+    "encendido y apagado de los relés, intensidad, temperatura de blanco y color de las luces",
+  "Protocole local des prises et ampoules TP-Link (Kasa, Tapo) : le compte TP-Link sert seulement à ouvrir la session locale, rien ne passe par le cloud":
+    "Protocolo local de los enchufes y bombillas TP-Link (Kasa, Tapo): la cuenta TP-Link solo abre la sesión local, nada pasa por la nube",
+  "état des prises et des multiprises voie par voie, intensité et couleur des ampoules, puissance et énergie du jour":
+    "estado de los enchufes y de cada toma de las regletas, intensidad y color de las bombillas, potencia y energía del día",
+  "Les Tapo et les Kasa récentes demandent l'adresse e-mail et le mot de passe du compte TP-Link (celui de l'application) : ils restent chiffrés sur le serveur.":
+    "Los Tapo y los Kasa recientes piden el correo y la contraseña de la cuenta TP-Link (la de la aplicación): quedan cifrados en el servidor.",
+  "API locale de la caméra ou du NVR Reolink, avec son identifiant : aucun compte Reolink nécessaire":
+    "API local de la cámara o del NVR Reolink, con su usuario: no se necesita cuenta Reolink",
+  "chaque caméra : mouvement et ce qui l'a causé (personne, véhicule, animal), coups de sonnette, image":
+    "cada cámara: movimiento y lo que lo causó (persona, vehículo, animal), timbrazos, imagen",
+  "Un coup de sonnette Reolink est un appui de bouton : il peut déclencher un automatisme.":
+    "Un timbrazo Reolink es una pulsación de botón: puede activar una automatización.",
+  "Service en ligne Forecast.Solar : la prévision de production selon la météo, sans compte (une clé d'API, facultative, donne plus de détail)":
+    "Servicio en línea Forecast.Solar: la previsión de producción según el tiempo, sin cuenta (una clave de API, opcional, da más detalle)",
+  "toutes les 30 min": "cada 30 min",
+  "puissance prévue maintenant, production prévue aujourd'hui, restant à produire et demain":
+    "potencia prevista ahora, producción prevista hoy, la que queda y mañana",
+  "Sans latitude ni longitude, celles de la ville de l'installation sont prises. Une installation sur deux pans s'ajoute en deux fois.":
+    "Sin latitud ni longitud, se toman las de la ciudad de la instalación. Una instalación en dos faldones se añade dos veces.",
+  "Service en ligne": "Servicio en línea",
+  "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan, clés Wi-Fi Hoymiles, ponts Philips Hue, VMC Renson Healthbox, accessoires HomeKit (Legrand, VELUX…), modules ESPHome et Tasmota, prises Kasa et caméras Reolink. Les prises et ampoules Tapo s'ajoutent par leur adresse.":
+    "Breezone busca en la red los productos que sabe controlar: WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), cargadores V2C Trydan, llaves Wi-Fi Hoymiles, puentes Philips Hue, ventilación Renson Healthbox, accesorios HomeKit (Legrand, VELUX…), módulos ESPHome y Tasmota, enchufes Kasa y cámaras Reolink. Los enchufes y bombillas Tapo se añaden por su dirección.",
+  "Un service en ligne : sans adresse sur le réseau":
+    "Un servicio en línea: sin dirección en la red",
+  Capteurs: "Sensores",
+  "Personne détectée": "Persona detectada",
+  "Véhicule détecté": "Vehículo detectado",
+  "Animal détecté": "Animal detectado",
+  "Mouvement détecté": "Movimiento detectado",
+  "Coup de sonnette": "Timbrazo",
+  "batterie {n} %": "batería {n} %",
+  "{value} prévus aujourd'hui": "{value} previstos hoy",
+  "{value} restants": "{value} restantes",
+  "{value} demain": "{value} mañana",
 }
 
 export default es

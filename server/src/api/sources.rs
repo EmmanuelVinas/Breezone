@@ -66,12 +66,57 @@ fn enabled() -> bool {
     true
 }
 
-/// Checks the driver and its configuration; returns the trimmed name and the configuration text.
-fn checked(input: &SourceInput) -> ApiResult<(String, String)> {
+/// The password fields of a driver's form, taken out of its configuration: they go to the
+/// source's secret, encrypted (an empty one is not given: the one kept stays).
+fn split_secrets(driver: &str, config: &Value) -> (Value, serde_json::Map<String, Value>) {
+    let fields: Vec<&str> =
+        crate::drivers::available().into_iter().find(|d| d.id == driver).map(|d| d.config.iter().filter(|f| f.kind == "password").map(|f| f.name).collect()).unwrap_or_default();
+    let mut config = config.clone();
+    let mut secrets = serde_json::Map::new();
+    if let Some(o) = config.as_object_mut() {
+        for f in fields {
+            if let Some(v) = o.remove(f).filter(|v| v.as_str().is_some_and(|s| !s.is_empty())) {
+                secrets.insert(f.into(), v);
+            }
+        }
+    }
+    (config, secrets)
+}
+
+/// A forecast of the sun is for a place: the home's (its city) when none is given, in the time
+/// zone of this server.
+async fn placed(state: &AppState, driver: &str, mut config: Value) -> Value {
+    if driver != "forecast_solar" {
+        return config;
+    }
+    if let Some(o) = config.as_object_mut() {
+        let missing = |k: &str| o.get(k).is_none_or(|v| v.is_null() || v.as_str().is_some_and(|s| s.trim().is_empty()));
+        if missing("latitude") || missing("longitude") {
+            if let Some(p) = state.weather.place(None).await {
+                o.insert("latitude".into(), Value::from(p.lat));
+                o.insert("longitude".into(), Value::from(p.lon));
+            }
+        }
+        o.insert("timezone".into(), Value::from(state.cfg.timezone.name()));
+    }
+    config
+}
+
+/// The secret of a source with the passwords given put in (the others kept).
+fn merged_secret(state: &AppState, current: Option<&str>, given: &serde_json::Map<String, Value>) -> Option<String> {
+    let mut secret: serde_json::Map<String, Value> =
+        current.and_then(|s| crate::crypto::decrypt(&state.data_key, s)).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+    secret.extend(given.clone());
+    (!secret.is_empty()).then(|| Value::Object(secret).to_string())
+}
+
+/// Checks the driver and its configuration (with its secret); returns the trimmed name and the
+/// configuration text.
+fn checked(input: &SourceInput, secret: Option<&str>) -> ApiResult<(String, String)> {
     // The Netatmo and EZVIZ modules come with their account: only their name and whether they run
     // change here.
     if !crate::accounts::MODULES.contains(&input.driver.as_str()) {
-        crate::drivers::create(&input.driver, &input.config, None).map_err(ApiError::bad_request)?;
+        crate::drivers::create(&input.driver, &input.config, secret).map_err(ApiError::bad_request)?;
     }
     let name: String = input.name.trim().chars().take(60).collect();
     if name.is_empty() {
@@ -104,8 +149,15 @@ pub async fn create(State(state): State<AppState>, _admin: AdminUser, Json(input
     if crate::accounts::MODULES.contains(&input.driver.as_str()) {
         return Err(ApiError::bad_request("ce module s'ajoute en connectant son compte (Réglages › Comptes et services)"));
     }
-    let (name, config) = checked(&input)?;
-    let id = db::insert_source(&state.db, &input.driver, &name, &config).await?;
+    let input = SourceInput { config: placed(&state, &input.driver, input.config.clone()).await, ..input };
+    let (config, given) = split_secrets(&input.driver, &input.config);
+    let secret = merged_secret(&state, None, &given);
+    let driver = input.driver.clone();
+    let (name, config) = checked(&SourceInput { config, ..input }, secret.as_deref())?;
+    let id = db::insert_source(&state.db, &driver, &name, &config).await?;
+    if let Some(s) = secret {
+        db::set_source_secret(&state.db, id, Some(&crate::crypto::encrypt(&state.data_key, &s))).await?;
+    }
     Ok((StatusCode::CREATED, Json(polled(&state, id).await?)))
 }
 
@@ -114,9 +166,16 @@ pub async fn update(State(state): State<AppState>, _admin: AdminUser, Path(id): 
     if current.driver != input.driver {
         return Err(ApiError::bad_request("the driver of a source cannot change"));
     }
-    let (name, config) = checked(&input)?;
+    let input = SourceInput { config: placed(&state, &input.driver, input.config.clone()).await, ..input };
+    let (config, given) = split_secrets(&input.driver, &input.config);
+    let secret = if given.is_empty() { None } else { merged_secret(&state, current.secret.as_deref(), &given) };
+    let kept = current.secret.as_deref().and_then(|s| crate::crypto::decrypt(&state.data_key, s));
+    let (name, config) = checked(&SourceInput { config, ..input }, secret.as_deref().or(kept.as_deref()))?;
     let config = with_choices(&config, &current.config);
     db::update_source(&state.db, id, &name, &config, input.enabled).await?;
+    if let Some(s) = secret {
+        db::set_source_secret(&state.db, id, Some(&crate::crypto::encrypt(&state.data_key, &s))).await?;
+    }
     Ok(Json(polled(&state, id).await?))
 }
 

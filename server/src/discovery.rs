@@ -118,7 +118,8 @@ pub async fn probe(host: &str, port: u16) -> Option<Found> {
 /// A product found on the network, of a supported brand.
 #[derive(Debug, Clone, Serialize)]
 pub struct Product {
-    /// "airzone" | "shelly" | "v2c" | "hoymiles" | "homekit" | "hue"
+    /// "airzone" | "shelly" | "v2c" | "hoymiles" | "homekit" | "hue" | "renson" | "tasmota" |
+    /// "reolink" | "esphome" | "tplink"
     pub brand: &'static str,
     /// What adds it: "airzone" (an installation) or the driver of a source.
     pub driver: &'static str,
@@ -155,7 +156,7 @@ pub async fn scan_products(subnet: &str, airzone_port: u16, quiet: &[std::net::I
         tasks.push(tokio::spawn(async move {
             let _permit = limit.acquire().await.ok()?;
             let host = host.to_string();
-            let (airzone, (shelly, trydan, hue, renson), hoymiles) = tokio::join!(
+            let (airzone, (shelly, trydan, hue, renson, tasmota, reolink), hoymiles, esphome, kasa) = tokio::join!(
                 probe(&host, airzone_port),
                 async {
                     if is_open(&host, 80).await {
@@ -163,15 +164,31 @@ pub async fn scan_products(subnet: &str, airzone_port: u16, quiet: &[std::net::I
                             crate::drivers::shelly::probe(&host),
                             crate::drivers::trydan::probe(&host),
                             crate::drivers::hue::probe(&host),
-                            crate::drivers::renson::probe(&host)
+                            crate::drivers::renson::probe(&host),
+                            crate::drivers::tasmota::probe(&host),
+                            crate::drivers::reolink::probe(&host)
                         )
                     } else {
-                        (None, None, None, None)
+                        (None, None, None, None, None, false)
                     }
                 },
                 async {
                     if is_open(&host, crate::drivers::hoymiles::PORT).await {
                         crate::drivers::hoymiles::probe(&host).await
+                    } else {
+                        None
+                    }
+                },
+                async {
+                    if is_open(&host, crate::drivers::esphome::PORT).await {
+                        crate::drivers::esphome::probe(&host).await
+                    } else {
+                        None
+                    }
+                },
+                async {
+                    if is_open(&host, crate::drivers::tplink::KASA_PORT).await {
+                        crate::drivers::tplink::probe(&host).await
                     } else {
                         None
                     }
@@ -276,6 +293,35 @@ pub async fn scan_products(subnet: &str, airzone_port: u16, quiet: &[std::net::I
                     device_id: Some(h.serial),
                     firmware: h.firmware,
                 });
+            }
+            let product = |brand: &'static str, model: String, port: u16, note: Option<String>, supported: bool| Product {
+                brand,
+                driver: brand,
+                model,
+                host: host.clone(),
+                port,
+                mac: None,
+                device_id: None,
+                firmware: None,
+                note,
+                supported,
+                flags: 0,
+            };
+            if let Some(name) = tasmota {
+                found.push(product("tasmota", "Tasmota".into(), 80, Some(format!("« {name} »")), true));
+            }
+            if reolink {
+                found.push(product("reolink", "Reolink".into(), 80, Some("identifiant et mot de passe de la caméra".into()), true));
+            }
+            if let Some(name) = esphome {
+                let note = match name {
+                    Some(n) => format!("« {n} »"),
+                    None => "chiffré : clé de l'API requise".into(),
+                };
+                found.push(product("esphome", "ESPHome".into(), crate::drivers::esphome::PORT, Some(note), true));
+            }
+            if let Some((model, alias)) = kasa {
+                found.push(product("tplink", format!("TP-Link Kasa {model}"), crate::drivers::tplink::KASA_PORT, (!alias.is_empty()).then(|| format!("« {alias} »")), true));
             }
             Some(found)
         }));

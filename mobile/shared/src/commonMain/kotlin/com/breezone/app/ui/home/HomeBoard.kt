@@ -3,6 +3,7 @@ package com.breezone.app.ui.home
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -53,6 +54,7 @@ import com.breezone.app.data.modulesHere
 import com.breezone.app.resources.*
 import com.breezone.app.ui.icons.FzIcons
 import com.breezone.app.ui.screens.ConfirmDialog
+import com.breezone.app.ui.screens.LoadingWave
 import com.breezone.app.ui.screens.Muted
 import com.breezone.app.ui.screens.SectionCard
 import com.breezone.app.ui.screens.rememberEnergy
@@ -190,13 +192,21 @@ fun HomeBoard(serverId: String, installationId: Long, nav: HomeNav, onInstallati
             colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
         )
     }) { padding ->
+        // The server or the layout still being read: the wave, not an empty or missing home.
+        val waiting = if (inst == null) server != null && !server.loaded && !server.authRequired && server.error == null else !loaded
+        if (waiting) {
+            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) { LoadingWave() }
+            return@Scaffold
+        }
         LazyColumn(
             Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (inst == null) {
-                item(key = "missing", contentType = "note") { Muted(stringResource(Res.string.installation_not_found)) }
+                item(key = "missing", contentType = "note") {
+                    Muted(server?.error?.takeIf { !server.loaded } ?: stringResource(Res.string.installation_not_found))
+                }
             } else if (editing) {
                 item(key = "hint", contentType = "note") { Muted(stringResource(Res.string.home_arrange_hint)) }
                 val list = draft.orEmpty()

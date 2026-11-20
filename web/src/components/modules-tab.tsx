@@ -8,6 +8,10 @@ import {
   Download,
   Blinds,
   Cctv,
+  Cpu,
+  CloudSun,
+  Plug,
+  ToggleRight,
   EyeOff,
   Fan,
   KeyRound,
@@ -37,6 +41,7 @@ import type {
 import { api } from "@/lib/api"
 import { CHARGER_STATUS, chargerStatus } from "@/lib/charger"
 import { inverterCounting, isInverter } from "@/lib/solar"
+import { cameraEvent, forecastText, sensorText } from "@/lib/sensors"
 import { errorText, kwh, relativeTime, watts } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { t } from "@/lib/i18n"
@@ -45,6 +50,12 @@ import {
   useModulesHere,
 } from "@/lib/selected-installation"
 import { Confirm } from "@/components/confirm"
+import {
+  AddWithConfig,
+  ModuleSettingsCard,
+  extraFields,
+  useDrivers,
+} from "@/components/module-config"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -96,7 +107,15 @@ const BY_ADDRESS = [
   { driver: "renson", label: "Renson Healthbox" },
   { driver: "hue", label: "Philips Hue" },
   { driver: "homekit", label: "HomeKit (Legrand, VELUX…)" },
+  { driver: "esphome", label: "ESPHome" },
+  { driver: "tasmota", label: "Tasmota" },
+  { driver: "tplink", label: "TP-Link (Kasa, Tapo)" },
+  { driver: "reolink", label: "Reolink" },
+  { driver: "forecast_solar", label: "Forecast.Solar" },
 ]
+
+/** Drivers without an address: a web service. */
+const NO_HOST = ["forecast_solar"]
 
 /** A product typed by its address, as if the search had found it (a Hue bridge, a HomeKit accessory). */
 function typed(driver: string, label: string, host: string): FoundProduct {
@@ -249,12 +268,14 @@ function DeviceRow({
           s.online === true ? t("en ligne") : t("hors ligne"),
           typeof s.last_event === "string" &&
             typeof s.last_event_at === "number" &&
-            `${s.last_event} ${relativeTime(s.last_event_at)}`,
+            `${cameraEvent(s.last_event)} ${relativeTime(s.last_event_at)}`,
         ]
           .filter(Boolean)
           .join(" · ")
       : null,
+    device.traits.includes("environment.sensor@1") ? sensorText(s) : null,
     wattsOf(s.power),
+    device.traits.includes("solar.forecast@1") ? forecastText(s) : null,
     typeof s.on === "boolean" && !d_light(s)
       ? s.on
         ? t("allumé")
@@ -265,7 +286,8 @@ function DeviceRow({
     typeof s.energy_out === "number" && s.energy_out > 0
       ? t("{value} injectés", { value: kwhOf(s.energy_out)! })
       : null,
-    typeof s.energy_today === "number"
+    typeof s.energy_today === "number" &&
+    !device.traits.includes("solar.forecast@1")
       ? t("{value} aujourd'hui", { value: kwhOf(s.energy_today)! })
       : null,
     typeof s.session_energy === "number" && s.session_energy > 0
@@ -667,6 +689,80 @@ const DRIVER: Record<
       "Un coup de sonnette est un appui de bouton : il peut déclencher un automatisme. Les images chiffrées par EZVIZ se lisent avec le code de vérification des caméras (sur leur étiquette), donné dans le compte."
     ),
   },
+  esphome: {
+    icon: Cpu,
+    tone: "bg-primary/15 text-primary",
+    connection: t(
+      "API native d'ESPHome (port 6053), chiffrée avec la clé de l'appareil : une connexion gardée ouverte, l'appareil envoie chaque changement"
+    ),
+    every: t("en direct"),
+    reads: t(
+      "interrupteurs, lumières, volets, puissances, et température, humidité, pression, CO₂ et luminosité"
+    ),
+    writes: t(
+      "marche et arrêt, intensité, température de blanc et couleur des lumières, position et arrêt des volets"
+    ),
+    note: t(
+      "La clé est celle de la section « api: encryption: key » de la configuration ESPHome de l'appareil. Un appareil sans chiffrement s'ajoute sans clé."
+    ),
+  },
+  tasmota: {
+    icon: ToggleRight,
+    tone: "bg-warning/15 text-warning",
+    connection: t("API HTTP locale de Tasmota : aucun compte nécessaire"),
+    every: t("toutes les 10 s"),
+    reads: t(
+      "état des relais et des lumières, puissance, tension, intensité et énergie, capteurs de température, humidité, pression, CO₂ et luminosité"
+    ),
+    writes: t(
+      "marche et arrêt des relais, intensité, température de blanc et couleur des lumières"
+    ),
+  },
+  tplink: {
+    icon: Plug,
+    tone: "bg-warning/15 text-warning",
+    connection: t(
+      "Protocole local des prises et ampoules TP-Link (Kasa, Tapo) : le compte TP-Link sert seulement à ouvrir la session locale, rien ne passe par le cloud"
+    ),
+    every: t("toutes les 10 s"),
+    reads: t(
+      "état des prises et des multiprises voie par voie, intensité et couleur des ampoules, puissance et énergie du jour"
+    ),
+    writes: t("marche et arrêt, intensité, température de blanc et couleur"),
+    note: t(
+      "Les Tapo et les Kasa récentes demandent l'adresse e-mail et le mot de passe du compte TP-Link (celui de l'application) : ils restent chiffrés sur le serveur."
+    ),
+  },
+  reolink: {
+    icon: Cctv,
+    tone: "bg-primary/15 text-primary",
+    connection: t(
+      "API locale de la caméra ou du NVR Reolink, avec son identifiant : aucun compte Reolink nécessaire"
+    ),
+    every: t("toutes les 5 s"),
+    reads: t(
+      "chaque caméra : mouvement et ce qui l'a causé (personne, véhicule, animal), coups de sonnette, image"
+    ),
+    writes: t("rien : lecture seule"),
+    note: t(
+      "Un coup de sonnette Reolink est un appui de bouton : il peut déclencher un automatisme."
+    ),
+  },
+  forecast_solar: {
+    icon: CloudSun,
+    tone: "bg-warning/15 text-warning",
+    connection: t(
+      "Service en ligne Forecast.Solar : la prévision de production selon la météo, sans compte (une clé d'API, facultative, donne plus de détail)"
+    ),
+    every: t("toutes les 30 min"),
+    reads: t(
+      "puissance prévue maintenant, production prévue aujourd'hui, restant à produire et demain"
+    ),
+    writes: t("rien : lecture seule"),
+    note: t(
+      "Sans latitude ni longitude, celles de la ville de l'installation sont prises. Une installation sur deux pans s'ajoute en deux fois."
+    ),
+  },
 }
 
 function Tile({
@@ -896,6 +992,7 @@ function SourceDetail({
   const host = typeof source.config.host === "string" ? source.config.host : ""
   // Reached through its maker's cloud, by a linked account: no address of its own.
   const cloud = source.driver === "netatmo" || source.driver === "ezviz"
+  const online = NO_HOST.includes(source.driver)
   const charger = devices.find((x) => x.traits.includes("ev.charger@1"))
   return (
     <>
@@ -936,7 +1033,11 @@ function SourceDetail({
         <CardContent className="grid gap-4">
           <div className="grid gap-1.5">
             <span className="text-xs text-muted-foreground">
-              {cloud ? t("Compte") : t("Adresse IP ou nom")}
+              {cloud
+                ? t("Compte")
+                : online
+                  ? t("Service en ligne")
+                  : t("Adresse IP ou nom")}
             </span>
             <div className="flex flex-wrap gap-2">
               {cloud ? (
@@ -945,7 +1046,7 @@ function SourceDetail({
                     <Cloud /> {t("Réglages › Comptes et services")}
                   </Link>
                 </Button>
-              ) : (
+              ) : online ? null : (
                 <>
                   <span className="tabular min-w-40 flex-1 rounded-2xl bg-muted/60 px-3 py-2 font-mono text-sm text-primary">
                     {host || "–"}
@@ -1010,6 +1111,7 @@ function SourceDetail({
       {charger && <CurrentOwner charger={charger} />}
       {source.driver === "netatmo" && <TwinsCard sourceId={source.id} />}
       {source.driver !== "netatmo" && <IgnoredCard sourceId={source.id} />}
+      <ModuleSettingsCard key={source.id} source={source} />
       {source.driver === "renson" && (
         <RensonKey
           sourceId={source.id}
@@ -1133,6 +1235,18 @@ function AddModuleDialog({
     // Once per opening.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
+  const added = (s: SourceView) => {
+    toast.success(
+      s.status.state === "online"
+        ? t("« {name} » ajouté", { name: s.name })
+        : t("« {name} » ajouté, mais ne répond pas pour l'instant", {
+            name: s.name,
+          })
+    )
+    qc.invalidateQueries({ queryKey: ["sources"] })
+    qc.invalidateQueries({ queryKey: ["devices"] })
+    onClose()
+  }
   const add = useMutation({
     mutationFn: (p: {
       driver: string
@@ -1147,21 +1261,24 @@ function AddModuleDialog({
           ? { host: p.host, device_id: p.device_id }
           : { host: p.host },
       }),
-    onSuccess: (s) => {
-      toast.success(
-        s.status.state === "online"
-          ? t("« {name} » ajouté", { name: s.name })
-          : t("« {name} » ajouté, mais ne répond pas pour l'instant", {
-              name: s.name,
-            })
-      )
-      qc.invalidateQueries({ queryKey: ["sources"] })
-      qc.invalidateQueries({ queryKey: ["devices"] })
-      onClose()
-    },
+    onSuccess: (s) => added(s),
     onError: (e) => toast.error(errorText(e)),
   })
   const products = scan.data?.products ?? []
+  const drivers = useDrivers()
+  // A module whose driver asks more than its address (credentials, a key, its panels).
+  const [configuring, setConfiguring] = useState<{
+    driver: string
+    name: string
+    host?: string
+    device_id?: string | null
+    note?: string | null
+  } | null>(null)
+  const needsMore = (driver: string) =>
+    extraFields(drivers.data?.find((d) => d.id === driver)).length > 0
+  const configuringInfo = drivers.data?.find(
+    (d) => d.id === configuring?.driver
+  )
   // A HomeKit accessory being paired, and the code typed.
   const [pairing, setPairing] = useState<FoundProduct | null>(null)
   // Closing the dialog gives up the pairing started: the accessory is free again.
@@ -1257,14 +1374,23 @@ function AddModuleDialog({
     return (
       <Button
         size="sm"
+        variant={configuring?.host === p.host ? "secondary" : "default"}
         disabled={add.isPending}
         onClick={() =>
-          add.mutate({
-            driver: p.driver,
-            name: p.model,
-            host: p.host,
-            device_id: p.device_id,
-          })
+          needsMore(p.driver)
+            ? setConfiguring({
+                driver: p.driver,
+                name: p.model,
+                host: p.host,
+                device_id: p.device_id,
+                note: p.note,
+              })
+            : add.mutate({
+                driver: p.driver,
+                name: p.model,
+                host: p.host,
+                device_id: p.device_id,
+              })
         }
       >
         <Plus /> {t("Ajouter")}
@@ -1279,7 +1405,7 @@ function AddModuleDialog({
           <DialogTitle>{t("Ajouter un module")}</DialogTitle>
           <DialogDescription>
             {t(
-              "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan, clés Wi-Fi Hoymiles, ponts Philips Hue, VMC Renson Healthbox et accessoires HomeKit (Legrand, VELUX…)."
+              "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan, clés Wi-Fi Hoymiles, ponts Philips Hue, VMC Renson Healthbox, accessoires HomeKit (Legrand, VELUX…), modules ESPHome et Tasmota, prises Kasa et caméras Reolink. Les prises et ampoules Tapo s'ajoutent par leur adresse."
             )}
           </DialogDescription>
         </DialogHeader>
@@ -1326,6 +1452,22 @@ function AddModuleDialog({
               {action(p)}
             </div>
           ))}
+          {configuring && configuringInfo && (
+            <AddWithConfig
+              key={`${configuring.driver}-${configuring.host ?? ""}`}
+              info={configuringInfo}
+              name={configuring.name}
+              host={configuring.host}
+              deviceId={configuring.device_id}
+              note={configuring.note}
+              onCancel={() => setConfiguring(null)}
+              onDone={(s) => {
+                add.reset()
+                setConfiguring(null)
+                added(s)
+              }}
+            />
+          )}
           {linking && (
             <div className="grid gap-3 rounded-2xl border border-primary/40 bg-primary/5 p-3">
               <div className="text-sm font-medium">
@@ -1438,18 +1580,24 @@ function AddModuleDialog({
                 ))}
               </SelectContent>
             </Select>
-            <Input
-              id="module-host"
-              value={host}
-              placeholder={
-                driver === "homekit" ? "192.168.1.30:5001" : "192.168.1.40"
-              }
-              onChange={(e) => setHost(e.target.value)}
-            />
+            {NO_HOST.includes(driver) ? (
+              <p className="flex-1 self-center text-xs text-muted-foreground">
+                {t("Un service en ligne : sans adresse sur le réseau")}
+              </p>
+            ) : (
+              <Input
+                id="module-host"
+                value={host}
+                placeholder={
+                  driver === "homekit" ? "192.168.1.30:5001" : "192.168.1.40"
+                }
+                onChange={(e) => setHost(e.target.value)}
+              />
+            )}
             <Button
               variant="outline"
               disabled={
-                !host.trim() ||
+                (!host.trim() && !NO_HOST.includes(driver)) ||
                 add.isPending ||
                 // A HomeKit accessory listens on a port of its own.
                 (driver === "homekit" && !/:\d+$/.test(host.trim()))
@@ -1462,6 +1610,12 @@ function AddModuleDialog({
                   setLinking(typed(driver, label, host.trim()))
                 else if (driver === "homekit")
                   startPairing(typed(driver, "HomeKit", host.trim()))
+                else if (needsMore(driver))
+                  setConfiguring({
+                    driver,
+                    name: label,
+                    host: NO_HOST.includes(driver) ? undefined : host.trim(),
+                  })
                 else add.mutate({ driver, name: label, host: host.trim() })
               }}
             >

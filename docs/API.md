@@ -291,10 +291,16 @@ Une **source** est un matériel lu par un **pilote** (ADR 0013) : par exemple un
 
 | Méthode | Chemin | Description |
 |---------|--------|-------------|
-| GET 👑 | `/api/drivers` | Pilotes disponibles : `[{id, label, provides, config:[{name, type, optional, label}]}]` |
+| GET 👑 | `/api/drivers` | Pilotes disponibles : `[{id, label, provides, config:[{name, type, optional, label}]}]` ; `type` : `string`, `integer`, `number` ou `password` |
 | GET 👑 | `/api/sources` | `[{id, driver, name, config, enabled, created_at, status:{state, last_seen, last_error, model, firmware}, devices}]` (`state` : `online`, `offline`, `error`, `disabled`, `unknown`) |
 | POST 👑 | `/api/sources` | `{driver, name, config, enabled?}` : configuration vérifiée, source lue aussitôt → 201 |
 | PUT 👑 · DELETE 👑 | `/api/sources/{id}` | Modifier (le pilote ne change pas) ; supprimer, avec ses appareils |
+
+Les champs `password` d'un pilote (mot de passe d'une caméra Reolink, compte TP-Link, clé d'API
+ESPHome, clé Forecast.Solar…) sont retirés de `config` et gardés chiffrés dans le secret de la source :
+jamais renvoyés ; absents ou vides à la modification, ils restent tels quels. Pour Forecast.Solar, sans
+`latitude`/`longitude`, celles de la ville de l'installation sont prises.
+
 | POST 👑 | `/api/sources/{id}/refresh` | Relire maintenant |
 | POST 👑 | `/api/sources/{id}/locate` | Chercher son matériel sur le réseau par son identité (`device_id`) et le suivre s'il a changé d'adresse (« Rechercher ») → la source et `moved` |
 | POST 👑 | `/api/homekit/pair` | `{host, name, code, flags?}` : appaire Breezone à un accessoire HomeKit trouvé par le scanner (`host` « ip:port », `flags` ses indicateurs) avec son code à 8 chiffres, puis l'ajoute comme module → 201 la source ; code incorrect, trop d'essais, déjà appairé ailleurs → 422 avec l'explication |
