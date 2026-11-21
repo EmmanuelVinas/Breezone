@@ -6,6 +6,12 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- App, a shutter's page: the shutter itself is the control. Drag it, and its edge follows the finger,
+  or tap where it should stop; its state is written on it. The side bar and the line under it are
+  gone, and the Open / Stop / Close buttons keep their label on one line.
+
 ## [0.12.0-beta.4] - 2026-11-20
 
 ### Fixed

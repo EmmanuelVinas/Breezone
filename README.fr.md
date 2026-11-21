@@ -25,7 +25,7 @@ ses pages sont prêtes : pas de YAML, pas de modèles, pas de tableau de bord à
 - **Plusieurs sites.** Votre maison, celle de vos parents, une maison de vacances : chaque site a son
   petit serveur Breezone, et ils se relient **sans VPN** (invitation à usage unique, requêtes signées,
   lecture ou pilotage, révocable). L'interface web et l'application les montrent tous.
-- **Léger.** Une image d'environ 20 Mo, quelques Mo de RAM : il tourne sur un NAS ou un Raspberry Pi.
+- **Léger.** Un serveur de moins de 60 Mo, quelques Mo de RAM : il tourne sur un NAS ou un Raspberry Pi.
 
 Breezone est né en 2025, quand des fonctions de l'application Airzone jusque-là gratuites sont
 passées sous abonnement payant

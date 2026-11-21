@@ -27,7 +27,7 @@ its pages are ready: no YAML, no templates, no dashboard to build, no broker to 
 - **Several sites.** Your home, your parents', a holiday home: each site runs its own small Breezone
   server, and they can be linked **without a VPN** (single-use invitation, signed requests, read-only
   or control, revocable). The web UI and the app show all of them.
-- **Small.** One image of about 20 MB, a few MB of RAM: it runs on a NAS or a Raspberry Pi.
+- **Small.** A server under 60 MB, a few MB of RAM: it runs on a NAS or a Raspberry Pi.
 
 Breezone started in 2025, when features of the Airzone app that used to be free became part of a
 paid subscription ([Next.ink, in French](https://next.ink/265416/airzone-withings-quand-des-fonctions-connectees-gratuites-deviennent-payantes/))
