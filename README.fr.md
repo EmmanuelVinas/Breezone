@@ -114,60 +114,16 @@ Ouvrez une issue.
 
 ## Installation (Docker)
 
-L'image est publiée sur GitHub Container Registry : `ghcr.io/emmanuelvinas/breezone`
-(`linux/amd64` et `linux/arm64`). Tags : `latest`, la version (`0.9.1`) et la série (`0.9`).
-
-Créez un dossier `breezone` contenant ce `docker-compose.yml`, puis lancez `docker compose up -d` :
-
-```yaml
-services:
-  breezone:
-    image: ghcr.io/emmanuelvinas/breezone:latest
-    container_name: breezone
-    restart: unless-stopped
-    # Réseau de l'hôte (Linux) : Breezone trouve tout seul les WebServers du réseau local.
-    network_mode: host
-    environment:
-      TZ: Europe/Paris
-      # BREEZONE_PORT: "8427"   # si le port 8427 est déjà pris
-    volumes:
-      - breezone_data:/data
-    mem_limit: 300m
-
-volumes:
-  breezone_data:
-```
-
-Ouvrez `http://<votre-serveur>:8427` : la première page crée le compte administrateur, puis propose
-d'importer votre compte Airzone (facultatif) ou de rechercher les WebServers sur le réseau.
-
-Sans compose :
-
 ```bash
 docker run -d --name breezone --restart unless-stopped --network host \
   -v breezone_data:/data -e TZ=Europe/Paris ghcr.io/emmanuelvinas/breezone:latest
 ```
 
-**NAS Synology** : guide pas à pas avec Container Manager :
-[docs/install-synology.md](docs/install-synology.md).
+Ouvrez ensuite `http://<votre-serveur>:8427` : la première page crée le compte administrateur.
 
-**Réseau.** Le serveur doit joindre les WebServers (port 3000) de votre réseau. Sans `network_mode: host`
-(Docker Desktop, réseau `bridge` avec `-p 8427:8427`), il ne peut pas deviner votre réseau local :
-indiquez-le dans *Réglages › Installations* (ex. `192.168.1.0/24`) ou l'adresse IP du WebServer.
-
-**Accès à distance sans VPN.** Utilisez un [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) :
-le [`docker-compose.yml` complet](docker-compose.yml) du dépôt contient un service `cloudflared` (profil
-`tunnel`, jeton dans `.env` : `CLOUDFLARE_TUNNEL_TOKEN`). Aucun port n'est ouvert sur la box. N'exposez **jamais** le
-port 3000 des WebServers : leur API n'a aucune authentification.
-
-**Mise à jour.** `docker compose pull && docker compose up -d`. Pour rester sur une version précise,
-remplacez `latest` par son numéro (ex. `0.9.1`). Les données (base SQLite, secret de
-signature, `data.key` : la clé des mots de passe et appairages gardés, à garder avec la base)
-sont dans le volume `breezone_data`. Sauvegarde :
-`docker run --rm -v breezone_data:/data -v "$PWD":/backup alpine tar czf /backup/breezone.tgz -C /data .`
-
-Les réglages (variables `BREEZONE_*`) sont décrits dans le [README anglais](README.md#settings) et
-dans [`.env.sample`](.env.sample).
+**Guide complet : [docs/installation](docs/installation/README.fr.md)** : Docker Compose, réseau,
+accès à distance sans VPN, mises à jour, sauvegarde, tous les réglages, modules. NAS Synology, pas
+à pas : [docs/installation/synology.md](docs/installation/synology.md).
 
 ## Application mobile
 

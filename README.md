@@ -108,75 +108,16 @@ Modbus SunSpec inverters, EZVIZ cameras, garden watering… A common device is m
 
 ## Install (Docker)
 
-The image is published on GitHub Container Registry: `ghcr.io/emmanuelvinas/breezone`
-(`linux/amd64` and `linux/arm64`). Tags: `latest`, the version (`0.9.1`) and the minor line (`0.9`).
-
-Create a `breezone` folder with this `docker-compose.yml`, then run `docker compose up -d`:
-
-```yaml
-services:
-  breezone:
-    image: ghcr.io/emmanuelvinas/breezone:latest
-    container_name: breezone
-    restart: unless-stopped
-    # Host network (Linux): Breezone finds the WebServers of your LAN by itself.
-    network_mode: host
-    environment:
-      TZ: Europe/Paris
-      # BREEZONE_PORT: "8427"   # if port 8427 is already taken
-    volumes:
-      - breezone_data:/data
-    mem_limit: 300m
-
-volumes:
-  breezone_data:
-```
-
-Open `http://<your-server>:8427`: the first page creates the administrator account, then offers to
-import your Airzone account (optional) or to search for WebServers on the network.
-
-Without compose:
-
 ```bash
 docker run -d --name breezone --restart unless-stopped --network host \
   -v breezone_data:/data -e TZ=Europe/Paris ghcr.io/emmanuelvinas/breezone:latest
 ```
 
-**Synology NAS**: step-by-step guide with Container Manager, in French:
-[docs/install-synology.md](docs/install-synology.md).
+Then open `http://<your-server>:8427`: the first page creates the administrator account.
 
-**Network.** The server must reach the WebServers (port 3000) on your LAN. Without `network_mode: host`
-(Docker Desktop, `bridge` network with `-p 8427:8427`) it cannot guess your LAN: set it in
-*Settings › Installations* (e.g. `192.168.1.0/24`) or give the WebServer's IP address.
-
-**Remote access without VPN.** Use a [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/):
-the repository's [full `docker-compose.yml`](docker-compose.yml) has a `cloudflared` service (`tunnel`
-profile, token in `.env`: `CLOUDFLARE_TUNNEL_TOKEN`). No port is opened on your router. **Never** expose port
-3000 of the WebServers: their API has no authentication.
-
-**Update.** `docker compose pull && docker compose up -d`. To stay on a given version, replace
-`latest` with its number (e.g. `0.9.1`). Data (SQLite database, signing secret, `data.key`: the key of the stored passwords and
-pairings, to keep with the database) is in the `breezone_data` volume; back it up with
-`docker run --rm -v breezone_data:/data -v "$PWD":/backup alpine tar czf /backup/breezone.tgz -C /data .`
-
-### Settings
-
-
-| Variable                                                             | Default                         | Purpose                                                                             |
-| -------------------------------------------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------- |
-| `BREEZONE_HTTP_PORT`                                                 | `8427`                          | Published port (compose)                                                            |
-| `BREEZONE_VERSION`                                                   | `latest`                        | Image tag (compose)                                                                 |
-| `BREEZONE_SCAN_SUBNET`                                               | server's /24                    | Network scanned for WebServers (also settable in the UI)                            |
-| `BREEZONE_AIRZONE_HOSTS`                                             | —                               | Installations created at first start (`Home=192.168.1.25,Office=192.168.1.40:3000`) |
-| `BREEZONE_ADMIN_USER` / `BREEZONE_ADMIN_PASSWORD`                    | —                               | Administrator created at first start (otherwise from the web page)                  |
-| `BREEZONE_POLL_INTERVAL_SECS`                                        | `15`                            | WebServer polling period                                                            |
-| `BREEZONE_DEVICE_READ_MS`                                            | `5000`                          | Reading period of the device sources (Shelly…)                                      |
-| `BREEZONE_HISTORY_RETENTION_DAYS` / `BREEZONE_EVENTS_RETENTION_DAYS` | `90` / `30`                     | Retention                                                                           |
-| `BREEZONE_ACCESS_TOKEN_TTL_SECS` / `BREEZONE_REFRESH_TOKEN_TTL_DAYS` | `900` / `60`                    | Token lifetimes (device sessions are sliding)                                       |
-| `BREEZONE_JWT_SECRET`                                                | generated in `/data/jwt.secret` | Signing secret                                                                      |
-| `TZ`                                                                 | `Europe/Paris`                  | Time zone                                                                           |
-| `RUST_LOG`                                                           | `info,…`                        | Log level                                                                           |
-
+**Full guide: [docs/installation](docs/installation/README.md)**: Docker Compose, network, remote
+access without VPN, updates, backup, every setting, modules. Synology NAS, step by step (in French):
+[docs/installation/synology.md](docs/installation/synology.md).
 
 ## Mobile app
 
@@ -208,6 +149,8 @@ yet? « Try the demo » on the first screen opens a simulated home.
 | [`server/`](server)                  | Rust server (axum, sqlx/SQLite): API, Airzone polling, device drivers (Hue, HomeKit, Shelly, Hoymiles, Trydan, Renson), routines, timers, auth, federation, a fake Airzone for demos and tests |
 | [`web/`](web)                        | Web UI: React 19, Vite, Tailwind 4, shadcn/ui                                                                                 |
 | [`mobile/`](mobile)                  | Compose Multiplatform app (Android and iOS)                                                                                   |
+| [`docs/installation/`](docs/installation/README.md) | Installation, settings, modules                         |
+| [`modules/`](modules/README.md)      | Modules in WebAssembly, and how to write one             |
 | [`docs/API.md`](docs/API.md)         | API reference (in French)                                                                                                     |
 
 

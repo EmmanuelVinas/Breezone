@@ -10,7 +10,7 @@ Dans ce guide, le serveur **Atelier** partage son installation avec le serveur *
 ## Avant de commencer
 
 - Le serveur qui partage (Atelier) doit être joignable par l'autre : une adresse `https://` publique
-  (proxy inversé du NAS ou Cloudflare Tunnel, voir le [guide Synology](install-synology.md#5-accès-depuis-lextérieur-facultatif)),
+  (proxy inversé du NAS ou Cloudflare Tunnel, voir le [guide Synology](installation/synology.md#5-accès-depuis-lextérieur-facultatif)),
   ou son adresse locale si les deux serveurs sont sur le même réseau. HTTP n'est accepté que vers une
   adresse locale.
 - Sur Atelier, renseignez cette adresse dans **Réglages › Partages › Ce serveur › Adresse publique**.
@@ -104,7 +104,7 @@ adresse (cadenas › certificat). Une fois le certificat corrigé, **Rétablir l
 habituelle** revient au contrôle HTTPS normal.
 
 La bonne solution reste un certificat valide : voir l'étape « Certificat » du
-[guide Synology](install-synology.md#proxy-inversé-du-nas-https).
+[guide Synology](installation/synology.md#proxy-inversé-du-nas-https).
 
 ## Versions différentes
 
@@ -133,7 +133,7 @@ n'utilise que ce que l'autre comprend.
 
 | Symptôme | Solution |
 |----------|----------|
-| « certificat HTTPS refusé : il ne couvre pas ce nom de domaine » | Le certificat de l'autre serveur ne correspond pas à son adresse (ex. certificat de `moncompte.synology.me` pour `breezone.moncompte.synology.me`) : corrigez-le (étape « Certificat » du [guide Synology](install-synology.md#proxy-inversé-du-nas-https)) ou faites-lui confiance (voir [Certificat HTTPS non valide](#certificat-https-non-valide)). |
+| « certificat HTTPS refusé : il ne couvre pas ce nom de domaine » | Le certificat de l'autre serveur ne correspond pas à son adresse (ex. certificat de `moncompte.synology.me` pour `breezone.moncompte.synology.me`) : corrigez-le (étape « Certificat » du [guide Synology](installation/synology.md#proxy-inversé-du-nas-https)) ou faites-lui confiance (voir [Certificat HTTPS non valide](#certificat-https-non-valide)). |
 | « certificat HTTPS différent de celui que vous aviez accepté » | Le certificat a changé (renouvellement, ou quelqu'un se fait passer pour le serveur) : examinez-le dans Réglages › Nœuds avant de lui faire confiance. |
 | « nom de domaine introuvable » / « connexion refusée » | Vérifiez l'adresse publique de l'autre serveur, son DNS et la redirection du port 443 sur sa box. |
 | « invitation expirée (15 minutes) » | Supprimez le partage sur Atelier et créez-en un nouveau. |

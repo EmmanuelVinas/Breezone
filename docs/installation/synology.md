@@ -143,7 +143,7 @@ Ouvrez `http://192.168.1.20:8427` (l'IP de votre NAS) :
 
    ![Compte Airzone connecté](images/web/airzone-account.webp)
 
-Pour piloter un autre site depuis ce NAS, voir [Relier deux sites](federation.md).
+Pour piloter un autre site depuis ce NAS, voir [Relier deux sites](../federation.md).
 
 Si la page ne s'ouvre pas : **Panneau de configuration › Sécurité › Pare-feu**, autorisez le port
 `8427` (TCP) depuis votre réseau local.
