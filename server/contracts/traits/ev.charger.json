@@ -1,6 +1,7 @@
 {
   "trait": "ev.charger",
   "version": 1,
+  "revision": 0,
   "label": { "fr": "Borne de recharge", "en": "EV charger", "es": "Cargador de vehículo eléctrico" },
   "state": [
     { "name": "status", "type": "enum", "values": ["available", "plugged", "charging", "fault"], "value_labels": { "available": { "fr": "Libre", "en": "Available", "es": "Libre" }, "plugged": { "fr": "Véhicule branché", "en": "Vehicle plugged in", "es": "Vehículo conectado" }, "charging": { "fr": "En charge", "en": "Charging", "es": "Cargando" }, "fault": { "fr": "En défaut", "en": "Fault", "es": "Avería" } }, "label": { "fr": "État", "en": "Status", "es": "Estado" } },
@@ -51,5 +52,23 @@
         { "name": "on", "type": "bool", "label": { "fr": "Réglée par la borne", "en": "Set by the charger", "es": "Regulada por el cargador" } }
       ]
     }
-  ]
+  ],
+  "ui": {
+    "kind": "charger",
+    "primary": "status",
+    "card": [
+      {"widget": "value", "field": "status"},
+      {"widget": "value", "field": "session_energy"},
+      {"widget": "button", "action": "start"},
+      {"widget": "button", "action": "stop"}
+    ],
+    "detail": [
+      {"widget": "value", "field": "status"},
+      {"widget": "value", "field": "session_energy"},
+      {"widget": "stepper", "field": "limit", "action": "set_limit", "param": "limit"},
+      {"widget": "button", "action": "start"},
+      {"widget": "button", "action": "stop"},
+      {"widget": "toggle", "field": "locked", "action": "lock", "param": "locked"}
+    ]
+  }
 }

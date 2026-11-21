@@ -18,6 +18,11 @@ path = "src/main.rs"
 name = "mock-airzone"
 path = "src/bin/mock_airzone.rs"
 
+# Packages and index of the modules, for the publishing workflow.
+[[bin]]
+name = "module-publish"
+path = "src/bin/module_publish.rs"
+
 [dependencies]
 tokio = { version = "1", features = ["full"] }
 axum = { version = "0.8", features = ["ws"] }
@@ -43,6 +48,8 @@ futures-util = "0.3.34"
 jsonwebtoken = { version = "11.1.0", default-features = false, features = ["rust_crypto"] }
 chacha20poly1305 = "0.11.0"
 ed25519-dalek = "3"
+# Versions and requirements of the modules (docs/roadmap/modules.md § 4.4).
+semver = "1"
 # Self-update: release archives (.tar.gz).
 tar = "0.4"
 flate2 = "1"
@@ -63,6 +70,12 @@ async-io = "2"
 futures-lite = "2"
 if-addrs = "0.15"
 socket2 = { version = "0.6", features = ["all"] }
+# Modules in WebAssembly (docs/roadmap/modules.md), behind the `wasm` feature while they are tried.
+wasmtime = { version = "49", optional = true, default-features = false, features = ["runtime", "std", "cranelift", "component-model", "async", "parallel-compilation"] }
+wasmtime-wasi = { version = "49", optional = true, default-features = false, features = ["p2"] }
+
+[features]
+wasm = ["dep:wasmtime", "dep:wasmtime-wasi"]
 
 [profile.release]
 opt-level = "z"

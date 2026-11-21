@@ -12,23 +12,13 @@
 //!        used, by half hour, the middle of the first one at `beg_time`. Their status has no power:
 //!        the power shown is the mean of the last half hour told, a little late.
 
-use super::{Described, DeviceInfo, Driver, DriverError, DriverFuture, DriverInfo, State};
+use super::{Described, DeviceInfo, Driver, DriverError, DriverFuture, State};
 use crate::crypto::Key;
 use crate::db::Db;
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
-
-pub fn info() -> DriverInfo {
-    DriverInfo {
-        id: "netatmo",
-        label: "Netatmo · Legrand (cloud)",
-        provides: vec!["cover.position@1", "light@1", "switch.relay@1", "energy.power@1"],
-        models: vec!["Legrand Home + Control".into(), "Legrand Ecocompteur".into()],
-        config: vec![],
-    }
-}
 
 /// What a module of Netatmo is, for Breezone.
 #[derive(Debug, Clone, Copy, PartialEq)]

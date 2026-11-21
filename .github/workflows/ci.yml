@@ -20,12 +20,19 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
+          targets: wasm32-wasip2
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: server
+          workspaces: |
+            server
+            modules
       - run: cargo fmt --check
+      - run: cargo fmt --all --check --manifest-path ../modules/Cargo.toml
       - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo clippy --all-targets --locked --features wasm -- -D warnings
       - run: cargo test --locked
+      # The modules in WebAssembly and their host (built for wasm32-wasip2 by the test).
+      - run: cargo test --locked --features wasm --test wasm_modules
 
   web:
     name: Web UI

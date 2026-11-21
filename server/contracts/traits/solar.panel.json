@@ -1,6 +1,7 @@
 {
   "trait": "solar.panel",
   "version": 1,
+  "revision": 0,
   "label": { "fr": "Panneau solaire", "en": "Solar panel", "es": "Panel solar" },
   "state": [
     { "name": "power", "type": "number", "unit": "W", "label": { "fr": "Puissance", "en": "Power", "es": "Potencia" } },
@@ -11,5 +12,19 @@
     { "name": "inverter", "type": "string", "label": { "fr": "Onduleur", "en": "Inverter", "es": "Inversor" } },
     { "name": "port", "type": "integer", "history": false, "label": { "fr": "Entrée", "en": "Input", "es": "Entrada" } }
   ],
-  "actions": []
+  "actions": [],
+  "ui": {
+    "kind": "solar",
+    "primary": "power",
+    "card": [
+      {"widget": "gauge", "field": "power"},
+      {"widget": "value", "field": "energy_today"}
+    ],
+    "detail": [
+      {"widget": "gauge", "field": "power"},
+      {"widget": "value", "field": "energy_today"},
+      {"widget": "value", "field": "energy_total"},
+      {"widget": "chart", "field": "power"}
+    ]
+  }
 }

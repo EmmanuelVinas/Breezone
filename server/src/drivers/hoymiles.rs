@@ -10,7 +10,7 @@
 //! Devices: each inverter (`energy.power@1`, `solar.inverter@1`), which can be given the role of
 //! the solar production on the energy page, and each of its panels (`solar.panel@1`).
 
-use super::{ConfigField, Described, DeviceInfo, Driver, DriverError, DriverFuture, DriverInfo, State};
+use super::{Described, DeviceInfo, Driver, DriverError, DriverFuture, State};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -378,16 +378,6 @@ async fn exchange(addr: &str, message: &[u8]) -> Result<Vec<u8>, DriverError> {
         }
     }
     Ok(buf)
-}
-
-pub fn info() -> DriverInfo {
-    DriverInfo {
-        id: "hoymiles",
-        label: "Hoymiles (DTU Wi-Fi)",
-        provides: vec!["energy.power@1", "solar.inverter@1", "solar.panel@1"],
-        models: vec!["DTU-W100/DTU-Lite-S".into(), "DTU-WLite".into(), "DTU-Pro".into(), "HM, HMS, HMT".into()],
-        config: vec![ConfigField { name: "host", kind: "string", optional: false, label: crate::text!("Adresse IP ou nom", "IP address or name", "Dirección IP o nombre") }],
-    }
 }
 
 pub struct Hoymiles {

@@ -1,0 +1,149 @@
+//! Modules (docs/roadmap/modules.md): what drives hardware and online services, loaded only when
+//! a source or an account uses it.
+
+/// The version of the module interface this server is built against.
+pub const INTERFACE: &str = "1.0";
+
+/// Versions of the module interface (`contracts/wit/breezone-module.wit`) this server hosts: none
+/// while the WebAssembly host is not built in (the modules compiled into the server need none).
+#[cfg(feature = "wasm")]
+pub const HOST_API: &[&str] = &[INTERFACE];
+#[cfg(not(feature = "wasm"))]
+pub const HOST_API: &[&str] = &[];
+
+pub mod compat;
+pub mod install;
+pub mod library;
+pub mod manifest;
+pub mod native;
+pub mod package;
+
+use manifest::{Manifest, Role};
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::{Arc, LazyLock, RwLock};
+
+/// The modules installed from a package (the library, the archive of Breezone, a file).
+static INSTALLED: RwLock<Vec<&'static Manifest>> = RwLock::new(Vec::new());
+
+/// Every module this server knows, in the order of the lists: those compiled in, then those
+/// installed.
+pub fn manifests() -> std::vec::IntoIter<&'static Manifest> {
+    let mut all: Vec<&'static Manifest> = native::all().iter().map(|n| &n.manifest).collect();
+    let installed = INSTALLED.read().unwrap_or_else(|e| e.into_inner());
+    all.extend(installed.iter().filter(|m| native::get(&m.id).is_none()).copied());
+    all.into_iter()
+}
+
+/// Where each installed module's files are, by id.
+static DIRS: LazyLock<RwLock<HashMap<String, PathBuf>>> = LazyLock::new(Default::default);
+
+/// The folder of an installed module (its manifest, component, words and icon).
+pub fn installed_dir(id: &str) -> Option<PathBuf> {
+    DIRS.read().unwrap_or_else(|e| e.into_inner()).get(id).cloned()
+}
+
+/// Takes an installed module into account (in place of its previous version), its files in `dir`.
+pub fn register(m: Manifest, dir: PathBuf) {
+    DIRS.write().unwrap_or_else(|e| e.into_inner()).insert(m.id.clone(), dir);
+    // A few hundred bytes per installation, kept for the life of the process.
+    let m: &'static Manifest = Box::leak(Box::new(m));
+    let mut installed = INSTALLED.write().unwrap_or_else(|e| e.into_inner());
+    installed.retain(|x| x.id != m.id);
+    installed.push(m);
+}
+
+pub fn unregister(id: &str) {
+    DIRS.write().unwrap_or_else(|e| e.into_inner()).remove(id);
+    INSTALLED.write().unwrap_or_else(|e| e.into_inner()).retain(|x| x.id != id);
+}
+
+/// The driver of a source: compiled into the server, or run from an installed module's component
+/// (loaded and compiled only now, when a source needs it).
+pub async fn open_source(id: &str, config: &serde_json::Value, secret: Option<&str>) -> Result<Arc<dyn crate::drivers::Driver>, String> {
+    if native::get(id).is_some() {
+        return crate::drivers::create(id, config, secret);
+    }
+    let m = manifest(id).ok_or_else(|| format!("unknown driver: {id}"))?;
+    if !m.has(Role::Driver) {
+        return Err(format!("the {id} module has no devices"));
+    }
+    #[cfg(feature = "wasm")]
+    {
+        let dir = installed_dir(id).ok_or_else(|| format!("the {id} module is not installed"))?;
+        wasm::source(m, &dir, config, secret).await
+    }
+    #[cfg(not(feature = "wasm"))]
+    {
+        let _ = (config, secret);
+        Err(format!("the {id} module needs the module host, which this build of Breezone lacks"))
+    }
+}
+
+/// Where the installed modules are kept: `<data>/modules/<id>/<version>/`.
+pub fn modules_dir(data_dir: &std::path::Path) -> std::path::PathBuf {
+    data_dir.join("modules")
+}
+
+pub fn manifest(id: &str) -> Option<&'static Manifest> {
+    manifests().find(|m| m.id == id)
+}
+
+/// The modules that have `role`.
+pub fn with_role(role: Role) -> impl Iterator<Item = &'static Manifest> {
+    manifests().filter(move |m| m.has(role))
+}
+
+#[cfg(feature = "wasm")]
+pub mod wasm;
+
+#[cfg(test)]
+mod tests {
+    /// Files of the core that still name a module, and the lot that takes the name away: no other
+    /// file may (docs/roadmap/modules.md § 8.4).
+    const PENDING: &[(&str, &str)] = &[
+        // Accounts and services: their forms, tests, loops and the sources they bring (L9).
+        ("api/linked.rs", "L9"),
+        ("lib.rs", "L9"),
+        ("tempo.rs", "L9"),
+        ("config.rs", "L9"),
+        ("accounts/mod.rs", "L9"),
+    ];
+
+    /// The core names no module but Airzone: what a module is, does and needs is in its manifest.
+    #[test]
+    fn the_core_names_no_module() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let ids: Vec<&str> = super::manifests().map(|m| m.id.as_str()).collect();
+        let mut found = vec![];
+        let mut stack = vec![root.clone()];
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir).unwrap().flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    stack.push(path);
+                    continue;
+                }
+                let rel = path.strip_prefix(&root).unwrap().to_string_lossy().replace('\\', "/");
+                let module_own = rel == "modules/native.rs"
+                    || rel == "mock_devices.rs"
+                    || ["drivers/", "accounts/"].iter().any(|d| rel.starts_with(d) && !rel.ends_with("/mod.rs"))
+                    || PENDING.iter().any(|(f, _)| *f == rel);
+                if module_own || !rel.ends_with(".rs") {
+                    continue;
+                }
+                let text = std::fs::read_to_string(&path).unwrap();
+                // Tests may name the modules they set up.
+                let code = text.split("#[cfg(test)]").next().unwrap_or_default();
+                for id in &ids {
+                    for needle in [format!("\"{id}\""), format!("drivers::{id}::"), format!("accounts::{id}::")] {
+                        if code.contains(&needle) {
+                            found.push(format!("{rel}: {needle}"));
+                        }
+                    }
+                }
+            }
+        }
+        assert!(found.is_empty(), "the core names modules (move it to the module, or its manifest):\n{}", found.join("\n"));
+    }
+}

@@ -1,0 +1,21 @@
+{
+  "id": "forecast_solar",
+  "version": "1.0.0",
+  "name": {"en": "Forecast.Solar", "es": "Forecast.Solar", "fr": "Forecast.Solar"},
+  "roles": ["account", "driver"],
+  "requires": {"api": "^1.0"},
+  "provides": {"traits": ["solar.forecast@1.0"]},
+  "models": ["Forecast.Solar"],
+  "config": [
+    {"name": "kwp", "type": "number", "label": {"en": "Peak power of the panels (kWp)", "es": "Potencia pico de los paneles (kWp)", "fr": "Puissance crête des panneaux (kWc)"}},
+    {"name": "declination", "type": "integer", "label": {"en": "Tilt (°, 0 = flat)", "es": "Inclinación (°, 0 = plano)", "fr": "Inclinaison (°, 0 = à plat)"}},
+    {"name": "azimuth", "type": "integer", "label": {"en": "Orientation (°, 0 = south, -90 = east, 90 = west)", "es": "Orientación (°, 0 = sur, -90 = este, 90 = oeste)", "fr": "Orientation (°, 0 = sud, -90 = est, 90 = ouest)"}},
+    {"name": "latitude", "type": "number", "optional": true, "label": {"en": "Latitude (the home's otherwise)", "es": "Latitud (la de la casa si no)", "fr": "Latitude (celle de la maison sinon)"}},
+    {"name": "longitude", "type": "number", "optional": true, "label": {"en": "Longitude (the home's otherwise)", "es": "Longitud (la de la casa si no)", "fr": "Longitude (celle de la maison sinon)"}},
+    {"name": "api_key", "type": "password", "optional": true, "label": {"en": "API key (optional)", "es": "Clave de API (opcional)", "fr": "Clé d'API (facultative)"}}
+  ],
+  "fills": {"latitude": "home.latitude", "longitude": "home.longitude", "timezone": "server.timezone"},
+  "permissions": {"network": {"lan": false, "hosts": ["api.forecast.solar"]}},
+  "read_every_s": 60,
+  "optional_calls": ["forecast", "diagnostic"]
+}

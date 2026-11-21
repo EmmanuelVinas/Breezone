@@ -1,0 +1,33 @@
+{
+  "doc": "The words of the presentation of traits (their `ui`), shared by the server, the web and the app: the kinds of devices in the order lists show them, the widgets a card or a detail is made of, and the icons a kind may have. A client that does not know a widget shows the field as a `value`; one that does not know a kind puts the device under `other`. Growing these lists is an addition (a revision of the catalog), never a change.",
+  "kinds": [
+    { "id": "climate", "icon": "thermometer", "page": "climate", "label": { "fr": "Climatisation", "en": "Air conditioning", "es": "Climatización" } },
+    { "id": "charger", "icon": "plug-zap", "page": "charging", "label": { "fr": "Recharge", "en": "Charging", "es": "Recarga" } },
+    { "id": "light", "icon": "lightbulb", "page": "lights", "label": { "fr": "Lumières", "en": "Lights", "es": "Luces" } },
+    { "id": "shutter", "icon": "blinds", "page": "shutters", "label": { "fr": "Volets", "en": "Shutters", "es": "Persianas" } },
+    { "id": "window", "icon": "app-window", "page": "shutters", "label": { "fr": "Fenêtres", "en": "Windows", "es": "Ventanas" } },
+    { "id": "door", "icon": "door-open", "page": "shutters", "label": { "fr": "Portes", "en": "Doors", "es": "Puertas" } },
+    { "id": "ventilation", "icon": "fan", "page": "ventilation", "label": { "fr": "Ventilation", "en": "Ventilation", "es": "Ventilación" } },
+    { "id": "room-air", "icon": "wind", "page": "ventilation", "label": { "fr": "Ventilation des pièces", "en": "Room ventilation", "es": "Ventilación de las habitaciones" } },
+    { "id": "switch", "icon": "power", "label": { "fr": "Prises et relais", "en": "Plugs and relays", "es": "Enchufes y relés" } },
+    { "id": "solar", "icon": "solar-panel", "page": "solar", "label": { "fr": "Solaire", "en": "Solar", "es": "Solar" } },
+    { "id": "energy", "icon": "zap", "page": "energy", "label": { "fr": "Énergie", "en": "Energy", "es": "Energía" } },
+    { "id": "sensor", "icon": "gauge", "label": { "fr": "Capteurs", "en": "Sensors", "es": "Sensores" } },
+    { "id": "camera", "icon": "cctv", "page": "cameras", "label": { "fr": "Caméras", "en": "Cameras", "es": "Cámaras" } },
+    { "id": "remote", "icon": "gamepad", "label": { "fr": "Télécommandes", "en": "Remotes", "es": "Mandos" } },
+    { "id": "other", "icon": "box", "label": { "fr": "Autres", "en": "Others", "es": "Otros" } }
+  ],
+  "widgets": {
+    "value": "Shows a field (with its unit and the words of an enum).",
+    "toggle": "A switch for a bool field, sent as `param` of `action`.",
+    "slider": "A slider between the field's min and max, sent as `param` of `action`.",
+    "stepper": "Minus and plus around a number field, sent as `param` of `action`.",
+    "gauge": "A number field shown large (a power).",
+    "enum": "Chips, one per value of an enum field, sent as `param` of `action`.",
+    "button": "Runs `action`, with the fixed `params` if given; shown only while the bool field `when` is true, if given.",
+    "color": "A colour picker for a `#rrggbb` field, sent as `param` of `action`.",
+    "picture": "The last picture of the device (`GET /api/devices/{id}/picture`).",
+    "chart": "The history of a field, or its forecast with `forecast: true`."
+  },
+  "icons": ["thermometer", "plug-zap", "lightbulb", "blinds", "app-window", "door-open", "fan", "wind", "power", "solar-panel", "zap", "gauge", "cctv", "gamepad", "box"]
+}

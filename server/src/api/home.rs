@@ -19,6 +19,16 @@ pub async fn traits(_user: AuthUser) -> Json<&'static [Trait]> {
     Json(crate::traits::catalog())
 }
 
+/// The words of the presentation of traits: kinds of devices, widgets, icons (`contracts/ui.json`).
+pub async fn ui(_user: AuthUser) -> Json<&'static crate::traits::Vocabulary> {
+    Json(crate::traits::vocabulary())
+}
+
+/// The catalog of service contracts (`contracts/services`).
+pub async fn services(_user: AuthUser) -> Json<&'static [crate::services::Service]> {
+    Json(crate::services::catalog())
+}
+
 /// The devices the user can see, each saying whether they may drive it.
 pub async fn list_devices(State(state): State<AppState>, user: AuthUser) -> ApiResult<Json<Vec<DeviceView>>> {
     let access = Access::of(&state.db, &user).await?;

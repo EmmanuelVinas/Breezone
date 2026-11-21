@@ -12,7 +12,7 @@
 //! Devices: `unit`, the whole house (`ventilation.unit@1`), and `room:{id}`, one per room
 //! (`ventilation.room@1`).
 
-use super::{ConfigField, Described, DeviceInfo, Driver, DriverError, DriverFuture, DriverInfo, HardwareRoom, State};
+use super::{Described, DeviceInfo, Driver, DriverError, DriverFuture, HardwareRoom, State};
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use std::time::Duration;
@@ -47,16 +47,6 @@ pub async fn probe(host: &str) -> Option<Identified> {
     let http = reqwest::Client::builder().timeout(Duration::from_secs(2)).build().ok()?;
     let data: Value = http.get(format!("http://{host}/v2/api/data/current")).send().await.ok()?.json().await.ok()?;
     identify(&data)
-}
-
-pub fn info() -> DriverInfo {
-    DriverInfo {
-        id: "renson",
-        label: "Renson Healthbox",
-        provides: vec!["ventilation.unit@1", "ventilation.room@1"],
-        models: vec!["Renson Healthbox 3.0".into()],
-        config: vec![ConfigField { name: "host", kind: "string", optional: false, label: crate::text!("Adresse IP ou nom", "IP address or name", "Dirección IP o nombre") }],
-    }
 }
 
 pub struct Renson {

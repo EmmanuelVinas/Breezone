@@ -1,0 +1,101 @@
+// The interface between Breezone and a module (docs/roadmap/modules.md § 4.5): what the host gives
+// a module (`host`) and what a driver module gives the host (`driver`). The host checks every value
+// against the catalog of traits; JSON travels as strings.
+//
+// First draft (lot L0): HTTP only. Sockets, subscriptions, the store of a source, accounts and
+// services come with lot L5.
+package breezone:module@1.0.0;
+
+interface types {
+    /// A JSON document: a configuration, a state, the parameters of an action.
+    type json = string;
+
+    variant error {
+        /// The hardware does not answer.
+        unreachable(string),
+        /// It answered something the module does not understand.
+        invalid(string),
+        /// It cannot do what was asked.
+        unsupported(string),
+    }
+
+    record device-info {
+        /// Its reference within the source ("power1").
+        reference: string,
+        /// Main trait.
+        kind: string,
+        /// `trait@version` it has.
+        traits: list<string>,
+        name: string,
+    }
+
+    record described {
+        model: string,
+        firmware: option<string>,
+        devices: list<device-info>,
+        /// What tells this hardware apart (serial number, MAC).
+        identity: option<string>,
+    }
+
+    record header {
+        name: string,
+        value: string,
+    }
+
+    record request {
+        method: string,
+        url: string,
+        headers: list<header>,
+        body: option<list<u8>>,
+        timeout-ms: u32,
+    }
+
+    record response {
+        status: u16,
+        headers: list<header>,
+        body: list<u8>,
+    }
+}
+
+interface host {
+    use types.{request, response};
+
+    enum level {
+        debug,
+        info,
+        warn,
+        error,
+    }
+
+    log: func(level: level, message: string);
+
+    /// Unix time, in seconds.
+    now: func() -> s64;
+
+    /// An HTTP request, refused unless its address is allowed by the module's permissions.
+    http: func(req: request) -> result<response, string>;
+}
+
+interface driver {
+    use types.{json, error, described};
+
+    /// One configured piece of hardware.
+    resource source {
+        open: static func(config: json, secret: option<string>) -> result<source, error>;
+        describe: func() -> result<described, error>;
+        /// The state of each device, by reference.
+        read: func() -> result<list<tuple<string, json>>, error>;
+        /// Applies an action of a trait to a device (parameters already checked by the host).
+        act: func(reference: string, trait-name: string, action: string, params: json) -> result<_, error>;
+        /// What the hardware says about itself, raw (support).
+        diagnostic: func() -> result<json, error>;
+    }
+
+    /// Whether this address is hardware of this module, and its name (discovery).
+    probe: func(host: string) -> option<string>;
+}
+
+world module {
+    import host;
+    export driver;
+}

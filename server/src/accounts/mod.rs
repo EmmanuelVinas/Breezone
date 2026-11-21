@@ -29,15 +29,34 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::{json, Value};
 
-/// The kinds of accounts, in the order of Settings › Accounts.
-pub const KINDS: &[&str] = &[crate::cloud::ACCOUNT, rte::KIND, linky::KIND, netatmo::KIND, ezviz::KIND, WEATHER, forecast_solar::KIND];
+use crate::modules::manifest::Role;
 
-/// The services set here whose module reads them (switched on and off with it), apart from the
-/// cloud modules whose devices may be the twins of local ones.
-pub const SERVICE_MODULES: &[&str] = &[forecast_solar::KIND];
+/// The kinds of accounts, in the order of Settings › Accounts: the Airzone Cloud account, then the
+/// modules that are an account or a service.
+pub fn kinds() -> Vec<&'static str> {
+    std::iter::once(crate::cloud::ACCOUNT).chain(crate::modules::manifests().filter(|m| m.has(Role::Account) || m.has(Role::Service)).map(|m| m.id.as_str())).collect()
+}
 
-/// The modules that come with an account (added when it is connected, never by hand).
-pub const MODULES: &[&str] = &[netatmo::KIND, ezviz::KIND];
+pub fn is_kind(kind: &str) -> bool {
+    kinds().contains(&kind)
+}
+
+/// A module whose source comes with its account (added when it is connected, never by hand), and
+/// is switched on and off with it.
+pub fn comes_with_account(id: &str) -> bool {
+    crate::modules::manifest(id).is_some_and(|m| m.has(Role::Account) && m.has(Role::Driver))
+}
+
+/// A module that reaches its hardware through its maker's cloud: its devices may be the twins of
+/// those of a local module.
+pub fn is_cloud(id: &str) -> bool {
+    crate::modules::manifest(id).is_some_and(|m| m.cloud)
+}
+
+/// A service that asks no credentials (the weather): switched on and off only.
+pub fn is_service_only(kind: &str) -> bool {
+    crate::modules::manifest(kind).is_some_and(|m| m.has(Role::Service) && !m.has(Role::Account))
+}
 
 /// The weather: a linked service without credentials.
 pub const WEATHER: &str = "weather";
@@ -65,14 +84,14 @@ pub struct AccountView {
 
 pub async fn list(state: &AppState) -> ApiResult<Vec<AccountView>> {
     let rows = db::list_accounts(&state.db).await?;
-    Ok(KINDS
-        .iter()
-        .map(|kind| match rows.iter().find(|r| r.kind == *kind) {
+    Ok(kinds()
+        .into_iter()
+        .map(|kind| match rows.iter().find(|r| r.kind == kind) {
             Some(r) => AccountView {
                 kind,
-                connected: r.secret.is_some() || *kind == WEATHER,
+                connected: r.secret.is_some() || is_service_only(kind),
                 enabled: r.enabled,
-                service: *kind == WEATHER,
+                service: is_service_only(kind),
                 state: r.state.clone(),
                 last_error: r.last_error.as_deref().map(Text::load),
                 last_ok: r.last_ok,
@@ -81,9 +100,9 @@ pub async fn list(state: &AppState) -> ApiResult<Vec<AccountView>> {
             },
             None => AccountView {
                 kind,
-                connected: *kind == WEATHER,
+                connected: is_service_only(kind),
                 enabled: true,
-                service: *kind == WEATHER,
+                service: is_service_only(kind),
                 state: "none".into(),
                 last_error: None,
                 last_ok: None,

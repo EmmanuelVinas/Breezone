@@ -1,7 +1,7 @@
 //! LAN discovery: scans a subnet for the products Breezone supports. Each address is asked, in
-//! parallel, whether it is an Airzone WebServer (local API, port 3000), a Shelly (`/shelly`, port
-//! 80), a V2C Trydan (`/RealTimeData`, port 80) or a Hoymiles DTU (port 10081), and products are
-//! identified down to the model.
+//! parallel, whether it is an Airzone WebServer (local API, port 3000), and every module whose
+//! ports (`discovery.tcp` of its manifest) are open there is asked whether it is its hardware;
+//! the modules found by mDNS are asked meanwhile. Products are identified down to the model.
 
 use crate::airzone::AirzoneClient;
 use serde::Serialize;
@@ -88,6 +88,12 @@ const SCAN_PARALLEL: usize = 128;
 /// found at 1.5 s; the former 400 ms missed devices).
 const CONNECT_WITHIN: Duration = Duration::from_millis(1500);
 
+/// The ports of `ports` open at `host`.
+async fn open_ports(host: &str, ports: &[u16]) -> Vec<u16> {
+    let checked = futures_util::future::join_all(ports.iter().map(|p| async move { is_open(host, *p).await.then_some(*p) })).await;
+    checked.into_iter().flatten().collect()
+}
+
 async fn is_open(host: &str, port: u16) -> bool {
     matches!(tokio::time::timeout(CONNECT_WITHIN, TcpStream::connect(format!("{host}:{port}"))).await, Ok(Ok(_)))
 }
@@ -118,8 +124,7 @@ pub async fn probe(host: &str, port: u16) -> Option<Found> {
 /// A product found on the network, of a supported brand.
 #[derive(Debug, Clone, Serialize)]
 pub struct Product {
-    /// "airzone" | "shelly" | "v2c" | "hoymiles" | "homekit" | "hue" | "renson" | "tasmota" |
-    /// "reolink" | "esphome" | "tplink" | "netatmo" (an Ecometer: through the linked account)
+    /// The maker ("airzone", "v2c"…), most often the id of the module.
     pub brand: &'static str,
     /// What adds it: "airzone" (an installation) or the driver of a source.
     pub driver: &'static str,
@@ -144,56 +149,29 @@ pub struct Product {
 /// added: their few connections are kept for their sessions).
 pub async fn scan_products(subnet: &str, airzone_port: u16, quiet: &[std::net::Ipv4Addr]) -> Result<Vec<Product>, String> {
     let hosts = hosts_in(subnet)?;
-    // HomeKit accessories answer mDNS: asked meanwhile.
-    let homekit = tokio::spawn({
+    // The modules found by mDNS are asked meanwhile.
+    let browsed = tokio::spawn({
         let hosts = hosts.clone();
-        async move { crate::homekit::discovery::browse(Duration::from_secs(2), &hosts).await }
+        async move { futures_util::future::join_all(crate::modules::native::all().iter().filter_map(|n| n.browse).map(|browse| browse(hosts.clone()))).await }
     });
+    // Every port a module wants open before its probe, checked once per address.
+    let mut ports: Vec<u16> = crate::modules::native::all().iter().flat_map(|n| n.manifest.discovery.tcp.iter().copied()).collect();
+    ports.sort_unstable();
+    ports.dedup();
+    let ports = Arc::new(ports);
     let limit = Arc::new(Semaphore::new(SCAN_PARALLEL));
     let mut tasks = Vec::with_capacity(hosts.len());
     for host in hosts.into_iter().filter(|h| !quiet.contains(h)) {
         let limit = limit.clone();
+        let ports = ports.clone();
         tasks.push(tokio::spawn(async move {
             let _permit = limit.acquire().await.ok()?;
             let host = host.to_string();
-            let (airzone, (shelly, trydan, hue, renson, tasmota, reolink), hoymiles, esphome, kasa) = tokio::join!(
-                probe(&host, airzone_port),
-                async {
-                    if is_open(&host, 80).await {
-                        tokio::join!(
-                            crate::drivers::shelly::probe(&host),
-                            crate::drivers::trydan::probe(&host),
-                            crate::drivers::hue::probe(&host),
-                            crate::drivers::renson::probe(&host),
-                            crate::drivers::tasmota::probe(&host),
-                            crate::drivers::reolink::probe(&host)
-                        )
-                    } else {
-                        (None, None, None, None, None, false)
-                    }
-                },
-                async {
-                    if is_open(&host, crate::drivers::hoymiles::PORT).await {
-                        crate::drivers::hoymiles::probe(&host).await
-                    } else {
-                        None
-                    }
-                },
-                async {
-                    if is_open(&host, crate::drivers::esphome::PORT).await {
-                        crate::drivers::esphome::probe(&host).await
-                    } else {
-                        None
-                    }
-                },
-                async {
-                    if is_open(&host, crate::drivers::tplink::KASA_PORT).await {
-                        crate::drivers::tplink::probe(&host).await
-                    } else {
-                        None
-                    }
-                }
-            );
+            let (airzone, open) = tokio::join!(probe(&host, airzone_port), open_ports(&host, &ports));
+            // Each module with a port open here is asked (they answer in parallel).
+            let asked =
+                crate::modules::native::all().iter().filter(|n| n.manifest.discovery.tcp.iter().any(|p| open.contains(p))).filter_map(|n| n.probe).map(|probe| probe(host.clone()));
+            let products = futures_util::future::join_all(asked).await;
             let mut found = vec![];
             if let Some(a) = airzone {
                 let note = match (&a.ws_type, a.zones) {
@@ -216,113 +194,7 @@ pub async fn scan_products(subnet: &str, airzone_port: u16, quiet: &[std::net::I
                     flags: 0,
                 });
             }
-            if let Some(s) = shelly {
-                found.push(Product {
-                    brand: "shelly",
-                    driver: "shelly",
-                    model: s.model,
-                    host: host.clone(),
-                    port: 80,
-                    mac: s.mac,
-                    device_id: Some(s.id),
-                    firmware: s.firmware,
-                    note: s.note,
-                    supported: s.supported,
-                    flags: 0,
-                });
-            }
-            if let Some(t) = trydan {
-                found.push(Product {
-                    brand: "v2c",
-                    driver: "trydan",
-                    model: "V2C Trydan".into(),
-                    host: host.clone(),
-                    port: 80,
-                    mac: None,
-                    device_id: (!t.id.is_empty()).then_some(t.id),
-                    firmware: t.firmware,
-                    note: t.note,
-                    supported: true,
-                    flags: 0,
-                });
-            }
-            if let Some(b) = hue {
-                found.push(Product {
-                    brand: "hue",
-                    driver: "hue",
-                    model: format!("Philips Hue {}", if b.model.is_empty() { "Bridge".to_string() } else { format!("Bridge ({})", b.model) }),
-                    host: host.clone(),
-                    port: 80,
-                    mac: None,
-                    device_id: Some(b.id),
-                    firmware: b.firmware,
-                    note: Some(match b.api {
-                        Some(api) => format!("« {} » · API {api} · appuyez sur son bouton pour l'ajouter", b.name),
-                        None => format!("« {} » · appuyez sur son bouton pour l'ajouter", b.name),
-                    }),
-                    supported: true,
-                    flags: 0,
-                });
-            }
-            if let Some(r) = renson {
-                found.push(Product {
-                    brand: "renson",
-                    driver: "renson",
-                    note: Some(format!("{} bouches · API locale", r.rooms)),
-                    model: r.model,
-                    host: host.clone(),
-                    port: 80,
-                    mac: None,
-                    device_id: (!r.serial.is_empty()).then_some(r.serial),
-                    firmware: None,
-                    supported: true,
-                    flags: 0,
-                });
-            }
-            if let Some(h) = hoymiles {
-                found.push(Product {
-                    brand: "hoymiles",
-                    driver: "hoymiles",
-                    note: Some(h.note()),
-                    supported: !h.encrypted,
-                    flags: 0,
-                    model: h.model,
-                    host: host.clone(),
-                    port: crate::drivers::hoymiles::PORT,
-                    mac: None,
-                    device_id: Some(h.serial),
-                    firmware: h.firmware,
-                });
-            }
-            let product = |brand: &'static str, model: String, port: u16, note: Option<String>, supported: bool| Product {
-                brand,
-                driver: brand,
-                model,
-                host: host.clone(),
-                port,
-                mac: None,
-                device_id: None,
-                firmware: None,
-                note,
-                supported,
-                flags: 0,
-            };
-            if let Some(name) = tasmota {
-                found.push(product("tasmota", "Tasmota".into(), 80, Some(format!("« {name} »")), true));
-            }
-            if reolink {
-                found.push(product("reolink", "Reolink".into(), 80, Some("identifiant et mot de passe de la caméra".into()), true));
-            }
-            if let Some(name) = esphome {
-                let note = match name {
-                    Some(n) => format!("« {n} »"),
-                    None => "chiffré : clé de l'API requise".into(),
-                };
-                found.push(product("esphome", "ESPHome".into(), crate::drivers::esphome::PORT, Some(note), true));
-            }
-            if let Some((model, alias)) = kasa {
-                found.push(product("tplink", format!("TP-Link Kasa {model}"), crate::drivers::tplink::KASA_PORT, (!alias.is_empty()).then(|| format!("« {alias} »")), true));
-            }
+            found.extend(products.into_iter().flatten());
             Some(found)
         }));
     }
@@ -332,52 +204,10 @@ pub async fn scan_products(subnet: &str, airzone_port: u16, quiet: &[std::net::I
             found.extend(f);
         }
     }
-    let native: Vec<String> = found.iter().map(|p| ip_of(&p.host).to_string()).collect();
-    // A Hue bridge (and others) also answers as a HomeKit accessory: its own driver is better.
-    for a in homekit.await.unwrap_or_default().into_iter().filter(|a| !native.iter().any(|n| n == ip_of(&a.host))) {
-        let kind = match a.category {
-            Some(2) => "pont",
-            Some(14) => "volet",
-            Some(15) => "fenêtre",
-            Some(7) => "prise",
-            Some(5) => "lumière",
-            _ => "accessoire",
-        };
-        let model = a.model.clone().filter(|m| !m.is_empty()).unwrap_or_else(|| a.name.clone());
-        // The Legrand Ecometer gives HomeKit nothing it measures: its lines come from the cloud.
-        if format!("{model} {}", a.name).to_lowercase().contains("ecometer") {
-            found.push(Product {
-                brand: "netatmo",
-                driver: "netatmo",
-                model,
-                port: a.host.rsplit(':').next().and_then(|p| p.parse().ok()).unwrap_or(0),
-                host: a.host,
-                mac: None,
-                device_id: Some(a.id),
-                firmware: None,
-                note: Some("ses mesures ne passent pas par HomeKit : elles viennent du compte Netatmo".into()),
-                supported: false,
-                flags: a.flags,
-            });
-            continue;
-        }
-        found.push(Product {
-            brand: "homekit",
-            driver: "homekit",
-            model,
-            port: a.host.rsplit(':').next().and_then(|p| p.parse().ok()).unwrap_or(0),
-            host: a.host,
-            mac: None,
-            device_id: Some(a.id),
-            firmware: None,
-            note: Some(if a.paired {
-                format!("HomeKit · {kind} « {} » · déjà appairé à un autre contrôleur", a.name)
-            } else {
-                format!("HomeKit · {kind} « {} » · à appairer avec son code", a.name)
-            }),
-            supported: !a.paired,
-            flags: a.flags,
-        });
+    let probed: Vec<String> = found.iter().map(|p| ip_of(&p.host).to_string()).collect();
+    // A Hue bridge (and others) also answers as a HomeKit accessory: the module that probed it is better.
+    for p in browsed.await.unwrap_or_default().into_iter().flatten().filter(|p| !probed.iter().any(|n| n == ip_of(&p.host))) {
+        found.push(p);
     }
     found.sort_by_key(|p| (p.host.split(':').next().and_then(|h| h.parse::<Ipv4Addr>().ok()).map(u32::from).unwrap_or(0), p.brand));
     Ok(found)

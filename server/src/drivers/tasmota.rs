@@ -9,29 +9,11 @@
 //! Its devices: each relay (a light when the module dims), the energy it measures, and each
 //! sensor that gives a temperature, a humidity… (`environment.sensor@1`).
 
-use super::{ConfigField, Described, DeviceInfo, Driver, DriverError, DriverFuture, DriverInfo, State};
+use super::{Described, DeviceInfo, Driver, DriverError, DriverFuture, State};
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::sync::Mutex;
-
-pub fn info() -> DriverInfo {
-    DriverInfo {
-        id: "tasmota",
-        label: "Tasmota",
-        provides: vec!["switch.relay@1", "light@1", "energy.power@1", "energy.meter@1", "environment.sensor@1"],
-        models: vec!["Sonoff (Tasmota)".into(), "Tasmota".into()],
-        config: vec![
-            ConfigField { name: "host", kind: "string", optional: false, label: crate::text!("Adresse IP ou nom", "IP address or name", "Dirección IP o nombre") },
-            ConfigField {
-                name: "password",
-                kind: "password",
-                optional: true,
-                label: crate::text!("Mot de passe de l'interface web (s'il y en a un)", "Web interface password (if any)", "Contraseña de la interfaz web (si la hay)"),
-            },
-        ],
-    }
-}
 
 /// What answers `Status 0` at an address, if it is a Tasmota (the network scanner).
 pub async fn probe(host: &str) -> Option<String> {

@@ -1123,7 +1123,6 @@ const en: Record<string, string> = {
   "Tous les objets ont déjà une pièce": "Every object already has a room",
   "{placed} objet(s) rangé(s), {created} pièce(s) créée(s)":
     "{placed} object(s) placed, {created} room(s) created",
-  "Reprendre les pièces Renson": "Take the Renson rooms",
   Eco: "Eco",
   Health: "Health",
   Intense: "Intense",
@@ -2031,7 +2030,6 @@ const en: Record<string, string> = {
   "{value} demain": "{value} tomorrow",
   Licences: "Licenses",
   "Données météo : Open-Meteo.com": "Weather data: Open-Meteo.com",
-  "Compte Netatmo": "Netatmo account",
   "La production solaire prévue selon la météo : maintenant, aujourd'hui, ce qui reste à produire et demain. Sans compte : seules la position de la ville et la description des panneaux sont envoyées.":
     "The solar production expected from the weather: now, today, what is still to come and tomorrow. No account: only the position of the city and the description of the panels are sent.",
   "Donnez la puissance crête des panneaux (en kWc, sur la facture de l'installateur), leur inclinaison et leur orientation.":
@@ -2070,6 +2068,44 @@ const en: Record<string, string> = {
     "From the weather, the orientation and the power of the panels",
   "Soleil demain": "Sun tomorrow",
   "sur {kwh} prévus": "of {kwh} expected",
+  "Reprendre les pièces de son application": "Take the rooms of its app",
+  "demande une autre version de l'interface des modules":
+    "needs another version of the module interface",
+  "demande Breezone {version}": "needs Breezone {version}",
+  "demande {name} (version plus récente)": "needs {name} (a newer version)",
+  "demande le compte {name}": "needs the {name} account",
+  "{name} {version} installé": "{name} {version} installed",
+  "Bibliothèque de modules": "Library of modules",
+  "Les modules publiés par Breezone, signés comme ses mises à jour. Seuls ceux qui fonctionnent avec ce serveur s'installent ; ils ne se chargent que lorsqu'un appareil ou un compte s'en sert.":
+    "The modules published by Breezone, signed like its updates. Only those that work with this server can be installed; they load only when a device or an account uses them.",
+  "Aucun module publié pour l'instant.": "No module published yet.",
+  "version {version}": "version {version}",
+  "Installé ({version})": "Installed ({version})",
+  "Mettre à jour ({version})": "Update ({version})",
+  Installer: "Install",
+  Incompatible: "Incompatible",
+  "Modules installés": "Installed modules",
+  "Ceux qui viennent de la bibliothèque, de Breezone ou d'un fichier. Ceux qui font partie de Breezone n'y figurent pas.":
+    "Those from the library, from Breezone or from a file. Those that are part of Breezone are not listed.",
+  "Aucun pour l'instant.": "None yet.",
+  "Ne fonctionne pas avec cette version de Breezone":
+    "Does not work with this version of Breezone",
+  "En service": "In use",
+  "Chargé seulement quand il sert": "Loaded only when used",
+  "Version précédente": "Previous version",
+  "Le module est supprimé de ce serveur. Retirez d'abord ses appareils et son compte.":
+    "The module is deleted from this server. Remove its devices and its account first.",
+  "Installer depuis un fichier": "Install from a file",
+  "Le paquet (.bzm) et sa signature (.bzm.sig) : un module que Breezone n'a pas signé est refusé.":
+    "The package (.bzm) and its signature (.bzm.sig): a module Breezone did not sign is refused.",
+  Paquet: "Package",
+  Signature: "Signature",
+  Bibliothèque: "Library",
+  "Des modules installés sont concernés": "Some installed modules are affected",
+  "{id} {version} sera remplacé par la version {replacement}, compatible.":
+    "{id} {version} will be replaced by version {replacement}, which works with it.",
+  "{id} {version} ne fonctionnera plus : il sera désactivé, sans être supprimé.":
+    "{id} {version} will no longer work: it will be switched off, not deleted.",
 }
 
 export default en

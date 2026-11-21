@@ -4,7 +4,7 @@
 //! Breezone gets its access key the way the Hue app does: the bridge's button is pressed, then
 //! `POST /api` gives a key (the source's secret, stored encrypted).
 
-use super::{ConfigField, Described, DeviceInfo, Driver, DriverError, DriverFuture, DriverInfo, HardwareRoom, Scene, State};
+use super::{Described, DeviceInfo, Driver, DriverError, DriverFuture, HardwareRoom, Scene, State};
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use std::time::Duration;
@@ -207,16 +207,6 @@ pub fn command(params: &State) -> Result<Value, DriverError> {
         return Err(DriverError::Invalid("nothing to set".into()));
     }
     Ok(Value::Object(c))
-}
-
-pub fn info() -> DriverInfo {
-    DriverInfo {
-        id: "hue",
-        label: "Philips Hue (pont)",
-        provides: vec!["light@1"],
-        models: vec!["Hue Bridge (BSB002)".into()],
-        config: vec![ConfigField { name: "host", kind: "string", optional: false, label: crate::text!("Adresse IP ou nom", "IP address or name", "Dirección IP o nombre") }],
-    }
 }
 
 pub struct Hue {

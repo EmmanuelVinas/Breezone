@@ -1,0 +1,21 @@
+{
+  "service": "tariff.day_color",
+  "version": 1,
+  "revision": 0,
+  "label": { "fr": "Couleur des jours (Tempo)", "en": "Colour of the days (Tempo)", "es": "Color de los días (Tempo)" },
+  "queries": [
+    {
+      "name": "colors",
+      "label": { "fr": "Couleurs des jours", "en": "Colours of the days", "es": "Colores de los días" },
+      "params": [
+        { "name": "from", "type": "string", "label": { "fr": "Du (AAAA-MM-JJ)", "en": "From (YYYY-MM-DD)", "es": "Desde (AAAA-MM-DD)" } },
+        { "name": "until", "type": "string", "label": { "fr": "Au (AAAA-MM-JJ, inclus)", "en": "Until (YYYY-MM-DD, included)", "es": "Hasta (AAAA-MM-DD, incluido)" } }
+      ],
+      "list": true,
+      "result": [
+        { "name": "day", "type": "string", "label": { "fr": "Jour", "en": "Day", "es": "Día" } },
+        { "name": "color", "type": "enum", "values": ["blue", "white", "red"], "value_labels": { "blue": { "fr": "Bleu", "en": "Blue", "es": "Azul" }, "white": { "fr": "Blanc", "en": "White", "es": "Blanco" }, "red": { "fr": "Rouge", "en": "Red", "es": "Rojo" } }, "label": { "fr": "Couleur", "en": "Colour", "es": "Color" } }
+      ]
+    }
+  ]
+}

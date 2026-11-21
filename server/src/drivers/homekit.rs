@@ -5,7 +5,7 @@
 //! The source keeps the accessory's address (`host`, "ip:port") and pairing id (`device_id`); the
 //! pairing itself (Breezone's key) is its secret, stored encrypted.
 
-use super::{Described, DeviceInfo, Driver, DriverError, DriverFuture, DriverInfo, Sink, State};
+use super::{Described, DeviceInfo, Driver, DriverError, DriverFuture, Sink, State};
 use crate::homekit::{Connection, HapError, Pairing};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -207,16 +207,6 @@ fn states_of(layout: &Layout, values: &HashMap<(u64, u64), Value>, presses: &Has
         out.insert(t.reference.clone(), s);
     }
     out
-}
-
-pub fn info() -> DriverInfo {
-    DriverInfo {
-        id: "homekit",
-        label: "HomeKit (Legrand, VELUX…)",
-        provides: vec!["cover.position@1", "switch.relay@1", "button@1"],
-        models: vec!["Legrand Home + Control".into(), "VELUX App Control (KIG 300)".into()],
-        config: vec![],
-    }
 }
 
 pub struct HomeKit {
@@ -610,29 +600,31 @@ mod tests {
         let t = Some(token.as_str());
         let host = format!("127.0.0.1:{}", fake.port);
 
-        let (s, _, _) = call("POST", "/api/homekit/pair", t, Some(json!({"host": host, "name": "Legrand", "code": "1234"}))).await;
+        let (s, _, _) = call("POST", "/api/modules/homekit/pairing", t, Some(json!({"step": "finish", "input": {"host": host, "code": "1234"}, "name": "Legrand"}))).await;
         assert_eq!(s, 400, "not a code");
-        let (s, _, v) = call("POST", "/api/homekit/pair", t, Some(json!({"host": host, "name": "Legrand", "code": "111-11-111", "flags": 1}))).await;
+        let (s, _, v) =
+            call("POST", "/api/modules/homekit/pairing", t, Some(json!({"step": "finish", "input": {"host": host, "code": "111-11-111", "flags": 1}, "name": "Legrand"}))).await;
         assert_eq!(s, 422);
         assert!(v.to_string().contains("Code incorrect") || v.to_string().contains("Wrong code"), "{v}");
         // With a screen, the code shown changes when a pairing starts: it is typed afterwards.
         fake.state.lock().unwrap().screen = true;
-        let (s, _, _) = call("POST", "/api/homekit/pair/start", t, Some(json!({"host": host, "flags": 1}))).await;
+        let (s, _, _) = call("POST", "/api/modules/homekit/pairing", t, Some(json!({"step": "start", "input": {"host": host, "flags": 1}}))).await;
         assert_eq!(s, 204);
         let shown = fake.state.lock().unwrap().shown.clone().unwrap();
         // Started again (the dialog reopened): the first one is dropped, a new code shows.
-        let (s, _, _) = call("POST", "/api/homekit/pair/start", t, Some(json!({"host": host, "flags": 1}))).await;
+        let (s, _, _) = call("POST", "/api/modules/homekit/pairing", t, Some(json!({"step": "start", "input": {"host": host, "flags": 1}}))).await;
         assert_eq!(s, 204);
-        let (s, _, v) = call("POST", "/api/homekit/pair", t, Some(json!({"host": host, "name": "Legrand", "code": shown}))).await;
+        let (s, _, v) = call("POST", "/api/modules/homekit/pairing", t, Some(json!({"step": "finish", "input": {"host": host, "code": shown}, "name": "Legrand"}))).await;
         assert_eq!(s, 422, "the code of the dropped pairing: {v}");
-        let (s, _, _) = call("POST", "/api/homekit/pair/start", t, Some(json!({"host": host, "flags": 1}))).await;
+        let (s, _, _) = call("POST", "/api/modules/homekit/pairing", t, Some(json!({"step": "start", "input": {"host": host, "flags": 1}}))).await;
         assert_eq!(s, 204);
-        let (s, _, _) = call("POST", "/api/homekit/pair/cancel", t, Some(json!({"host": host}))).await;
+        let (s, _, _) = call("POST", "/api/modules/homekit/pairing", t, Some(json!({"step": "cancel", "input": {"host": host}}))).await;
         assert_eq!(s, 204);
-        let (s, _, _) = call("POST", "/api/homekit/pair/start", t, Some(json!({"host": host, "flags": 1}))).await;
+        let (s, _, _) = call("POST", "/api/modules/homekit/pairing", t, Some(json!({"step": "start", "input": {"host": host, "flags": 1}}))).await;
         assert_eq!(s, 204);
         let shown = fake.state.lock().unwrap().shown.clone().unwrap();
-        let (s, text, source) = call("POST", "/api/homekit/pair", t, Some(json!({"host": host, "name": "Legrand", "code": shown, "flags": 1}))).await;
+        let (s, text, source) =
+            call("POST", "/api/modules/homekit/pairing", t, Some(json!({"step": "finish", "input": {"host": host, "code": shown, "flags": 1}, "name": "Legrand"}))).await;
         assert_eq!(s, 201, "{text}");
         assert_eq!(source["status"]["state"], "online", "{source}");
         assert_eq!(source["config"]["device_id"], "AA:BB:CC:DD:EE:FF");

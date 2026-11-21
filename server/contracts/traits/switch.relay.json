@@ -1,6 +1,7 @@
 {
   "trait": "switch.relay",
   "version": 1,
+  "revision": 0,
   "label": { "fr": "Relais", "en": "Relay", "es": "Relé" },
   "state": [
     { "name": "on", "type": "bool", "label": { "fr": "Allumé", "en": "On", "es": "Encendido" } }
@@ -13,5 +14,12 @@
         { "name": "on", "type": "bool", "label": { "fr": "Allumé", "en": "On", "es": "Encendido" } }
       ]
     }
-  ]
+  ],
+  "ui": {
+    "kind": "switch",
+    "primary": "on",
+    "card": [
+      {"widget": "toggle", "field": "on", "action": "set", "param": "on"}
+    ]
+  }
 }

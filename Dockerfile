@@ -31,12 +31,14 @@ COPY --from=manifest /src/Cargo.toml /src/Cargo.lock ./
 RUN mkdir -p src/bin \
  && echo 'fn main() {}' > src/main.rs \
  && echo 'fn main() {}' > src/bin/mock_airzone.rs \
+ && echo 'fn main() {}' > src/bin/module_publish.rs \
  && touch src/lib.rs \
  && cargo build --release --locked \
  && rm -rf src
 COPY server/ ./
-RUN touch src/main.rs src/lib.rs src/bin/mock_airzone.rs \
- && cargo build --release --locked --bins
+RUN touch src/main.rs src/lib.rs src/bin/mock_airzone.rs src/bin/module_publish.rs \
+ && cargo build --release --locked --bins \
+ && ./target/release/module-publish host > /src/host.json
 
 # --- Release files (self-update, issue #40) ------------------------------------------------
 # The server and the web UI only, exported by the release workflow to make the signed archive
@@ -44,6 +46,8 @@ RUN touch src/main.rs src/lib.rs src/bin/mock_airzone.rs \
 FROM scratch AS release-files
 COPY --from=server /src/target/release/breezone-server /breezone-server
 COPY --from=web /web/dist /web
+# What this version hosts for modules: read before updating, to check the modules installed.
+COPY --from=server /src/host.json /host.json
 
 # --- Runtime -------------------------------------------------------------------------------
 FROM alpine:3.22

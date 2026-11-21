@@ -1,6 +1,7 @@
 {
   "trait": "solar.forecast",
   "version": 1,
+  "revision": 0,
   "label": { "fr": "Prévision solaire", "en": "Solar forecast", "es": "Previsión solar" },
   "state": [
     { "name": "power", "type": "number", "unit": "W", "label": { "fr": "Puissance prévue maintenant", "en": "Power expected now", "es": "Potencia prevista ahora" } },
@@ -11,5 +12,18 @@
   "actions": [],
   "forecast": [
     { "name": "power", "type": "number", "unit": "W", "label": { "fr": "Puissance prévue", "en": "Expected power", "es": "Potencia prevista" } }
-  ]
+  ],
+  "ui": {
+    "kind": "solar",
+    "primary": "power",
+    "card": [
+      {"widget": "value", "field": "power"},
+      {"widget": "value", "field": "energy_remaining"}
+    ],
+    "detail": [
+      {"widget": "chart", "field": "power", "forecast": true},
+      {"widget": "value", "field": "energy_today"},
+      {"widget": "value", "field": "energy_tomorrow"}
+    ]
+  }
 }

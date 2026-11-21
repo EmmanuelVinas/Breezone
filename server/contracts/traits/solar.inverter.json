@@ -1,6 +1,7 @@
 {
   "trait": "solar.inverter",
   "version": 1,
+  "revision": 0,
   "label": { "fr": "Onduleur solaire", "en": "Solar inverter", "es": "Inversor solar" },
   "state": [
     { "name": "energy_today", "type": "number", "unit": "kWh", "label": { "fr": "Production du jour", "en": "Production today", "es": "Producción de hoy" } },
@@ -9,5 +10,17 @@
     { "name": "frequency", "type": "number", "history": false, "unit": "Hz", "optional": true, "label": { "fr": "Fréquence du réseau", "en": "Grid frequency", "es": "Frecuencia de la red" } },
     { "name": "panels", "type": "integer", "history": false, "label": { "fr": "Panneaux", "en": "Panels", "es": "Paneles" } }
   ],
-  "actions": []
+  "actions": [],
+  "ui": {
+    "kind": "solar",
+    "primary": "energy_today",
+    "card": [
+      {"widget": "value", "field": "energy_today"}
+    ],
+    "detail": [
+      {"widget": "value", "field": "energy_today"},
+      {"widget": "value", "field": "energy_total"},
+      {"widget": "value", "field": "temperature"}
+    ]
+  }
 }

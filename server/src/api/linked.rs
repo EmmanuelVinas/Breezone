@@ -91,11 +91,11 @@ pub struct EnabledInput {
 /// Switches an account or a service on or off, without forgetting it: what uses it does as if it
 /// were not set (the Netatmo or EZVIZ module stops, the Tempo colours come from the public relay…).
 pub async fn set_enabled(State(state): State<AppState>, AdminUser(user): AdminUser, Path(kind): Path<String>, Json(input): Json<EnabledInput>) -> ApiResult<Json<AccountView>> {
-    if !accounts::KINDS.contains(&kind.as_str()) {
+    if !accounts::is_kind(&kind) {
         return Err(ApiError::not_found("unknown account"));
     }
     crate::db::set_account_enabled(&state.db, &kind, input.enabled).await?;
-    if accounts::MODULES.contains(&kind.as_str()) || accounts::SERVICE_MODULES.contains(&kind.as_str()) {
+    if accounts::comes_with_account(&kind) {
         for s in crate::db::list_sources(&state.db).await?.into_iter().filter(|s| s.driver == kind) {
             crate::db::update_source(&state.db, s.id, &s.name, &s.config, input.enabled).await?;
         }
@@ -115,10 +115,10 @@ pub async fn set_enabled(State(state): State<AppState>, AdminUser(user): AdminUs
 }
 
 pub async fn delete(State(state): State<AppState>, AdminUser(user): AdminUser, Path(kind): Path<String>) -> ApiResult<StatusCode> {
-    if !accounts::KINDS.contains(&kind.as_str()) {
+    if !accounts::is_kind(&kind) {
         return Err(ApiError::not_found("unknown account"));
     }
-    if kind == accounts::WEATHER {
+    if accounts::is_service_only(&kind) {
         return Err(ApiError::bad_request("la météo se désactive, elle ne se retire pas"));
     }
     if kind == crate::cloud::ACCOUNT {

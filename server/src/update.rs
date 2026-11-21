@@ -15,9 +15,6 @@
 //!   update, previous version run again).
 
 use crate::db::Db;
-use base64::engine::general_purpose::STANDARD;
-use base64::Engine;
-use ed25519_dalek::{Signature, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
@@ -174,10 +171,7 @@ pub fn signed_message(version: Version, target: &str, archive: &[u8]) -> Vec<u8>
 
 /// Checks an archive's signature (`signature`: base64, as published) with `public_key` (base64).
 pub fn verify(public_key: &str, version: Version, target: &str, archive: &[u8], signature: &str) -> bool {
-    let Some(key) = STANDARD.decode(public_key.trim()).ok().and_then(|k| <[u8; 32]>::try_from(k).ok()) else { return false };
-    let Ok(key) = VerifyingKey::from_bytes(&key) else { return false };
-    let Some(sig) = STANDARD.decode(signature.trim()).ok().and_then(|s| <[u8; 64]>::try_from(s).ok()) else { return false };
-    key.verify_strict(&signed_message(version, target, archive), &Signature::from_bytes(&sig)).is_ok()
+    crate::modules::package::verify_signature(public_key, &signed_message(version, target, archive), signature)
 }
 
 // ---------------------------------------------------------------------------------------
@@ -827,7 +821,9 @@ impl Updater {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ed25519_dalek::{Signer, SigningKey};
+    use base64::engine::general_purpose::STANDARD;
+    use base64::Engine;
+    use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
     use std::io::Write;
 
     fn temp_dir(name: &str) -> PathBuf {

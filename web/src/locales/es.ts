@@ -1132,7 +1132,6 @@ const es: Record<string, string> = {
   "Tous les objets ont déjà une pièce": "Todos los objetos ya tienen estancia",
   "{placed} objet(s) rangé(s), {created} pièce(s) créée(s)":
     "{placed} objeto(s) colocado(s), {created} estancia(s) creada(s)",
-  "Reprendre les pièces Renson": "Tomar las estancias de Renson",
   Eco: "Eco",
   Health: "Health",
   Intense: "Intense",
@@ -2052,7 +2051,6 @@ const es: Record<string, string> = {
   "{value} demain": "{value} mañana",
   Licences: "Licencias",
   "Données météo : Open-Meteo.com": "Datos meteorológicos: Open-Meteo.com",
-  "Compte Netatmo": "Cuenta Netatmo",
   "La production solaire prévue selon la météo : maintenant, aujourd'hui, ce qui reste à produire et demain. Sans compte : seules la position de la ville et la description des panneaux sont envoyées.":
     "La producción solar prevista según el tiempo: ahora, hoy, lo que queda por producir y mañana. Sin cuenta: solo se envían la posición de la ciudad y la descripción de los paneles.",
   "Donnez la puissance crête des panneaux (en kWc, sur la facture de l'installateur), leur inclinaison et leur orientation.":
@@ -2091,6 +2089,47 @@ const es: Record<string, string> = {
     "Según el tiempo, la orientación y la potencia de los paneles",
   "Soleil demain": "Sol mañana",
   "sur {kwh} prévus": "de {kwh} previstos",
+  "Reprendre les pièces de son application":
+    "Recuperar las habitaciones de su aplicación",
+  "demande une autre version de l'interface des modules":
+    "necesita otra versión de la interfaz de módulos",
+  "demande Breezone {version}": "necesita Breezone {version}",
+  "demande {name} (version plus récente)":
+    "necesita {name} (una versión más reciente)",
+  "demande le compte {name}": "necesita la cuenta {name}",
+  "{name} {version} installé": "{name} {version} instalado",
+  "Bibliothèque de modules": "Biblioteca de módulos",
+  "Les modules publiés par Breezone, signés comme ses mises à jour. Seuls ceux qui fonctionnent avec ce serveur s'installent ; ils ne se chargent que lorsqu'un appareil ou un compte s'en sert.":
+    "Los módulos publicados por Breezone, firmados como sus actualizaciones. Solo se instalan los que funcionan con este servidor; solo se cargan cuando un aparato o una cuenta los usa.",
+  "Aucun module publié pour l'instant.": "Aún no hay módulos publicados.",
+  "version {version}": "versión {version}",
+  "Installé ({version})": "Instalado ({version})",
+  "Mettre à jour ({version})": "Actualizar ({version})",
+  Installer: "Instalar",
+  Incompatible: "Incompatible",
+  "Modules installés": "Módulos instalados",
+  "Ceux qui viennent de la bibliothèque, de Breezone ou d'un fichier. Ceux qui font partie de Breezone n'y figurent pas.":
+    "Los que vienen de la biblioteca, de Breezone o de un archivo. Los que forman parte de Breezone no aparecen.",
+  "Aucun pour l'instant.": "Ninguno por ahora.",
+  "Ne fonctionne pas avec cette version de Breezone":
+    "No funciona con esta versión de Breezone",
+  "En service": "En uso",
+  "Chargé seulement quand il sert": "Se carga solo cuando se usa",
+  "Version précédente": "Versión anterior",
+  "Le module est supprimé de ce serveur. Retirez d'abord ses appareils et son compte.":
+    "El módulo se elimina de este servidor. Quite primero sus aparatos y su cuenta.",
+  "Installer depuis un fichier": "Instalar desde un archivo",
+  "Le paquet (.bzm) et sa signature (.bzm.sig) : un module que Breezone n'a pas signé est refusé.":
+    "El paquete (.bzm) y su firma (.bzm.sig): un módulo que Breezone no firmó se rechaza.",
+  Paquet: "Paquete",
+  Signature: "Firma",
+  Bibliothèque: "Biblioteca",
+  "Des modules installés sont concernés":
+    "Algunos módulos instalados se ven afectados",
+  "{id} {version} sera remplacé par la version {replacement}, compatible.":
+    "{id} {version} se sustituirá por la versión {replacement}, compatible.",
+  "{id} {version} ne fonctionnera plus : il sera désactivé, sans être supprimé.":
+    "{id} {version} dejará de funcionar: se desactivará, sin eliminarse.",
 }
 
 export default es

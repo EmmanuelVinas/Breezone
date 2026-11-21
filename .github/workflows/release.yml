@@ -95,6 +95,8 @@ jobs:
       - run: |
           mkdir -p /tmp/archives
           tar -czf "/tmp/archives/breezone-${GITHUB_REF_NAME#v}-linux-${ARCH}.tar.gz" -C /tmp/release-files breezone-server web
+          # The same for both architectures: published once, beside the archives.
+          if [ "$ARCH" = amd64 ]; then cp /tmp/release-files/host.json /tmp/archives/host.json; fi
       - uses: actions/upload-artifact@v7
         with:
           name: archive-${{ env.ARCH }}

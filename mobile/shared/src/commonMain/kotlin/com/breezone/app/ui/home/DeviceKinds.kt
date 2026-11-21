@@ -27,6 +27,7 @@ import com.breezone.app.data.EnergyPowerState
 import com.breezone.app.data.EvChargerState
 import com.breezone.app.data.Hub
 import com.breezone.app.data.SwitchRelayState
+import com.breezone.app.data.TRAIT_KINDS
 import com.breezone.app.data.VentilationUnitState
 import com.breezone.app.data.Zone
 import com.breezone.app.data.ZoneCommand
@@ -78,27 +79,16 @@ enum class DeviceKind(val id: String, val label: StringResource, val icon: Image
     }
 }
 
-/** The kind of a device: from its kind, else from its traits. */
+/**
+ * The kind of a device: its own kind when it names one (a shutter, a window…), else the first in
+ * list order among those of its traits (`ui.kind` in the catalog), else Other.
+ */
 val DeviceView.deviceKind: DeviceKind
     get() {
-        fun has(prefix: String) = kind.startsWith(prefix) || traits.any { it.startsWith(prefix) }
-        return when {
-            kind == "shutter" -> DeviceKind.Shutter
-            kind == "window" -> DeviceKind.Window
-            kind == "door" -> DeviceKind.Door
-            has("climate.") -> DeviceKind.Climate
-            has("ev.charger") -> DeviceKind.Charger
-            has("light") -> DeviceKind.Light
-            has("cover.") -> DeviceKind.Shutter
-            has("ventilation.unit") -> DeviceKind.Ventilation
-            has("ventilation.room") -> DeviceKind.RoomAir
-            has("switch.") -> DeviceKind.Switch
-            has("solar.") -> DeviceKind.Solar
-            has("energy.") -> DeviceKind.Energy
-            has("environment.") -> DeviceKind.Sensor
-            kind == "remote" || has("button") -> DeviceKind.Remote
-            else -> DeviceKind.Other
-        }
+        DeviceKind.byId(kind)?.takeIf { it != DeviceKind.Other }?.let { return it }
+        return (listOf(kind) + traits.map { it.substringBefore('@') })
+            .mapNotNull { TRAIT_KINDS[it]?.let(DeviceKind::byId) }
+            .minByOrNull { it.ordinal } ?: DeviceKind.Other
     }
 
 @Composable

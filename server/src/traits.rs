@@ -76,7 +76,15 @@ pub struct Action {
 pub struct Trait {
     #[serde(rename = "trait")]
     pub name: String,
+    /// Major version: a new one for an incompatible change, in a file of its own.
     pub version: u32,
+    /// Additions made since the major version came (optional fields, actions, parameters): a
+    /// client or a module that needs one checks the revision a server announces.
+    #[serde(default)]
+    pub revision: u32,
+    /// The revision that added each field or action, when it is not the first one.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub since: BTreeMap<String, u32>,
     pub label: Label,
     #[serde(default)]
     pub state: Vec<Field>,
@@ -86,6 +94,70 @@ pub struct Trait {
     /// give): served as curves at `GET /api/devices/{id}/forecast`, not kept in the state.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub forecast: Vec<Field>,
+    /// How a client that does not know this trait shows it (words of `contracts/ui.json`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ui: Option<Ui>,
+}
+
+/// The presentation of a trait.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Ui {
+    /// The kind of device it makes (`shutter`…): its place in lists and its page.
+    pub kind: String,
+    /// The field that sums the device up.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub primary: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub card: Vec<Widget>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub detail: Vec<Widget>,
+}
+
+/// A piece of a card or of a detail.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Widget {
+    pub widget: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub field: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action: Option<String>,
+    /// The parameter of the action the widget sets.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub param: Option<String>,
+    /// Fixed parameters of the action (a button « Ouvrir » sends `{"position": 100}`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub params: Option<serde_json::Map<String, serde_json::Value>>,
+    /// A bool field: the widget is shown only while it is true.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub when: Option<String>,
+    /// A chart of the forecast of the field rather than of its history.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub forecast: bool,
+}
+
+/// A kind of device of `contracts/ui.json`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Kind {
+    pub id: String,
+    pub icon: String,
+    /// The page of the clients that handles it, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub page: Option<String>,
+    pub label: Label,
+}
+
+/// The words of the presentation (`contracts/ui.json`), served at `GET /api/ui`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Vocabulary {
+    pub kinds: Vec<Kind>,
+    pub widgets: BTreeMap<String, String>,
+    pub icons: Vec<String>,
+}
+
+static VOCABULARY: LazyLock<Vocabulary> = LazyLock::new(|| serde_json::from_str(include_str!("../contracts/ui.json")).unwrap_or_else(|e| panic!("contracts/ui.json: {e}")));
+
+pub fn vocabulary() -> &'static Vocabulary {
+    &VOCABULARY
 }
 
 impl Trait {
@@ -122,29 +194,32 @@ pub fn is_counter(field: &str) -> bool {
 }
 
 #[cfg(test)]
+const KINDS: &[&str] = &["bool", "integer", "number", "string", "enum"];
+
+/// Checks a field of a contract (traits and services), for the tests.
+#[cfg(test)]
+pub(crate) fn check_field(t: &str, f: &Field) {
+    assert!(KINDS.contains(&f.kind.as_str()), "{t}.{}: unknown type {}", f.name, f.kind);
+    assert_eq!(f.kind == "enum", !f.values.is_empty(), "{t}.{}: an enum lists its values, and only an enum", f.name);
+    let named: Vec<&String> = f.value_labels.keys().collect();
+    let mut values: Vec<&String> = f.values.iter().collect();
+    values.sort();
+    assert_eq!(named, values, "{t}.{}: one label per value, in value_labels", f.name);
+    for l in f.value_labels.values() {
+        assert!(![&l.fr, &l.en, &l.es].iter().any(|s| s.trim().is_empty()), "{t}.{}: a value label is missing", f.name);
+    }
+    for l in [&f.label.fr, &f.label.en, &f.label.es] {
+        assert!(!l.trim().is_empty(), "{t}.{}: a label is missing", f.name);
+    }
+    if let (Some(min), Some(max)) = (f.min, f.max) {
+        assert!(min <= max, "{t}.{}: min > max", f.name);
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::HashSet;
-
-    const KINDS: &[&str] = &["bool", "integer", "number", "string", "enum"];
-
-    fn check_field(t: &str, f: &Field) {
-        assert!(KINDS.contains(&f.kind.as_str()), "{t}.{}: unknown type {}", f.name, f.kind);
-        assert_eq!(f.kind == "enum", !f.values.is_empty(), "{t}.{}: an enum lists its values, and only an enum", f.name);
-        let named: Vec<&String> = f.value_labels.keys().collect();
-        let mut values: Vec<&String> = f.values.iter().collect();
-        values.sort();
-        assert_eq!(named, values, "{t}.{}: one label per value, in value_labels", f.name);
-        for l in f.value_labels.values() {
-            assert!(![&l.fr, &l.en, &l.es].iter().any(|s| s.trim().is_empty()), "{t}.{}: a value label is missing", f.name);
-        }
-        for l in [&f.label.fr, &f.label.en, &f.label.es] {
-            assert!(!l.trim().is_empty(), "{t}.{}: a label is missing", f.name);
-        }
-        if let (Some(min), Some(max)) = (f.min, f.max) {
-            assert!(min <= max, "{t}.{}: min > max", f.name);
-        }
-    }
 
     #[test]
     fn every_trait_file_is_embedded_and_valid() {
@@ -175,7 +250,57 @@ mod tests {
                     check_field(&format!("{}.{}", t.name, a.name), p);
                 }
             }
+            for (what, rev) in &t.since {
+                assert!(names.contains(what) || actions.contains(what), "{}: since names {what}, which it does not have", t.name);
+                assert!(*rev >= 1 && *rev <= t.revision, "{}.{what}: since {rev} is not a revision of the trait (0..={})", t.name, t.revision);
+            }
+            check_ui(t);
         }
+    }
+
+    fn check_ui(t: &Trait) {
+        let ui = t.ui.as_ref().unwrap_or_else(|| panic!("{}: no ui", t.name));
+        let v = vocabulary();
+        assert!(v.kinds.iter().any(|k| k.id == ui.kind), "{}: unknown kind {}", t.name, ui.kind);
+        let field = |n: &str| t.state.iter().find(|f| f.name == n);
+        if let Some(p) = &ui.primary {
+            assert!(field(p).is_some(), "{}: primary {p} is not a field", t.name);
+        }
+        for w in ui.card.iter().chain(&ui.detail) {
+            let at = format!("{}.ui.{}", t.name, w.widget);
+            assert!(v.widgets.contains_key(&w.widget), "{at}: unknown widget");
+            if let Some(f) = &w.field {
+                let known = if w.forecast { t.forecast.iter().any(|x| &x.name == f) } else { field(f).is_some() };
+                assert!(known, "{at}: no field {f}");
+            }
+            if let Some(a) = &w.action {
+                let action = t.action(a).unwrap_or_else(|| panic!("{at}: no action {a}"));
+                if let Some(p) = &w.param {
+                    assert!(action.params.iter().any(|x| &x.name == p), "{at}: {a} has no parameter {p}");
+                }
+                for p in w.params.iter().flat_map(|m| m.keys()) {
+                    assert!(action.params.iter().any(|x| &x.name == p), "{at}: {a} has no parameter {p}");
+                }
+            }
+            if let Some(b) = &w.when {
+                assert_eq!(field(b).map(|f| f.kind.as_str()), Some("bool"), "{at}: when {b} is not a bool field");
+            }
+            let needs_action = ["toggle", "slider", "stepper", "enum", "color"].contains(&w.widget.as_str());
+            assert!(!needs_action || (w.action.is_some() && w.param.is_some() && w.field.is_some()), "{at}: needs a field, an action and its param");
+            assert!(w.widget != "button" || w.action.is_some(), "{at}: a button runs an action");
+        }
+    }
+
+    #[test]
+    fn the_vocabulary_is_consistent() {
+        let v = vocabulary();
+        let mut ids = HashSet::new();
+        for k in &v.kinds {
+            assert!(ids.insert(&k.id), "kind {} twice", k.id);
+            assert!(v.icons.contains(&k.icon), "kind {}: unknown icon {}", k.id, k.icon);
+            assert!(![&k.label.fr, &k.label.en, &k.label.es].iter().any(|s| s.trim().is_empty()), "kind {}: a label is missing", k.id);
+        }
+        assert_eq!(v.kinds.last().map(|k| k.id.as_str()), Some("other"), "`other` comes last: it takes what no kind fits");
     }
 
     #[test]
@@ -190,10 +315,15 @@ mod tests {
 
     #[test]
     fn announced_traits_are_in_the_catalog() {
-        for (name, versions) in crate::capabilities::Capabilities::local().traits {
+        let caps = crate::capabilities::Capabilities::local();
+        for (name, versions) in &caps.traits {
             for v in versions {
-                assert!(get(&name, v).is_some(), "{name}@{v} is announced but not described in contracts/traits");
+                assert!(get(name, *v).is_some(), "{name}@{v} is announced but not described in contracts/traits");
             }
+        }
+        for t in catalog() {
+            assert!(caps.traits.get(&t.name).is_some_and(|v| v.contains(&t.version)), "{} is described but not announced", t.id());
+            assert_eq!(caps.host.traits.get(&t.name).and_then(|m| m.get(&t.version.to_string())), Some(&t.revision), "{}: revision announced", t.id());
         }
     }
 

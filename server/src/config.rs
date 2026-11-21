@@ -63,6 +63,9 @@ pub struct Config {
     pub conso_api_url: String,
     pub netatmo_url: String,
     pub ezviz_url: String,
+    /// Where the library of modules is read, and the key that signs it: the official repository
+    /// and the key of the releases, always (no variable changes them); the tests point elsewhere.
+    pub modules_library: Option<(String, String)>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -126,6 +129,7 @@ impl Config {
             conso_api_url: var("BREEZONE_CONSO_API_URL").unwrap_or_else(|| "https://conso.boris.sh".into()),
             netatmo_url: var("BREEZONE_NETATMO_URL").unwrap_or_else(|| "https://api.netatmo.com".into()),
             ezviz_url: var("BREEZONE_EZVIZ_URL").unwrap_or_else(|| "https://apiieu.ezvizlife.com".into()),
+            modules_library: None,
         }
     }
 
@@ -136,6 +140,11 @@ impl Config {
             None if self.airzone_cloud_url.contains("m.airzonecloud.com") => "https://prodctrl.airzonecloud.com".into(),
             None => self.airzone_cloud_url.clone(),
         }
+    }
+
+    /// The address of the maker's service of the modules that reach it through their account.
+    pub fn module_urls(&self) -> std::collections::HashMap<String, String> {
+        [("netatmo", &self.netatmo_url), ("ezviz", &self.ezviz_url)].into_iter().map(|(k, v)| (k.to_string(), v.clone())).collect()
     }
 
     pub fn for_tests(data_dir: PathBuf) -> Self {
@@ -173,6 +182,7 @@ impl Config {
             conso_api_url: "http://127.0.0.1:9".into(),
             netatmo_url: "http://127.0.0.1:9".into(),
             ezviz_url: "http://127.0.0.1:9".into(),
+            modules_library: None,
         }
     }
 }

@@ -1,6 +1,7 @@
 {
   "trait": "cover.position",
   "version": 1,
+  "revision": 0,
   "label": { "fr": "Volet, store ou fenêtre", "en": "Shutter, blind or window", "es": "Persiana, toldo o ventana" },
   "state": [
     { "name": "position", "type": "integer", "unit": "%", "min": 0, "max": 100, "label": { "fr": "Ouverture", "en": "Opening", "es": "Apertura" } },
@@ -21,5 +22,20 @@
       "label": { "fr": "Arrêter", "en": "Stop", "es": "Detener" },
       "params": []
     }
-  ]
+  ],
+  "ui": {
+    "kind": "shutter",
+    "primary": "position",
+    "card": [
+      {"widget": "slider", "field": "position", "action": "set", "param": "position"},
+      {"widget": "button", "action": "stop", "when": "stoppable"}
+    ],
+    "detail": [
+      {"widget": "slider", "field": "position", "action": "set", "param": "position"},
+      {"widget": "button", "action": "set", "params": {"position": 100}},
+      {"widget": "button", "action": "stop", "when": "stoppable"},
+      {"widget": "button", "action": "set", "params": {"position": 0}},
+      {"widget": "value", "field": "moving"}
+    ]
+  }
 }

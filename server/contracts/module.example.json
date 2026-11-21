@@ -1,0 +1,26 @@
+{
+  "id": "shelly",
+  "version": "1.4.0",
+  "name": { "fr": "Shelly (Plus, Pro, Gen3, Gen4)", "en": "Shelly (Plus, Pro, Gen3, Gen4)", "es": "Shelly (Plus, Pro, Gen3, Gen4)" },
+  "description": { "fr": "Relais et compteurs Shelly, par leur API locale.", "en": "Shelly relays and meters, through their local API.", "es": "Relés y medidores Shelly, por su API local." },
+  "roles": ["driver"],
+  "requires": { "api": "^1.0", "breezone": ">=0.13.0", "accounts": [] },
+  "provides": { "traits": ["energy.power@1.0", "energy.meter@1.0", "switch.relay@1.0"], "services": [] },
+  "models": ["Shelly Plus 1PM", "Shelly Pro 3EM"],
+  "config": [
+    { "name": "host", "type": "string", "label": { "fr": "Adresse IP ou nom", "en": "IP address or name", "es": "Dirección IP o nombre" } }
+  ],
+  "config_version": 1,
+  "fills": { "timezone": "server.timezone" },
+  "pairing": "form",
+  "discovery": {
+    "mdns": [{ "service": "_shelly._tcp", "txt": { "gen": "2" } }],
+    "http": [{ "port": 80, "path": "/shelly", "json_has": ["mac", "gen"] }],
+    "tcp": [80],
+    "mac_oui": ["E8:DB:84", "A8:03:2A"]
+  },
+  "permissions": { "network": { "lan": true, "hosts": [], "udp_broadcast": false, "mdns": ["_shelly._tcp"] }, "memory_mb": 16 },
+  "read_every_s": 5,
+  "cloud": false,
+  "optional_calls": ["probe", "listen", "diagnostic"]
+}

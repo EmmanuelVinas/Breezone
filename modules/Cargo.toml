@@ -1,0 +1,15 @@
+# Modules of Breezone (docs/roadmap/modules.md): WebAssembly components built for wasm32-wasip2,
+# loaded by the server only when a source uses them.
+[workspace]
+resolver = "2"
+members = ["tasmota", "testing/misbehave"]
+
+[workspace.package]
+edition = "2021"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

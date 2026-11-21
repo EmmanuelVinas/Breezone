@@ -14,7 +14,7 @@
 //! each sensor of power (`energy.power@1`), and the sensors of the air of the device together
 //! (`environment.sensor@1`: temperature, humidity, pressure, CO₂, illuminance).
 
-use super::{ConfigField, Described, DeviceInfo, Driver, DriverError, DriverFuture, DriverInfo, State};
+use super::{Described, DeviceInfo, Driver, DriverError, DriverFuture, State};
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use serde_json::{json, Map, Value};
@@ -25,34 +25,6 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::{mpsc, Mutex, Notify};
 
 pub const PORT: u16 = 6053;
-
-pub fn info() -> DriverInfo {
-    DriverInfo {
-        id: "esphome",
-        label: "ESPHome",
-        provides: vec!["switch.relay@1", "light@1", "cover.position@1", "energy.power@1", "environment.sensor@1"],
-        models: vec!["ESPHome (API native)".into()],
-        config: vec![
-            ConfigField { name: "host", kind: "string", optional: false, label: crate::text!("Adresse IP ou nom", "IP address or name", "Dirección IP o nombre") },
-            ConfigField {
-                name: "key",
-                kind: "password",
-                optional: true,
-                label: crate::text!(
-                    "Clé de chiffrement de l'API (api: encryption: key)",
-                    "API encryption key (api: encryption: key)",
-                    "Clave de cifrado de la API (api: encryption: key)"
-                ),
-            },
-            ConfigField {
-                name: "password",
-                kind: "password",
-                optional: true,
-                label: crate::text!("Mot de passe de l'API (ancien)", "API password (old)", "Contraseña de la API (antigua)"),
-            },
-        ],
-    }
-}
 
 // ---------------------------------------------------------------------------------------
 // Protobuf, by hand: the few messages used

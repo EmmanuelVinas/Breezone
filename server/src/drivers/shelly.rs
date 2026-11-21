@@ -7,7 +7,7 @@
 //! * `switch:N` (Plus 1PM, Plug S, Pro…) → `switch.relay@1`, with power and energy when measured;
 //! * `pm1:N` (Plus PM Mini) → `energy.power@1`, `energy.meter@1`.
 
-use super::{ConfigField, Described, DeviceInfo, Driver, DriverError, DriverFuture, DriverInfo, State};
+use super::{Described, DeviceInfo, Driver, DriverError, DriverFuture, State};
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use std::time::Duration;
@@ -96,20 +96,15 @@ pub async fn probe(host: &str) -> Option<Identified> {
     identify(&info)
 }
 
-pub fn info() -> DriverInfo {
-    DriverInfo {
-        id: "shelly",
-        label: "Shelly (Plus, Pro, Gen3, Gen4)",
-        provides: vec!["energy.power@1", "energy.meter@1", "switch.relay@1"],
-        models: MODELS
-            .iter()
-            .map(|(_, name, note)| match note {
-                Some(n) => format!("{name} ({n})"),
-                None => name.to_string(),
-            })
-            .collect(),
-        config: vec![ConfigField { name: "host", kind: "string", optional: false, label: crate::text!("Adresse IP ou nom", "IP address or name", "Dirección IP o nombre") }],
-    }
+/// The models it recognises by name (`models` of its manifest).
+pub fn models() -> Vec<String> {
+    MODELS
+        .iter()
+        .map(|(_, name, note)| match note {
+            Some(n) => format!("{name} ({n})"),
+            None => name.to_string(),
+        })
+        .collect()
 }
 
 pub struct Shelly {

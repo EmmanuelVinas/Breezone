@@ -1,0 +1,90 @@
+# Publishes a module of `modules/` (docs/roadmap/modules.md § 6): a tag `module-<id>-v<version>`
+# builds its component, packs it with its manifest, signs the package with the key of the
+# releases, adds it to the index of the library (its number grows), signs the index, and uploads
+# both to the `modules` release, where every server reads them.
+name: modules
+
+on:
+  push:
+    tags: ["module-*-v*"]
+
+permissions:
+  contents: write
+
+# One publication at a time: each reads the index and writes the next number.
+concurrency:
+  group: modules-library
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip2
+      - name: Module and version from the tag
+        id: tag
+        run: |
+          set -euo pipefail
+          rest="${GITHUB_REF_NAME#module-}"
+          id="${rest%-v*}"
+          version="${rest##*-v}"
+          test -f "modules/$id/manifest.json" || { echo "::error::modules/$id/manifest.json is missing"; exit 1; }
+          declared=$(jq -r .version "modules/$id/manifest.json")
+          test "$declared" = "$version" || { echo "::error::the manifest says $declared, the tag $version"; exit 1; }
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Build the publishing tool and the component
+        run: |
+          set -euo pipefail
+          cargo build --release --locked --manifest-path server/Cargo.toml --bin module-publish
+          cargo test --release --manifest-path modules/Cargo.toml -p "breezone-module-${{ steps.tag.outputs.id }}"
+          cargo build --release --manifest-path modules/Cargo.toml --target wasm32-wasip2 -p "breezone-module-${{ steps.tag.outputs.id }}"
+      - name: Pack, add to the index
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          id="${{ steps.tag.outputs.id }}"
+          tool=server/target/release/module-publish
+          wasm="modules/target/wasm32-wasip2/release/breezone_module_${id}.wasm"
+          extra=()
+          test -d "modules/$id/i18n" && extra+=("modules/$id/i18n")
+          test -f "modules/$id/icon.svg" && extra+=("modules/$id/icon.svg")
+          mkdir -p /tmp/out
+          "$tool" pack "modules/$id/manifest.json" "$wasm" "${extra[@]}" /tmp/out
+          gh release view modules >/dev/null 2>&1 || gh release create modules --title "Modules" --notes "The library of Breezone's modules: index.json and the packages, signed." --latest=false
+          if gh release download modules -p index.json -D /tmp/current; then current=/tmp/current/index.json; else current=-; fi
+          "$tool" index "$current" /tmp/out /tmp/out/*.bzm
+      # Same key as the releases, same check that it is the one compiled into the server; the
+      # messages say what is signed (`breezone-module …`, `breezone-modules-index …`), so that a
+      # signature never passes for something else.
+      - name: Sign
+        env:
+          SIGNING_KEY: ${{ secrets.BREEZONE_RELEASE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$SIGNING_KEY" || { echo "::error::the BREEZONE_RELEASE_SIGNING_KEY secret is not set"; exit 1; }
+          umask 077
+          printf '%s\n' "$SIGNING_KEY" > /tmp/release-key.pem
+          trap 'rm -f /tmp/release-key.pem' EXIT
+          expected=$(sed -n 's/^pub const RELEASE_PUBLIC_KEY: &str = "\(.*\)";/\1/p' server/src/update.rs)
+          actual=$(openssl pkey -in /tmp/release-key.pem -pubout -outform DER | tail -c 32 | base64 -w0)
+          test "$expected" = "$actual" || { echo "::error::the signing key is not the one of RELEASE_PUBLIC_KEY"; exit 1; }
+          cd /tmp/out
+          for message in *.message; do
+            openssl pkeyutl -sign -inkey /tmp/release-key.pem -rawin -in "$message" -out signature
+            base64 -w0 signature > "${message%.message}.sig"
+          done
+          rm -f signature *.message
+          ls -l
+      - name: Upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # The packages first: the index never names a file that is not there yet.
+        run: |
+          set -euo pipefail
+          gh release upload modules /tmp/out/*.bzm /tmp/out/*.bzm.sig --clobber
+          gh release upload modules /tmp/out/index.json /tmp/out/index.json.sig --clobber

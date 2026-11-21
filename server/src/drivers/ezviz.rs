@@ -9,7 +9,7 @@
 //!   GET {ezviz}/v3/userdevices/v1/resources/pagelist?… → {deviceInfos: [{deviceSerial, name, deviceCategory, deviceType, status}]}
 //!   GET {ezviz}/v3/unifiedmsg/list?serials=…&stype=…&limit=…&date=YYYYMMDD&endTime= → {message: [{msgId, deviceSerial, time, title, subType, pic, ext: {alarmType, pics}}]}
 
-use super::{Described, DeviceInfo, Driver, DriverError, DriverFuture, DriverInfo, Sink, State};
+use super::{Described, DeviceInfo, Driver, DriverError, DriverFuture, Sink, State};
 use crate::crypto::Key;
 use crate::db::Db;
 use reqwest::Method;
@@ -17,16 +17,6 @@ use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
-
-pub fn info() -> DriverInfo {
-    DriverInfo {
-        id: "ezviz",
-        label: "EZVIZ (cloud)",
-        provides: vec!["camera@1", "button@1"],
-        models: vec!["EZVIZ DB1C, DB2, EP3x…".into(), "EZVIZ C3, C6, C8…".into()],
-        config: vec![],
-    }
-}
 
 /// The messages asked: every alarm, and the calls of the doorbells.
 const MESSAGE_TYPES: &str = "92,9904,2701";

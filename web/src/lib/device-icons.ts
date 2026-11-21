@@ -21,12 +21,14 @@ import {
   Zap,
 } from "lucide-react"
 import type { DeviceView } from "@/lib/api"
+import { KINDS, TRAIT_KINDS, type KindId } from "@/lib/traits.generated"
 import { t } from "@/lib/i18n"
 
 /** A type of device, as lists group them (same icons as the menu). */
 export type DeviceType = { id: string; label: string; icon: LucideIcon }
 
-const TYPES: DeviceType[] = [
+/** In the order of `KINDS` (contracts/ui.json). */
+export const TYPES: DeviceType[] = [
   { id: "climate", label: t("Climatisation"), icon: Thermometer },
   { id: "charger", label: t("Recharge"), icon: PlugZap },
   { id: "light", label: t("Lumières"), icon: Lightbulb },
@@ -61,39 +63,22 @@ export const SCENE_TYPE: DeviceType = {
   icon: Sparkles,
 }
 
-/** The type of a device: from its kind, else from its traits. */
+/**
+ * The type of a device: its kind when it names one (a shutter, a window…), else the first type in
+ * list order among those of its traits (`ui.kind` in the catalog), else « other ».
+ */
 export function deviceType(d: Pick<DeviceView, "kind" | "traits">): DeviceType {
-  const has = (prefix: string) =>
-    d.kind.startsWith(prefix) || d.traits.some((x) => x.startsWith(prefix))
-  const id =
-    d.kind === "shutter" || d.kind === "window" || d.kind === "door"
-      ? d.kind
-      : has("climate.")
-        ? "climate"
-        : has("ev.charger")
-          ? "charger"
-          : has("light")
-            ? "light"
-            : has("cover.")
-              ? "shutter"
-              : has("ventilation.unit")
-                ? "ventilation"
-                : has("ventilation.room")
-                  ? "room-air"
-                  : has("switch.")
-                    ? "switch"
-                    : has("solar.")
-                      ? "solar"
-                      : has("energy.")
-                        ? "energy"
-                        : has("environment.")
-                          ? "sensor"
-                          : has("camera")
-                            ? "camera"
-                            : d.kind === "remote" || has("button")
-                              ? "remote"
-                              : "other"
-  return TYPES.find((x) => x.id === id)!
+  const direct = TYPES.find((x) => x.id === d.kind && x.id !== "other")
+  if (direct) return direct
+  const kinds = [d.kind, ...d.traits.map((t) => t.split("@")[0])]
+    .map((name) => TRAIT_KINDS[name])
+    .filter((k): k is string => !!k)
+  const order = (id: string) => {
+    const i = KINDS.indexOf(id as KindId)
+    return i < 0 ? KINDS.length : i
+  }
+  const id = kinds.sort((a, b) => order(a) - order(b))[0] ?? "other"
+  return TYPES.find((x) => x.id === id) ?? TYPES[TYPES.length - 1]
 }
 
 /** The order of the types in a list. */

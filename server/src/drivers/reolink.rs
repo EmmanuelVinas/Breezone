@@ -12,25 +12,11 @@
 //! is a press. The last event is told by a key ("motion", "person", "vehicle", "animal", "ring")
 //! that the pages put in words.
 
-use super::{ConfigField, Described, DeviceInfo, Driver, DriverError, DriverFuture, DriverInfo, Sink, State};
+use super::{Described, DeviceInfo, Driver, DriverError, DriverFuture, Sink, State};
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::sync::Mutex;
-
-pub fn info() -> DriverInfo {
-    DriverInfo {
-        id: "reolink",
-        label: "Reolink",
-        provides: vec!["camera@1", "button@1"],
-        models: vec!["Reolink (caméras, sonnettes, enregistreurs)".into()],
-        config: vec![
-            ConfigField { name: "host", kind: "string", optional: false, label: crate::text!("Adresse IP ou nom", "IP address or name", "Dirección IP o nombre") },
-            ConfigField { name: "username", kind: "string", optional: true, label: crate::text!("Utilisateur (admin sinon)", "User (admin otherwise)", "Usuario (admin si no)") },
-            ConfigField { name: "password", kind: "password", optional: false, label: crate::text!("Mot de passe", "Password", "Contraseña") },
-        ],
-    }
-}
 
 #[derive(Debug, Clone, PartialEq)]
 struct Channel {

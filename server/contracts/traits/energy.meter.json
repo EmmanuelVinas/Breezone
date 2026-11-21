@@ -1,10 +1,24 @@
 {
   "trait": "energy.meter",
   "version": 1,
+  "revision": 0,
   "label": { "fr": "Compteur d'énergie", "en": "Energy meter", "es": "Contador de energía" },
   "state": [
     { "name": "energy_in", "type": "number", "unit": "kWh", "label": { "fr": "Énergie consommée", "en": "Energy consumed", "es": "Energía consumida" } },
     { "name": "energy_out", "type": "number", "unit": "kWh", "optional": true, "label": { "fr": "Énergie injectée", "en": "Energy returned", "es": "Energía inyectada" } }
   ],
-  "actions": []
+  "actions": [],
+  "ui": {
+    "kind": "energy",
+    "primary": "energy_in",
+    "card": [
+      {"widget": "value", "field": "energy_in"},
+      {"widget": "value", "field": "energy_out"}
+    ],
+    "detail": [
+      {"widget": "value", "field": "energy_in"},
+      {"widget": "value", "field": "energy_out"},
+      {"widget": "chart", "field": "energy_in"}
+    ]
+  }
 }

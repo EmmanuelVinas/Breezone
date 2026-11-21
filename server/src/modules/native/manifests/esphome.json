@@ -1,0 +1,18 @@
+{
+  "id": "esphome",
+  "version": "1.0.0",
+  "name": {"en": "ESPHome", "es": "ESPHome", "fr": "ESPHome"},
+  "roles": ["driver"],
+  "requires": {"api": "^1.0"},
+  "provides": {"traits": ["switch.relay@1.0", "light@1.0", "cover.position@1.0", "energy.power@1.0", "environment.sensor@1.0"]},
+  "models": ["ESPHome (API native)"],
+  "config": [
+    {"name": "host", "type": "string", "label": {"en": "IP address or name", "es": "Dirección IP o nombre", "fr": "Adresse IP ou nom"}},
+    {"name": "key", "type": "password", "optional": true, "label": {"en": "API encryption key (api: encryption: key)", "es": "Clave de cifrado de la API (api: encryption: key)", "fr": "Clé de chiffrement de l'API (api: encryption: key)"}},
+    {"name": "password", "type": "password", "optional": true, "label": {"en": "API password (old)", "es": "Contraseña de la API (antigua)", "fr": "Mot de passe de l'API (ancien)"}}
+  ],
+  "discovery": {"tcp": [6053], "mdns": [{"service": "_esphomelib._tcp"}]},
+  "permissions": {"network": {"lan": true, "mdns": ["_esphomelib._tcp"]}},
+  "read_every_s": 3,
+  "optional_calls": ["probe", "diagnostic"]
+}
