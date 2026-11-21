@@ -71,8 +71,8 @@ futures-lite = "2"
 if-addrs = "0.15"
 socket2 = { version = "0.6", features = ["all"] }
 # Modules in WebAssembly (docs/roadmap/modules.md), behind the `wasm` feature while they are tried.
-wasmtime = { version = "49", optional = true, default-features = false, features = ["runtime", "std", "cranelift", "component-model", "async", "parallel-compilation"] }
-wasmtime-wasi = { version = "49", optional = true, default-features = false, features = ["p2"] }
+wasmtime = { version = "51", optional = true, default-features = false, features = ["runtime", "std", "cranelift", "component-model", "async", "parallel-compilation"] }
+wasmtime-wasi = { version = "51", optional = true, default-features = false, features = ["p2"] }
 
 [features]
 wasm = ["dep:wasmtime", "dep:wasmtime-wasi"]

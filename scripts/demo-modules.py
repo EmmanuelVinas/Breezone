@@ -72,7 +72,7 @@ if "forecast_solar" not in existing:
     call("PUT", "/api/accounts/forecast_solar", {"kwp": "4,5", "declination": "30", "azimuth": "0"})
 if "hue" not in existing:
     print("▸ Pont Hue (hue)")
-    call("POST", "/api/hue/link", {"host": host(1), "name": "Pont Hue"})
+    call("POST", "/api/modules/hue/pairing", {"step": "link", "input": {"host": host(1)}, "name": "Pont Hue"})
 
 rooms = {r["name"]: r["id"] for r in call("GET", "/api/rooms") or []}
 for name in ["Salon", "Chambre", "Cuisine", "Salle de bains", "Bureau", "Dressing", "Garage", "Jardin"]:
