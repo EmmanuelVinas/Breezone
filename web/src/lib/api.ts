@@ -817,6 +817,13 @@ export type FoundProduct = {
   brand: string
   /** What adds it: "airzone" (an installation) or the module of a source. */
   driver: string
+  /** Its module is not installed: the source of modules to install it from. */
+  install?: {
+    repository: number
+    repository_name: string
+    official: boolean
+    version: string
+  }
   model: string
   host: string
   port: number

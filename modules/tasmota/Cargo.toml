@@ -5,8 +5,7 @@ edition.workspace = true
 description = "Tasmota (Sonoff and others flashed with it), through its local HTTP API"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-wit-bindgen = "0.57"
-serde_json = "1"
+breezone-module-sdk = { path = "../sdk" }

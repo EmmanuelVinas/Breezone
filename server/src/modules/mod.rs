@@ -148,6 +148,7 @@ pub async fn probe_installed(host: &str, open: &[u16]) -> Vec<crate::discovery::
                     note: Some(format!("« {name} »")),
                     supported: true,
                     flags: 0,
+                    install: None,
                 });
             }
         }

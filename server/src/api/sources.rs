@@ -270,8 +270,38 @@ pub struct FoundProduct {
     pub added: bool,
 }
 
+/// The modules of the library not installed whose hardware the scan looks for too: those with
+/// devices, HTTP hints, and a version that works here (the index kept for the day, not read again).
+async fn candidates(state: &AppState) -> Vec<crate::discovery::Candidate> {
+    let Ok(indexes) = state.library.indexes(&state.db, false).await else { return vec![] };
+    let host = crate::capabilities::Host::local();
+    let fits = |a: &str| crate::modules::manifest(a).is_some();
+    let mut out: Vec<crate::discovery::Candidate> = vec![];
+    for (repo, index) in indexes {
+        let Ok(index) = index else { continue };
+        for entry in &index.modules {
+            if crate::modules::manifest(&entry.id).is_some() || out.iter().any(|c| c.id == entry.id) {
+                continue;
+            }
+            let Some(best) = entry.best(&host, env!("CARGO_PKG_VERSION"), &fits) else { continue };
+            let m = &best.manifest;
+            if !m.has(crate::modules::manifest::Role::Driver) || m.discovery.http.is_empty() {
+                continue;
+            }
+            out.push(crate::discovery::Candidate {
+                id: crate::discovery::interned(&m.id),
+                name: m.name.fr.clone(),
+                hints: m.discovery.http.clone(),
+                install: crate::discovery::Install { repository: repo.id, repository_name: repo.name.clone(), official: repo.official, version: m.version.clone() },
+            });
+        }
+    }
+    out
+}
+
 /// Every supported product on the network (Airzone WebServers, Shelly…), identified down to the
-/// model, and whether each one is already added.
+/// model, and whether each one is already added; the hardware of the modules of the library not
+/// installed is found too, with where to install its module from.
 pub async fn scan(State(state): State<AppState>, _admin: AdminUser, body: Option<Json<ScanInput>>) -> ApiResult<Json<Value>> {
     let req = body.map(|Json(b)| b).unwrap_or_default();
     let subnet = match req.subnet.filter(|s| !s.trim().is_empty()) {
@@ -280,7 +310,8 @@ pub async fn scan(State(state): State<AppState>, _admin: AdminUser, body: Option
     }
     .ok_or_else(|| ApiError::bad_request("indiquez le réseau à analyser, par exemple 192.168.1.0/24"))?;
     let started = std::time::Instant::now();
-    let products = crate::discovery::scan_products(&subnet, state.cfg.scan_port, &state.drivers.quiet_hosts().await).await.map_err(ApiError::bad_request)?;
+    let candidates = candidates(&state).await;
+    let products = crate::discovery::scan_products(&subnet, state.cfg.scan_port, &state.drivers.quiet_hosts().await, &candidates).await.map_err(ApiError::bad_request)?;
     let installations = db::list_installations(&state.db).await?;
     let sources = db::list_sources(&state.db).await?;
     let mac = |m: &Option<String>| m.as_deref().map(crate::cloud::normalize_mac);

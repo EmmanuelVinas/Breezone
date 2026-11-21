@@ -558,6 +558,7 @@ async fn a_lost_source_is_found_again_at_its_new_address() {
         note: None,
         supported: true,
         flags: 0,
+        install: None,
     };
 
     // Another Shelly on the network is not it.

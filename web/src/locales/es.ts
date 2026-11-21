@@ -2146,6 +2146,9 @@ const es: Record<string, string> = {
   "L'adresse du dossier de son index.json (HTTPS, ou HTTP sur le réseau local) et sa clé publique Ed25519, en base64.":
     "La dirección de la carpeta de su index.json (HTTPS, o HTTP en la red local) y su clave pública Ed25519, en base64.",
   "Clé publique": "Clave pública",
+  "Module {name} installé": "Módulo {name} instalado",
+  "Installer le module": "Instalar el módulo",
+  "Installer (non officiel · {name})": "Instalar (no oficial · {name})",
 }
 
 export default es

@@ -22,11 +22,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "breezone-module-tasmota"
+name = "breezone-module-sdk"
 version = "1.0.0"
 dependencies = [
  "serde_json",
  "wit-bindgen",
+]
+
+[[package]]
+name = "breezone-module-tasmota"
+version = "1.0.0"
+dependencies = [
+ "breezone-module-sdk",
 ]
 
 [[package]]

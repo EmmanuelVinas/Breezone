@@ -47,7 +47,7 @@ import { inverterCounting, isInverter } from "@/lib/solar"
 import { cameraEvent, forecastText, sensorText } from "@/lib/sensors"
 import { errorText, kwh, relativeTime, watts } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import { t } from "@/lib/i18n"
+import { lang, t } from "@/lib/i18n"
 import {
   useChosenInstallation,
   useModulesHere,
@@ -1353,8 +1353,43 @@ function AddModuleDialog({
     },
   })
 
+  // Its module comes from the library: installed first, then the search runs again and offers to
+  // add it as the other products.
+  const installing = useMutation({
+    mutationFn: (p: FoundProduct) =>
+      api.installModule(p.driver, p.install?.repository),
+    onSuccess: (m) => {
+      toast.success(
+        t("Module {name} installé", { name: m.manifest.name[lang()] })
+      )
+      qc.invalidateQueries({ queryKey: ["modules"] })
+      qc.invalidateQueries({ queryKey: ["drivers"] })
+      scan.mutate()
+    },
+    onError: (e) => toast.error(errorText(e)),
+  })
+
   const action = (p: FoundProduct) => {
     if (p.added) return <Badge variant="secondary">{t("Déjà ajouté")}</Badge>
+    if (p.install)
+      return (
+        <Button
+          size="sm"
+          disabled={installing.isPending}
+          onClick={() => installing.mutate(p)}
+        >
+          {installing.isPending ? (
+            <Loader2 className="animate-spin" />
+          ) : (
+            <Download />
+          )}
+          {p.install.official
+            ? t("Installer le module")
+            : t("Installer (non officiel · {name})", {
+                name: p.install.repository_name,
+              })}
+        </Button>
+      )
     if (p.brand === "airzone")
       return (
         <span className="text-xs text-muted-foreground">

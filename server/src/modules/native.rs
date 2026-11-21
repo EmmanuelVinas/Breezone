@@ -78,7 +78,7 @@ fn url(cx: &Context, id: &str) -> String {
 
 /// A product found at `host` by a probe.
 fn product(driver: &'static str, brand: &'static str, host: &str, port: u16, model: String) -> Product {
-    Product { brand, driver, model, host: host.to_string(), port, mac: None, device_id: None, firmware: None, note: None, supported: true, flags: 0 }
+    Product { brand, driver, model, host: host.to_string(), port, mac: None, device_id: None, firmware: None, note: None, supported: true, flags: 0, install: None }
 }
 
 macro_rules! native {

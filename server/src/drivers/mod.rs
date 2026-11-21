@@ -925,7 +925,7 @@ impl Runtime {
             }
         }
         let Some(subnet) = crate::discovery::global_subnet(&self.db, configured).await else { return };
-        match crate::discovery::scan_products(&subnet, airzone_port, &self.quiet_hosts().await).await {
+        match crate::discovery::scan_products(&subnet, airzone_port, &self.quiet_hosts().await, &[]).await {
             Ok(products) => {
                 self.relocate(&products, &lost).await;
             }
@@ -937,7 +937,7 @@ impl Runtime {
     /// hardware, and whether the source followed it to another address.
     pub async fn locate(&self, id: i64, configured: Option<&str>, airzone_port: u16) -> Result<Located, String> {
         let subnet = crate::discovery::global_subnet(&self.db, configured).await.ok_or_else(|| "no network to scan: set it in Settings".to_string())?;
-        let products = crate::discovery::scan_products(&subnet, airzone_port, &self.quiet_hosts().await).await?;
+        let products = crate::discovery::scan_products(&subnet, airzone_port, &self.quiet_hosts().await, &[]).await?;
         self.searched.write().await.insert(id, Instant::now());
         let identity = self.sources.read().await.get(&id).and_then(|r| Some((config_identity(&r.source)?, r.source.driver.clone())));
         let seen = identity.as_ref().and_then(|(identity, driver)| {

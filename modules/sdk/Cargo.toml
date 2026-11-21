@@ -1,0 +1,9 @@
+[package]
+name = "breezone-module-sdk"
+version = "1.0.0"
+edition.workspace = true
+description = "Writing a module of Breezone: the Driver trait, the host's functions, and a test bench"
+
+[dependencies]
+wit-bindgen = "0.57"
+serde_json = "1"

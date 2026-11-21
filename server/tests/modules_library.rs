@@ -242,3 +242,43 @@ async fn other_sources_of_modules() {
     let (code, _) = server.call("DELETE", "/api/modules/repositories/1", None).await;
     assert_eq!(code, StatusCode::BAD_REQUEST, "the library of Breezone stays");
 }
+
+/// The scan finds the hardware of a module of the library not installed yet (lot L7), by the
+/// HTTP hints of its manifest, and says where to install it from; installed, it is no longer
+/// proposed for installation.
+#[tokio::test]
+async fn the_scan_proposes_modules_of_the_library() {
+    // A device of the network that says what it is at /info.
+    let device = Router::new().route("/info", get(|| async { r#"{"vendor":"plugscan","mac":"AA"}"# }));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move { axum::serve(listener, device).await.unwrap() });
+
+    let files: Files = Arc::default();
+    let mut m = manifest_of("plugscan", "1.0.0", "^1.0");
+    m.name = serde_json::from_value(json!({"fr": "Prise Scan", "en": "Scan plug", "es": "Enchufe Scan"})).unwrap();
+    m.discovery = serde_json::from_value(json!({"tcp": [port], "http": [{"port": port, "path": "/info", "contains": "plugscan", "json_has": ["mac"]}]})).unwrap();
+    {
+        let bytes = package::build(&serde_json::to_string(&m).unwrap(), None, &[]).unwrap();
+        let mut out = files.lock().unwrap();
+        out.insert("plugscan-1.0.0.bzm.sig".into(), sign(&package::signed_message("plugscan", "1.0.0", &bytes)));
+        let published = Published { manifest: m, file: "plugscan-1.0.0.bzm".into(), size: bytes.len() as u64, sha256: String::new(), published_at: 0, yanked: false, code: false };
+        out.insert("plugscan-1.0.0.bzm".into(), bytes);
+        let index = serde_json::to_vec(&Index { seq: 1, modules: vec![Entry { id: "plugscan".into(), versions: vec![published] }] }).unwrap();
+        out.insert("index.json.sig".into(), sign(&library::signed_message(1, &index)));
+        out.insert("index.json".into(), index);
+    }
+    let server = Server::start(serve_library(files.clone()).await).await;
+    let found = |v: &Value| v["products"].as_array().unwrap().iter().find(|p| p["driver"] == "plugscan").cloned();
+
+    let (code, scan) = server.call("POST", "/api/discovery/products", Some(json!({"subnet": "127.0.0.0/30"}))).await;
+    assert_eq!(code, StatusCode::OK, "{scan}");
+    let p = found(&scan).unwrap_or_else(|| panic!("not found: {scan}"));
+    assert_eq!((p["model"].clone(), p["port"].clone()), (json!("Prise Scan"), json!(port)));
+    assert_eq!((p["install"]["repository"].clone(), p["install"]["official"].clone(), p["install"]["version"].clone()), (json!(1), json!(true), json!("1.0.0")));
+
+    let (code, _) = server.call("POST", "/api/modules", Some(json!({"id": "plugscan", "repository": 1}))).await;
+    assert_eq!(code, StatusCode::CREATED);
+    let (_, scan) = server.call("POST", "/api/discovery/products", Some(json!({"subnet": "127.0.0.0/30"}))).await;
+    assert!(found(&scan).is_none_or(|p| p["install"].is_null()), "installed: no longer to install: {scan}");
+}

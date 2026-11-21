@@ -9,24 +9,8 @@
 //! Its devices: each relay (a light when the module dims), the energy it measures, and each
 //! sensor that gives a temperature, a humidity… (`environment.sensor@1`).
 
-wit_bindgen::generate!({
-    path: "../../server/contracts/wit",
-    world: "module",
-});
-
-use breezone::module::host::{self, Level};
-use breezone::module::types::{Curve, Described, DeviceInfo, Error, HardwareRoom, Picture, Request, Scene};
-use exports::breezone::module::driver::{Guest, GuestSource, Source as SourceHandle};
-use serde_json::{json, Map, Value};
+use breezone_module_sdk::{host, json, module, Described, DeviceInfo, Driver, Error, Map, Result, State, Value};
 use std::cell::RefCell;
-
-struct Module;
-
-pub struct Source {
-    base: String,
-    password: Option<String>,
-    status: RefCell<Value>,
-}
 
 fn encode(s: &str) -> String {
     let mut out = String::new();
@@ -39,19 +23,19 @@ fn encode(s: &str) -> String {
     out
 }
 
-fn get(url: &str, timeout_ms: u32) -> Result<(u16, Value), Error> {
-    let resp = host::http(&Request { method: "GET".into(), url: url.into(), headers: vec![], body: None, timeout_ms }).map_err(|e| Error::Unreachable(format!("Tasmota: {e}")))?;
-    let v = serde_json::from_slice(&resp.body).map_err(|e| Error::Unreachable(format!("Tasmota: {e}")))?;
-    Ok((resp.status, v))
+pub struct Tasmota {
+    base: String,
+    password: Option<String>,
+    status: RefCell<Value>,
 }
 
-impl Source {
-    fn command(&self, cmnd: &str) -> Result<Value, Error> {
+impl Tasmota {
+    fn command(&self, cmnd: &str) -> Result<Value> {
         let mut url = format!("{}/cm?cmnd={}", self.base, encode(cmnd));
         if let Some(p) = &self.password {
             url.push_str(&format!("&user=admin&password={}", encode(p)));
         }
-        let (status, v) = get(&url, 5000)?;
+        let (status, v) = host::get_json(&url, 5000)?;
         if status == 401 {
             return Err(Error::Invalid("Tasmota : mot de passe refusé".into()));
         }
@@ -61,7 +45,7 @@ impl Source {
         Ok(v)
     }
 
-    fn status(&self) -> Result<Value, Error> {
+    fn status(&self) -> Result<Value> {
         let v = self.command("Status 0")?;
         *self.status.borrow_mut() = v.clone();
         Ok(v)
@@ -119,9 +103,9 @@ pub fn devices_of(v: &Value) -> Vec<DeviceInfo> {
     for (n, _) in &list {
         let name = names.get(*n as usize - 1).cloned().filter(|s| !s.is_empty()).unwrap_or_else(|| if list.len() > 1 { format!("{device} {n}") } else { device.clone() });
         if dims && *n == 1 {
-            out.push(DeviceInfo { reference: format!("power{n}"), kind: "light".into(), traits: vec!["light@1".into()], name });
+            out.push(breezone_module_sdk::device(format!("power{n}"), "light", &["light@1"], name));
         } else {
-            out.push(DeviceInfo { reference: format!("power{n}"), kind: "switch.relay".into(), traits: vec!["switch.relay@1".into()], name });
+            out.push(breezone_module_sdk::device(format!("power{n}"), "switch.relay", &["switch.relay@1"], name));
         }
     }
     if v["StatusSNS"]["ENERGY"].is_object() {
@@ -182,16 +166,15 @@ pub fn states_of(v: &Value) -> Vec<(String, Map<String, Value>)> {
     out
 }
 
-impl GuestSource for Source {
-    fn open(config: String, secret: Option<String>) -> Result<SourceHandle, Error> {
-        let config: Value = serde_json::from_str(&config).map_err(|e| Error::Invalid(e.to_string()))?;
+impl Driver for Tasmota {
+    fn open(config: Value, secret: Option<Value>) -> Result<Self> {
         let host = config["host"].as_str().map(str::trim).filter(|h| !h.is_empty()).ok_or_else(|| Error::Invalid("l'adresse est requise".into()))?;
         let base = if host.starts_with("http") { host.trim_end_matches('/').to_string() } else { format!("http://{host}") };
-        let password = secret.and_then(|s| serde_json::from_str::<Value>(&s).ok()).and_then(|v| v["password"].as_str().map(str::to_string)).filter(|p| !p.is_empty());
-        Ok(SourceHandle::new(Source { base, password, status: RefCell::new(Value::Null) }))
+        let password = secret.and_then(|v| v["password"].as_str().map(str::to_string)).filter(|p| !p.is_empty());
+        Ok(Tasmota { base, password, status: RefCell::new(Value::Null) })
     }
 
-    fn describe(&self) -> Result<Described, Error> {
+    fn describe(&self) -> Result<Described> {
         let v = self.status()?;
         Ok(Described {
             model: v["StatusFWR"]["Hardware"].as_str().map(|h| format!("Tasmota · {h}")).unwrap_or_else(|| "Tasmota".into()),
@@ -201,14 +184,13 @@ impl GuestSource for Source {
         })
     }
 
-    fn read(&self) -> Result<Vec<(String, String)>, Error> {
-        Ok(states_of(&self.status()?).into_iter().map(|(r, s)| (r, Value::Object(s).to_string())).collect())
+    fn read(&self) -> Result<Vec<(String, State)>> {
+        Ok(states_of(&self.status()?))
     }
 
-    fn act(&self, reference: String, trait_name: String, action: String, params: String) -> Result<(), Error> {
-        let params: Map<String, Value> = serde_json::from_str(&params).map_err(|e| Error::Invalid(e.to_string()))?;
+    fn act(&self, reference: &str, trait_name: &str, action: &str, params: &State) -> Result<()> {
         let n: u32 = reference.strip_prefix("power").and_then(|n| n.parse().ok()).ok_or_else(|| Error::Unsupported(format!("{reference}: nothing to drive")))?;
-        match (trait_name.as_str(), action.as_str()) {
+        match (trait_name, action) {
             ("switch.relay" | "light", "set") => {
                 if let Some(c) = params.get("color").and_then(Value::as_str) {
                     self.command(&format!("Color {}", c.trim_start_matches('#')))?;
@@ -228,58 +210,89 @@ impl GuestSource for Source {
         }
     }
 
-    fn diagnostic(&self) -> Result<String, Error> {
+    fn diagnostic(&self) -> Result<Value> {
         let mut v = self.status()?;
+        // What tells the hardware apart, not where it is.
         if let Some(o) = v.as_object_mut() {
             o.remove("StatusNET");
             o.remove("StatusMQT");
         }
-        Ok(v.to_string())
+        Ok(v)
     }
 
-    fn on_message(&self, _subscription: u32, _data: Vec<u8>) -> Result<(), Error> {
-        Ok(())
-    }
-
-    fn rooms(&self) -> Result<Vec<HardwareRoom>, Error> {
-        Err(Error::Unsupported("rooms".into()))
-    }
-
-    fn scenes(&self) -> Result<Vec<Scene>, Error> {
-        Err(Error::Unsupported("scenes".into()))
-    }
-
-    fn activate_scene(&self, _id: String) -> Result<(), Error> {
-        Err(Error::Unsupported("scenes".into()))
-    }
-
-    fn picture(&self, _reference: String) -> Result<Picture, Error> {
-        Err(Error::Unsupported("picture".into()))
-    }
-
-    fn forecast(&self, _reference: String) -> Result<Vec<Curve>, Error> {
-        Err(Error::Unsupported("forecast".into()))
-    }
-
-    fn unlock(&self, _key: String) -> Result<bool, Error> {
-        Err(Error::Unsupported("unlock".into()))
-    }
-
-    fn close(&self) {}
-}
-
-impl Guest for Module {
-    type Source = Source;
-
-    fn probe(host: String) -> Option<String> {
-        let (_, v) = get(&format!("http://{host}/cm?cmnd=Status%200"), 2000).ok()?;
+    fn probe(host: &str) -> Option<String> {
+        let (_, v) = host::get_json(&format!("http://{host}/cm?cmnd=Status%200"), 2000).ok()?;
         let version = v["StatusFWR"]["Version"].as_str()?;
+        // "14.2.0(tasmota)": a Tasmota, not another JSON.
         if !version.contains("tasmota") {
             return None;
         }
-        host::log(Level::Debug, &format!("Tasmota found at {host}"));
         Some(v["Status"]["DeviceName"].as_str().filter(|n| !n.is_empty()).or(v["Status"]["FriendlyName"][0].as_str()).unwrap_or("Tasmota").to_string())
     }
 }
 
-export!(Module);
+module!(Tasmota);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use breezone_module_sdk::testing;
+
+    const MANIFEST: &str = include_str!("../manifest.json");
+
+    fn status() -> Value {
+        json!({
+            "Status": {"DeviceName": "Salon", "FriendlyName": ["Lampe", "Prise"]},
+            "StatusSTS": {"POWER1": "ON", "POWER2": "OFF", "Dimmer": 40, "CT": 250, "Color": "000000FF00"},
+            "StatusSNS": {"ENERGY": {"Power": 52, "Voltage": 231, "Total": 12.5}, "AM2301": {"Temperature": 21.4, "Humidity": 48}, "TempUnit": "C"},
+            "StatusFWR": {"Version": "14.2.0(tasmota)", "Hardware": "ESP8266EX"},
+            "StatusNET": {"Mac": "AA:BB:CC:DD:EE:FF"}
+        })
+    }
+
+    #[test]
+    fn a_dimmer_two_relays_an_energy_meter_and_a_sensor() {
+        testing::reset();
+        testing::answer_json("GET", "cmnd=Status%200", &status());
+        let t: Tasmota = testing::open(json!({"host": "192.168.1.30"}), None);
+        // What it says fits the catalog of traits and its manifest.
+        let s = testing::check(&t, MANIFEST);
+        assert_eq!((s["power1"]["on"].clone(), s["power1"]["brightness"].clone(), s["power1"]["color_temp"].clone()), (json!(true), json!(40), json!(4000)));
+        assert_eq!(s["power2"]["on"], false);
+        assert_eq!((s["energy"]["power"].clone(), s["energy"]["energy_in"].clone()), (json!(52.0), json!(12.5)));
+        assert_eq!((s["sensor/AM2301"]["temperature"].clone(), s["sensor/AM2301"]["humidity"].clone()), (json!(21.4), json!(48.0)));
+        let d = t.describe().unwrap();
+        let names: Vec<(&str, &str)> = d.devices.iter().map(|x| (x.reference.as_str(), x.kind.as_str())).collect();
+        assert_eq!(names, [("power1", "light"), ("power2", "switch.relay"), ("energy", "energy.power"), ("sensor/AM2301", "sensor")]);
+        assert_eq!((d.devices[0].name.as_str(), d.identity.as_deref()), ("Lampe", Some("AA:BB:CC:DD:EE:FF")));
+    }
+
+    #[test]
+    fn a_single_relay_is_named_after_the_module() {
+        let d = devices_of(&json!({"Status": {"DeviceName": "Chauffe-eau"}, "StatusSTS": {"POWER": "OFF"}, "StatusSNS": {}}));
+        assert_eq!((d.len(), d[0].name.as_str(), d[0].reference.as_str()), (1, "Chauffe-eau", "power1"));
+    }
+
+    #[test]
+    fn it_drives_a_relay_with_its_password() {
+        testing::reset();
+        testing::answer_json("GET", "/cm?", &json!({"POWER2": "ON"}));
+        let t: Tasmota = testing::open(json!({"host": "192.168.1.30"}), Some(json!({"password": "s3cr&t"})));
+        let on = json!({"on": true});
+        t.act("power2", "switch.relay", "set", on.as_object().unwrap()).unwrap();
+        assert_eq!(testing::requests(), ["GET http://192.168.1.30/cm?cmnd=Power2%20On&user=admin&password=s3cr%26t"]);
+        assert!(matches!(t.act("energy", "switch.relay", "set", on.as_object().unwrap()), Err(Error::Unsupported(_))));
+    }
+
+    #[test]
+    fn a_refused_password_and_another_json_are_told() {
+        testing::reset();
+        testing::answer("GET", "/cm?", 401, "{}");
+        let t: Tasmota = testing::open(json!({"host": "192.168.1.30"}), None);
+        assert!(matches!(t.read(), Err(Error::Invalid(m)) if m.contains("mot de passe")));
+        testing::answer_json("GET", "/cm?", &json!({"StatusFWR": {"Version": "1.0"}}));
+        assert_eq!(Tasmota::probe("192.168.1.30"), None);
+        testing::answer_json("GET", "/cm?", &status());
+        assert_eq!(Tasmota::probe("192.168.1.30").as_deref(), Some("Salon"));
+    }
+}

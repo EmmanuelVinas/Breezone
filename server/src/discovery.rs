@@ -142,12 +142,65 @@ pub struct Product {
     pub supported: bool,
     /// HomeKit feature flags (1: Apple authentication), for pairing.
     pub flags: u32,
+    /// The module that drives it is not installed: where to install it from.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub install: Option<Install>,
+}
+
+/// A module of the library to install for a product found (docs/roadmap/modules.md, lot L7).
+#[derive(Debug, Clone, Serialize)]
+pub struct Install {
+    pub repository: i64,
+    pub repository_name: String,
+    pub official: bool,
+    pub version: String,
+}
+
+/// A module of the library, not installed, that a product on the network may need: its HTTP hints
+/// (`discovery.http` of its manifest) are tried on the addresses where nothing else answered.
+#[derive(Debug, Clone)]
+pub struct Candidate {
+    pub id: &'static str,
+    pub name: String,
+    pub hints: Vec<crate::modules::manifest::HttpHint>,
+    pub install: Install,
+}
+
+/// The id of a module as a `&'static str` (kept once per id for the life of the process).
+pub fn interned(id: &str) -> &'static str {
+    static IDS: std::sync::LazyLock<std::sync::Mutex<std::collections::HashSet<&'static str>>> = std::sync::LazyLock::new(Default::default);
+    let mut ids = IDS.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(known) = ids.get(id) {
+        return known;
+    }
+    let leaked: &'static str = Box::leak(id.to_string().into_boxed_str());
+    ids.insert(leaked);
+    leaked
+}
+
+/// Whether `host` answers one of the HTTP hints of a candidate (only on the ports open there).
+async fn hinted(host: &str, open: &[u16], hints: &[crate::modules::manifest::HttpHint]) -> bool {
+    let Ok(http) = reqwest::Client::builder().timeout(Duration::from_secs(2)).redirect(reqwest::redirect::Policy::none()).build() else { return false };
+    for h in hints.iter().filter(|h| open.contains(&h.port)) {
+        let Ok(resp) = http.get(format!("http://{host}:{}{}", h.port, h.path)).send().await else { continue };
+        if !resp.status().is_success() {
+            continue;
+        }
+        let Ok(body) = resp.text().await else { continue };
+        let contains = h.contains.as_deref().is_none_or(|c| body.contains(c));
+        let keys = h.json_has.is_empty() || serde_json::from_str::<serde_json::Value>(&body).is_ok_and(|v| h.json_has.iter().all(|k| v.get(k).is_some()));
+        if contains && keys && (h.contains.is_some() || !h.json_has.is_empty()) {
+            return true;
+        }
+    }
+    false
 }
 
 /// Every supported product on `subnet`, each address asked for every brand at once.
 /// `quiet`: hosts only asked through mDNS, never connected to (the HomeKit gateways already
 /// added: their few connections are kept for their sessions).
-pub async fn scan_products(subnet: &str, airzone_port: u16, quiet: &[std::net::Ipv4Addr]) -> Result<Vec<Product>, String> {
+/// `candidates`: modules of the library not installed, whose hardware is looked for too.
+pub async fn scan_products(subnet: &str, airzone_port: u16, quiet: &[std::net::Ipv4Addr], candidates: &[Candidate]) -> Result<Vec<Product>, String> {
     let hosts = hosts_in(subnet)?;
     // The modules found by mDNS are asked meanwhile.
     let browsed = tokio::spawn({
@@ -155,7 +208,9 @@ pub async fn scan_products(subnet: &str, airzone_port: u16, quiet: &[std::net::I
         async move { futures_util::future::join_all(crate::modules::native::all().iter().filter_map(|n| n.browse).map(|browse| browse(hosts.clone()))).await }
     });
     // Every port a module wants open before its probe, checked once per address.
-    let mut ports: Vec<u16> = crate::modules::manifests().flat_map(|m| m.discovery.tcp.iter().copied()).collect();
+    let mut ports: Vec<u16> =
+        crate::modules::manifests().flat_map(|m| m.discovery.tcp.iter().copied()).chain(candidates.iter().flat_map(|c| c.hints.iter().map(|h| h.port))).collect();
+    let candidates = Arc::new(candidates.to_vec());
     ports.sort_unstable();
     ports.dedup();
     let ports = Arc::new(ports);
@@ -164,6 +219,7 @@ pub async fn scan_products(subnet: &str, airzone_port: u16, quiet: &[std::net::I
     for host in hosts.into_iter().filter(|h| !quiet.contains(h)) {
         let limit = limit.clone();
         let ports = ports.clone();
+        let candidates = candidates.clone();
         tasks.push(tokio::spawn(async move {
             let _permit = limit.acquire().await.ok()?;
             let host = host.to_string();
@@ -192,10 +248,34 @@ pub async fn scan_products(subnet: &str, airzone_port: u16, quiet: &[std::net::I
                     note,
                     supported: true,
                     flags: 0,
+                    install: None,
                 });
             }
             found.extend(products.into_iter().flatten());
             found.extend(installed);
+            // Nothing installed knows it: the modules of the library are asked by their hints.
+            if found.is_empty() {
+                for c in candidates.iter() {
+                    if hinted(&host, &open, &c.hints).await {
+                        let port = c.hints.iter().map(|h| h.port).find(|p| open.contains(p)).unwrap_or(80);
+                        found.push(Product {
+                            brand: c.id,
+                            driver: c.id,
+                            model: c.name.clone(),
+                            host: host.clone(),
+                            port,
+                            mac: None,
+                            device_id: None,
+                            firmware: None,
+                            note: None,
+                            supported: true,
+                            flags: 0,
+                            install: Some(c.install.clone()),
+                        });
+                        break;
+                    }
+                }
+            }
             Some(found)
         }));
     }
