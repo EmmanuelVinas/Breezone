@@ -1,5 +1,7 @@
 //! Misbehaves as its configuration says (`"panic"`, `"loop"`, `"memory"`, `"http:<url>"`), at each
-//! `read`; otherwise answers one device.
+//! `read`; tries the host as it says (`"sub:<url>"`: a subscription whose messages it keeps, presses
+//! and announces; `"store"`: a counter in the store of the source; `"account:<kind>"`: the secret
+//! of an account); otherwise answers one device.
 
 wit_bindgen::generate!({
     path: "../../../server/contracts/wit",
@@ -7,18 +9,25 @@ wit_bindgen::generate!({
 });
 
 use breezone::module::host;
-use breezone::module::types::{Described, Error, Request};
+use breezone::module::types::{Curve, Described, Error, HardwareRoom, Picture, Request, Scene};
 use exports::breezone::module::driver::{Guest, GuestSource, Source as SourceHandle};
 
 struct Module;
 
 pub struct Source {
     mode: String,
+    subscription: Option<u32>,
+    last: std::cell::RefCell<Option<String>>,
 }
 
 impl GuestSource for Source {
     fn open(config: String, _secret: Option<String>) -> Result<SourceHandle, Error> {
-        Ok(SourceHandle::new(Source { mode: config.trim_matches('"').to_string() }))
+        let mode = config.trim_matches('"').to_string();
+        let subscription = match mode.strip_prefix("sub:") {
+            Some(url) => Some(host::subscribe(url).map_err(Error::Unreachable)?),
+            None => None,
+        };
+        Ok(SourceHandle::new(Source { mode, subscription, last: Default::default() }))
     }
 
     fn describe(&self) -> Result<Described, Error> {
@@ -47,6 +56,22 @@ impl GuestSource for Source {
                     }
                 }
             }
+            m if m.starts_with("sub:") => {
+                if let Some(s) = self.subscription {
+                    host::send(s, b"ping").map_err(Error::Unreachable)?;
+                }
+                let last = self.last.borrow().clone().unwrap_or_default();
+                Ok(vec![("sub".into(), format!("{{\"last\":{last:?}}}"))])
+            }
+            "store" => {
+                let n = host::store_get("n").map(|v| u32::from_le_bytes(v.try_into().unwrap_or([0; 4]))).unwrap_or(0) + 1;
+                host::store_set("n", Some(&n.to_le_bytes()));
+                Ok(vec![("store".into(), format!("{{\"n\":{n}}}"))])
+            }
+            m if m.starts_with("account:") => {
+                let secret = host::account(&m[8..]).map_err(Error::Unsupported)?;
+                Ok(vec![("account".into(), format!("{{\"length\":{}}}", secret.len()))])
+            }
             m if m.starts_with("http:") => {
                 let r = host::http(&Request { method: "GET".into(), url: m[5..].into(), headers: vec![], body: None, timeout_ms: 2000 }).map_err(Error::Unreachable)?;
                 Ok(vec![("http".into(), format!("{{\"status\":{}}}", r.status))])
@@ -62,6 +87,39 @@ impl GuestSource for Source {
     fn diagnostic(&self) -> Result<String, Error> {
         Ok("null".into())
     }
+
+    fn on_message(&self, _subscription: u32, data: Vec<u8>) -> Result<(), Error> {
+        *self.last.borrow_mut() = Some(String::from_utf8_lossy(&data).into_owned());
+        host::pressed("remote", 1, "double");
+        host::changed();
+        Ok(())
+    }
+
+    fn rooms(&self) -> Result<Vec<HardwareRoom>, Error> {
+        Err(Error::Unsupported("rooms".into()))
+    }
+
+    fn scenes(&self) -> Result<Vec<Scene>, Error> {
+        Err(Error::Unsupported("scenes".into()))
+    }
+
+    fn activate_scene(&self, _id: String) -> Result<(), Error> {
+        Err(Error::Unsupported("scenes".into()))
+    }
+
+    fn picture(&self, _reference: String) -> Result<Picture, Error> {
+        Err(Error::Unsupported("picture".into()))
+    }
+
+    fn forecast(&self, _reference: String) -> Result<Vec<Curve>, Error> {
+        Err(Error::Unsupported("forecast".into()))
+    }
+
+    fn unlock(&self, _key: String) -> Result<bool, Error> {
+        Err(Error::Unsupported("unlock".into()))
+    }
+
+    fn close(&self) {}
 }
 
 impl Guest for Module {

@@ -76,6 +76,15 @@ impl Package {
         Ok(package)
     }
 
+    /// Reads a package that comes with Breezone (beside it in the image, or in its archive, signed
+    /// as a whole): same checks as [`Package::open`] but the signature.
+    pub fn trusted(bytes: &[u8]) -> Result<Package, PackageError> {
+        if bytes.len() > MAX_PACKAGE {
+            return Err(PackageError::Unreadable("too large".into()));
+        }
+        Package::read(bytes)
+    }
+
     /// Reads the files of a package (its signature is checked by [`Package::open`]).
     fn read(bytes: &[u8]) -> Result<Package, PackageError> {
         let unreadable = |e: std::io::Error| PackageError::Unreadable(e.to_string());

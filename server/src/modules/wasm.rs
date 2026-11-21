@@ -2,11 +2,13 @@
 //! server, a module compiled once (and kept compiled on disk), one instance per source.
 //!
 //! A module sees nothing of the system: no files, no environment, no sockets of WASI. It reaches
-//! the network only through `host.http`, which refuses any address its permissions do not allow.
-//! Each call has a deadline and a memory limit; a module that traps (panic, loop, memory) only puts
-//! its source in error, and is instantiated again at the next call.
+//! the network only through `host.http` and `host.subscribe`, which refuse any address its
+//! permissions do not allow. Each call has a deadline and a memory limit; a module that traps
+//! (panic, loop, memory) only puts its source in error, and is instantiated again at the next call.
+//! What the hardware says without being asked comes through subscriptions: the host keeps the
+//! connection and hands each message to the module's `on-message`, between its other calls.
 
-use crate::drivers::{Described, DeviceInfo, Driver, DriverError, DriverFuture, State};
+use crate::drivers::{Described, DeviceInfo, Driver, DriverError, DriverFuture, Forecast, HardwareRoom, Scene, Sink, State};
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::path::Path;
@@ -20,7 +22,14 @@ use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 wasmtime::component::bindgen!({
     path: "contracts/wit",
     world: "module",
-    imports: { "breezone:module/host.http": async, default: trappable },
+    imports: {
+        "breezone:module/host.http": async,
+        "breezone:module/host.subscribe": async,
+        "breezone:module/host.store-get": async,
+        "breezone:module/host.store-set": async,
+        "breezone:module/host.account": async,
+        default: trappable,
+    },
     exports: { default: async },
 });
 
@@ -34,6 +43,12 @@ const CALL_TICKS: u64 = 100;
 const CALL_TIMEOUT: Duration = Duration::from_secs(60);
 /// Largest body of an HTTP answer handed to a module.
 const MAX_BODY: usize = 4 << 20;
+/// Subscriptions one source may keep open.
+const MAX_SUBSCRIPTIONS: usize = 4;
+/// Largest message of a subscription handed to a module.
+const MAX_MESSAGE: usize = 1 << 20;
+/// Largest value of the store of a source.
+const MAX_STORED: usize = 64 << 10;
 
 /// What a module may reach.
 #[derive(Debug, Clone, Default)]
@@ -45,6 +60,8 @@ pub struct Permissions {
     /// The machine itself: tests and development only (it would reach Breezone's own API).
     pub loopback: bool,
     pub memory_mb: usize,
+    /// The accounts whose secret it may read (`requires.accounts` of its manifest).
+    pub accounts: Vec<String>,
 }
 
 impl Permissions {
@@ -85,9 +102,34 @@ impl Permissions {
     }
 }
 
-struct HostState {
+/// What a source shares with the host functions of its instances: who it is, where it tells what
+/// it hears, and the messages of its subscriptions, handed to `on-message` by its pump.
+struct SourceCtx {
     module: Arc<str>,
+    /// The source (`None` while its configuration is only checked: its store is then in memory).
+    source_id: Option<i64>,
+    sink: std::sync::Mutex<Option<Sink>>,
+    messages: tokio::sync::mpsc::UnboundedSender<(u32, Vec<u8>)>,
+    memory_store: std::sync::Mutex<HashMap<String, Vec<u8>>>,
+}
+
+/// An open subscription: what is sent on it, and its task (stopped with it).
+struct Subscription {
+    out: tokio::sync::mpsc::UnboundedSender<Vec<u8>>,
+    task: tokio::task::AbortHandle,
+}
+
+impl Drop for Subscription {
+    fn drop(&mut self) {
+        self.task.abort();
+    }
+}
+
+struct HostState {
     permissions: Arc<Permissions>,
+    ctx: Arc<SourceCtx>,
+    subscriptions: HashMap<u32, Subscription>,
+    next_subscription: u32,
     wasi: WasiCtx,
     table: ResourceTable,
     limits: StoreLimits,
@@ -99,18 +141,28 @@ impl WasiView for HostState {
     }
 }
 
+/// The database and the key of the secrets, for the store of the sources and their accounts.
+static CONTEXT: OnceLock<(crate::db::Db, [u8; 32])> = OnceLock::new();
+
+/// Gives the host what the store of the sources and the accounts need (at start).
+pub fn set_context(db: crate::db::Db, key: [u8; 32]) {
+    let _ = CONTEXT.set((db, key));
+}
+
 impl breezone::module::types::Host for HostState {}
 
 impl breezone::module::host::Host for HostState {
     fn log(&mut self, level: breezone::module::host::Level, message: String) -> wasmtime::Result<()> {
         use breezone::module::host::Level;
-        let module = &*self.module;
-        match level {
-            Level::Debug => tracing::debug!(module, "{message}"),
-            Level::Info => tracing::info!(module, "{message}"),
-            Level::Warn => tracing::warn!(module, "{message}"),
-            Level::Error => tracing::error!(module, "{message}"),
-        }
+        let module = &*self.ctx.module;
+        let level = match level {
+            Level::Debug => "debug",
+            Level::Info => "info",
+            Level::Warn => "warn",
+            Level::Error => "error",
+        };
+        tracing::debug!(module, level, "{message}");
+        crate::modules::log(module, level, message);
         Ok(())
     }
 
@@ -119,8 +171,172 @@ impl breezone::module::host::Host for HostState {
     }
 
     async fn http(&mut self, req: Request) -> Result<Response, String> {
-        http(&self.permissions, req).await
+        let url = req.url.clone();
+        let r = http(&self.permissions, req).await;
+        if let Err(e) = &r {
+            crate::modules::log(&self.ctx.module, "warn", format!("{url}: {e}"));
+        }
+        r
     }
+
+    async fn subscribe(&mut self, url: String) -> Result<u32, String> {
+        if self.subscriptions.len() >= MAX_SUBSCRIPTIONS {
+            return Err(format!("at most {MAX_SUBSCRIPTIONS} subscriptions"));
+        }
+        self.next_subscription += 1;
+        let id = self.next_subscription;
+        let sub = subscribe(&self.permissions, &url, id, self.ctx.messages.clone()).await.inspect_err(|e| crate::modules::log(&self.ctx.module, "warn", format!("{url}: {e}")))?;
+        self.subscriptions.insert(id, sub);
+        Ok(id)
+    }
+
+    fn send(&mut self, subscription: u32, data: Vec<u8>) -> wasmtime::Result<Result<(), String>> {
+        Ok(match self.subscriptions.get(&subscription) {
+            Some(s) => s.out.send(data).map_err(|_| "the subscription is closed".to_string()),
+            None => Err("unknown subscription".into()),
+        })
+    }
+
+    fn unsubscribe(&mut self, subscription: u32) -> wasmtime::Result<()> {
+        self.subscriptions.remove(&subscription);
+        Ok(())
+    }
+
+    async fn store_get(&mut self, key: String) -> Option<Vec<u8>> {
+        match (self.ctx.source_id, CONTEXT.get()) {
+            (Some(id), Some((db, _))) => crate::db::store_get(db, id, &key).await.ok().flatten(),
+            _ => self.ctx.memory_store.lock().unwrap_or_else(|e| e.into_inner()).get(&key).cloned(),
+        }
+    }
+
+    async fn store_set(&mut self, key: String, value: Option<Vec<u8>>) {
+        if key.len() > 200 || value.as_ref().is_some_and(|v| v.len() > MAX_STORED) {
+            crate::modules::log(&self.ctx.module, "warn", format!("store: {key} too large, not kept"));
+            return;
+        }
+        match (self.ctx.source_id, CONTEXT.get()) {
+            (Some(id), Some((db, _))) => {
+                if let Err(e) = crate::db::store_set(db, id, &key, value.as_deref()).await {
+                    crate::modules::log(&self.ctx.module, "error", format!("store: {e}"));
+                }
+            }
+            _ => {
+                let mut store = self.ctx.memory_store.lock().unwrap_or_else(|e| e.into_inner());
+                match value {
+                    Some(v) => store.insert(key, v),
+                    None => store.remove(&key),
+                };
+            }
+        }
+    }
+
+    async fn account(&mut self, kind: String) -> Result<String, String> {
+        // Only the accounts its manifest requires.
+        if !self.permissions.accounts.contains(&kind) {
+            return Err(format!("{kind}: not an account this module requires"));
+        }
+        let (db, key) = CONTEXT.get().ok_or("no account here")?;
+        let row = crate::db::account(db, &kind).await.map_err(|e| e.to_string())?.ok_or_else(|| format!("{kind}: not connected"))?;
+        if !row.enabled {
+            return Err(format!("{kind}: switched off"));
+        }
+        row.secret.as_deref().and_then(|s| crate::crypto::decrypt(key, s)).ok_or_else(|| format!("{kind}: not connected"))
+    }
+
+    fn pressed(&mut self, reference: String, button: u32, press: String) -> wasmtime::Result<()> {
+        let press = match press.as_str() {
+            "double" => "double",
+            "long" => "long",
+            _ => "single",
+        };
+        if let Some(sink) = self.ctx.sink.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+            sink.press(&reference, button, press);
+        }
+        Ok(())
+    }
+
+    fn changed(&mut self) -> wasmtime::Result<()> {
+        if let Some(sink) = self.ctx.sink.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+            sink.changed();
+        }
+        Ok(())
+    }
+}
+
+/// Opens a subscription (`ws://` or `tcp://`) to an allowed address, and the task that hands its
+/// messages to `messages` and writes what is sent on it.
+async fn subscribe(permissions: &Permissions, url: &str, id: u32, messages: tokio::sync::mpsc::UnboundedSender<(u32, Vec<u8>)>) -> Result<Subscription, String> {
+    use futures_util::{SinkExt, StreamExt};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio_tungstenite::tungstenite::Message;
+    let parsed = reqwest::Url::parse(url).map_err(|e| e.to_string())?;
+    let addrs = permissions.resolve(&parsed).await?;
+    let connect = tokio::time::timeout(Duration::from_secs(10), tokio::net::TcpStream::connect(&addrs[..]));
+    let (out, mut outgoing) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
+    let task = match parsed.scheme() {
+        "ws" => {
+            let tcp = connect.await.map_err(|_| "no answer".to_string())?.map_err(|e| e.to_string())?;
+            let (ws, _) = tokio_tungstenite::client_async(url, tcp).await.map_err(|e| e.to_string())?;
+            let (mut write, mut read) = ws.split();
+            tokio::spawn(async move {
+                loop {
+                    tokio::select! {
+                        incoming = read.next() => match incoming {
+                            Some(Ok(m @ (Message::Text(_) | Message::Binary(_)))) => {
+                                let data = m.into_data();
+                                if data.len() <= MAX_MESSAGE && messages.send((id, data.to_vec())).is_err() {
+                                    break;
+                                }
+                            }
+                            Some(Ok(Message::Close(_))) | Some(Err(_)) | None => break,
+                            Some(Ok(_)) => {}
+                        },
+                        sent = outgoing.recv() => match sent {
+                            Some(data) => {
+                                let m = match String::from_utf8(data) {
+                                    Ok(text) => Message::Text(text.into()),
+                                    Err(e) => Message::Binary(e.into_bytes().into()),
+                                };
+                                if write.send(m).await.is_err() {
+                                    break;
+                                }
+                            }
+                            None => break,
+                        },
+                    }
+                }
+            })
+        }
+        "tcp" => {
+            let tcp = connect.await.map_err(|_| "no answer".to_string())?.map_err(|e| e.to_string())?;
+            let (mut read, mut write) = tcp.into_split();
+            tokio::spawn(async move {
+                let mut buf = vec![0u8; 64 << 10];
+                loop {
+                    tokio::select! {
+                        n = read.read(&mut buf) => match n {
+                            Ok(0) | Err(_) => break,
+                            Ok(n) => {
+                                if messages.send((id, buf[..n].to_vec())).is_err() {
+                                    break;
+                                }
+                            }
+                        },
+                        sent = outgoing.recv() => match sent {
+                            Some(data) => {
+                                if write.write_all(&data).await.is_err() {
+                                    break;
+                                }
+                            }
+                            None => break,
+                        },
+                    }
+                }
+            })
+        }
+        other => return Err(format!("{other}: only ws:// and tcp://")),
+    };
+    Ok(Subscription { out, task: task.abort_handle() })
 }
 
 async fn http(permissions: &Permissions, req: Request) -> Result<Response, String> {
@@ -195,6 +411,8 @@ fn engine() -> &'static Engine {
 pub struct WasmModule {
     id: Arc<str>,
     read_every: Duration,
+    /// The calls it answers beyond the required ones (`optional_calls` of its manifest).
+    optional: Vec<String>,
     component: Component,
     linker: Arc<Linker<HostState>>,
     permissions: Arc<Permissions>,
@@ -228,14 +446,20 @@ impl WasmModule {
         let mut linker = Linker::new(engine);
         wasmtime_wasi::p2::add_to_linker_async(&mut linker).map_err(|e| anyhow::anyhow!("{e}"))?;
         Module::add_to_linker::<_, wasmtime::component::HasSelf<_>>(&mut linker, |s| s).map_err(|e| anyhow::anyhow!("{e}"))?;
-        Ok(Self { id: id.into(), read_every: Duration::ZERO, component, linker: Arc::new(linker), permissions: Arc::new(permissions) })
+        Ok(Self { id: id.into(), read_every: Duration::ZERO, optional: vec![], component, linker: Arc::new(linker), permissions: Arc::new(permissions) })
     }
 
-    async fn instantiate(&self) -> Result<(Store<HostState>, Module), DriverError> {
+    /// The calls it answers beyond the required ones.
+    pub fn with_optional_calls(mut self, calls: &[String]) -> Self {
+        self.optional = calls.to_vec();
+        self
+    }
+
+    async fn instantiate(&self, ctx: Arc<SourceCtx>) -> Result<(Store<HostState>, Module), DriverError> {
         let wasi = WasiCtxBuilder::new().allow_tcp(false).allow_udp(false).allow_ip_name_lookup(false).socket_addr_check(|_, _| Box::pin(async { false })).build();
         let memory = self.permissions.memory_mb.clamp(1, 64) << 20;
         let limits = StoreLimitsBuilder::new().memory_size(memory).instances(16).trap_on_grow_failure(true).build();
-        let state = HostState { module: self.id.clone(), permissions: self.permissions.clone(), wasi, table: ResourceTable::new(), limits };
+        let state = HostState { permissions: self.permissions.clone(), ctx, subscriptions: HashMap::new(), next_subscription: 0, wasi, table: ResourceTable::new(), limits };
         let mut store = Store::new(engine(), state);
         store.limiter(|s| &mut s.limits);
         store.epoch_deadline_trap();
@@ -244,20 +468,42 @@ impl WasmModule {
         Ok((store, module))
     }
 
+    fn context(&self, source_id: Option<i64>) -> (Arc<SourceCtx>, tokio::sync::mpsc::UnboundedReceiver<(u32, Vec<u8>)>) {
+        let (messages, received) = tokio::sync::mpsc::unbounded_channel();
+        let ctx = SourceCtx { module: self.id.clone(), source_id, sink: std::sync::Mutex::new(None), messages, memory_store: Default::default() };
+        (Arc::new(ctx), received)
+    }
+
     /// Whether `host` is hardware of this module (discovery), in an instance of its own.
     pub async fn probe(&self, host: &str) -> Option<String> {
-        let (mut store, module) = self.instantiate().await.ok()?;
+        let (ctx, _) = self.context(None);
+        let (mut store, module) = self.instantiate(ctx).await.ok()?;
         tokio::time::timeout(CALL_TIMEOUT, module.breezone_module_driver().call_probe(&mut store, host)).await.ok()?.ok()?
     }
 
-    /// A source of this module.
-    pub async fn open(self: &Arc<Self>, config: &serde_json::Value, secret: Option<&str>) -> Result<WasmSource, DriverError> {
-        let source = WasmSource { module: self.clone(), config: config.to_string(), secret: secret.map(str::to_string), live: Mutex::new(None), every: self.read_every };
+    /// A source of this module (`source_id`: the one it is for, `None` while its configuration is
+    /// only checked), with its pump: the messages of its subscriptions go to `on-message`.
+    pub async fn open(self: &Arc<Self>, source_id: Option<i64>, config: &serde_json::Value, secret: Option<&str>) -> Result<Arc<WasmSource>, DriverError> {
+        let (ctx, received) = self.context(source_id);
+        let source =
+            Arc::new(WasmSource { module: self.clone(), config: config.to_string(), secret: secret.map(str::to_string), ctx, live: Mutex::new(None), every: self.read_every });
         // Checks the configuration at once, as the native drivers do.
-        let mut live = source.live.lock().await;
-        *live = Some(source.start().await?);
-        drop(live);
+        let started = source.start().await?;
+        *source.live.lock().await = Some(started);
+        tokio::spawn(pump(Arc::downgrade(&source), received));
         Ok(source)
+    }
+}
+
+/// Hands the messages of a source's subscriptions to its module, until the source is dropped.
+async fn pump(source: std::sync::Weak<WasmSource>, mut received: tokio::sync::mpsc::UnboundedReceiver<(u32, Vec<u8>)>) {
+    while let Some((subscription, data)) = received.recv().await {
+        let Some(source) = source.upgrade() else { break };
+        let result =
+            source.call(move |l| Box::pin(async move { l.module.breezone_module_driver().source().call_on_message(&mut l.store, l.source, subscription, &data).await })).await;
+        if let Err(e) = result {
+            crate::modules::log(&source.module.id, "warn", format!("on-message: {e}"));
+        }
     }
 }
 
@@ -272,6 +518,7 @@ pub struct WasmSource {
     module: Arc<WasmModule>,
     config: String,
     secret: Option<String>,
+    ctx: Arc<SourceCtx>,
     /// The instance, created again after a trap.
     live: Mutex<Option<Live>>,
     every: Duration,
@@ -285,9 +532,19 @@ fn from_wit(e: WitError) -> DriverError {
     }
 }
 
+/// A media type a picture may have (others are given as JPEG).
+fn media_type(t: &str) -> &'static str {
+    match t {
+        "image/png" => "image/png",
+        "image/webp" => "image/webp",
+        "image/gif" => "image/gif",
+        _ => "image/jpeg",
+    }
+}
+
 impl WasmSource {
     async fn start(&self) -> Result<Live, DriverError> {
-        let (mut store, module) = self.module.instantiate().await?;
+        let (mut store, module) = self.module.instantiate(self.ctx.clone()).await?;
         let guest = module.breezone_module_driver().source();
         let open = guest.call_open(&mut store, &self.config, self.secret.as_deref());
         let source = tokio::time::timeout(CALL_TIMEOUT, open)
@@ -296,6 +553,14 @@ impl WasmSource {
             .map_err(|e| DriverError::Invalid(format!("{}: {e}", self.module.id)))?
             .map_err(from_wit)?;
         Ok(Live { store, module, source })
+    }
+
+    fn has(&self, call: &str) -> Result<(), DriverError> {
+        if self.module.optional.iter().any(|c| c == call) {
+            Ok(())
+        } else {
+            Err(DriverError::Unsupported(format!("{}: no {call}", self.module.id)))
+        }
     }
 
     /// Runs one call in the instance (created if needed); a trap or a call too long drops the
@@ -319,14 +584,22 @@ impl WasmSource {
             Ok(Err(trap)) => {
                 *guard = None;
                 tracing::warn!(module = &*self.module.id, "module stopped: {trap}");
+                crate::modules::log(&self.module.id, "error", format!("stopped: {trap}"));
                 Err(DriverError::Invalid(format!("{}: {trap}", self.module.id)))
             }
             Err(_) => {
                 *guard = None;
+                crate::modules::log(&self.module.id, "error", "a call took too long: stopped");
                 Err(DriverError::Unreachable(format!("{}: too long", self.module.id)))
             }
         }
     }
+}
+
+macro_rules! guest {
+    ($self:ident, $method:ident $(, $arg:expr)*) => {
+        $self.call(move |l| Box::pin(async move { l.module.breezone_module_driver().source().$method(&mut l.store, l.source $(, $arg)*).await }))
+    };
 }
 
 impl Driver for WasmSource {
@@ -336,7 +609,7 @@ impl Driver for WasmSource {
 
     fn describe(&self) -> DriverFuture<'_, Described> {
         Box::pin(async move {
-            let d = self.call(|l| Box::pin(async move { l.module.breezone_module_driver().source().call_describe(&mut l.store, l.source).await })).await?;
+            let d = guest!(self, call_describe).await?;
             Ok(Described {
                 model: d.model,
                 firmware: d.firmware,
@@ -348,7 +621,7 @@ impl Driver for WasmSource {
 
     fn read(&self) -> DriverFuture<'_, HashMap<String, State>> {
         Box::pin(async move {
-            let list = self.call(|l| Box::pin(async move { l.module.breezone_module_driver().source().call_read(&mut l.store, l.source).await })).await?;
+            let list = guest!(self, call_read).await?;
             list.into_iter()
                 .map(|(reference, json)| match serde_json::from_str(&json) {
                     Ok(serde_json::Value::Object(state)) => Ok((reference, state)),
@@ -360,17 +633,70 @@ impl Driver for WasmSource {
 
     fn act<'a>(&'a self, reference: &'a str, trait_name: &'a str, action: &'a str, params: &'a State) -> DriverFuture<'a, ()> {
         let (reference, trait_name, action, params) = (reference.to_string(), trait_name.to_string(), action.to_string(), serde_json::Value::Object(params.clone()).to_string());
+        Box::pin(async move { guest!(self, call_act, &reference, &trait_name, &action, &params).await })
+    }
+
+    fn rooms(&self) -> DriverFuture<'_, Vec<HardwareRoom>> {
         Box::pin(async move {
-            self.call(move |l| {
-                Box::pin(async move { l.module.breezone_module_driver().source().call_act(&mut l.store, l.source, &reference, &trait_name, &action, &params).await })
-            })
-            .await
+            self.has("rooms")?;
+            Ok(guest!(self, call_rooms).await?.into_iter().map(|r| HardwareRoom { name: r.name, references: r.references }).collect())
+        })
+    }
+
+    fn scenes(&self) -> DriverFuture<'_, Vec<Scene>> {
+        Box::pin(async move {
+            self.has("scenes")?;
+            Ok(guest!(self, call_scenes).await?.into_iter().map(|s| Scene { id: s.id, name: s.name, room: s.room, references: s.references }).collect())
+        })
+    }
+
+    fn activate_scene<'a>(&'a self, id: &'a str) -> DriverFuture<'a, ()> {
+        let id = id.to_string();
+        Box::pin(async move {
+            self.has("scenes")?;
+            guest!(self, call_activate_scene, &id).await
+        })
+    }
+
+    fn unlock<'a>(&'a self, key: &'a str) -> DriverFuture<'a, bool> {
+        let key = key.to_string();
+        Box::pin(async move {
+            self.has("unlock")?;
+            guest!(self, call_unlock, &key).await
+        })
+    }
+
+    fn listen(&self, sink: Sink) {
+        *self.ctx.sink.lock().unwrap_or_else(|e| e.into_inner()) = Some(sink);
+    }
+
+    fn close(&self) -> DriverFuture<'_, ()> {
+        Box::pin(async move {
+            let _ = self.call(|l| Box::pin(async move { l.module.breezone_module_driver().source().call_close(&mut l.store, l.source).await.map(Ok) })).await;
+            Ok(())
+        })
+    }
+
+    fn picture<'a>(&'a self, reference: &'a str) -> DriverFuture<'a, (Vec<u8>, &'static str)> {
+        let reference = reference.to_string();
+        Box::pin(async move {
+            self.has("picture")?;
+            let p = guest!(self, call_picture, &reference).await?;
+            Ok((p.data, media_type(&p.media_type)))
+        })
+    }
+
+    fn forecast<'a>(&'a self, reference: &'a str) -> DriverFuture<'a, Forecast> {
+        let reference = reference.to_string();
+        Box::pin(async move {
+            self.has("forecast")?;
+            Ok(guest!(self, call_forecast, &reference).await?.into_iter().map(|c| (c.name, c.points)).collect())
         })
     }
 
     fn diagnostic(&self) -> DriverFuture<'_, serde_json::Value> {
         Box::pin(async move {
-            let json = self.call(|l| Box::pin(async move { l.module.breezone_module_driver().source().call_diagnostic(&mut l.store, l.source).await })).await?;
+            let json = guest!(self, call_diagnostic).await?;
             Ok(serde_json::from_str(&json).unwrap_or(serde_json::Value::Null))
         })
     }
@@ -388,38 +714,51 @@ pub fn allow_loopback(allowed: bool) {
 type Loaded = HashMap<(String, String), Arc<WasmModule>>;
 static LOADED: std::sync::LazyLock<Mutex<Loaded>> = std::sync::LazyLock::new(Default::default);
 
-/// A source of an installed module (`dir`: its files): the component is compiled the first time
-/// one of its sources is opened (and kept compiled in `<modules>/cache`), with the permissions of
-/// its manifest.
-pub async fn source(m: &crate::modules::manifest::Manifest, dir: &Path, config: &serde_json::Value, secret: Option<&str>) -> Result<Arc<dyn Driver>, String> {
+/// An installed module, compiled (the first time one of its sources needs it, kept compiled in
+/// `<modules>/cache`), with the permissions of its manifest.
+async fn loaded(m: &crate::modules::manifest::Manifest, dir: &Path) -> Result<Arc<WasmModule>, String> {
     let key = (m.id.clone(), m.version.clone());
-    let module = {
-        let mut loaded = LOADED.lock().await;
-        // Another version than the one loaded: the older is dropped.
-        loaded.retain(|(id, version), _| id != &m.id || version == &m.version);
-        match loaded.get(&key) {
-            Some(module) => module.clone(),
-            None => {
-                let wasm = std::fs::read(dir.join("module.wasm")).map_err(|e| format!("{}: {e}", m.id))?;
-                let net = &m.permissions.network;
-                let permissions = Permissions {
-                    lan: net.lan,
-                    hosts: net.hosts.clone(),
-                    loopback: LOOPBACK.load(std::sync::atomic::Ordering::SeqCst),
-                    memory_mb: m.permissions.memory_mb as usize,
-                };
-                let cache = dir.parent().and_then(Path::parent).map(|modules| modules.join("cache"));
-                let id = m.id.clone();
-                let mut module = tokio::task::spawn_blocking(move || WasmModule::load(&id, &wasm, permissions, cache.as_deref()))
-                    .await
-                    .map_err(|e| e.to_string())?
-                    .map_err(|e| format!("{}: {e}", m.id))?;
-                module.read_every = Duration::from_secs(u64::from(m.read_every_s.unwrap_or(0)));
-                let module = Arc::new(module);
-                loaded.insert(key, module.clone());
-                module
-            }
-        }
+    let mut loaded = LOADED.lock().await;
+    // Another version than the one loaded: the older is dropped.
+    loaded.retain(|(id, version), _| id != &m.id || version == &m.version);
+    if let Some(module) = loaded.get(&key) {
+        return Ok(module.clone());
+    }
+    let wasm = std::fs::read(dir.join("module.wasm")).map_err(|e| format!("{}: {e}", m.id))?;
+    let net = &m.permissions.network;
+    let permissions = Permissions {
+        lan: net.lan,
+        hosts: net.hosts.clone(),
+        loopback: LOOPBACK.load(std::sync::atomic::Ordering::SeqCst),
+        memory_mb: m.permissions.memory_mb as usize,
+        accounts: m.requires.accounts.clone(),
     };
-    Ok(Arc::new(module.open(config, secret).await.map_err(|e| e.to_string())?))
+    let cache = dir.parent().and_then(Path::parent).map(|modules| modules.join("cache"));
+    let id = m.id.clone();
+    let mut module = tokio::task::spawn_blocking(move || WasmModule::load(&id, &wasm, permissions, cache.as_deref()))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| format!("{}: {e}", m.id))?
+        .with_optional_calls(&m.optional_calls);
+    module.read_every = Duration::from_secs(u64::from(m.read_every_s.unwrap_or(0)));
+    let module = Arc::new(module);
+    loaded.insert(key, module.clone());
+    Ok(module)
+}
+
+/// A source of an installed module (`dir`: its files).
+pub async fn source(
+    m: &crate::modules::manifest::Manifest,
+    dir: &Path,
+    source_id: Option<i64>,
+    config: &serde_json::Value,
+    secret: Option<&str>,
+) -> Result<Arc<dyn Driver>, String> {
+    let module = loaded(m, dir).await?;
+    Ok(module.open(source_id, config, secret).await.map_err(|e| e.to_string())?)
+}
+
+/// Whether `host` is hardware of an installed module (discovery).
+pub async fn probe(m: &crate::modules::manifest::Manifest, dir: &Path, host: &str) -> Option<String> {
+    loaded(m, dir).await.ok()?.probe(host).await
 }

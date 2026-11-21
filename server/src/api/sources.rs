@@ -118,7 +118,7 @@ async fn checked(input: &SourceInput, secret: Option<&str>) -> ApiResult<(String
     // The Netatmo and EZVIZ modules come with their account: only their name and whether they run
     // change here.
     if !crate::accounts::comes_with_account(&input.driver) || !crate::accounts::is_cloud(&input.driver) {
-        crate::modules::open_source(&input.driver, &input.config, secret).await.map_err(ApiError::bad_request)?;
+        crate::modules::open_source(&input.driver, None, &input.config, secret).await.map_err(ApiError::bad_request)?;
     }
     let name: String = input.name.trim().chars().take(60).collect();
     if name.is_empty() {

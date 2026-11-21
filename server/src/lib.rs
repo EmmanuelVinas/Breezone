@@ -96,12 +96,17 @@ pub async fn init_state(cfg: Config) -> anyhow::Result<AppState> {
         let builtin = cfg.web_dir.parent().unwrap_or(std::path::Path::new(".")).join("modules");
         modules::install::install_builtin(&db, &cfg.data_dir, &builtin, update::RELEASE_PUBLIC_KEY).await;
     }
+    if let Some(dev) = &cfg.modules_dev {
+        modules::install::install_dev(&db, &cfg.data_dir, dev).await;
+    }
     let secret = AuthService::load_secret(cfg.jwt_secret.as_deref(), &cfg.data_dir)?;
     let auth = Arc::new(AuthService::new(&secret, cfg.access_token_ttl_secs, cfg.refresh_token_ttl_days));
     let data_key = Arc::new(crypto::load_key(&cfg.data_dir, &db, &secret).await?);
     let hub = Hub::new(db.clone(), cfg.clone(), data_key.clone());
     let updater = Arc::new(update::Updater::new(cfg.data_dir.clone(), cfg.self_update));
     updater.set_beta(db::get_setting(&db, update::CHANNEL_SETTING).await?.as_deref() == Some("beta"));
+    #[cfg(feature = "wasm")]
+    modules::wasm::set_context(db.clone(), *data_key);
     let drivers = Arc::new(drivers::Runtime::new(db.clone(), *data_key, cfg.module_urls()));
     drivers.reload().await?;
     drivers.clone().hear();

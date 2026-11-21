@@ -23,35 +23,54 @@ fn key() -> SigningKey {
     SigningKey::from_bytes(&[3; 32])
 }
 
-fn sign(message: &[u8]) -> Vec<u8> {
-    STANDARD.encode(key().sign(message).to_bytes()).into_bytes()
+fn sign_with(key: &SigningKey, message: &[u8]) -> Vec<u8> {
+    STANDARD.encode(key.sign(message).to_bytes()).into_bytes()
 }
 
-/// A module that is only data (no code), at `version`.
-fn manifest(version: &str, api: &str) -> breezone_server::modules::manifest::Manifest {
+fn sign(message: &[u8]) -> Vec<u8> {
+    sign_with(&key(), message)
+}
+
+/// A module `id` that is only data (no code), at `version`.
+fn manifest_of(id: &str, version: &str, api: &str) -> breezone_server::modules::manifest::Manifest {
     let mut m: breezone_server::modules::manifest::Manifest = serde_json::from_str(include_str!("../contracts/module.example.json")).unwrap();
-    m.id = "plugdemo".into();
+    m.id = id.into();
     m.version = version.into();
     m.requires.api = api.into();
     m.requires.breezone = None;
     m
 }
 
-/// Publishes the versions given in `files`, with an index numbered `seq`.
-fn publish(files: &Files, seq: u64, versions: &[(&str, &str)]) {
-    let mut published = vec![];
+fn manifest(version: &str, api: &str) -> breezone_server::modules::manifest::Manifest {
+    manifest_of("plugdemo", version, api)
+}
+
+/// Publishes in `files` the modules given (id, version, interface), signed by `key`, with an index
+/// numbered `seq`.
+fn publish_with(files: &Files, key: &SigningKey, seq: u64, modules: &[(&str, &str, &str)]) {
+    let mut entries: Vec<Entry> = vec![];
     let mut out = files.lock().unwrap();
-    for (version, api) in versions {
-        let m = manifest(version, api);
+    for (id, version, api) in modules {
+        let m = manifest_of(id, version, api);
         let bytes = package::build(&serde_json::to_string(&m).unwrap(), None, &[("i18n/fr.json", b"{}")]).unwrap();
-        let file = format!("plugdemo-{version}.bzm");
-        out.insert(format!("{file}.sig"), sign(&package::signed_message("plugdemo", version, &bytes)));
-        published.push(Published { manifest: m, file: file.clone(), size: bytes.len() as u64, sha256: String::new(), published_at: 0, yanked: false, code: false });
+        let file = format!("{id}-{version}.bzm");
+        out.insert(format!("{file}.sig"), sign_with(key, &package::signed_message(id, version, &bytes)));
+        let published = Published { manifest: m, file: file.clone(), size: bytes.len() as u64, sha256: String::new(), published_at: 0, yanked: false, code: false };
+        match entries.iter_mut().find(|e| e.id == *id) {
+            Some(e) => e.versions.push(published),
+            None => entries.push(Entry { id: id.to_string(), versions: vec![published] }),
+        }
         out.insert(file, bytes);
     }
-    let index = serde_json::to_vec(&Index { seq, modules: vec![Entry { id: "plugdemo".into(), versions: published }] }).unwrap();
-    out.insert("index.json.sig".into(), sign(&library::signed_message(seq, &index)));
+    let index = serde_json::to_vec(&Index { seq, modules: entries }).unwrap();
+    out.insert("index.json.sig".into(), sign_with(key, &library::signed_message(seq, &index)));
     out.insert("index.json".into(), index);
+}
+
+/// Publishes versions of `plugdemo` in the official library.
+fn publish(files: &Files, seq: u64, versions: &[(&str, &str)]) {
+    let modules: Vec<(&str, &str, &str)> = versions.iter().map(|(v, a)| ("plugdemo", *v, *a)).collect();
+    publish_with(files, &key(), seq, &modules);
 }
 
 async fn serve_library(files: Files) -> String {
@@ -105,7 +124,9 @@ async fn modules_come_from_the_signed_library() {
 
     let (code, lib) = server.call("GET", "/api/modules/library", None).await;
     assert_eq!(code, StatusCode::OK, "{lib}");
+    let lib = lib["modules"].clone();
     assert_eq!(lib[0]["id"], "plugdemo");
+    assert_eq!(lib[0]["repository"]["official"], true);
     assert_eq!(lib[0]["manifest"]["version"], "2.0.0");
     assert_eq!(lib[0]["fits"], "1.1.0");
     assert_eq!(lib[0]["reasons"][0]["kind"], "api");
@@ -152,12 +173,13 @@ async fn modules_come_from_the_signed_library() {
 
     // An index older than the one seen is refused; a tampered one too.
     publish(&files, 2, &[("1.1.0", "^1.0")]);
-    let (code, _) = server.call("GET", "/api/modules/library?refresh=true", None).await;
-    assert_eq!(code, StatusCode::BAD_GATEWAY);
+    let (code, lib) = server.call("GET", "/api/modules/library?refresh=true", None).await;
+    assert_eq!(code, StatusCode::OK);
+    assert!(lib["unreadable"][0]["error"].as_str().unwrap().contains("older"), "{lib}");
     publish(&files, 4, &[("1.1.0", "^1.0")]);
     files.lock().unwrap().get_mut("index.json").unwrap().extend_from_slice(b" ");
-    let (code, _) = server.call("GET", "/api/modules/library?refresh=true", None).await;
-    assert_eq!(code, StatusCode::BAD_GATEWAY);
+    let (_, lib) = server.call("GET", "/api/modules/library?refresh=true", None).await;
+    assert!(lib["unreadable"][0]["error"].as_str().unwrap().contains("signature"), "{lib}");
 
     let (code, _) = server.call("DELETE", "/api/modules/plugdemo", None).await;
     assert_eq!(code, StatusCode::NO_CONTENT);
@@ -165,4 +187,58 @@ async fn modules_come_from_the_signed_library() {
     assert!(!list.as_array().unwrap().iter().any(|m| m["id"] == "plugdemo"));
     let (code, _) = server.call("DELETE", "/api/modules/shelly", None).await;
     assert_eq!(code, StatusCode::BAD_REQUEST, "compiled in");
+}
+
+/// Sources of modules besides Breezone's (a developer's, a community's): each signs with its own
+/// key, lists its modules in its index, and may neither replace a module of Breezone nor one that
+/// came from another source.
+#[tokio::test]
+async fn other_sources_of_modules() {
+    let official: Files = Arc::default();
+    publish(&official, 1, &[("1.0.0", "^1.0")]);
+    let server = Server::start(serve_library(official.clone()).await).await;
+    let other_key = SigningKey::from_bytes(&[8; 32]);
+    let other: Files = Arc::default();
+    publish_with(&other, &other_key, 1, &[("chauffeau", "0.3.0", "^1.0"), ("plugdemo", "9.0.0", "^1.0"), ("shelly", "9.0.0", "^1.0")]);
+    let other_url = serve_library(other.clone()).await;
+    let other_public = STANDARD.encode(other_key.verifying_key().to_bytes());
+
+    // Refused: not on the local network in HTTP, a key that is not one, a key that does not sign it.
+    for (url, key) in [("http://modules.example.com", other_public.as_str()), (other_url.as_str(), "abc"), (other_url.as_str(), &STANDARD.encode([1u8; 32]))] {
+        let (code, _) = server.call("POST", "/api/modules/repositories", Some(json!({"name": "Autre", "url": url, "public_key": key}))).await;
+        assert!(code == StatusCode::BAD_REQUEST || code == StatusCode::UNPROCESSABLE_ENTITY, "{url} {key}: {code}");
+    }
+    let (code, repos) = server.call("POST", "/api/modules/repositories", Some(json!({"name": "Atelier", "url": other_url, "public_key": other_public}))).await;
+    assert_eq!(code, StatusCode::CREATED, "{repos}");
+    let atelier = repos.as_array().unwrap().iter().find(|r| r["name"] == "Atelier").unwrap()["id"].as_i64().unwrap();
+
+    // Its modules are listed with it, apart from the official ones.
+    let (_, lib) = server.call("GET", &format!("/api/modules/library?repository={atelier}"), None).await;
+    let ids: Vec<&str> = lib["modules"].as_array().unwrap().iter().map(|m| m["id"].as_str().unwrap()).collect();
+    assert_eq!(ids.len(), 3, "{lib}");
+    assert!(lib["modules"].as_array().unwrap().iter().all(|m| m["repository"]["official"] == false));
+
+    let (code, m) = server.call("POST", "/api/modules", Some(json!({"id": "chauffeau", "repository": atelier}))).await;
+    assert_eq!(code, StatusCode::CREATED, "{m}");
+    // A module of Breezone, or one installed from Breezone's library, is not taken by another source.
+    let (code, _) = server.call("POST", "/api/modules", Some(json!({"id": "shelly", "repository": atelier}))).await;
+    assert_eq!(code, StatusCode::CONFLICT);
+    let (code, _) = server.call("POST", "/api/modules", Some(json!({"id": "plugdemo"}))).await;
+    assert_eq!(code, StatusCode::CREATED);
+    let (code, _) = server.call("POST", "/api/modules", Some(json!({"id": "plugdemo", "repository": atelier}))).await;
+    assert_eq!(code, StatusCode::CONFLICT);
+
+    // A source a module comes from is not removed; switched off, it is no longer read.
+    let (code, _) = server.call("DELETE", &format!("/api/modules/repositories/{atelier}"), None).await;
+    assert_eq!(code, StatusCode::CONFLICT);
+    let (code, _) = server.call("PATCH", &format!("/api/modules/repositories/{atelier}"), Some(json!({"enabled": false}))).await;
+    assert_eq!(code, StatusCode::OK);
+    let (_, lib) = server.call("GET", "/api/modules/library", None).await;
+    assert!(lib["modules"].as_array().unwrap().iter().all(|m| m["repository"]["official"] == true), "{lib}");
+    let (code, _) = server.call("DELETE", "/api/modules/chauffeau", None).await;
+    assert_eq!(code, StatusCode::NO_CONTENT);
+    let (code, _) = server.call("DELETE", &format!("/api/modules/repositories/{atelier}"), None).await;
+    assert_eq!(code, StatusCode::NO_CONTENT);
+    let (code, _) = server.call("DELETE", "/api/modules/repositories/1", None).await;
+    assert_eq!(code, StatusCode::BAD_REQUEST, "the library of Breezone stays");
 }

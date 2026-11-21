@@ -29,10 +29,10 @@ jobs:
       - run: cargo fmt --check
       - run: cargo fmt --all --check --manifest-path ../modules/Cargo.toml
       - run: cargo clippy --all-targets --locked -- -D warnings
-      - run: cargo clippy --all-targets --locked --features wasm -- -D warnings
+      # Without the host of modules in WebAssembly too (the `wasm` feature, on by default).
+      - run: cargo clippy --all-targets --locked --no-default-features -- -D warnings
+      # Includes the modules in WebAssembly and their host (built for wasm32-wasip2 by the test).
       - run: cargo test --locked
-      # The modules in WebAssembly and their host (built for wasm32-wasip2 by the test).
-      - run: cargo test --locked --features wasm --test wasm_modules
 
   web:
     name: Web UI

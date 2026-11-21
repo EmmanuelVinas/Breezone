@@ -24,13 +24,52 @@ pub async fn install(
     data_dir: &Path,
     bytes: &[u8],
     signature: &str,
-    public_key: &str,
+    from: &super::library::Repository,
     origin: Origin,
     expected: Option<(&str, &str)>,
 ) -> Result<(String, String), ApiError> {
-    let package = Package::open(bytes, signature, public_key, expected).map_err(refused)?;
+    let package = Package::open(bytes, signature, &from.public_key, expected).map_err(refused)?;
+    install_package(db, data_dir, package, origin, Some(from)).await
+}
+
+/// Installs a package already checked (signed, or one of those that come with Breezone, whose
+/// archive is signed as a whole). A module with the id of one compiled into the server replaces it
+/// (its code must then be there: data alone cannot drive hardware).
+/// `from`: the source it comes from (`None`: it comes with Breezone).
+pub async fn install_package(db: &Db, data_dir: &Path, package: Package, origin: Origin, from: Option<&super::library::Repository>) -> Result<(String, String), ApiError> {
     let m = &package.manifest;
-    if super::native::get(&m.id).is_some() {
+    let official = from.is_none_or(|r| r.official);
+    // A source other than Breezone's never takes the place of one of its modules, nor of a module
+    // that came from elsewhere: its updates come from where it was installed from.
+    if !official && super::native::get(&m.id).is_some() {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            crate::text!(
+                "Seule la bibliothèque de Breezone peut remplacer son module {0}.",
+                "Only Breezone's library may replace its {0} module.",
+                "Solo la biblioteca de Breezone puede sustituir su módulo {0}.",
+                m.id.clone()
+            ),
+        ));
+    }
+    if let Some(installed) = db::module_row(db, &m.id).await?.filter(|r| r.origin != "native") {
+        let was = db::module_repository(db, &m.id).await?;
+        let now = from.map(|r| r.id);
+        // The same source again, or Breezone's library taking over a module that came with Breezone.
+        let allowed = was == now || (official && installed.origin == "builtin");
+        if !allowed {
+            return Err(ApiError::new(
+                StatusCode::CONFLICT,
+                crate::text!(
+                    "Le module {0} vient d'une autre source : retirez-le d'abord pour le prendre ici.",
+                    "The {0} module comes from another source: remove it first to take it from here.",
+                    "El módulo {0} viene de otra fuente: quítelo primero para tomarlo de aquí.",
+                    m.id.clone()
+                ),
+            ));
+        }
+    }
+    if super::native::get(&m.id).is_some() && (package.wasm.is_none() || !cfg!(feature = "wasm")) {
         return Err(ApiError::new(
             StatusCode::CONFLICT,
             crate::text!("Le module {0} est déjà compris dans Breezone.", "The {0} module is already part of Breezone.", "El módulo {0} ya forma parte de Breezone.", m.id.clone()),
@@ -66,6 +105,7 @@ pub async fn install(
     let dir = super::modules_dir(data_dir);
     package.unpack(&dir).map_err(|e| ApiError::internal(format!("cannot write the module: {e}")))?;
     db::save_module(db, &m.id, &m.version, previous.as_deref(), origin).await?;
+    db::set_module_repository(db, &m.id, from.map(|r| r.id)).await?;
     keep_only(&dir.join(&m.id), &[Some(m.version.as_str()), previous.as_deref()]);
     tracing::info!(module = m.id, version = m.version, origin, "module installed");
     super::register(package.manifest.clone(), dir.join(&m.id).join(&m.version));
@@ -107,16 +147,19 @@ fn leak_origin(origin: &str) -> Origin {
     match origin {
         "builtin" => "builtin",
         "file" => "file",
+        "dev" => "dev",
         _ => "library",
     }
 }
 
 /// Removes a module no source and no account uses.
 pub async fn uninstall(db: &Db, data_dir: &Path, id: &str) -> Result<(), ApiError> {
-    if super::native::get(id).is_some() {
+    let native = super::native::get(id).is_some();
+    if native && !super::replaces_native(id) {
         return Err(ApiError::bad_request("a module compiled into Breezone cannot be removed"));
     }
-    let used = db::list_sources(db).await?.iter().filter(|s| s.driver == id).count();
+    // One that replaces a module compiled in leaves its sources to it.
+    let used = if native { 0 } else { db::list_sources(db).await?.iter().filter(|s| s.driver == id).count() };
     let account = db::list_accounts(db).await?.iter().any(|a| a.kind == id && a.secret.is_some());
     if used > 0 || account {
         return Err(ApiError::new(
@@ -133,6 +176,12 @@ pub async fn uninstall(db: &Db, data_dir: &Path, id: &str) -> Result<(), ApiErro
     }
     let _ = std::fs::remove_dir_all(super::modules_dir(data_dir).join(id));
     super::unregister(id);
+    if native {
+        // The module compiled in is the one again.
+        if let Some(n) = super::native::get(id) {
+            db::restore_native_module(db, &n.manifest.id, &n.manifest.version).await?;
+        }
+    }
     tracing::info!(module = id, "module removed");
     Ok(())
 }
@@ -147,17 +196,47 @@ fn read_manifest(data_dir: &Path, id: &str, version: &str) -> Option<super::mani
 pub async fn install_builtin(db: &Db, data_dir: &Path, dir: &Path, public_key: &str) {
     let Ok(entries) = std::fs::read_dir(dir) else { return };
     for path in entries.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "bzm")) {
-        let (Ok(bytes), Ok(sig)) = (std::fs::read(&path), std::fs::read_to_string(path.with_extension("bzm.sig"))) else { continue };
-        let Ok(package) = Package::open(&bytes, &sig, public_key, None) else {
-            tracing::warn!("{}: not a module signed by Breezone, left out", path.display());
+        let Ok(bytes) = std::fs::read(&path) else { continue };
+        // Beside Breezone itself, in the image or in its signed archive: trusted like the binary.
+        // A signature, when there is one, is checked all the same.
+        let opened = match std::fs::read_to_string(path.with_extension("bzm.sig")) {
+            Ok(sig) => Package::open(&bytes, &sig, public_key, None),
+            Err(_) => Package::trusted(&bytes),
+        };
+        let Ok(package) = opened else {
+            tracing::warn!("{}: not a module of Breezone, left out", path.display());
             continue;
         };
         let installed = db::module_row(db, &package.manifest.id).await.ok().flatten();
-        let newer = installed.as_ref().is_none_or(|r| semver::Version::parse(&r.version).ok() < Some(package.manifest.semver()));
+        // Missing here, still the driver compiled in, or older than this one.
+        let newer = installed.as_ref().is_none_or(|r| r.origin == "native" || semver::Version::parse(&r.version).ok() < Some(package.manifest.semver()));
         if newer {
-            if let Err(e) = install(db, data_dir, &bytes, &sig, public_key, "builtin", None).await {
+            if let Err(e) = install_package(db, data_dir, package, "builtin", None).await {
                 tracing::warn!("{}: {}", path.display(), e.message.en);
             }
+        }
+    }
+}
+
+/// At start, in a development build: installs the packages of the folder of modules being
+/// developed (`BREEZONE_MODULES_DEV`), without a signature, each time (a new build of the same
+/// version replaces the one before). Never read by a release build.
+pub async fn install_dev(db: &Db, data_dir: &Path, dir: &Path) {
+    if !cfg!(debug_assertions) {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        tracing::warn!("{}: no folder of modules in development", dir.display());
+        return;
+    };
+    for path in entries.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "bzm")) {
+        let opened = std::fs::read(&path).map_err(|e| e.to_string()).and_then(|b| Package::trusted(&b).map_err(|e| e.to_string()));
+        match opened {
+            Ok(package) => match install_package(db, data_dir, package, "dev", None).await {
+                Ok((id, version)) => tracing::warn!(module = id, version, "module in development installed, not signed"),
+                Err(e) => tracing::warn!("{}: {}", path.display(), e.message.en),
+            },
+            Err(e) => tracing::warn!("{}: {e}", path.display()),
         }
     }
 }
@@ -192,25 +271,31 @@ pub async fn replace_incompatible(db: &Db, data_dir: &Path, library: &super::lib
     if stale.is_empty() {
         return;
     }
-    let index = match library.index(db, false).await {
-        Ok(i) => i,
-        Err(e) => return tracing::warn!("modules not replaced: {e}"),
-    };
     let host = crate::capabilities::Host::local();
     for row in stale {
+        let repo = match db::module_repository(db, &row.id).await.ok().flatten() {
+            Some(id) => library.repository(db, id).await.ok().flatten(),
+            None => library.official(db).await.ok(),
+        };
+        let Some(repo) = repo.filter(|r| r.enabled) else { continue };
+        let index = match library.index(db, &repo, false).await {
+            Ok(i) => i,
+            Err(e) => {
+                tracing::warn!(module = row.id, "not replaced: {e}");
+                continue;
+            }
+        };
         let Some(published) = index.entry(&row.id).and_then(|e| e.best(&host, env!("CARGO_PKG_VERSION"), &|a| super::manifest(a).is_some())) else { continue };
         let fetched = async {
-            let bytes = library.fetch(&published.file, super::package::MAX_PACKAGE).await?;
-            let sig = library.fetch(&format!("{}.sig", published.file), 1024).await?;
+            let bytes = library.fetch(&repo, &published.file, super::package::MAX_PACKAGE).await?;
+            let sig = library.fetch(&repo, &format!("{}.sig", published.file), 1024).await?;
             Ok::<_, String>((bytes, sig))
         };
         match fetched.await {
-            Ok((bytes, sig)) => {
-                match install(db, data_dir, &bytes, &String::from_utf8_lossy(&sig), library.public_key(), "library", Some((&row.id, &published.manifest.version))).await {
-                    Ok(_) => tracing::info!(module = row.id, version = published.manifest.version, "module replaced by a version that fits"),
-                    Err(e) => tracing::warn!(module = row.id, "not replaced: {}", e.message.en),
-                }
-            }
+            Ok((bytes, sig)) => match install(db, data_dir, &bytes, &String::from_utf8_lossy(&sig), &repo, "library", Some((&row.id, &published.manifest.version))).await {
+                Ok(_) => tracing::info!(module = row.id, version = published.manifest.version, "module replaced by a version that fits"),
+                Err(e) => tracing::warn!(module = row.id, "not replaced: {}", e.message.en),
+            },
             Err(e) => tracing::warn!(module = row.id, "not replaced: {e}"),
         }
     }
@@ -238,6 +323,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let db = db::connect(&dir.join("t.db")).await.unwrap();
         let (key, public) = keys();
+        let official = crate::modules::library::Repository { id: 1, name: "Breezone".into(), url: None, public_key: public.clone(), official: true, enabled: true };
         let package = |version: &str, api: &str| {
             let bytes = build(&manifest("plugtest", version, api), None, &[]).unwrap();
             let sig = sign(&key, &signed_message("plugtest", version, &bytes));
@@ -247,22 +333,22 @@ mod tests {
         let api = "^1.0";
 
         let (b, s) = package("1.0.0", api);
-        assert_eq!(install(&db, &dir, &b, &s, &public, "file", None).await.unwrap().1, "1.0.0");
+        assert_eq!(install(&db, &dir, &b, &s, &official, "file", None).await.unwrap().1, "1.0.0");
         assert!(crate::modules::manifest("plugtest").is_some());
         let (b, s) = package("1.1.0", api);
-        install(&db, &dir, &b, &s, &public, "library", Some(("plugtest", "1.1.0"))).await.unwrap();
+        install(&db, &dir, &b, &s, &official, "library", Some(("plugtest", "1.1.0"))).await.unwrap();
         let row = db::module_row(&db, "plugtest").await.unwrap().unwrap();
         assert_eq!((row.version.as_str(), row.previous_version.as_deref()), ("1.1.0", Some("1.0.0")));
         assert_eq!(crate::modules::manifest("plugtest").unwrap().version, "1.1.0");
 
         // Refused: an interface this server does not host, a module compiled in, a bad signature.
         let (b, s) = package("2.0.0", "^9.0");
-        assert_eq!(install(&db, &dir, &b, &s, &public, "file", None).await.unwrap_err().status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(install(&db, &dir, &b, &s, &official, "file", None).await.unwrap_err().status, StatusCode::UNPROCESSABLE_ENTITY);
         let bytes = build(&manifest("shelly", "9.0.0", api), None, &[]).unwrap();
         let sig = sign(&key, &signed_message("shelly", "9.0.0", &bytes));
-        assert_eq!(install(&db, &dir, &bytes, &sig, &public, "file", None).await.unwrap_err().status, StatusCode::CONFLICT);
+        assert_eq!(install(&db, &dir, &bytes, &sig, &official, "file", None).await.unwrap_err().status, StatusCode::CONFLICT);
         let (b, _) = package("1.2.0", api);
-        assert_eq!(install(&db, &dir, &b, "AAAA", &public, "file", None).await.unwrap_err().status, StatusCode::FORBIDDEN);
+        assert_eq!(install(&db, &dir, &b, "AAAA", &official, "file", None).await.unwrap_err().status, StatusCode::FORBIDDEN);
 
         assert_eq!(rollback(&db, &dir, "plugtest").await.unwrap(), "1.0.0");
         assert_eq!(crate::modules::manifest("plugtest").unwrap().version, "1.0.0");
@@ -272,6 +358,15 @@ mod tests {
         crate::modules::unregister("plugtest");
         load_installed(&db, &dir).await.unwrap();
         assert_eq!(crate::modules::manifest("plugtest").unwrap().version, "1.0.0");
+
+        // A module in development: installed without a signature, again at each start.
+        let devdir = dir.join("dev");
+        std::fs::create_dir_all(&devdir).unwrap();
+        std::fs::write(devdir.join("mine.bzm"), build(&manifest("plugmine", "0.1.0", api), None, &[]).unwrap()).unwrap();
+        install_dev(&db, &dir, &devdir).await;
+        assert_eq!(db::module_row(&db, "plugmine").await.unwrap().map(|r| r.origin), Some("dev".to_string()));
+        install_dev(&db, &dir, &devdir).await;
+        uninstall(&db, &dir, "plugmine").await.unwrap();
 
         uninstall(&db, &dir, "plugtest").await.unwrap();
         assert!(crate::modules::manifest("plugtest").is_none() && !dir.join("modules/plugtest").exists());

@@ -3,13 +3,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   Download,
   Loader2,
+  Plus,
   RefreshCw,
   Trash2,
   Undo2,
   Upload,
 } from "lucide-react"
 import { toast } from "sonner"
-import type { LibraryModule, ModuleView } from "@/lib/api"
+import type { LibraryModule, ModuleRepository, ModuleView } from "@/lib/api"
 import { api } from "@/lib/api"
 import { errorText } from "@/lib/format"
 import { lang, t } from "@/lib/i18n"
@@ -26,6 +27,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Switch } from "@/components/ui/switch"
 
 /** Why a module does not work with this server, in words. */
 function reasonText(r: LibraryModule["reasons"][number]) {
@@ -74,7 +76,7 @@ export function LibraryPanel() {
     onError: (e) => toast.error(errorText(e)),
   })
   const install = useMutation({
-    mutationFn: (id: string) => api.installModule(id),
+    mutationFn: (m: LibraryModule) => api.installModule(m.id, m.repository.id),
     onSuccess: (m) => {
       toast.success(
         t("{name} {version} installé", {
@@ -151,12 +153,12 @@ export function LibraryPanel() {
             <p className="text-sm text-muted-foreground">
               {errorText(library.error)}
             </p>
-          ) : (library.data ?? []).length === 0 ? (
+          ) : (library.data?.modules ?? []).length === 0 ? (
             <p className="text-sm text-muted-foreground">
               {t("Aucun module publié pour l'instant.")}
             </p>
           ) : (
-            (library.data ?? []).map((m) => {
+            (library.data?.modules ?? []).map((m) => {
               const update =
                 m.installed && m.fits && m.fits !== m.installed ? m.fits : null
               return (
@@ -165,8 +167,15 @@ export function LibraryPanel() {
                   className="flex flex-wrap items-center gap-3 rounded-2xl border p-3"
                 >
                   <div className="grid min-w-0 flex-1 gap-0.5">
-                    <span className="truncate font-medium">
+                    <span className="flex items-center gap-2 truncate font-medium">
                       {m.manifest.name[lang()]}
+                      {!m.repository.official && (
+                        <Badge variant="outline">
+                          {t("non officiel · {name}", {
+                            name: m.repository.name,
+                          })}
+                        </Badge>
+                      )}
                     </span>
                     <span className="text-xs text-muted-foreground">
                       {m.fits
@@ -182,7 +191,7 @@ export function LibraryPanel() {
                     <Button
                       size="sm"
                       disabled={install.isPending}
-                      onClick={() => install.mutate(m.id)}
+                      onClick={() => install.mutate(m)}
                     >
                       <Download />{" "}
                       {update
@@ -196,8 +205,18 @@ export function LibraryPanel() {
               )
             })
           )}
+          {(library.data?.unreadable ?? []).map((u) => (
+            <p key={u.repository.id} className="text-xs text-destructive">
+              {t("Source « {name} » illisible : {error}", {
+                name: u.repository.name,
+                error: u.error,
+              })}
+            </p>
+          ))}
         </CardContent>
       </Card>
+
+      <RepositoriesCard onChange={changed} />
 
       <Card className="rounded-3xl">
         <CardHeader>
@@ -224,6 +243,8 @@ export function LibraryPanel() {
                   {m.manifest.name[lang()]} · {m.version}
                 </span>
                 <span className="text-xs text-muted-foreground">
+                  {m.origin === "dev" &&
+                    `${t("en développement, non signé")} · `}
                   {m.state === "incompatible"
                     ? t("Ne fonctionne pas avec cette version de Breezone")
                     : m.loaded
@@ -294,5 +315,139 @@ export function LibraryPanel() {
         </CardContent>
       </Card>
     </>
+  )
+}
+
+/** The sources of modules: Breezone's library, and those added (a developer's, a community's). */
+function RepositoriesCard({ onChange }: { onChange: () => void }) {
+  const qc = useQueryClient()
+  const repositories = useQuery({
+    queryKey: ["module-repositories"],
+    queryFn: api.moduleRepositories,
+  })
+  const [name, setName] = useState("")
+  const [url, setUrl] = useState("")
+  const [key, setKey] = useState("")
+  const done = (data: ModuleRepository[]) => {
+    qc.setQueryData(["module-repositories"], data)
+    onChange()
+  }
+  const add = useMutation({
+    mutationFn: () =>
+      api.addModuleRepository({
+        name: name.trim(),
+        url: url.trim(),
+        public_key: key.trim(),
+      }),
+    onSuccess: (data) => {
+      setName("")
+      setUrl("")
+      setKey("")
+      done(data)
+    },
+    onError: (e) => toast.error(errorText(e)),
+  })
+  const toggle = useMutation({
+    mutationFn: (r: ModuleRepository) =>
+      api.setModuleRepository(r.id, !r.enabled),
+    onSuccess: done,
+    onError: (e) => toast.error(errorText(e)),
+  })
+  const remove = useMutation({
+    mutationFn: (id: number) => api.removeModuleRepository(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["module-repositories"] })
+      onChange()
+    },
+    onError: (e) => toast.error(errorText(e)),
+  })
+  return (
+    <Card className="rounded-3xl">
+      <CardHeader>
+        <CardTitle>{t("Sources de modules")}</CardTitle>
+        <CardDescription>
+          {t(
+            "La bibliothèque de Breezone, et celles que vous ajoutez : chacune signe ses modules avec sa propre clé. Un module venu d'une autre source ne remplace jamais un module de Breezone."
+          )}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-2">
+        {(repositories.data ?? []).map((r) => (
+          <div
+            key={r.id}
+            className="flex flex-wrap items-center gap-3 rounded-2xl border p-3"
+          >
+            <div className="grid min-w-0 flex-1 gap-0.5">
+              <span className="truncate font-medium">
+                {r.name}
+                {r.official && ` · ${t("officielle")}`}
+              </span>
+              <span className="truncate text-xs text-muted-foreground">
+                {r.url ?? "github.com"}
+                {r.modules.length > 0 && ` · ${r.modules.join(", ")}`}
+              </span>
+            </div>
+            <Switch
+              checked={r.enabled}
+              aria-label={t("Activée")}
+              onCheckedChange={() => toggle.mutate(r)}
+            />
+            {!r.official && (
+              <Confirm
+                title={t("Retirer la source « {name} » ?", { name: r.name })}
+                description={t(
+                  "Ses modules ne sont plus proposés. Une source dont des modules sont installés ne se retire pas."
+                )}
+                onConfirm={() => remove.mutate(r.id)}
+              >
+                <Button variant="ghost" size="icon" aria-label={t("Retirer")}>
+                  <Trash2 />
+                </Button>
+              </Confirm>
+            )}
+          </div>
+        ))}
+        <div className="grid gap-2 border-t pt-4">
+          <Label>{t("Ajouter une source")}</Label>
+          <p className="text-xs text-muted-foreground">
+            {t(
+              "L'adresse du dossier de son index.json (HTTPS, ou HTTP sur le réseau local) et sa clé publique Ed25519, en base64."
+            )}
+          </p>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <Input
+              value={name}
+              placeholder={t("Nom")}
+              aria-label={t("Nom")}
+              onChange={(e) => setName(e.target.value)}
+            />
+            <Input
+              value={url}
+              placeholder="https://…"
+              aria-label={t("Adresse")}
+              onChange={(e) => setUrl(e.target.value)}
+            />
+            <Input
+              value={key}
+              placeholder={t("Clé publique")}
+              aria-label={t("Clé publique")}
+              onChange={(e) => setKey(e.target.value)}
+            />
+          </div>
+          <div>
+            <Button
+              variant="outline"
+              disabled={
+                !name.trim() || !url.trim() || !key.trim() || add.isPending
+              }
+              onClick={() => add.mutate()}
+            >
+              {add.isPending ? <Loader2 className="animate-spin" /> : <Plus />}
+              {t("Ajouter")}
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   )
 }

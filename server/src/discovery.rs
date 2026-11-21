@@ -155,7 +155,7 @@ pub async fn scan_products(subnet: &str, airzone_port: u16, quiet: &[std::net::I
         async move { futures_util::future::join_all(crate::modules::native::all().iter().filter_map(|n| n.browse).map(|browse| browse(hosts.clone()))).await }
     });
     // Every port a module wants open before its probe, checked once per address.
-    let mut ports: Vec<u16> = crate::modules::native::all().iter().flat_map(|n| n.manifest.discovery.tcp.iter().copied()).collect();
+    let mut ports: Vec<u16> = crate::modules::manifests().flat_map(|m| m.discovery.tcp.iter().copied()).collect();
     ports.sort_unstable();
     ports.dedup();
     let ports = Arc::new(ports);
@@ -171,7 +171,7 @@ pub async fn scan_products(subnet: &str, airzone_port: u16, quiet: &[std::net::I
             // Each module with a port open here is asked (they answer in parallel).
             let asked =
                 crate::modules::native::all().iter().filter(|n| n.manifest.discovery.tcp.iter().any(|p| open.contains(p))).filter_map(|n| n.probe).map(|probe| probe(host.clone()));
-            let products = futures_util::future::join_all(asked).await;
+            let (products, installed) = tokio::join!(futures_util::future::join_all(asked), crate::modules::probe_installed(&host, &open));
             let mut found = vec![];
             if let Some(a) = airzone {
                 let note = match (&a.ws_type, a.zones) {
@@ -195,6 +195,7 @@ pub async fn scan_products(subnet: &str, airzone_port: u16, quiet: &[std::net::I
                 });
             }
             found.extend(products.into_iter().flatten());
+            found.extend(installed);
             Some(found)
         }));
     }

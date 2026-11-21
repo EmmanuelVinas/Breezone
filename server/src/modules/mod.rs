@@ -26,13 +26,18 @@ use std::sync::{Arc, LazyLock, RwLock};
 /// The modules installed from a package (the library, the archive of Breezone, a file).
 static INSTALLED: RwLock<Vec<&'static Manifest>> = RwLock::new(Vec::new());
 
-/// Every module this server knows, in the order of the lists: those compiled in, then those
-/// installed.
+/// Every module this server knows, in the order of the lists: those compiled in (or the installed
+/// module that replaces one of them, same id), then the other installed ones.
 pub fn manifests() -> std::vec::IntoIter<&'static Manifest> {
-    let mut all: Vec<&'static Manifest> = native::all().iter().map(|n| &n.manifest).collect();
     let installed = INSTALLED.read().unwrap_or_else(|e| e.into_inner());
+    let mut all: Vec<&'static Manifest> = native::all().iter().map(|n| installed.iter().find(|m| m.id == n.manifest.id).copied().unwrap_or(&n.manifest)).collect();
     all.extend(installed.iter().filter(|m| native::get(&m.id).is_none()).copied());
     all.into_iter()
+}
+
+/// An installed module replaces the one compiled in with the same id (the WebAssembly one runs).
+pub fn replaces_native(id: &str) -> bool {
+    native::get(id).is_some() && installed_dir(id).is_some()
 }
 
 /// Where each installed module's files are, by id.
@@ -58,10 +63,41 @@ pub fn unregister(id: &str) {
     INSTALLED.write().unwrap_or_else(|e| e.into_inner()).retain(|x| x.id != id);
 }
 
+/// A line of a module's log.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct LogLine {
+    pub at: i64,
+    /// "debug" | "info" | "warn" | "error"
+    pub level: &'static str,
+    pub message: String,
+}
+
+/// Lines kept per module, the latest.
+const LOG_LINES: usize = 200;
+
+static LOGS: LazyLock<std::sync::Mutex<HashMap<String, std::collections::VecDeque<LogLine>>>> = LazyLock::new(Default::default);
+
+/// Writes to a module's log (what it says, and what befalls it: a stop, a call refused).
+pub fn log(id: &str, level: &'static str, message: impl Into<String>) {
+    let mut logs = LOGS.lock().unwrap_or_else(|e| e.into_inner());
+    let lines = logs.entry(id.to_string()).or_default();
+    if lines.len() == LOG_LINES {
+        lines.pop_front();
+    }
+    let message: String = message.into().chars().take(1000).collect();
+    lines.push_back(LogLine { at: crate::db::now(), level, message });
+}
+
+/// The log of a module, oldest first.
+pub fn logs(id: &str) -> Vec<LogLine> {
+    LOGS.lock().unwrap_or_else(|e| e.into_inner()).get(id).map(|l| l.iter().cloned().collect()).unwrap_or_default()
+}
+
 /// The driver of a source: compiled into the server, or run from an installed module's component
 /// (loaded and compiled only now, when a source needs it).
-pub async fn open_source(id: &str, config: &serde_json::Value, secret: Option<&str>) -> Result<Arc<dyn crate::drivers::Driver>, String> {
-    if native::get(id).is_some() {
+/// `source_id`: the source it is for (`None` while its configuration is only checked).
+pub async fn open_source(id: &str, source_id: Option<i64>, config: &serde_json::Value, secret: Option<&str>) -> Result<Arc<dyn crate::drivers::Driver>, String> {
+    if native::get(id).is_some() && !replaces_native(id) {
         return crate::drivers::create(id, config, secret);
     }
     let m = manifest(id).ok_or_else(|| format!("unknown driver: {id}"))?;
@@ -71,13 +107,54 @@ pub async fn open_source(id: &str, config: &serde_json::Value, secret: Option<&s
     #[cfg(feature = "wasm")]
     {
         let dir = installed_dir(id).ok_or_else(|| format!("the {id} module is not installed"))?;
-        wasm::source(m, &dir, config, secret).await
+        match wasm::source(m, &dir, source_id, config, secret).await {
+            // The module compiled in takes over when the one that replaces it cannot start.
+            Err(e) if native::get(id).is_some() => {
+                log(id, "error", format!("{e}: the module compiled into Breezone takes over"));
+                crate::drivers::create(id, config, secret)
+            }
+            other => other,
+        }
     }
     #[cfg(not(feature = "wasm"))]
     {
-        let _ = (config, secret);
+        let _ = (source_id, config, secret);
         Err(format!("the {id} module needs the module host, which this build of Breezone lacks"))
     }
+}
+
+/// What the installed modules (not those compiled in) say of `host`, whose ports `open` are open:
+/// each one that probes and listens on one of them is asked.
+pub async fn probe_installed(host: &str, open: &[u16]) -> Vec<crate::discovery::Product> {
+    let asked: Vec<&'static Manifest> =
+        manifests().filter(|m| native::get(&m.id).is_none() && m.optional_calls.iter().any(|c| c == "probe") && m.discovery.tcp.iter().any(|p| open.contains(p))).collect();
+    #[cfg_attr(not(feature = "wasm"), allow(unused_mut))]
+    let mut found = vec![];
+    for m in asked {
+        #[cfg(feature = "wasm")]
+        {
+            let Some(dir) = installed_dir(&m.id) else { continue };
+            if let Some(name) = wasm::probe(m, &dir, host).await {
+                let port = m.discovery.tcp.iter().copied().find(|p| open.contains(p)).unwrap_or(80);
+                found.push(crate::discovery::Product {
+                    brand: m.id.as_str(),
+                    driver: m.id.as_str(),
+                    model: m.name.fr.clone(),
+                    host: host.to_string(),
+                    port,
+                    mac: None,
+                    device_id: None,
+                    firmware: None,
+                    note: Some(format!("« {name} »")),
+                    supported: true,
+                    flags: 0,
+                });
+            }
+        }
+        #[cfg(not(feature = "wasm"))]
+        let _ = (m, host);
+    }
+    found
 }
 
 /// Where the installed modules are kept: `<data>/modules/<id>/<version>/`.

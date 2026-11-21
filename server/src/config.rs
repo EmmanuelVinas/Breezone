@@ -66,6 +66,9 @@ pub struct Config {
     /// Where the library of modules is read, and the key that signs it: the official repository
     /// and the key of the releases, always (no variable changes them); the tests point elsewhere.
     pub modules_library: Option<(String, String)>,
+    /// A folder of modules being developed (`BREEZONE_MODULES_DEV`): its packages are installed at
+    /// start without a signature. Read by the development builds only, never by a release.
+    pub modules_dev: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -130,6 +133,7 @@ impl Config {
             netatmo_url: var("BREEZONE_NETATMO_URL").unwrap_or_else(|| "https://api.netatmo.com".into()),
             ezviz_url: var("BREEZONE_EZVIZ_URL").unwrap_or_else(|| "https://apiieu.ezvizlife.com".into()),
             modules_library: None,
+            modules_dev: if cfg!(debug_assertions) { var("BREEZONE_MODULES_DEV").map(PathBuf::from) } else { None },
         }
     }
 
@@ -183,6 +187,7 @@ impl Config {
             netatmo_url: "http://127.0.0.1:9".into(),
             ezviz_url: "http://127.0.0.1:9".into(),
             modules_library: None,
+            modules_dev: None,
         }
     }
 }

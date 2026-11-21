@@ -953,7 +953,7 @@ export type ModuleManifest = {
 export type ModuleView = {
   id: string
   version: string
-  origin: "native" | "builtin" | "library" | "file"
+  origin: "native" | "builtin" | "library" | "file" | "dev"
   enabled: boolean
   state: string
   last_error: string | null
@@ -970,9 +970,22 @@ export type ModuleIncompatibility = {
   id?: string
 }
 
+/** A source of modules: Breezone's library, or one an administrator added. */
+export type ModuleRepository = {
+  id: number
+  name: string
+  /** The folder of its index (null: Breezone's own). */
+  url: string | null
+  official: boolean
+  enabled: boolean
+  /** The modules installed from it. */
+  modules: string[]
+}
+
 /** A module of the library, sorted for this server. */
 export type LibraryModule = {
   id: string
+  repository: { id: number; name: string; official: boolean }
   /** The manifest of its newest version. */
   manifest: ModuleManifest
   installed: string | null
@@ -1593,12 +1606,28 @@ export const api = {
   drivers: () => request<DriverInfo[]>("GET", "/api/drivers"),
   modules: () => request<ModuleView[]>("GET", "/api/modules"),
   moduleLibrary: (refresh: boolean) =>
-    request<LibraryModule[]>(
-      "GET",
-      `/api/modules/library${refresh ? "?refresh=true" : ""}`
-    ),
-  installModule: (id: string, version?: string) =>
-    request<ModuleView>("POST", "/api/modules", { id, version }),
+    request<{
+      modules: LibraryModule[]
+      unreadable: {
+        repository: LibraryModule["repository"]
+        error: string
+      }[]
+    }>("GET", `/api/modules/library${refresh ? "?refresh=true" : ""}`),
+  installModule: (id: string, repository?: number, version?: string) =>
+    request<ModuleView>("POST", "/api/modules", { id, repository, version }),
+  moduleRepositories: () =>
+    request<ModuleRepository[]>("GET", "/api/modules/repositories"),
+  addModuleRepository: (input: {
+    name: string
+    url: string
+    public_key: string
+  }) => request<ModuleRepository[]>("POST", "/api/modules/repositories", input),
+  setModuleRepository: (id: number, enabled: boolean) =>
+    request<ModuleRepository[]>("PATCH", `/api/modules/repositories/${id}`, {
+      enabled,
+    }),
+  removeModuleRepository: (id: number) =>
+    request<void>("DELETE", `/api/modules/repositories/${id}`),
   uploadModule: (pkg: string, signature: string) =>
     request<ModuleView>("POST", "/api/modules/upload", {
       package: pkg,

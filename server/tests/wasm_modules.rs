@@ -39,7 +39,7 @@ fn wasm(name: &str) -> Vec<u8> {
 static SERIAL: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 fn local() -> Permissions {
-    Permissions { lan: true, hosts: vec![], loopback: true, memory_mb: 16 }
+    Permissions { lan: true, hosts: vec![], loopback: true, memory_mb: 16, accounts: vec![] }
 }
 
 /// A Tasmota with a dimmer on relay 1, a plug on relay 2, an energy meter and a sensor; it keeps
@@ -87,7 +87,7 @@ async fn the_tasmota_module_describes_reads_and_drives() {
     eprintln!("compiled in {compiled:?}, from the cache in {:?}", started.elapsed());
 
     assert_eq!(module.probe(&host).await.as_deref(), Some("Salon"));
-    let source = module.open(&json!({ "host": host }), None).await.unwrap();
+    let source = module.open(None, &json!({ "host": host }), None).await.unwrap();
     let d = source.describe().await.unwrap();
     assert_eq!(d.model, "Tasmota · ESP8266EX");
     assert_eq!(d.identity.as_deref(), Some("AA:BB:CC:DD:EE:FF"));
@@ -110,14 +110,14 @@ async fn a_module_reaches_only_what_it_is_allowed() {
     let (host, _) = fake_tasmota().await;
     let no_loopback = Permissions { loopback: false, ..local() };
     let module = Arc::new(WasmModule::load("tasmota", &wasm("tasmota"), no_loopback, None).unwrap());
-    let source = module.open(&json!({ "host": host }), None).await.unwrap();
+    let source = module.open(None, &json!({ "host": host }), None).await.unwrap();
     let err = source.read().await.unwrap_err();
     assert!(err.to_string().contains("not allowed"), "{err}");
 
     // Neither the Internet unless declared, nor a name that leads to a refused address.
     let misbehave = Arc::new(WasmModule::load("misbehave", &wasm("misbehave"), Permissions { loopback: false, ..local() }, None).unwrap());
     for url in ["http://1.1.1.1/", "http://localhost:9/", "file:///etc/passwd"] {
-        let s = misbehave.open(&json!(format!("http:{url}")), None).await.unwrap();
+        let s = misbehave.open(None, &json!(format!("http:{url}")), None).await.unwrap();
         let err = s.read().await.unwrap_err();
         assert!(matches!(err, DriverError::Unreachable(_)), "{url}: {err}");
     }
@@ -128,7 +128,7 @@ async fn a_module_that_misbehaves_only_fails_its_source() {
     let _serial = SERIAL.lock().await;
     let module = Arc::new(WasmModule::load("misbehave", &wasm("misbehave"), local(), None).unwrap());
     for mode in ["panic", "loop", "memory"] {
-        let s = module.open(&json!(mode), None).await.unwrap();
+        let s = module.open(None, &json!(mode), None).await.unwrap();
         let started = Instant::now();
         let err = s.read().await.unwrap_err();
         eprintln!("{mode}: {err} after {:?}", started.elapsed());
@@ -137,7 +137,7 @@ async fn a_module_that_misbehaves_only_fails_its_source() {
         // The instance is made again for the next call: it fails the same way, without harm.
         assert!(s.read().await.is_err());
     }
-    let fine = module.open(&json!("fine"), None).await.unwrap();
+    let fine = module.open(None, &json!("fine"), None).await.unwrap();
     assert_eq!(fine.read().await.unwrap()["ok"]["on"], Value::Bool(true));
 }
 
@@ -149,7 +149,7 @@ async fn sources_cost_little_memory() {
     let before = resident_kb();
     let mut sources = vec![];
     for _ in 0..20 {
-        let s = module.open(&json!({ "host": host }), None).await.unwrap();
+        let s = module.open(None, &json!({ "host": host }), None).await.unwrap();
         s.read().await.unwrap();
         sources.push(s);
     }
@@ -187,20 +187,29 @@ async fn an_installed_module_runs_its_sources() {
     // The Tasmota module under an id of its own (the native one keeps `tasmota`).
     let mut manifest: breezone_server::modules::manifest::Manifest = serde_json::from_str(include_str!("../../modules/tasmota/manifest.json")).unwrap();
     manifest.id = "tasmotawasm".into();
-    let bytes = package::build(&serde_json::to_string(&manifest).unwrap(), Some(&wasm("tasmota")), &[]).unwrap();
-    let mut files: HashMap<String, Vec<u8>> = HashMap::new();
-    files.insert("tasmotawasm-1.0.0.bzm.sig".into(), sign(&package::signed_message("tasmotawasm", "1.0.0", &bytes)));
-    let published = Published { manifest, file: "tasmotawasm-1.0.0.bzm".into(), size: bytes.len() as u64, sha256: String::new(), published_at: 0, yanked: false, code: true };
-    files.insert("tasmotawasm-1.0.0.bzm".into(), bytes);
-    let index = serde_json::to_vec(&Index { seq: 1, modules: vec![Entry { id: "tasmotawasm".into(), versions: vec![published] }] }).unwrap();
-    files.insert("index.json.sig".into(), sign(&library::signed_message(1, &index)));
-    files.insert("index.json".into(), index);
-    let files = Arc::new(files);
+    let files: Arc<Mutex<HashMap<String, Vec<u8>>>> = Arc::default();
+    // Publishes the versions given (manifest, then the component) with an index numbered `seq`.
+    let publish = |seq: u64, versions: Vec<breezone_server::modules::manifest::Manifest>| {
+        let mut out = files.lock().unwrap();
+        let mut published = vec![];
+        for m in versions {
+            let bytes = package::build(&serde_json::to_string(&m).unwrap(), Some(&wasm("tasmota")), &[]).unwrap();
+            let file = format!("tasmotawasm-{}.bzm", m.version);
+            out.insert(format!("{file}.sig"), sign(&package::signed_message("tasmotawasm", &m.version, &bytes)));
+            published.push(Published { file: file.clone(), size: bytes.len() as u64, sha256: String::new(), published_at: 0, yanked: false, code: true, manifest: m });
+            out.insert(file, bytes);
+        }
+        let index = serde_json::to_vec(&Index { seq, modules: vec![Entry { id: "tasmotawasm".into(), versions: published }] }).unwrap();
+        out.insert("index.json.sig".into(), sign(&library::signed_message(seq, &index)));
+        out.insert("index.json".into(), index);
+    };
+    publish(1, vec![manifest.clone()]);
+    let served = files.clone();
     let app = Router::new().route(
         "/{file}",
         get(move |axum::extract::Path(f): axum::extract::Path<String>| {
-            let files = files.clone();
-            async move { files.get(&f).cloned().ok_or(axum::http::StatusCode::NOT_FOUND) }
+            let files = served.clone();
+            async move { files.lock().unwrap().get(&f).cloned().ok_or(axum::http::StatusCode::NOT_FOUND) }
         }),
     );
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -249,4 +258,138 @@ async fn an_installed_module_runs_its_sources() {
     assert!(commands.lock().unwrap().contains(&"Power2 On".to_string()));
     let (_, modules) = call("GET", "/api/modules", None, t()).await;
     assert!(modules.as_array().unwrap().iter().any(|m| m["id"] == "tasmotawasm" && m["loaded"] == true));
+
+    // Found by the network scan through its own probe (port 80 said open: the fake listens elsewhere).
+    let found = breezone_server::modules::probe_installed(&host, &[80]).await;
+    assert_eq!(found.iter().map(|p| (p.driver, p.note.clone())).collect::<Vec<_>>(), [("tasmotawasm", Some("« Salon »".to_string()))]);
+
+    // Its log says what went wrong: an address its permissions refuse.
+    let (code, _) = call("POST", "/api/sources", Some(json!({"driver": "tasmotawasm", "name": "Dehors", "config": {"host": "1.1.1.1"}})), t()).await;
+    assert_eq!(code, 201);
+    let (code, log) = call("GET", "/api/modules/tasmotawasm/log", None, t()).await;
+    assert_eq!(code, 200);
+    assert!(log.as_array().unwrap().iter().any(|l| l["level"] == "warn" && l["message"].as_str().unwrap_or_default().contains("not allowed")), "{log}");
+    call("DELETE", "/api/sources/2", None, t()).await;
+
+    // An update whose sources do not read their hardware (1 MB of memory: it cannot even start)
+    // goes back to the version before, and is not proposed again.
+    let mut broken = manifest.clone();
+    broken.version = "1.1.0".into();
+    broken.permissions.memory_mb = 1;
+    publish(2, vec![broken, manifest.clone()]);
+    call("GET", "/api/modules/library?refresh=true", None, t()).await;
+    let (code, m) = call("POST", "/api/modules", Some(json!({"id": "tasmotawasm", "version": "1.1.0"})), t()).await;
+    assert_eq!(code, 201, "{m}");
+    assert_eq!(m["version"], "1.0.0", "back to the version before: {m}");
+    assert!(m["last_error"].as_str().unwrap_or_default().contains("1.1.0"), "{m}");
+    let (code, _) = call("POST", "/api/modules", Some(json!({"id": "tasmotawasm", "version": "1.1.0"})), t()).await;
+    assert_eq!(code, 409, "a version that failed here is not installed again");
+    let (_, s) = call("GET", "/api/sources", None, t()).await;
+    assert_eq!(s.as_array().unwrap().iter().find(|x| x["driver"] == "tasmotawasm").unwrap()["status"]["state"], "online", "{s}");
+}
+
+/// What the hardware says without being asked (lot L5): the host keeps a WebSocket for the module,
+/// hands it each message, and passes on the presses and the « read me again » it asks for; the
+/// store of a source outlives its instance; an account it does not require stays closed.
+#[tokio::test]
+async fn subscriptions_store_and_accounts() {
+    use breezone_server::drivers::{Heard, Sink};
+    use futures_util::{SinkExt, StreamExt};
+    let _serial = SERIAL.lock().await;
+    // A WebSocket that greets, then answers each frame.
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let received = Arc::new(Mutex::new(vec![]));
+    let seen = received.clone();
+    tokio::spawn(async move {
+        while let Ok((tcp, _)) = listener.accept().await {
+            let seen = seen.clone();
+            tokio::spawn(async move {
+                let mut ws = tokio_tungstenite::accept_async(tcp).await.unwrap();
+                ws.send(tokio_tungstenite::tungstenite::Message::Text("hello".into())).await.unwrap();
+                while let Some(Ok(m)) = ws.next().await {
+                    seen.lock().unwrap().push(m.to_text().unwrap_or_default().to_string());
+                }
+            });
+        }
+    });
+    let module = Arc::new(WasmModule::load("misbehave", &wasm("misbehave"), local(), None).unwrap());
+    let source = module.open(Some(7), &json!(format!("sub:ws://{addr}/rpc")), None).await.unwrap();
+    let (tx, mut heard) = tokio::sync::mpsc::unbounded_channel();
+    source.listen(Sink::new(7, tx));
+    let mut events = vec![];
+    while events.len() < 2 {
+        events.push(tokio::time::timeout(std::time::Duration::from_secs(10), heard.recv()).await.expect("the module heard nothing").unwrap());
+    }
+    assert!(events.iter().any(|h| matches!(h, Heard::Press(p) if p.source_id == 7 && p.reference == "remote" && p.press == "double")), "{events:?}");
+    assert!(events.contains(&Heard::Changed(7)), "{events:?}");
+    assert_eq!(source.read().await.unwrap()["sub"]["last"], "hello");
+    // What it sends goes out on the WebSocket.
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    assert_eq!(received.lock().unwrap().first().map(String::as_str), Some("ping"));
+
+    // A subscription to an address it may not reach is refused at `open`.
+    let strict = Arc::new(WasmModule::load("misbehave", &wasm("misbehave"), Permissions { loopback: false, ..local() }, None).unwrap());
+    assert!(strict.open(None, &json!(format!("sub:ws://{addr}/rpc")), None).await.is_err());
+
+    // The store goes on after the instance is made again (a panic in between).
+    let counter = module.open(None, &json!("store"), None).await.unwrap();
+    assert_eq!(counter.read().await.unwrap()["store"]["n"], 1);
+    assert_eq!(counter.read().await.unwrap()["store"]["n"], 2);
+
+    // An account the manifest does not require is not given.
+    let curious = module.open(None, &json!("account:netatmo"), None).await.unwrap();
+    assert!(matches!(curious.read().await, Err(DriverError::Unsupported(e)) if e.contains("not an account this module requires")));
+}
+
+/// A module that comes with Breezone (lot L6): beside its web UI, unsigned (the image or the signed
+/// archive vouches for it), it replaces the driver compiled in with the same id; removed, the
+/// driver compiled in drives the same sources again.
+#[tokio::test]
+async fn a_module_that_comes_with_breezone_replaces_the_native_driver() {
+    use breezone_server::modules::package;
+    let _serial = SERIAL.lock().await;
+    breezone_server::modules::wasm::allow_loopback(true);
+    let dir = tempfile_dir("builtin");
+    std::fs::create_dir_all(dir.join("app/modules")).unwrap();
+    let manifest = include_str!("../../modules/tasmota/manifest.json");
+    std::fs::write(dir.join("app/modules/tasmota-1.0.0.bzm"), package::build(manifest, Some(&wasm("tasmota")), &[]).unwrap()).unwrap();
+    let mut cfg = breezone_server::config::Config::for_tests(dir.join("data"));
+    cfg.web_dir = dir.join("app/web");
+    let state = breezone_server::init_state(cfg).await.unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(listener, breezone_server::app(state)).await.unwrap() });
+    let http = reqwest::Client::new();
+    let v: Value = http.post(format!("{base}/api/setup")).json(&json!({"username":"admin","password":"motdepasse1"})).send().await.unwrap().json().await.unwrap();
+    let token = v["access_token"].as_str().unwrap().to_string();
+    let call = |method: &str, path: &str, body: Option<Value>| {
+        let mut req = http.request(method.parse().unwrap(), format!("{base}{path}")).bearer_auth(&token);
+        if let Some(b) = body {
+            req = req.json(&b);
+        }
+        async move {
+            let resp = req.send().await.unwrap();
+            (resp.status().as_u16(), serde_json::from_str::<Value>(&resp.text().await.unwrap()).unwrap_or(Value::Null))
+        }
+    };
+    let tasmota = |modules: &Value| modules.as_array().unwrap().iter().find(|m| m["id"] == "tasmota").unwrap().clone();
+
+    let (_, modules) = call("GET", "/api/modules", None).await;
+    assert_eq!(tasmota(&modules)["origin"], "builtin", "{modules}");
+    let (host, commands) = fake_tasmota().await;
+    let (code, s) = call("POST", "/api/sources", Some(json!({"driver": "tasmota", "name": "Salon", "config": {"host": host}}))).await;
+    assert_eq!((code, s["status"]["state"].clone()), (201, json!("online")), "{s}");
+    let (_, modules) = call("GET", "/api/modules", None).await;
+    assert_eq!(tasmota(&modules)["loaded"], true);
+
+    // Removed: the driver compiled in takes the same source over.
+    let (code, _) = call("DELETE", "/api/modules/tasmota", None).await;
+    assert_eq!(code, 204);
+    let (_, modules) = call("GET", "/api/modules", None).await;
+    assert_eq!(tasmota(&modules)["origin"], "native");
+    let id = s["id"].as_i64().unwrap();
+    let (code, s) = call("POST", &format!("/api/sources/{id}/refresh"), None).await;
+    assert_eq!((code, s["status"]["state"].clone()), (200, json!("online")), "{s}");
+    assert!(commands.lock().unwrap().iter().any(|c| c == "Status 0"));
 }

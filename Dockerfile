@@ -22,6 +22,19 @@ RUN awk '!done && /^version = /{print "version = \"0.0.0\""; done=1; next} 1' Ca
          {own = ($0 == "name = \"breezone-server\"")} 1' Cargo.lock > t \
  && mv t Cargo.lock
 
+# --- Modules that come with Breezone (WebAssembly, the same for every platform) ------------
+# Built once, natively; packed by the server's `module-publish` below. They are trusted like the
+# binary they come with (the image, or the signed archive of a release).
+FROM --platform=$BUILDPLATFORM rust:1-alpine AS modules
+RUN rustup target add wasm32-wasip2
+WORKDIR /src
+COPY server/contracts/wit server/contracts/wit
+COPY modules/ modules/
+RUN cd modules \
+ && cargo build --release --locked --target wasm32-wasip2 -p breezone-module-tasmota \
+ && mkdir -p /out/tasmota \
+ && cp target/wasm32-wasip2/release/breezone_module_tasmota.wasm tasmota/manifest.json /out/tasmota/
+
 # --- Server (Rust, static musl binary) -----------------------------------------------------
 FROM rust:1-alpine AS server
 RUN apk add --no-cache musl-dev gcc make
@@ -39,6 +52,12 @@ COPY server/ ./
 RUN touch src/main.rs src/lib.rs src/bin/mock_airzone.rs src/bin/module_publish.rs \
  && cargo build --release --locked --bins \
  && ./target/release/module-publish host > /src/host.json
+COPY --from=modules /out/ /src/modules-in/
+RUN mkdir -p /src/modules-out \
+ && for m in /src/modules-in/*/; do \
+      ./target/release/module-publish pack "$m/manifest.json" "$m"/*.wasm /src/modules-out; \
+    done \
+ && rm -f /src/modules-out/*.message
 
 # --- Release files (self-update, issue #40) ------------------------------------------------
 # The server and the web UI only, exported by the release workflow to make the signed archive
@@ -48,6 +67,7 @@ COPY --from=server /src/target/release/breezone-server /breezone-server
 COPY --from=web /web/dist /web
 # What this version hosts for modules: read before updating, to check the modules installed.
 COPY --from=server /src/host.json /host.json
+COPY --from=server /src/modules-out /modules
 
 # --- Runtime -------------------------------------------------------------------------------
 FROM alpine:3.22
@@ -64,6 +84,7 @@ RUN apk add --no-cache ca-certificates tzdata \
  && chown breezone:breezone /data
 COPY --from=server /src/target/release/breezone-server /src/target/release/mock-airzone /usr/local/bin/
 COPY --from=web /web/dist /app/web
+COPY --from=server /src/modules-out /app/modules
 # Breezone's licence; those of the software it includes are in the web UI (third-party-licenses.txt).
 COPY LICENSE.md /app/LICENSE.md
 ENV BREEZONE_DATA_DIR=/data \

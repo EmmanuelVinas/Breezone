@@ -2106,6 +2106,22 @@ const en: Record<string, string> = {
     "{id} {version} will be replaced by version {replacement}, which works with it.",
   "{id} {version} ne fonctionnera plus : il sera désactivé, sans être supprimé.":
     "{id} {version} will no longer work: it will be switched off, not deleted.",
+  "non officiel · {name}": "unofficial · {name}",
+  "Source « {name} » illisible : {error}":
+    "Source « {name} » unreadable: {error}",
+  "en développement, non signé": "in development, not signed",
+  "Sources de modules": "Sources of modules",
+  "La bibliothèque de Breezone, et celles que vous ajoutez : chacune signe ses modules avec sa propre clé. Un module venu d'une autre source ne remplace jamais un module de Breezone.":
+    "Breezone's library, and those you add: each signs its modules with its own key. A module from another source never replaces a module of Breezone.",
+  officielle: "official",
+  Activée: "On",
+  "Retirer la source « {name} » ?": "Remove the source « {name} »?",
+  "Ses modules ne sont plus proposés. Une source dont des modules sont installés ne se retire pas.":
+    "Its modules are no longer offered. A source with installed modules cannot be removed.",
+  "Ajouter une source": "Add a source",
+  "L'adresse du dossier de son index.json (HTTPS, ou HTTP sur le réseau local) et sa clé publique Ed25519, en base64.":
+    "The address of the folder of its index.json (HTTPS, or HTTP on the local network) and its Ed25519 public key, in base64.",
+  "Clé publique": "Public key",
 }
 
 export default en

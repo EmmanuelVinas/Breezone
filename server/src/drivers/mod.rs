@@ -144,21 +144,34 @@ pub struct Press {
     pub press: &'static str,
 }
 
+/// What a driver tells without being asked.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Heard {
+    Press(Press),
+    /// Something changed on the hardware of this source: it is read again now.
+    Changed(i64),
+}
+
 /// Where a driver sends what it hears, for its source.
 #[derive(Debug, Clone)]
 pub struct Sink {
     source_id: i64,
-    tx: tokio::sync::mpsc::UnboundedSender<Press>,
+    tx: tokio::sync::mpsc::UnboundedSender<Heard>,
 }
 
 impl Sink {
-    pub fn new(source_id: i64, tx: tokio::sync::mpsc::UnboundedSender<Press>) -> Self {
+    pub fn new(source_id: i64, tx: tokio::sync::mpsc::UnboundedSender<Heard>) -> Self {
         Self { source_id, tx }
     }
 
     /// False once nobody listens any more (the server stops).
     pub fn press(&self, reference: &str, button: u32, press: &'static str) -> bool {
-        self.tx.send(Press { source_id: self.source_id, reference: reference.to_string(), button, press }).is_ok()
+        self.tx.send(Heard::Press(Press { source_id: self.source_id, reference: reference.to_string(), button, press })).is_ok()
+    }
+
+    /// Asks for the source to be read again (the hardware said something changed).
+    pub fn changed(&self) -> bool {
+        self.tx.send(Heard::Changed(self.source_id)).is_ok()
     }
 }
 
@@ -518,8 +531,8 @@ pub struct Runtime {
     /// When each lost source was last looked for on the network.
     searched: RwLock<HashMap<i64, Instant>>,
     /// The presses of the remotes, sent by the drivers that listen (`Driver::listen`).
-    presses: tokio::sync::mpsc::UnboundedSender<Press>,
-    heard: std::sync::Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<Press>>>,
+    presses: tokio::sync::mpsc::UnboundedSender<Heard>,
+    heard: std::sync::Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<Heard>>>,
     /// What the modules that come with their linked account are made from.
     context: crate::modules::native::Context,
     /// When this server started: a source not read since is not lost before `RELOCATE_AFTER`.
@@ -590,7 +603,7 @@ impl Runtime {
                     let created = match crate::modules::native::get(&source.driver).map(|n| &n.create) {
                         _ if !source.enabled => Err(String::new()),
                         Some(crate::modules::native::Create::Account(make)) => Ok(make(&self.context)),
-                        _ => crate::modules::open_source(&source.driver, &config, secret.as_deref()).await,
+                        _ => crate::modules::open_source(&source.driver, Some(source.id), &config, secret.as_deref()).await,
                     };
                     let (driver, error) = match created {
                         Err(e) if e.is_empty() => (None, None),
@@ -764,8 +777,11 @@ impl Runtime {
     pub fn hear(self: Arc<Self>) {
         let Some(mut heard) = self.heard.lock().unwrap_or_else(|e| e.into_inner()).take() else { return };
         tokio::spawn(async move {
-            while let Some(p) = heard.recv().await {
-                self.pressed(p).await;
+            while let Some(h) = heard.recv().await {
+                match h {
+                    Heard::Press(p) => self.pressed(p).await,
+                    Heard::Changed(id) => self.poll(id).await,
+                }
             }
         });
     }
@@ -1012,6 +1028,27 @@ impl Runtime {
         let sources = self.sources.read().await;
         let Some(r) = sources.get(&id) else { return vec![] };
         r.cloud_view.iter().map(|v| CloudDevice { state: r.states.get(&v.reference).cloned(), ..v.clone() }).collect()
+    }
+
+    /// Makes the sources of a module again (it was updated or rolled back) and reads them: whether
+    /// each one that runs answered (`None`: it has no source that runs).
+    pub async fn restart_module(&self, module: &str) -> sqlx::Result<Option<bool>> {
+        let ids: Vec<i64> = {
+            let mut sources = self.sources.write().await;
+            let ids = sources.values().filter(|r| r.source.driver == module && r.source.enabled).map(|r| r.source.id).collect();
+            sources.retain(|_, r| r.source.driver != module);
+            ids
+        };
+        self.reload().await?;
+        if ids.is_empty() {
+            return Ok(None);
+        }
+        let mut all = true;
+        for id in ids {
+            self.poll(id).await;
+            all &= self.status(id).await.is_some_and(|s| s.state == "online");
+        }
+        Ok(Some(all))
     }
 
     pub async fn status(&self, id: i64) -> Option<SourceStatus> {

@@ -15,7 +15,7 @@ wit_bindgen::generate!({
 });
 
 use breezone::module::host::{self, Level};
-use breezone::module::types::{Described, DeviceInfo, Error, Request};
+use breezone::module::types::{Curve, Described, DeviceInfo, Error, HardwareRoom, Picture, Request, Scene};
 use exports::breezone::module::driver::{Guest, GuestSource, Source as SourceHandle};
 use serde_json::{json, Map, Value};
 use std::cell::RefCell;
@@ -236,6 +236,36 @@ impl GuestSource for Source {
         }
         Ok(v.to_string())
     }
+
+    fn on_message(&self, _subscription: u32, _data: Vec<u8>) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn rooms(&self) -> Result<Vec<HardwareRoom>, Error> {
+        Err(Error::Unsupported("rooms".into()))
+    }
+
+    fn scenes(&self) -> Result<Vec<Scene>, Error> {
+        Err(Error::Unsupported("scenes".into()))
+    }
+
+    fn activate_scene(&self, _id: String) -> Result<(), Error> {
+        Err(Error::Unsupported("scenes".into()))
+    }
+
+    fn picture(&self, _reference: String) -> Result<Picture, Error> {
+        Err(Error::Unsupported("picture".into()))
+    }
+
+    fn forecast(&self, _reference: String) -> Result<Vec<Curve>, Error> {
+        Err(Error::Unsupported("forecast".into()))
+    }
+
+    fn unlock(&self, _key: String) -> Result<bool, Error> {
+        Err(Error::Unsupported("unlock".into()))
+    }
+
+    fn close(&self) {}
 }
 
 impl Guest for Module {
