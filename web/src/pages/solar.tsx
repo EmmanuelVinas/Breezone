@@ -8,12 +8,14 @@ import {
   CartesianGrid,
   ComposedChart,
   Line,
+  ReferenceLine,
   XAxis,
   YAxis,
 } from "recharts"
-import { CalendarDays, Leaf, Sun, UtilityPole } from "lucide-react"
+import { CalendarDays, CloudSun, Leaf, Sun, UtilityPole } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { api } from "@/lib/api"
+import { forecastAt, useSolarForecast } from "@/lib/forecast"
 import { kwh, percent, stateNumber, time, watts } from "@/lib/format"
 import { locale, t, tn } from "@/lib/i18n"
 import { PageHeader } from "@/components/app-shell"
@@ -76,19 +78,23 @@ function Kpi({
 
 const curveConfig = {
   solar: { label: t("Production"), color: SUN },
+  forecast: { label: t("Prévue"), color: SUN },
   home: { label: t("Consommation"), color: "var(--foreground)" },
 } satisfies ChartConfig
 
-/** Today's production, every 15 minutes, beside what the home used. */
+/** Today's production, every 15 minutes, beside what the home used and what was forecast. */
 export function TodayCurve() {
   const day = useQuery({
     queryKey: ["energy-day", "today"],
     queryFn: () => api.energyDay(),
     refetchInterval: 60_000,
   })
+  const forecast = useSolarForecast()
+  const forecasts = forecast.power.length > 0
   const points = (day.data?.points ?? []).map((p) => ({
     ts: p.ts,
     solar: p.solar === null ? null : p.solar / 1000,
+    forecast: forecasts ? forecastAt(forecast.power, p.ts) / 1000 : null,
     home: p.home === null ? null : p.home / 1000,
   }))
   const measured = points.some((p) => p.solar !== null)
@@ -99,13 +105,15 @@ export function TodayCurve() {
       <CardHeader>
         <CardTitle>{t("Aujourd'hui")}</CardTitle>
         <CardDescription>
-          {t("Production et consommation toutes les 15 minutes")}
+          {forecasts
+            ? t("Production, prévision et consommation toutes les 15 minutes")
+            : t("Production et consommation toutes les 15 minutes")}
         </CardDescription>
       </CardHeader>
       <CardContent>
         {day.isLoading ? (
           <Skeleton className="h-64 w-full" />
-        ) : !measured ? (
+        ) : !measured && !forecasts ? (
           <div className="flex h-64 items-center justify-center text-center text-sm text-muted-foreground">
             {t(
               "Pas encore de relevés ce jour-là : ils s'accumulent toutes les 5 minutes."
@@ -167,6 +175,17 @@ export function TodayCurve() {
                 connectNulls={false}
                 isAnimationActive={false}
               />
+              {forecasts && (
+                <Line
+                  dataKey="forecast"
+                  type="monotone"
+                  stroke="var(--color-forecast)"
+                  strokeWidth={1.5}
+                  strokeDasharray="2 3"
+                  dot={false}
+                  isAnimationActive={false}
+                />
+              )}
               <Line
                 dataKey="home"
                 type="monotone"
@@ -179,6 +198,130 @@ export function TodayCurve() {
               />
             </ComposedChart>
           </ChartContainer>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+const forecastConfig = {
+  power: { label: t("Prévue"), color: SUN },
+} satisfies ChartConfig
+
+function Figure({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <div className="truncate text-xs text-muted-foreground">{label}</div>
+      <div className="tabular font-heading text-lg font-semibold">{value}</div>
+    </div>
+  )
+}
+
+/** What the panels should give today and tomorrow (Forecast.Solar), and its curve over both days. */
+export function ForecastCard() {
+  const f = useSolarForecast()
+  const start = new Date()
+  start.setHours(0, 0, 0, 0)
+  const from = start.getTime() / 1000
+  const noon = from + 12 * 3600
+  const tomorrow = new Date(start)
+  tomorrow.setDate(start.getDate() + 1)
+  const next = tomorrow.getTime() / 1000
+  const until = next + 86_400
+  const data = f.power
+    .filter(([ts]) => ts >= from && ts <= until)
+    .map(([ts, w]) => ({ ts, power: w / 1000 }))
+  const tick = (ts: number) =>
+    ts === from ? t("aujourd'hui") : ts === next ? t("demain") : time(ts)
+  return (
+    <Card className="rounded-3xl">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <CloudSun className="size-4" style={{ color: SUN }} />
+          {t("Prévision solaire")}
+        </CardTitle>
+        <CardDescription>
+          {t("Selon la météo, l'orientation et la puissance des panneaux")}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {f.loading ? (
+          <Skeleton className="h-48 w-full" />
+        ) : !f.device ? (
+          <p className="text-sm text-muted-foreground">
+            {t(
+              "Réglez Forecast.Solar dans Réglages › Comptes et services pour voir la production attendue."
+            )}
+          </p>
+        ) : (
+          <>
+            <div className="grid grid-cols-3 gap-3">
+              <Figure label={t("Aujourd'hui")} value={kwh(f.today)} />
+              <Figure label={t("Reste à produire")} value={kwh(f.remaining)} />
+              <Figure label={t("Demain")} value={kwh(f.tomorrow)} />
+            </div>
+            {data.length > 0 && (
+              <ChartContainer
+                config={forecastConfig}
+                className="aspect-auto h-40 w-full"
+              >
+                <ComposedChart data={data} margin={{ left: 0, right: 8 }}>
+                  <CartesianGrid vertical={false} />
+                  <XAxis
+                    dataKey="ts"
+                    type="number"
+                    domain={[from, until]}
+                    scale="time"
+                    ticks={[from, noon, next, next + 12 * 3600]}
+                    tickFormatter={tick}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    width={56}
+                    tickFormatter={(v: number) => watts(v * 1000)}
+                  />
+                  <ChartTooltip
+                    content={
+                      <ChartTooltipContent
+                        labelFormatter={(_, p) => {
+                          const ts = Number(p?.[0]?.payload.ts ?? 0)
+                          return `${ts >= next ? t("Demain") : t("Aujourd'hui")} ${time(ts)}`
+                        }}
+                        formatter={(value) => (
+                          <div className="flex w-full items-center justify-between gap-4">
+                            <span className="text-muted-foreground">
+                              {t("Prévue")}
+                            </span>
+                            <span className="tabular font-medium">
+                              {watts(Number(value) * 1000)}
+                            </span>
+                          </div>
+                        )}
+                      />
+                    }
+                  />
+                  <ReferenceLine
+                    x={f.readAt}
+                    stroke="var(--muted-foreground)"
+                    strokeDasharray="3 3"
+                  />
+                  <Area
+                    dataKey="power"
+                    type="monotone"
+                    stroke="var(--color-power)"
+                    fill="var(--color-power)"
+                    fillOpacity={0.18}
+                    strokeWidth={1.5}
+                    strokeDasharray="2 3"
+                    isAnimationActive={false}
+                  />
+                </ComposedChart>
+              </ChartContainer>
+            )}
+          </>
         )}
       </CardContent>
     </Card>
@@ -356,6 +499,7 @@ export function SolarPage() {
     queryFn: () => api.energyDay(),
     refetchInterval: 60_000,
   })
+  const forecast = useSolarForecast()
   const all = devices.data ?? []
   const inverters = all.filter((d) => d.traits.includes("solar.inverter@1"))
   const panels = all.filter((d) => d.traits.includes("solar.panel@1"))
@@ -392,6 +536,11 @@ export function SolarPage() {
       />
       {devices.isLoading ? (
         <Skeleton className="h-96 w-full rounded-3xl" />
+      ) : inverters.length === 0 && forecast.device ? (
+        <div className="grid gap-6">
+          <ForecastCard />
+          <TodayCurve />
+        </div>
       ) : inverters.length === 0 ? (
         <Card className="rounded-3xl">
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
@@ -421,6 +570,11 @@ export function SolarPage() {
               icon={CalendarDays}
               label={t("Aujourd'hui")}
               value={kwh(produced)}
+              sub={
+                forecast.today !== null
+                  ? t("sur {kwh} prévus", { kwh: kwh(forecast.today) })
+                  : undefined
+              }
               color={SUN}
             />
             <Kpi
@@ -443,6 +597,7 @@ export function SolarPage() {
             <TodayCurve />
             <DaysCard />
           </div>
+          {forecast.device && <ForecastCard />}
         </div>
       )}
     </>

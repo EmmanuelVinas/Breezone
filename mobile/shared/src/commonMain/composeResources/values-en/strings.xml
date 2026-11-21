@@ -638,6 +638,12 @@
     <string name="block_charger_curve_hint">What it drew over the period</string>
     <string name="block_solar_today">Solar production</string>
     <string name="block_solar_today_hint">Now, and the day’s curve</string>
+    <string name="block_solar_forecast">Solar forecast</string>
+    <string name="block_solar_forecast_hint">Production expected today and tomorrow</string>
+    <string name="solar_forecast_title">Solar forecast</string>
+    <string name="solar_forecast_today">Today</string>
+    <string name="solar_forecast_remaining">Still to produce</string>
+    <string name="solar_forecast_tomorrow">Tomorrow</string>
     <string name="block_solar_panels">Micro-inverters and panels</string>
     <string name="block_solar_panels_hint">What each panel makes</string>
     <string name="block_ventilation_house">Home ventilation</string>

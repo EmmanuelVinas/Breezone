@@ -197,7 +197,11 @@ function useModules() {
   }).data
   return {
     charger: !!devices?.some((d) => d.traits.includes("ev.charger@1")),
-    solar: !!devices?.some((d) => d.traits.includes("solar.inverter@1")),
+    solar: !!devices?.some(
+      (d) =>
+        d.traits.includes("solar.inverter@1") ||
+        d.traits.includes("solar.forecast@1")
+    ),
     light: !!devices?.some((d) => d.traits.includes("light@1")),
     cover: !!devices?.some((d) => d.traits.includes("cover.position@1")),
     ventilation: !!devices?.some((d) =>

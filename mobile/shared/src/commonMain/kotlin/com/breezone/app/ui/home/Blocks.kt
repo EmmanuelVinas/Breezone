@@ -90,7 +90,9 @@ import com.breezone.app.ui.screens.AirQualitySection
 import com.breezone.app.ui.screens.ChargerHero
 import com.breezone.app.ui.screens.ChargerPowerCard
 import com.breezone.app.ui.screens.InverterCard
+import com.breezone.app.ui.screens.SolarForecastCard
 import com.breezone.app.ui.screens.SolarNowCard
+import com.breezone.app.ui.screens.rememberSolarForecast
 import com.breezone.app.ui.screens.VentilationHouseCard
 import com.breezone.app.ui.screens.ZoneHistorySection
 import com.breezone.app.ui.screens.ventilationLevel
@@ -172,6 +174,7 @@ enum class BlockKind(
     ChargerCurve(BlockTypes.CHARGER_CURVE, Res.string.block_charger_curve, FzIcons.ChartLine, BlockSize.Full),
     SolarToday(BlockTypes.SOLAR_TODAY, Res.string.block_solar_today, FzIcons.Sun, BlockSize.Full),
     SolarPanels(BlockTypes.SOLAR_PANELS, Res.string.block_solar_panels, FzIcons.SolarPanel, BlockSize.Full),
+    SolarForecast(BlockTypes.SOLAR_FORECAST, Res.string.block_solar_forecast, FzIcons.CloudSun, BlockSize.Full),
     VentilationHouse(BlockTypes.VENTILATION_HOUSE, Res.string.block_ventilation_house, FzIcons.Fan, BlockSize.Full),
     VentilationRooms(BlockTypes.VENTILATION_ROOMS, Res.string.block_ventilation_rooms, FzIcons.ChartLine, BlockSize.Full, BlockChoice.Measure),
     LightPanel(BlockTypes.LIGHT_PANEL, Res.string.block_light_panel, FzIcons.Lightbulb, BlockSize.Full, BlockChoice.Light),
@@ -188,7 +191,8 @@ enum class BlockKind(
         ZoneHistory -> ctx.installation?.zones?.isNotEmpty() == true
         AirQuality -> ctx.installation?.zones?.any { it.airQuality != null } == true
         Charger, ChargerCurve -> ctx.server.withTrait(TraitIds.CHARGER).isNotEmpty() && AppPage.Charging in ctx.pages
-        SolarToday, SolarPanels -> AppPage.Solar in ctx.pages
+        SolarToday, SolarPanels -> ctx.server.withTrait(TraitIds.INVERTER).isNotEmpty() && AppPage.Solar in ctx.pages
+        SolarForecast -> ctx.server.withTrait(TraitIds.FORECAST).isNotEmpty() && AppPage.Solar in ctx.pages
         VentilationHouse -> ctx.server.withTrait(TraitIds.VENTILATION_UNIT).isNotEmpty() && AppPage.Ventilation in ctx.pages
         VentilationRooms -> ctx.server.withTrait(TraitIds.VENTILATION_ROOM).isNotEmpty() && AppPage.Ventilation in ctx.pages
         LightPanel -> ctx.server.withTrait(TraitIds.LIGHT).isNotEmpty() && AppPage.Lights in ctx.pages
@@ -247,7 +251,13 @@ fun BlockContent(b: DashboardBlock, ctx: HomeContext, editing: Boolean) {
         BlockKind.AirQuality -> zoneBlock(b, ctx)?.let { z -> z.airQuality?.let { AirQualitySection(ctx.hub, ctx.serverId, z, it) } } ?: Waiting(b, ctx, editing)
         BlockKind.Charger -> charger(b, ctx)?.let { ChargerHero(ctx.serverId, it) } ?: Gone()
         BlockKind.ChargerCurve -> charger(b, ctx)?.let { ChargerPowerCard(ctx.serverId, it) } ?: Gone()
-        BlockKind.SolarToday -> SolarNowCard(ctx.live, ctx.day, ctx.server.withTrait(TraitIds.INVERTER))
+        BlockKind.SolarToday -> {
+            val sun = ctx.server.withTrait(TraitIds.FORECAST).firstOrNull()
+            SolarNowCard(ctx.live, ctx.day, ctx.server.withTrait(TraitIds.INVERTER), rememberSolarForecast(ctx.hub, ctx.serverId, sun?.id))
+        }
+        BlockKind.SolarForecast -> ctx.server.withTrait(TraitIds.FORECAST).firstOrNull()?.let { sun ->
+            SolarForecastCard(sun, rememberSolarForecast(ctx.hub, ctx.serverId, sun.id), ctx.day)
+        } ?: Gone()
         BlockKind.SolarPanels -> ctx.server.withTrait(TraitIds.INVERTER).forEach { InverterCard(it, ctx.server.withTrait(TraitIds.PANEL)) }
         BlockKind.VentilationHouse -> ctx.server.withTrait(TraitIds.VENTILATION_UNIT).firstOrNull()?.let { unit ->
             VentilationHouseCard(ctx.serverId, unit, ctx.server.withTrait(TraitIds.VENTILATION_ROOM).filter { it.sourceId == unit.sourceId })

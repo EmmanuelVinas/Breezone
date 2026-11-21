@@ -212,6 +212,7 @@ class BreezoneApi(
     suspend fun price(installationId: Long): PriceView = call(HttpMethod.Get, "/api/installations/$installationId/electricity/price?hours=24")
     suspend fun deviceHistoryOver(deviceId: Long, hours: Int): DeviceHistory =
         call(HttpMethod.Get, "/api/devices/$deviceId/history?hours=$hours&bucket=${Periods.bucket(hours)}")
+    suspend fun deviceForecast(deviceId: Long): DeviceForecast = call(HttpMethod.Get, "/api/devices/$deviceId/forecast")
     suspend fun deviceHistory(deviceId: Long, hours: Int = 24, points: Int = 96): DeviceHistory =
         call(HttpMethod.Get, "/api/devices/$deviceId/history?hours=$hours&points=$points")
     suspend fun scenes(): List<SceneView> = call(HttpMethod.Get, "/api/scenes")

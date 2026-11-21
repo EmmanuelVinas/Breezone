@@ -193,6 +193,14 @@ impl Driver for ForecastSolar {
         Box::pin(async { Err(DriverError::Unsupported("a forecast is only read".into())) })
     }
 
+    /// The power expected along today and tomorrow, as Forecast.Solar gives it.
+    fn forecast<'a>(&'a self, _reference: &'a str) -> DriverFuture<'a, super::Forecast> {
+        Box::pin(async move {
+            let f = self.forecast().await?;
+            Ok(super::Forecast::from([("power".to_string(), f.watts)]))
+        })
+    }
+
     /// The power expected now moves along the day: worked out every minute from the forecast.
     fn read_every(&self) -> Duration {
         Duration::from_secs(60)

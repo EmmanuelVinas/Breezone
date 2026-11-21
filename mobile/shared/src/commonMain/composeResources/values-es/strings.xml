@@ -634,6 +634,12 @@
     <string name="block_charger_curve_hint">Lo que consumió en el periodo</string>
     <string name="block_solar_today">Producción solar</string>
     <string name="block_solar_today_hint">Ahora, y la curva del día</string>
+    <string name="block_solar_forecast">Previsión solar</string>
+    <string name="block_solar_forecast_hint">Producción esperada hoy y mañana</string>
+    <string name="solar_forecast_title">Previsión solar</string>
+    <string name="solar_forecast_today">Hoy</string>
+    <string name="solar_forecast_remaining">Queda por producir</string>
+    <string name="solar_forecast_tomorrow">Mañana</string>
     <string name="block_solar_panels">Microinversores y paneles</string>
     <string name="block_solar_panels_hint">Lo que produce cada panel</string>
     <string name="block_ventilation_house">Ventilación de la casa</string>

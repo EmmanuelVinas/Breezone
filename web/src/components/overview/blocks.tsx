@@ -38,7 +38,7 @@ import { LIGHT_BRAND, LightCard, LightPanel, LightScenes } from "@/pages/lights"
 import { ShutterCard } from "@/pages/shutters"
 import { House, isRoom, isUnit, RoomCard } from "@/pages/ventilation"
 import { ChargerCard, PowerCurve } from "@/pages/charging"
-import { DaysCard, TodayCurve } from "@/pages/solar"
+import { DaysCard, ForecastCard, TodayCurve } from "@/pages/solar"
 import { SolarPanels } from "@/components/solar-panels"
 import { ZoneHistory } from "@/components/zone-history"
 import { AirQualityCard } from "@/components/air-quality"
@@ -1122,6 +1122,8 @@ export function BlockView({
       return <DaysCard />
     case "solar_panels":
       return <SolarPanelsBlock />
+    case "solar_forecast":
+      return <ForecastCard />
     case "ventilation_house":
       return <VentilationBlock />
     case "ventilation_rooms":

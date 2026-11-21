@@ -2052,6 +2052,24 @@ const en: Record<string, string> = {
   "Ses panneaux (puissance, inclinaison, orientation) se règlent dans Comptes et services ; la prévision est faite pour la ville de l'installation.":
     "Its panels (power, tilt, orientation) are set in Accounts and services; the forecast is made for the city of the installation.",
   "Compte ou service": "Account or service",
+  "À 20 h, si la production prévue demain dépasse 10 kWh, prévenir pour y décaler lessives et recharges.":
+    "At 8 pm, if tomorrow's expected production is above 10 kWh, notify to move laundry and charging to it.",
+  "aujourd'hui": "today",
+  "Beaucoup de soleil prévu demain : c'est le jour pour les lessives et la recharge.":
+    "Plenty of sun expected tomorrow: the day for laundry and charging.",
+  "Belle journée solaire demain : prévenir": "Sunny day tomorrow: notify",
+  demain: "tomorrow",
+  "Prévision solaire": "Solar forecast",
+  Prévue: "Expected",
+  "Production, prévision et consommation toutes les 15 minutes":
+    "Production, forecast and consumption every 15 minutes",
+  "Réglez Forecast.Solar dans Réglages › Comptes et services pour voir la production attendue.":
+    "Set up Forecast.Solar in Settings › Accounts and services to see the expected production.",
+  "Reste à produire": "Still to produce",
+  "Selon la météo, l'orientation et la puissance des panneaux":
+    "From the weather, the orientation and the power of the panels",
+  "Soleil demain": "Sun tomorrow",
+  "sur {kwh} prévus": "of {kwh} expected",
 }
 
 export default en

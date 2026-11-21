@@ -115,6 +115,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/devices/{id}", put(home::update_device))
         .route("/api/devices/{id}/actions", post(home::act))
         .route("/api/devices/{id}/picture", get(home::picture))
+        .route("/api/devices/{id}/forecast", get(home::forecast))
         .route("/api/devices/charted", get(energy::charted))
         .route("/api/devices/{id}/history", get(energy::device_history))
         .route("/api/accounts", get(linked::list))

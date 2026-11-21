@@ -132,6 +132,8 @@ export function isMeasure(trait: string, f: TraitField) {
   if (f.type !== "number" && f.type !== "integer") return false
   if (trait === "climate.zone")
     return ["room_temp", "humidity"].includes(f.name)
+  // A forecast has no history but is worth a rule ("tomorrow's production above 10 kWh").
+  if (trait === "solar.forecast") return true
   return f.history !== false
 }
 

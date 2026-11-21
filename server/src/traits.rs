@@ -82,6 +82,10 @@ pub struct Trait {
     pub state: Vec<Field>,
     #[serde(default)]
     pub actions: Vec<Action>,
+    /// The values the device can forecast along the coming hours (the power the panels should
+    /// give): served as curves at `GET /api/devices/{id}/forecast`, not kept in the state.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub forecast: Vec<Field>,
 }
 
 impl Trait {
@@ -157,6 +161,12 @@ mod tests {
             for f in &t.state {
                 check_field(&t.name, f);
                 assert!(names.insert(&f.name), "{}.{} twice", t.name, f.name);
+            }
+            let mut forecast = HashSet::new();
+            for f in &t.forecast {
+                check_field(&format!("{}.forecast", t.name), f);
+                assert!(f.kind == "number" || f.kind == "integer", "{}.forecast.{}: a forecast is a curve of numbers", t.name, f.name);
+                assert!(forecast.insert(&f.name), "{}.forecast.{} twice", t.name, f.name);
             }
             let mut actions = HashSet::new();
             for a in &t.actions {

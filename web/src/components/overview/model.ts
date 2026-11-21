@@ -37,6 +37,7 @@ export type BlockType =
   | "solar_today"
   | "solar_days"
   | "solar_panels"
+  | "solar_forecast"
   | "ventilation_house"
   | "ventilation_rooms"
   | "spacer"
@@ -70,6 +71,7 @@ export const BLOCK_LABEL: Record<BlockType, string> = {
   solar_today: t("Production de la journée"),
   solar_days: t("Production jour par jour"),
   solar_panels: t("Micro-onduleurs et panneaux"),
+  solar_forecast: t("Prévision solaire"),
   ventilation_house: t("Ventilation de la maison"),
   ventilation_rooms: t("Graphique des pièces ventilées"),
   spacer: t("Espace vide"),
@@ -103,6 +105,7 @@ export const BLOCK_GROUP: Record<BlockType, string> = {
   solar_today: t("Solaire"),
   solar_days: t("Solaire"),
   solar_panels: t("Solaire"),
+  solar_forecast: t("Solaire"),
   ventilation_house: t("Ventilation"),
   ventilation_rooms: t("Ventilation"),
   spacer: t("Vue d'ensemble"),
@@ -149,6 +152,7 @@ export const DEFAULT_SIZE: Record<BlockType, DashboardSize> = {
   solar_today: "half",
   solar_days: "half",
   solar_panels: "full",
+  solar_forecast: "half",
   ventilation_house: "full",
   ventilation_rooms: "full",
   spacer: "quarter",

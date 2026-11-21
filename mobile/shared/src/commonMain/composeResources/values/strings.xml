@@ -653,6 +653,12 @@
     <string name="block_charger_curve_hint">Ce qu’elle a tiré sur la période</string>
     <string name="block_solar_today">Production solaire</string>
     <string name="block_solar_today_hint">Maintenant, et la courbe de la journée</string>
+    <string name="block_solar_forecast">Prévision solaire</string>
+    <string name="block_solar_forecast_hint">Production attendue aujourd’hui et demain</string>
+    <string name="solar_forecast_title">Prévision solaire</string>
+    <string name="solar_forecast_today">Aujourd’hui</string>
+    <string name="solar_forecast_remaining">Reste à produire</string>
+    <string name="solar_forecast_tomorrow">Demain</string>
     <string name="block_solar_panels">Micro-onduleurs et panneaux</string>
     <string name="block_solar_panels_hint">Ce que fait chaque panneau</string>
     <string name="block_ventilation_house">Ventilation de la maison</string>

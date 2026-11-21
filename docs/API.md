@@ -179,6 +179,7 @@ avec un identifiant stable. Les routes des zones restent celles qui les pilotent
 | POST 🔒 | `/api/devices/{id}/actions` | `{trait, action, params}` : action d'un trait de l'appareil, quelle que soit sa source (`climate.zone` / `set` pour une zone Airzone, avec les droits de l'installation ; `switch.relay` / `set` pour un relais Shelly, réservé aux administrateurs pour l'instant). Paramètre inconnu → `422 unsupported` ; manquant ou mal typé → `400` → appareil à jour |
 | GET 🔒 | `/api/devices/{id}/history?hours=24&points=96` ou `?from=&until=&bucket=` | `{bucket, series:{field:[[ts, value]]}}` : chaque nombre de l'état d'un appareil d'une source (puissance, énergie, relais en 0/1…), moyenne par intervalle (dernière valeur pour un compteur `energy_in` / `energy_out`). Avec `from` et `until` (horodatages), sur cette période, par exemple un jour local, et `bucket` secondes par point. Un point est enregistré toutes les 5 min (`BREEZONE_HISTORY_INTERVAL_SECS`) : moyenne des lectures depuis le point précédent |
 | GET 🔒 | `/api/devices/{id}/picture` | Image du dernier événement d'une caméra (`camera@1`), déchiffrée : `image/jpeg` ou `image/png` ; `409` sans image (ou chiffrée sans code de vérification) |
+| GET 🔒 | `/api/devices/{id}/forecast` | Courbes prévues par l'appareil (le `forecast` de ses traits, ex. `solar.forecast@1` → `power` en W) : `{series: {power: [[ts, valeur]…]}}`, aujourd'hui et demain ; `409` si l'appareil ne prévoit rien |
 
 ### Énergie
 

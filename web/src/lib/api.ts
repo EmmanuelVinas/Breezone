@@ -935,7 +935,12 @@ export type TraitInfo = {
   label: TraitLabel
   state: TraitField[]
   actions: { name: string; label: TraitLabel; params: TraitField[] }[]
+  /** The curves the device forecasts, at `/api/devices/{id}/forecast`. */
+  forecast?: TraitField[]
 }
+
+/** The curves a device forecasts, by name: [time (s), value], in time order. */
+export type DeviceForecast = { series: Record<string, [number, number][]> }
 
 /** A number an automation can read now. */
 export type AutomationMeasure =
@@ -1397,6 +1402,8 @@ export const api = {
       "GET",
       `/api/devices/${id}/history?hours=${hours}&bucket=${bucket}`
     ),
+  deviceForecast: (id: number) =>
+    request<DeviceForecast>("GET", `/api/devices/${id}/forecast`),
   deviceHistory: (id: number, hours = 24, points = 96) =>
     request<DeviceHistory>(
       "GET",

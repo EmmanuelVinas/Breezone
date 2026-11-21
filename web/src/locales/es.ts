@@ -2073,6 +2073,24 @@ const es: Record<string, string> = {
   "Ses panneaux (puissance, inclinaison, orientation) se règlent dans Comptes et services ; la prévision est faite pour la ville de l'installation.":
     "Sus paneles (potencia, inclinación, orientación) se ajustan en Cuentas y servicios; la previsión se hace para la ciudad de la instalación.",
   "Compte ou service": "Cuenta o servicio",
+  "À 20 h, si la production prévue demain dépasse 10 kWh, prévenir pour y décaler lessives et recharges.":
+    "A las 20 h, si la producción prevista mañana supera 10 kWh, avisar para trasladar a ese día coladas y recargas.",
+  "aujourd'hui": "hoy",
+  "Beaucoup de soleil prévu demain : c'est le jour pour les lessives et la recharge.":
+    "Mucho sol previsto mañana: es el día para las coladas y la recarga.",
+  "Belle journée solaire demain : prévenir": "Día soleado mañana: avisar",
+  demain: "mañana",
+  "Prévision solaire": "Previsión solar",
+  Prévue: "Prevista",
+  "Production, prévision et consommation toutes les 15 minutes":
+    "Producción, previsión y consumo cada 15 minutos",
+  "Réglez Forecast.Solar dans Réglages › Comptes et services pour voir la production attendue.":
+    "Configura Forecast.Solar en Ajustes › Cuentas y servicios para ver la producción esperada.",
+  "Reste à produire": "Queda por producir",
+  "Selon la météo, l'orientation et la puissance des panneaux":
+    "Según el tiempo, la orientación y la potencia de los paneles",
+  "Soleil demain": "Sol mañana",
+  "sur {kwh} prévus": "de {kwh} previstos",
 }
 
 export default es

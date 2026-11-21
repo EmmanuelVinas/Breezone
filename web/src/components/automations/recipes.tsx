@@ -418,6 +418,39 @@ export function recipes(home: Home): Recipe[] {
       ],
     },
   })
+  const sun = home.devices.find((d) => has(d, "solar.forecast"))
+  if (sun)
+    out.push({
+      title: t("Belle journée solaire demain : prévenir"),
+      description: t(
+        "À 20 h, si la production prévue demain dépasse 10 kWh, prévenir pour y décaler lessives et recharges."
+      ),
+      rule: {
+        ...base(t("Soleil demain"), [
+          { kind: "time", time: "20:00", days: [] },
+        ]),
+        conditions: [
+          {
+            kind: "measure",
+            measure: {
+              kind: "device",
+              device_id: sun.id,
+              field: "energy_tomorrow",
+            },
+            op: "above",
+            value: 10,
+          },
+        ],
+        actions: [
+          {
+            kind: "notify",
+            message: t(
+              "Beaucoup de soleil prévu demain : c'est le jour pour les lessives et la recharge."
+            ),
+          },
+        ],
+      },
+    })
   if (zones.length)
     out.push({
       title: t("Gel annoncé : garder la maison hors gel"),

@@ -52,6 +52,7 @@ import com.breezone.app.data.EvChargerStatus
 import com.breezone.app.data.Hub
 import com.breezone.app.data.Periods
 import com.breezone.app.data.ServerDevices
+import com.breezone.app.data.SolarForecastState
 import com.breezone.app.data.SolarInverterState
 import com.breezone.app.data.SolarPanelState
 import com.breezone.app.data.TraitIds
@@ -69,6 +70,10 @@ import com.breezone.app.ui.components.Sparkline
 import com.breezone.app.ui.icons.FzIcons
 import com.breezone.app.ui.theme.Fz
 import kotlinx.coroutines.delay
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Clock
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -247,13 +252,16 @@ fun SolarScreen(serverId: String, onBack: (() -> Unit)? = null) {
     val data = all[serverId] ?: ServerDevices()
     val inverters = data.withTrait(TraitIds.INVERTER)
     val panels = data.withTrait(TraitIds.PANEL)
+    val sun = data.withTrait(TraitIds.FORECAST).firstOrNull()
+    val forecast = rememberSolarForecast(hub, serverId, sun?.id)
     Scaffold(topBar = { FzTopBar(stringResource(Res.string.house_solar), null, onBack) }) { padding ->
         LazyColumn(
             Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item(key = "now", contentType = "now") { SolarNowCard(live, day, inverters) }
+            if (inverters.isNotEmpty() || sun == null) item(key = "now", contentType = "now") { SolarNowCard(live, day, inverters, forecast) }
+            if (sun != null) item(key = "forecast", contentType = "forecast") { SolarForecastCard(sun, forecast, day) }
             inverters.forEach { inv ->
                 item(key = "inv-${inv.id}", contentType = "inverter") { InverterCard(inv, panels) }
             }
@@ -261,22 +269,78 @@ fun SolarScreen(serverId: String, onBack: (() -> Unit)? = null) {
     }
 }
 
-/** What the panels make now, and their curve of the day. */
+/** The power a forecast device expects along today and tomorrow, read again every 10 minutes. */
 @Composable
-internal fun SolarNowCard(live: EnergyLive?, day: EnergyDay?, inverters: List<DeviceView>) {
+internal fun rememberSolarForecast(hub: Hub, serverId: String, deviceId: Long?): List<Pair<Long, Double>> {
+    var points by remember(serverId, deviceId) { mutableStateOf(emptyList<Pair<Long, Double>>()) }
+    LaunchedEffect(serverId, deviceId) {
+        if (deviceId == null) return@LaunchedEffect
+        while (true) {
+            runCatching { hub.api(serverId)?.deviceForecast(deviceId) }.getOrNull()?.let { f ->
+                points = f.series["power"].orEmpty().mapNotNull { p -> if (p.size >= 2) p[0].toLong() to p[1] else null }
+            }
+            delay(600_000)
+        }
+    }
+    return points
+}
+
+/** The points of a curve within the day that starts at [dayStart]. */
+private fun List<Pair<Long, Double>>.within(dayStart: Long) = filter { it.first in dayStart..dayStart + 86_400 }
+
+/** What the panels make now, and their curve of the day, beside the forecast when there is one. */
+@Composable
+internal fun SolarNowCard(live: EnergyLive?, day: EnergyDay?, inverters: List<DeviceView>, forecast: List<Pair<Long, Double>> = emptyList()) {
     val sun = Fz.colors.warning
     SectionCard {
         Caption(stringResource(Res.string.solar_now))
         Text(formatPower(live?.solar ?: inverters.sumOf { it.stateAs(EnergyPowerState.serializer())?.power ?: 0.0 }), fontSize = 40.sp, fontWeight = FontWeight.SemiBold, color = sun)
         day?.totals?.production?.let { Caption(stringResource(Res.string.solar_today, formatEnergy(it))) }
         if (day != null) {
+            val start = day.points.firstOrNull()?.ts ?: 0L
             PowerDayChart(
-                listOf(PowerSeries(day.points.mapNotNull { p -> p.solar?.let { p.ts to it } }, sun, area = true)),
-                day.points.firstOrNull()?.ts ?: 0L,
+                listOf(
+                    PowerSeries(day.points.mapNotNull { p -> p.solar?.let { p.ts to it } }, sun, area = true),
+                    PowerSeries(forecast.within(start), sun, area = false, dashed = true),
+                ),
+                start,
                 Modifier.fillMaxWidth().height(150.dp),
             )
         }
     }
+}
+
+/** What a forecast (Forecast.Solar) expects today and tomorrow, and its curve of the day. */
+@Composable
+internal fun SolarForecastCard(device: DeviceView, forecast: List<Pair<Long, Double>>, day: EnergyDay?) {
+    val sun = Fz.colors.warning
+    val s = device.stateAs(SolarForecastState.serializer())
+    SectionCard {
+        Caption(stringResource(Res.string.solar_forecast_title))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            ForecastFigure(stringResource(Res.string.solar_forecast_today), formatEnergy(s?.energyToday), Modifier.weight(1f))
+            ForecastFigure(stringResource(Res.string.solar_forecast_remaining), formatEnergy(s?.energyRemaining), Modifier.weight(1f))
+            ForecastFigure(stringResource(Res.string.solar_forecast_tomorrow), formatEnergy(s?.energyTomorrow), Modifier.weight(1f))
+        }
+        val start = day?.points?.firstOrNull()?.ts ?: startOfToday()
+        val today = forecast.within(start)
+        if (today.size >= 2) {
+            PowerDayChart(listOf(PowerSeries(today, sun, area = true, dashed = true)), start, Modifier.fillMaxWidth().height(130.dp))
+        }
+    }
+}
+
+@Composable
+private fun ForecastFigure(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        Caption(label)
+        Text(value, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+    }
+}
+
+private fun startOfToday(): Long {
+    val zone = TimeZone.currentSystemDefault()
+    return Clock.System.now().toLocalDateTime(zone).date.atStartOfDayIn(zone).epochSeconds
 }
 
 /** A micro-inverter and its panels, each with what it makes now and today. */

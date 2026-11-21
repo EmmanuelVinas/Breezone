@@ -8,5 +8,8 @@
     { "name": "energy_remaining", "type": "number", "unit": "kWh", "history": false, "optional": true, "label": { "fr": "Reste à produire aujourd'hui", "en": "Still to produce today", "es": "Queda por producir hoy" } },
     { "name": "energy_tomorrow", "type": "number", "unit": "kWh", "history": false, "optional": true, "label": { "fr": "Production prévue demain", "en": "Production expected tomorrow", "es": "Producción prevista mañana" } }
   ],
-  "actions": []
+  "actions": [],
+  "forecast": [
+    { "name": "power", "type": "number", "unit": "W", "label": { "fr": "Puissance prévue", "en": "Expected power", "es": "Potencia prevista" } }
+  ]
 }

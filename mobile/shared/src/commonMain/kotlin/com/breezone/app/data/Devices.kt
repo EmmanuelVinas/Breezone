@@ -83,6 +83,7 @@ object TraitIds {
     const val INVERTER = "solar.inverter@1"
     const val PANEL = "solar.panel@1"
     const val POWER = "energy.power@1"
+    const val FORECAST = "solar.forecast@1"
 }
 
 /**
@@ -107,6 +108,10 @@ val EvChargerState.shown: ChargerShown
             else -> ChargerShown.Available
         }
     }
+
+/** The curves a device forecasts (`/api/devices/{id}/forecast`): `[ts, value]` points by name. */
+@Serializable
+data class DeviceForecast(val series: Map<String, List<List<Double>>> = emptyMap())
 
 /** The history of a device (`/api/devices/{id}/history`): `[ts, value]` points by field. */
 @Serializable

@@ -32,7 +32,7 @@ import kotlin.math.round
 import kotlin.math.roundToInt
 
 /** A series of a power chart: `[ts, W]` points, drawn as an area or a line. */
-data class PowerSeries(val points: List<Pair<Long, Double>>, val color: Color, val area: Boolean)
+data class PowerSeries(val points: List<Pair<Long, Double>>, val color: Color, val area: Boolean, val dashed: Boolean = false)
 
 /**
  * The power of a day (kW on the left axis, hours below): each series from [dayStart] (a timestamp),
@@ -57,7 +57,8 @@ fun PowerDayChart(series: List<PowerSeries>, dayStart: Long, modifier: Modifier 
         LineCartesianLayer.rememberLine(
             fill = LineCartesianLayer.LineFill.single(Fill(s.color)),
             areaFill = if (s.area) LineCartesianLayer.AreaFill.single(Fill(Brush.verticalGradient(listOf(s.color.copy(alpha = 0.3f), Color.Transparent)))) else null,
-            stroke = LineCartesianLayer.LineStroke.Continuous(thickness = if (s.area) 1.5.dp else 1.75.dp),
+            stroke = if (s.dashed) LineCartesianLayer.LineStroke.Dashed(thickness = 1.5.dp, dashLength = 3.dp, gapLength = 3.dp)
+            else LineCartesianLayer.LineStroke.Continuous(thickness = if (s.area) 1.5.dp else 1.75.dp),
             pointConnector = LineCartesianLayer.PointConnector.cubic(),
         )
     }

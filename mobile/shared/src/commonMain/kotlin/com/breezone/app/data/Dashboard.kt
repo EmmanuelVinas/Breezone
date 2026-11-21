@@ -95,6 +95,7 @@ object BlockTypes {
     const val CHARGER_CURVE = "charger_curve"
     const val SOLAR_TODAY = "solar_today"
     const val SOLAR_PANELS = "solar_panels"
+    const val SOLAR_FORECAST = "solar_forecast"
     const val VENTILATION_HOUSE = "ventilation_house"
     const val VENTILATION_ROOMS = "ventilation_rooms"
     const val LIGHT_PANEL = "light_panel"

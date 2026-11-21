@@ -72,6 +72,9 @@ pub struct Described {
 /// Values of the traits of one device.
 pub type State = Map<String, Value>;
 
+/// Forecast curves by name (`power`…): (unix time, value), in time order.
+pub type Forecast = std::collections::BTreeMap<String, Vec<(i64, f64)>>;
+
 /// What every driver implements.
 pub trait Driver: Send + Sync {
     /// Identifies the hardware and lists its devices.
@@ -118,6 +121,10 @@ pub trait Driver: Send + Sync {
     /// The last picture of a camera (its last event): the bytes and their type.
     fn picture<'a>(&'a self, _reference: &'a str) -> DriverFuture<'a, (Vec<u8>, &'static str)> {
         Box::pin(async { Err(DriverError::Unsupported("no picture from this module".into())) })
+    }
+    /// The curves a device forecasts (its trait's `forecast`), by name: times and values, sorted.
+    fn forecast<'a>(&'a self, _reference: &'a str) -> DriverFuture<'a, Forecast> {
+        Box::pin(async { Err(DriverError::Unsupported("no forecast from this module".into())) })
     }
     /// What the hardware says about itself, raw, to understand how a model behaves (support).
     fn diagnostic(&self) -> DriverFuture<'_, Value> {
@@ -1038,6 +1045,12 @@ impl Runtime {
     pub async fn picture(&self, source_id: i64, reference: &str) -> Result<(Vec<u8>, &'static str), DriverError> {
         let driver = self.sources.read().await.get(&source_id).and_then(|r| r.driver.clone()).ok_or_else(|| DriverError::Unreachable("source not configured".into()))?;
         driver.picture(reference).await
+    }
+
+    /// The forecast curves of a device of a source.
+    pub async fn forecast(&self, source_id: i64, reference: &str) -> Result<Forecast, DriverError> {
+        let driver = self.sources.read().await.get(&source_id).and_then(|r| r.driver.clone()).ok_or_else(|| DriverError::Unreachable("source not configured".into()))?;
+        driver.forecast(reference).await
     }
 
     pub async fn act(&self, source_id: i64, reference: &str, trait_name: &str, action: &str, params: &State) -> Result<(), DriverError> {
