@@ -166,7 +166,8 @@ interface host {
     store-get: func(key: string) -> option<list<u8>>;
     store-set: func(key: string, value: option<list<u8>>);
 
-    /// The secret of an account the module requires (`requires.accounts` of its manifest), as JSON.
+    /// The secret of an account the module requires (`requires.accounts` of its manifest), as JSON;
+    /// a module that is an account (role `account`) gets its own with its id.
     account: func(kind: string) -> result<string, string>;
 
     /// A button of a remote was pressed (`button@1`): "single" | "double" | "long".
@@ -214,7 +215,22 @@ interface driver {
     pair: func(step: string, input: json) -> result<paired, error>;
 }
 
+interface service {
+    use types.{json, error};
+
+    /// Checks the account of this module (`host.account` with its own id gives the fields of its
+    /// form) before Breezone keeps it: the service must accept it.
+    check: func() -> result<_, error>;
+
+    /// A query of a service contract the module provides (`provides.services` of its manifest,
+    /// `contract` as "tariff.day_color@1"): its parameters and its answer as the contract
+    /// (`server/contracts/services/`) describes them. Breezone checks the answer, and keeps the
+    /// caches and the tables.
+    query: func(contract: string, query: string, params: json) -> result<json, error>;
+}
+
 world module {
     import host;
     export driver;
+    export service;
 }

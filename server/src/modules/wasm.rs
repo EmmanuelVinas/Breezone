@@ -113,6 +113,8 @@ struct SourceCtx {
     sink: std::sync::Mutex<Option<Sink>>,
     messages: tokio::sync::mpsc::UnboundedSender<(u32, Vec<u8>)>,
     memory_store: std::sync::Mutex<HashMap<String, Vec<u8>>>,
+    /// The fields of the module's own account while it is checked, before Breezone keeps them.
+    checked_account: Option<String>,
 }
 
 /// An open subscription: what is sent on it, and its task (stopped with it).
@@ -143,12 +145,17 @@ impl WasiView for HostState {
     }
 }
 
-/// The database and the key of the secrets, for the store of the sources and their accounts.
-static CONTEXT: OnceLock<(crate::db::Db, [u8; 32])> = OnceLock::new();
+/// The database and the key of the secrets, for the store of the sources and their accounts (the
+/// last server started in the process: one, except in the tests).
+static CONTEXT: std::sync::RwLock<Option<(crate::db::Db, [u8; 32])>> = std::sync::RwLock::new(None);
 
 /// Gives the host what the store of the sources and the accounts need (at start).
 pub fn set_context(db: crate::db::Db, key: [u8; 32]) {
-    let _ = CONTEXT.set((db, key));
+    *CONTEXT.write().unwrap_or_else(|e| e.into_inner()) = Some((db, key));
+}
+
+fn context() -> Option<(crate::db::Db, [u8; 32])> {
+    CONTEXT.read().unwrap_or_else(|e| e.into_inner()).clone()
 }
 
 impl breezone::module::types::Host for HostState {}
@@ -217,8 +224,8 @@ impl breezone::module::host::Host for HostState {
     }
 
     async fn store_get(&mut self, key: String) -> Option<Vec<u8>> {
-        match (self.ctx.source_id, CONTEXT.get()) {
-            (Some(id), Some((db, _))) => crate::db::store_get(db, id, &key).await.ok().flatten(),
+        match (self.ctx.source_id, context()) {
+            (Some(id), Some((db, _))) => crate::db::store_get(&db, id, &key).await.ok().flatten(),
             _ => self.ctx.memory_store.lock().unwrap_or_else(|e| e.into_inner()).get(&key).cloned(),
         }
     }
@@ -228,9 +235,9 @@ impl breezone::module::host::Host for HostState {
             crate::modules::log(&self.ctx.module, "warn", format!("store: {key} too large, not kept"));
             return;
         }
-        match (self.ctx.source_id, CONTEXT.get()) {
+        match (self.ctx.source_id, context()) {
             (Some(id), Some((db, _))) => {
-                if let Err(e) = crate::db::store_set(db, id, &key, value.as_deref()).await {
+                if let Err(e) = crate::db::store_set(&db, id, &key, value.as_deref()).await {
                     crate::modules::log(&self.ctx.module, "error", format!("store: {e}"));
                 }
             }
@@ -249,12 +256,15 @@ impl breezone::module::host::Host for HostState {
         if !self.permissions.accounts.contains(&kind) {
             return Err(format!("{kind}: not an account this module requires"));
         }
-        let (db, key) = CONTEXT.get().ok_or("no account here")?;
-        let row = crate::db::account(db, &kind).await.map_err(|e| e.to_string())?.ok_or_else(|| format!("{kind}: not connected"))?;
+        if let Some(fields) = self.ctx.checked_account.as_ref().filter(|_| *kind == *self.ctx.module) {
+            return Ok(fields.clone());
+        }
+        let (db, key) = context().ok_or("no account here")?;
+        let row = crate::db::account(&db, &kind).await.map_err(|e| e.to_string())?.ok_or_else(|| format!("{kind}: not connected"))?;
         if !row.enabled {
             return Err(format!("{kind}: switched off"));
         }
-        row.secret.as_deref().and_then(|s| crate::crypto::decrypt(key, s)).ok_or_else(|| format!("{kind}: not connected"))
+        row.secret.as_deref().and_then(|s| crate::crypto::decrypt(&key, s)).ok_or_else(|| format!("{kind}: not connected"))
     }
 
     fn pressed(&mut self, reference: String, button: u32, press: String) -> wasmtime::Result<()> {
@@ -576,7 +586,7 @@ impl WasmModule {
 
     fn context(&self, source_id: Option<i64>) -> (Arc<SourceCtx>, tokio::sync::mpsc::UnboundedReceiver<(u32, Vec<u8>)>) {
         let (messages, received) = tokio::sync::mpsc::unbounded_channel();
-        let ctx = SourceCtx { module: self.id.clone(), source_id, sink: std::sync::Mutex::new(None), messages, memory_store: Default::default() };
+        let ctx = SourceCtx { module: self.id.clone(), source_id, sink: std::sync::Mutex::new(None), messages, memory_store: Default::default(), checked_account: None };
         (Arc::new(ctx), received)
     }
 
@@ -585,6 +595,33 @@ impl WasmModule {
         let (ctx, _) = self.context(None);
         let (mut store, module) = self.instantiate(ctx).await.ok()?;
         tokio::time::timeout(CALL_TIMEOUT, module.breezone_module_driver().call_probe(&mut store, host)).await.ok()?.ok()?
+    }
+
+    /// Checks the module's own account (`fields`: those of its form, as JSON) before it is kept.
+    pub async fn check_account(&self, fields: &str) -> Result<(), DriverError> {
+        let (ctx, _) = self.context(None);
+        let ctx = Arc::new(SourceCtx { checked_account: Some(fields.to_string()), ..Arc::into_inner(ctx).ok_or_else(|| DriverError::Invalid("context".into()))? });
+        let (mut store, module) = self.instantiate(ctx).await?;
+        tokio::time::timeout(CALL_TIMEOUT, module.breezone_module_service().call_check(&mut store))
+            .await
+            .map_err(|_| DriverError::Unreachable(format!("{}: no answer", self.id)))?
+            .map_err(|e| DriverError::Invalid(format!("{}: {e}", self.id)))?
+            .map_err(from_wit)
+    }
+
+    /// A query of a service contract (`contract`: "tariff.day_color@1"), in an instance of its own;
+    /// the answer is checked against the contract.
+    pub async fn query(&self, contract: &str, query: &str, params: &serde_json::Value) -> Result<serde_json::Value, DriverError> {
+        let (ctx, _) = self.context(None);
+        let (mut store, module) = self.instantiate(ctx).await?;
+        let answer = tokio::time::timeout(CALL_TIMEOUT, module.breezone_module_service().call_query(&mut store, contract, query, &params.to_string()))
+            .await
+            .map_err(|_| DriverError::Unreachable(format!("{}: no answer", self.id)))?
+            .map_err(|e| DriverError::Invalid(format!("{}: {e}", self.id)))?
+            .map_err(from_wit)?;
+        let value: serde_json::Value = serde_json::from_str(&answer).map_err(|e| DriverError::Invalid(format!("{}: {e}", self.id)))?;
+        crate::services::check_answer(contract, query, &value).map_err(|e| DriverError::Invalid(format!("{}: {e}", self.id)))?;
+        Ok(value)
     }
 
     /// A step of the appairage, in an instance of its own.
@@ -857,7 +894,8 @@ pub async fn loaded(m: &crate::modules::manifest::Manifest, dir: &Path) -> Resul
         hosts: net.hosts.clone(),
         loopback: LOOPBACK.load(std::sync::atomic::Ordering::SeqCst),
         memory_mb: m.permissions.memory_mb as usize,
-        accounts: m.requires.accounts.clone(),
+        // A module that is an account reads its own.
+        accounts: m.requires.accounts.iter().cloned().chain(m.has(crate::modules::manifest::Role::Account).then(|| m.id.clone())).collect(),
     };
     let cache = dir.parent().and_then(Path::parent).map(|modules| modules.join("cache"));
     let id = m.id.clone();

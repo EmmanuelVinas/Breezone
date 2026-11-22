@@ -101,6 +101,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "breezone-module-rte"
+version = "1.0.0"
+dependencies = [
+ "base64",
+ "breezone-module-sdk",
+ "chrono",
+]
+
+[[package]]
 name = "breezone-module-sdk"
 version = "1.0.0"
 dependencies = [

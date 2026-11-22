@@ -8,6 +8,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::Json;
 use serde::Deserialize;
+use serde_json::Value;
 
 pub async fn list(State(state): State<AppState>, _admin: AdminUser) -> ApiResult<Json<Vec<AccountView>>> {
     Ok(Json(accounts::list(&state).await?))
@@ -47,8 +48,11 @@ pub struct ConnectInput {
     pub api_key: String,
 }
 
-pub async fn connect(State(state): State<AppState>, AdminUser(user): AdminUser, Path(kind): Path<String>, Json(input): Json<ConnectInput>) -> ApiResult<Json<AccountView>> {
+pub async fn connect(State(state): State<AppState>, AdminUser(user): AdminUser, Path(kind): Path<String>, Json(fields): Json<Value>) -> ApiResult<Json<AccountView>> {
+    let input: ConnectInput = serde_json::from_value(fields.clone()).map_err(|e| ApiError::bad_request(e.to_string()))?;
     match kind.as_str() {
+        // A module run by the host checks its account itself, from the fields of its form.
+        k if accounts::is_module_account(k) => accounts::connect_module(&state, k, &fields).await?,
         accounts::rte::KIND => accounts::rte::connect(&state, &input.client_id, &input.client_secret).await?,
         accounts::linky::KIND => accounts::linky::connect(&state, &input.token, &input.prm).await?,
         accounts::netatmo::KIND => accounts::netatmo::connect(&state, &input.client_id, &input.client_secret, &input.refresh_token).await?,
@@ -64,6 +68,7 @@ pub async fn connect(State(state): State<AppState>, AdminUser(user): AdminUser, 
 /// Uses the account once more: its state says whether it still works.
 pub async fn test(State(state): State<AppState>, AdminUser(user): AdminUser, Path(kind): Path<String>) -> ApiResult<Json<AccountView>> {
     let result = match kind.as_str() {
+        k if accounts::is_module_account(k) => accounts::test_module(&state, k).await,
         accounts::rte::KIND => accounts::rte::test(&state).await,
         accounts::linky::KIND => accounts::linky::test(&state).await,
         accounts::netatmo::KIND => accounts::netatmo::test(&state).await,

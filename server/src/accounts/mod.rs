@@ -179,3 +179,83 @@ pub async fn refused(service: &str, resp: reqwest::Response) -> ApiError {
 pub fn unreachable(service: &str, e: reqwest::Error) -> ApiError {
     ApiError::bad_gateway(crate::text!("{0} injoignable : {1}", "{0} unreachable: {1}", "{0} inaccesible: {1}", service, e.to_string()))
 }
+
+/// An account that is a module run by the host (installed, or shipped in place of the code of the
+/// core): connected, checked and tested from the fields of its manifest's form.
+pub fn is_module_account(kind: &str) -> bool {
+    crate::modules::manifest(kind).is_some_and(|m| m.has(Role::Account))
+        && crate::modules::installed_dir(kind).is_some()
+        && (crate::modules::native::get(kind).is_none() || crate::modules::replaces_native(kind))
+}
+
+/// The fields of the form of a module's account, from what was typed: (what is not secret, all of
+/// them). A field not optional must be given.
+fn account_fields(m: &crate::modules::manifest::Manifest, input: &Value) -> ApiResult<(Value, Value)> {
+    let (mut config, mut all) = (serde_json::Map::new(), serde_json::Map::new());
+    for f in &m.config {
+        let value = match &input[&f.name] {
+            Value::String(s) => Value::String(s.trim().to_string()),
+            Value::Null => Value::Null,
+            other => other.clone(),
+        };
+        if value.is_null() || value == Value::String(String::new()) {
+            if f.optional {
+                continue;
+            }
+            return Err(ApiError::bad_request(crate::text!("{0} est requis", "{0} is required", "{0} es obligatorio", f.label.fr.clone())));
+        }
+        if f.kind != "password" {
+            config.insert(f.name.clone(), value.clone());
+        }
+        all.insert(f.name.clone(), value);
+    }
+    Ok((Value::Object(config), Value::Object(all)))
+}
+
+/// Asks the module to check its account's fields (`fields`, as JSON).
+async fn check_module_account(kind: &str, fields: &str) -> ApiResult<()> {
+    #[cfg(feature = "wasm")]
+    {
+        let m = crate::modules::manifest(kind).ok_or_else(|| ApiError::not_found("unknown account"))?;
+        let dir = crate::modules::installed_dir(kind).ok_or_else(|| ApiError::not_found("unknown account"))?;
+        let module = crate::modules::wasm::loaded(m, &dir).await.map_err(ApiError::bad_gateway)?;
+        module.check_account(fields).await.map_err(|e| ApiError::bad_gateway(e.to_string()))
+    }
+    #[cfg(not(feature = "wasm"))]
+    {
+        let _ = (kind, fields);
+        Err(ApiError::bad_request("this build of Breezone has no module host"))
+    }
+}
+
+/// Connects the account of a module: the module checks it, then it is kept (what is not secret
+/// shown in Settings › Accounts, all the fields encrypted).
+pub async fn connect_module(state: &AppState, kind: &str, input: &Value) -> ApiResult<()> {
+    let m = crate::modules::manifest(kind).ok_or_else(|| ApiError::not_found("unknown account"))?;
+    let (config, all) = account_fields(m, input)?;
+    check_module_account(kind, &all.to_string()).await?;
+    save(state, kind, &config, &all, None).await?;
+    db::set_account_state(&state.db, kind, "ok", None).await?;
+    Ok(())
+}
+
+/// Checks the account of a module again, with what is kept.
+pub async fn test_module(state: &AppState, kind: &str) -> ApiResult<()> {
+    let Some((_, fields)) = load::<Value>(state, kind).await? else { return Err(ApiError::bad_request("not connected")) };
+    let result = check_module_account(kind, &fields.to_string()).await;
+    record(state, kind, result).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_fields_of_an_account_are_split() {
+        let m = crate::modules::manifest::Manifest::parse(include_str!("../modules/native/manifests/rte.json")).unwrap();
+        let (config, all) = account_fields(&m, &serde_json::json!({"client_id": " id ", "client_secret": "s", "other": 1})).unwrap();
+        assert_eq!(config, serde_json::json!({"client_id": "id"}));
+        assert_eq!(all, serde_json::json!({"client_id": "id", "client_secret": "s"}));
+        assert!(account_fields(&m, &serde_json::json!({"client_id": "id"})).is_err());
+    }
+}

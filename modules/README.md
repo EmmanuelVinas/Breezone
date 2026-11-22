@@ -62,6 +62,11 @@ provided, types, bounds, required fields). `modules/tasmota/src/lib.rs` has exam
   appairage when the manifest's `pairing` is `button` or `code`: `Driver::pair` in the SDK,
   `modules/hue/` as an example). Subscriptions take `ws://`, `wss://` (a device of the local
   network may have its own certificate) and `tcp://`.
+- A module of the `service` role implements `Service` (`check` of its account, `query` of the
+  contracts of its `provides.services`, as `server/contracts/services/` describes them) and ends
+  with `module!(service: MyService)` (or `module!(driver: MyDriver, service: MyService)`). Its
+  account's fields (the `config` of its manifest) come from `host::account("<its id>")`; Breezone
+  checks each answer against the contract and keeps the caches. `modules/rte/` is an example.
 - `server/contracts/module.schema.json`: the manifest (`manifest.json`), with
   `server/contracts/module.example.json` as an example. The traits a module provides are those
   of `server/contracts/traits/`.

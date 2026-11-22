@@ -102,6 +102,49 @@ pub trait Driver: Sized + 'static {
     }
 }
 
+/// What a module of the `service` role answers (the queries of the service contracts of its
+/// manifest's `provides.services`). Nothing is kept between two calls: an account's credentials
+/// come from [`host::account`] with the module's own id.
+pub trait Service: 'static {
+    /// Checks the account before Breezone keeps it (the service must accept it).
+    fn check() -> Result<()> {
+        Ok(())
+    }
+    /// A query of a contract ("tariff.day_color@1", "colors"): its parameters and its answer as the
+    /// contract describes them.
+    fn query(contract: &str, query: &str, params: Value) -> Result<Value>;
+}
+
+/// What a module without devices gives as its driver: nothing.
+pub struct NoDriver;
+
+impl Driver for NoDriver {
+    fn open(_config: Value, _secret: Option<Value>) -> Result<Self> {
+        unsupported("devices")
+    }
+    fn describe(&self) -> Result<Described> {
+        unsupported("devices")
+    }
+    fn read(&self) -> Result<Vec<(String, State)>> {
+        unsupported("devices")
+    }
+    fn act(&self, _reference: &str, _trait_name: &str, _action: &str, _params: &State) -> Result<()> {
+        unsupported("devices")
+    }
+}
+
+/// What a module without services gives as its service: nothing.
+pub struct NoService;
+
+impl Service for NoService {
+    fn check() -> Result<()> {
+        unsupported("services")
+    }
+    fn query(_contract: &str, _query: &str, _params: Value) -> Result<Value> {
+        unsupported("services")
+    }
+}
+
 /// A [`Driver`] as the interface wants it (made by [`module!`]).
 pub struct Adapter<T>(pub T);
 
@@ -169,10 +212,11 @@ impl<T: Driver> bindings::exports::breezone::module::driver::GuestSource for Ada
     }
 }
 
-/// Makes the WebAssembly component of a module from its [`Driver`].
+/// Makes the WebAssembly component of a module: `module!(Plug)` for a driver, `module!(service:
+/// Tempo)` for a service, `module!(driver: Plug, service: Tempo)` for both.
 #[macro_export]
 macro_rules! module {
-    ($driver:ty) => {
+    (driver: $driver:ty, service: $service:ty) => {
         struct __BreezoneModule;
 
         impl $crate::bindings::exports::breezone::module::driver::Guest for __BreezoneModule {
@@ -188,9 +232,26 @@ macro_rules! module {
             }
         }
 
+        impl $crate::bindings::exports::breezone::module::service::Guest for __BreezoneModule {
+            fn check() -> $crate::Result<()> {
+                <$service as $crate::Service>::check()
+            }
+
+            fn query(contract: String, query: String, params: String) -> $crate::Result<String> {
+                let params = $crate::serde_json::from_str(&params).map_err(|e| $crate::Error::Invalid(e.to_string()))?;
+                Ok(<$service as $crate::Service>::query(&contract, &query, params)?.to_string())
+            }
+        }
+
         // Only a WebAssembly component has these exports; a native build (the tests) has none.
         #[cfg(target_arch = "wasm32")]
         $crate::bindings::export_bindings!(__BreezoneModule with_types_in $crate::bindings);
+    };
+    (service: $service:ty) => {
+        $crate::module!(driver: $crate::NoDriver, service: $service);
+    };
+    ($driver:ty) => {
+        $crate::module!(driver: $driver, service: $crate::NoService);
     };
 }
 

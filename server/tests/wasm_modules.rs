@@ -402,6 +402,22 @@ async fn a_module_pairs() {
     assert!(matches!(module.pair("finish", &json!({})).await, Err(DriverError::Unsupported(_))));
 }
 
+/// A module of the `service` role: its account checked before it is kept, its answers to the
+/// queries of a contract checked against the contract.
+#[tokio::test]
+async fn a_service_module_answers_its_contract() {
+    let _serial = SERIAL.lock().await;
+    let permissions = Permissions { accounts: vec!["misbehave".into()], ..local() };
+    let module = Arc::new(WasmModule::load("misbehave", &wasm("misbehave"), permissions, None).unwrap());
+    module.check_account(r#"{"token": "red"}"#).await.unwrap();
+    assert!(matches!(module.check_account(r#"{"token": "wrong"}"#).await, Err(DriverError::Invalid(m)) if m == "refused"));
+    let colors = module.query("tariff.day_color@1", "colors", &json!({"from": "2026-11-22", "until": "2026-11-22"})).await.unwrap();
+    assert_eq!(colors, json!([{"day": "2026-11-22", "color": "blue"}]));
+    // An answer that is not what the contract says is refused.
+    assert!(matches!(module.query("tariff.day_color@1", "colors", &json!({"from": "bad"})).await, Err(DriverError::Invalid(m)) if m.contains("color")));
+    assert!(matches!(module.query("weather.forecast@1", "daily", &json!({})).await, Err(DriverError::Unsupported(_))));
+}
+
 /// A module that comes with Breezone (lot L6): beside its web UI, unsigned (the image or the signed
 /// archive vouches for it), it replaces the driver compiled in with the same id; removed, the
 /// driver compiled in drives the same sources again.
@@ -452,6 +468,51 @@ async fn a_module_that_comes_with_breezone_replaces_the_native_driver() {
     let (code, s) = call("POST", &format!("/api/sources/{id}/refresh"), None).await;
     assert_eq!((code, s["status"]["state"].clone()), (200, json!("online")), "{s}");
     assert!(commands.lock().unwrap().iter().any(|c| c == "Status 0"));
+}
+
+/// A service module that comes with Breezone, with an account (lot L9): its account is connected
+/// from the fields of its manifest's form once the module accepts it, then the core asks it for
+/// the colour of the days before its own code.
+#[tokio::test]
+async fn a_service_module_with_an_account_answers_the_core() {
+    use breezone_server::modules::package;
+    let _serial = SERIAL.lock().await;
+    let dir = tempfile_dir("service");
+    std::fs::create_dir_all(dir.join("app/modules")).unwrap();
+    let manifest = json!({
+        "id": "misbehave", "version": "1.0.0",
+        "name": {"fr": "Couleurs", "en": "Colours", "es": "Colores"},
+        "roles": ["account", "service"], "requires": {"api": "^1.0"},
+        "provides": {"services": ["tariff.day_color@1.0"]},
+        "config": [{"name": "token", "type": "password", "label": {"fr": "Jeton", "en": "Token", "es": "Token"}}],
+        "permissions": {"network": {"lan": false}}
+    });
+    std::fs::write(dir.join("app/modules/misbehave-1.0.0.bzm"), package::build(&manifest.to_string(), Some(&wasm("misbehave")), &[]).unwrap()).unwrap();
+    let mut cfg = breezone_server::config::Config::for_tests(dir.join("data"));
+    cfg.web_dir = dir.join("app/web");
+    let state = breezone_server::init_state(cfg).await.unwrap();
+    let db = state.db.clone();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(listener, breezone_server::app(state)).await.unwrap() });
+    let http = reqwest::Client::new();
+    let v: Value = http.post(format!("{base}/api/setup")).json(&json!({"username":"admin","password":"motdepasse1"})).send().await.unwrap().json().await.unwrap();
+    let token = v["access_token"].as_str().unwrap().to_string();
+    let put = |body: Value| http.put(format!("{base}/api/accounts/misbehave")).bearer_auth(&token).json(&body).send();
+
+    // Not connected: nobody answers, the core does it itself.
+    let asked = json!({"from": "2026-11-22", "until": "2026-11-22"});
+    assert!(breezone_server::modules::ask_service(&db, "tariff.day_color@1", "colors", &asked).await.is_none());
+    assert_eq!(put(json!({})).await.unwrap().status().as_u16(), 400, "the token is required");
+    assert_eq!(put(json!({"token": "wrong"})).await.unwrap().status().as_u16(), 502, "refused by the module");
+    let resp = put(json!({"token": "red"})).await.unwrap();
+    assert_eq!(resp.status().as_u16(), 200);
+    let view: Value = resp.json().await.unwrap();
+    assert_eq!((view["connected"].clone(), view["state"].clone(), view["config"].clone()), (json!(true), json!("ok"), json!({})), "{view}");
+    let answer = breezone_server::modules::ask_service(&db, "tariff.day_color@1", "colors", &asked).await.unwrap().unwrap();
+    assert_eq!(answer, json!([{"day": "2026-11-22", "color": "red"}]));
+    let tested = http.post(format!("{base}/api/accounts/misbehave/test")).bearer_auth(&token).send().await.unwrap();
+    assert_eq!(tested.json::<Value>().await.unwrap()["state"], "ok");
 }
 
 /// The Shelly module in WebAssembly (lot L8): it replaces the driver compiled in, drives the relay,
@@ -579,6 +640,8 @@ async fn the_shipped_modules_load() {
         ("tplink", json!({"host": "192.168.1.31"})),
         ("hue", json!({"host": "192.168.1.20", "device_id": "001788FFFE6DBD26"})),
         ("renson", json!({"host": "192.168.1.70"})),
+        // A service: loaded, nothing to open.
+        ("rte", json!(null)),
         ("forecast_solar", json!({"kwp": 4.5, "declination": 30, "azimuth": 0, "latitude": 43.5, "longitude": 1.5, "timezone": "Europe/Paris"})),
     ];
     let host = breezone_server::capabilities::Host::local();
@@ -589,7 +652,11 @@ async fn the_shipped_modules_load() {
         assert_eq!(breezone_server::modules::compat::check(&manifest, &host, env!("CARGO_PKG_VERSION"), |_| true), Ok(()), "{id}");
         let native = breezone_server::modules::native::get(id).unwrap_or_else(|| panic!("{id} replaces a driver compiled in"));
         assert_eq!(manifest.provides.traits, native.manifest.provides.traits, "{id}: the same traits as the driver it replaces");
+        assert_eq!(manifest.provides.services, native.manifest.provides.services, "{id}: the same services as the code it replaces");
         let module = Arc::new(WasmModule::load(id, &wasm(id), local(), None).unwrap_or_else(|e| panic!("{id}: {e}")));
+        if config.is_null() {
+            continue;
+        }
         // A Hue bridge is opened with the key it gave (a plain string).
         let secret = (id == "hue").then_some("key-1");
         module.open(None, &config, secret).await.unwrap_or_else(|e| panic!("{id}: {e}"));

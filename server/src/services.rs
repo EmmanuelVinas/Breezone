@@ -6,6 +6,7 @@
 
 use crate::traits::{Field, Label};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::BTreeMap;
 use std::sync::LazyLock;
 
@@ -62,10 +63,66 @@ pub fn get(name: &str, version: u32) -> Option<&'static Service> {
     catalog().iter().find(|s| s.name == name && s.version == version)
 }
 
+/// A contract by its id ("tariff.day_color@1").
+pub fn by_id(id: &str) -> Option<&'static Service> {
+    let (name, version) = id.split_once('@')?;
+    get(name, version.split('.').next()?.parse().ok()?)
+}
+
+/// Whether a value is one of a field.
+fn accepts(f: &Field, v: &Value) -> bool {
+    let within = |n: f64| f.min.is_none_or(|m| n >= m) && f.max.is_none_or(|m| n <= m);
+    match f.kind.as_str() {
+        "bool" => v.is_boolean(),
+        "integer" => v.as_i64().is_some_and(|n| within(n as f64)),
+        "number" => v.as_f64().is_some_and(within),
+        "string" => v.is_string(),
+        "enum" => v.as_str().is_some_and(|s| f.values.iter().any(|x| x == s)),
+        _ => false,
+    }
+}
+
+fn check_record(q: &Query, v: &Value) -> Result<(), String> {
+    let o = v.as_object().ok_or("a record is not an object")?;
+    for f in &q.result {
+        match o.get(&f.name) {
+            Some(Value::Null) | None if f.optional => {}
+            Some(x) if accepts(f, x) => {}
+            Some(x) => return Err(format!("{}: {x} is not a value of it", f.name)),
+            None => return Err(format!("{}: missing", f.name)),
+        }
+    }
+    Ok(())
+}
+
+/// Checks the answer of a module to a query of a contract: a record (or a list of them, as the
+/// contract says) whose values are of their fields, the required ones there.
+pub fn check_answer(contract: &str, query: &str, answer: &Value) -> Result<(), String> {
+    let service = by_id(contract).ok_or_else(|| format!("{contract}: unknown contract"))?;
+    let q = service.query(query).ok_or_else(|| format!("{contract}: no query {query}"))?;
+    if q.list {
+        answer.as_array().ok_or("a list is expected")?.iter().try_for_each(|r| check_record(q, r))
+    } else {
+        check_record(q, answer)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
     use std::collections::HashSet;
+
+    #[test]
+    fn an_answer_is_checked_against_its_contract() {
+        let ok = json!([{"day": "2026-11-22", "color": "red"}]);
+        assert_eq!(check_answer("tariff.day_color@1", "colors", &ok), Ok(()));
+        assert!(check_answer("tariff.day_color@1", "colors", &json!([{"day": "2026-11-22", "color": "green"}])).is_err());
+        assert!(check_answer("tariff.day_color@1", "colors", &json!([{"color": "red"}])).is_err());
+        assert!(check_answer("tariff.day_color@1", "colors", &json!({"day": "2026-11-22", "color": "red"})).is_err(), "a list");
+        assert!(check_answer("tariff.day_color@2", "colors", &ok).is_err());
+        assert!(check_answer("tariff.day_color@1", "other", &ok).is_err());
+    }
 
     #[test]
     fn every_service_file_is_embedded_and_valid() {

@@ -146,6 +146,30 @@ impl Guest for Module {
     }
 }
 
+/// `echo`: the parameters back, with the account of the module when there is one; `bad`: an answer
+/// that is not what the contract says.
+impl exports::breezone::module::service::Guest for Module {
+    fn check() -> Result<(), Error> {
+        let account = host::account("misbehave").map_err(Error::Unsupported)?;
+        if account.contains("wrong") {
+            return Err(Error::Invalid("refused".into()));
+        }
+        Ok(())
+    }
+
+    fn query(contract: String, query: String, params: String) -> Result<String, Error> {
+        match (contract.as_str(), query.as_str()) {
+            ("tariff.day_color@1", "colors") if params.contains("bad") => Ok(r#"[{"day": "2026-11-22", "color": "green"}]"#.into()),
+            ("tariff.day_color@1", "colors") => {
+                let account = host::account("misbehave").unwrap_or_default();
+                let color = if account.contains("red") { "red" } else { "blue" };
+                Ok(format!(r#"[{{"day": "2026-11-22", "color": "{color}"}}]"#))
+            }
+            _ => Err(Error::Unsupported(format!("{contract} {query}"))),
+        }
+    }
+}
+
 // Only a WebAssembly component has these exports.
 #[cfg(target_arch = "wasm32")]
 export!(Module);

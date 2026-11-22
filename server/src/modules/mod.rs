@@ -123,6 +123,54 @@ pub async fn open_source(id: &str, source_id: Option<i64>, config: &serde_json::
     }
 }
 
+/// The installed (or shipped) modules that answer `contract` ("tariff.day_color@1"), in the
+/// order they were installed: those of the `service` role whose `provides.services` has it, and
+/// which replace the code of the core when it has the same id.
+pub fn service_providers(contract: &str) -> Vec<&'static Manifest> {
+    let major = |c: &str| c.split('.').next().map(str::to_string);
+    let (name, version) = contract.split_once('@').map(|(n, v)| (n.to_string(), major(v))).unwrap_or_default();
+    manifests()
+        .filter(|m| m.has(Role::Service) && installed_dir(&m.id).is_some() && (native::get(&m.id).is_none() || replaces_native(&m.id)))
+        .filter(|m| m.provides.services.iter().any(|s| s.split_once('@').is_some_and(|(n, v)| n == name && major(v) == version)))
+        .collect()
+}
+
+/// Asks the modules that provide `contract` for `query`, in turn, and gives the first answer
+/// (checked against the contract). A module that is an account is asked only when its account is
+/// connected and switched on; how it went is noted on the account. `None`: no module answers
+/// this contract here, the core does it itself.
+pub async fn ask_service(db: &crate::db::Db, contract: &str, query: &str, params: &serde_json::Value) -> Option<Result<serde_json::Value, String>> {
+    #[cfg_attr(not(feature = "wasm"), allow(unused_mut))]
+    let mut last: Option<Result<serde_json::Value, String>> = None;
+    for m in service_providers(contract) {
+        if m.has(Role::Account) && !crate::db::account(db, &m.id).await.ok().flatten().is_some_and(|a| a.enabled && a.secret.is_some()) {
+            continue;
+        }
+        #[cfg(feature = "wasm")]
+        {
+            let Some(dir) = installed_dir(&m.id) else { continue };
+            let answer = match wasm::loaded(m, &dir).await {
+                Ok(module) => module.query(contract, query, params).await.map_err(|e| e.to_string()),
+                Err(e) => Err(e),
+            };
+            if m.has(Role::Account) {
+                let error = answer.as_ref().err().map(|e| crate::i18n::Text::plain(e.clone()).store());
+                let _ = crate::db::set_account_state(db, &m.id, if error.is_none() { "ok" } else { "error" }, error.as_deref()).await;
+            }
+            match answer {
+                Ok(v) => return Some(Ok(v)),
+                Err(e) => {
+                    log(&m.id, "warn", format!("{contract} {query}: {e}"));
+                    last = Some(Err(e));
+                }
+            }
+        }
+        #[cfg(not(feature = "wasm"))]
+        let _ = (query, params);
+    }
+    last
+}
+
 /// A step of the appairage of a module: the installed (or shipped) module when there is one, else
 /// the driver compiled in.
 pub async fn pair(id: &str, step: String, mut input: serde_json::Value) -> Result<native::Paired, crate::error::ApiError> {

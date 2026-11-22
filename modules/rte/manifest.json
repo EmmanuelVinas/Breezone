@@ -1,0 +1,13 @@
+{
+  "id": "rte",
+  "version": "1.0.0",
+  "name": {"fr": "RTE (couleur des jours Tempo)", "en": "RTE (colour of the Tempo days)", "es": "RTE (color de los días Tempo)"},
+  "roles": ["account", "service"],
+  "requires": {"api": "^1.0"},
+  "provides": {"services": ["tariff.day_color@1.0"]},
+  "config": [
+    {"name": "client_id", "type": "string", "label": {"fr": "Identifiant client", "en": "Client id", "es": "Identificador de cliente"}},
+    {"name": "client_secret", "type": "password", "label": {"fr": "Secret client", "en": "Client secret", "es": "Secreto de cliente"}}
+  ],
+  "permissions": {"network": {"lan": false, "hosts": ["digital.iservices.rte-france.com", "www.api-couleur-tempo.fr"]}}
+}
