@@ -1,6 +1,6 @@
 [package]
 name = "breezone-server"
-version = "0.12.0-beta.4"
+version = "0.12.0-beta.5"
 edition = "2021"
 description = "Breezone — self-hosted hub that drives the local Airzone API and serves the mobile app and web UI"
 default-run = "breezone-server"
@@ -84,11 +84,13 @@ webpki-roots = { version = "1", optional = true }
 default = ["wasm"]
 wasm = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:tokio-tungstenite", "dep:tokio-rustls", "dep:webpki-roots"]
 
+# Built for a small memory footprint at run time (100 MB), not for the size of the binary: the
+# dependencies keep their parallel code generation and the link-time optimisation is the thin one,
+# which compile several times faster for a few more megabytes of binary.
 [profile.release]
 opt-level = "z"
-lto = true
+lto = "thin"
 strip = true
-codegen-units = 1
 panic = "abort"
 # On a Mac (development), the Matter service is announced by Bonjour, which holds the mDNS port.
 [target.'cfg(target_os = "macos")'.dependencies]

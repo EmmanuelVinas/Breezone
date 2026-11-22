@@ -10,18 +10,6 @@ RUN npm ci --no-audit --no-fund
 COPY web/ ./
 RUN npm run build
 
-# --- Dependency manifest, without the crate version ----------------------------------------
-# Every release bumps the version in Cargo.toml and Cargo.lock; masking it keeps the layer
-# that compiles the dependencies cached from one release to the next.
-FROM --platform=$BUILDPLATFORM alpine:3.22 AS manifest
-WORKDIR /src
-COPY server/Cargo.toml server/Cargo.lock ./
-RUN awk '!done && /^version = /{print "version = \"0.0.0\""; done=1; next} 1' Cargo.toml > t \
- && mv t Cargo.toml \
- && awk 'own && /^version = /{print "version = \"0.0.0\""; own=0; next} \
-         {own = ($0 == "name = \"breezone-server\"")} 1' Cargo.lock > t \
- && mv t Cargo.lock
-
 # --- Modules that come with Breezone (WebAssembly, the same for every platform) ------------
 # Built once, natively; packed by the server's `module-publish` below. They are trusted like the
 # binary they come with (the image, or the signed archive of a release).
@@ -32,7 +20,12 @@ COPY server/contracts/wit server/contracts/wit
 COPY modules/ modules/
 # The modules shipped with Breezone (each replaces the driver compiled in with the same id).
 ARG SHIPPED_MODULES="tasmota shelly trydan forecast_solar reolink hoymiles tplink hue renson rte weather linky netatmo ezviz"
-RUN cd modules \
+# The registry and the build folder are caches kept by BuildKit (and by the CI, see the workflows):
+# only what changed is compiled again.
+RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
+    --mount=type=cache,id=modules-target,target=/src/modules/target \
+    cd modules \
  && cargo build --release --locked --target wasm32-wasip2 $(for m in $SHIPPED_MODULES; do printf -- '-p breezone-module-%s ' "$m"; done) \
  && for m in $SHIPPED_MODULES; do \
       mkdir -p "/out/$m" && cp "target/wasm32-wasip2/release/breezone_module_$m.wasm" "$m/manifest.json" "/out/$m/"; \
@@ -40,25 +33,24 @@ RUN cd modules \
 
 # --- Server (Rust, static musl binary) -----------------------------------------------------
 FROM rust:1-alpine AS server
+ARG TARGETARCH
 RUN apk add --no-cache musl-dev gcc make
 WORKDIR /src
-# Build the dependencies first, with stub sources, so that they are cached.
-COPY --from=manifest /src/Cargo.toml /src/Cargo.lock ./
-RUN mkdir -p src/bin \
- && echo 'fn main() {}' > src/main.rs \
- && echo 'fn main() {}' > src/bin/mock_airzone.rs \
- && echo 'fn main() {}' > src/bin/module_publish.rs \
- && touch src/lib.rs \
- && cargo build --release --locked \
- && rm -rf src
 COPY server/ ./
-RUN touch src/main.rs src/lib.rs src/bin/mock_airzone.rs src/bin/module_publish.rs \
- && cargo build --release --locked --bins \
- && ./target/release/module-publish host > /src/host.json
+# The registry and the build folder are caches kept by BuildKit (and by the CI): a new version, or
+# a change of the server, compiles only what changed; the dependencies stay compiled. The binaries
+# are copied out of the cache, which is not part of the image.
+RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
+    --mount=type=cache,id=server-target-${TARGETARCH},target=/src/target \
+    cargo build --release --locked --bins \
+ && mkdir -p /src/out \
+ && cp target/release/breezone-server target/release/mock-airzone target/release/module-publish /src/out/ \
+ && /src/out/module-publish host > /src/host.json
 COPY --from=modules /out/ /src/modules-in/
 RUN mkdir -p /src/modules-out \
  && for m in /src/modules-in/*/; do \
-      ./target/release/module-publish pack "$m/manifest.json" "$m"/*.wasm /src/modules-out; \
+      /src/out/module-publish pack "$m/manifest.json" "$m"/*.wasm /src/modules-out; \
     done \
  && rm -f /src/modules-out/*.message
 
@@ -66,7 +58,7 @@ RUN mkdir -p /src/modules-out \
 # The server and the web UI only, exported by the release workflow to make the signed archive
 # that installations download (`--target release-files --output type=local`).
 FROM scratch AS release-files
-COPY --from=server /src/target/release/breezone-server /breezone-server
+COPY --from=server /src/out/breezone-server /breezone-server
 COPY --from=web /web/dist /web
 # What this version hosts for modules: read before updating, to check the modules installed.
 COPY --from=server /src/host.json /host.json
@@ -85,7 +77,7 @@ RUN apk add --no-cache ca-certificates tzdata \
  && adduser -D -H -u 10001 breezone \
  && mkdir -p /data /app \
  && chown breezone:breezone /data
-COPY --from=server /src/target/release/breezone-server /src/target/release/mock-airzone /usr/local/bin/
+COPY --from=server /src/out/breezone-server /src/out/mock-airzone /usr/local/bin/
 COPY --from=web /web/dist /app/web
 COPY --from=server /src/modules-out /app/modules
 # Breezone's licence; those of the software it includes are in the web UI (third-party-licenses.txt).

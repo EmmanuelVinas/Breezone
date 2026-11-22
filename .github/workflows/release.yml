@@ -67,6 +67,24 @@ jobs:
         env:
           OWNER: ${{ github.repository_owner }}
           PLATFORM: ${{ matrix.platform }}
+      # The compilation caches of the Dockerfile (Cargo registry, build folders), kept from one run to
+      # the next: only what changed is compiled again. BuildKit does not keep them in the layer cache.
+      - uses: actions/cache@v4
+        id: cargo-cache
+        with:
+          path: cargo-cache
+          key: docker-cargo-${{ env.ARCH }}-${{ github.sha }}
+          restore-keys: docker-cargo-${{ env.ARCH }}-
+      - uses: reproducible-containers/buildkit-cache-dance@v3
+        with:
+          cache-map: |
+            {
+              "cargo-cache/registry": {"target": "/usr/local/cargo/registry", "id": "cargo-registry"},
+              "cargo-cache/git": {"target": "/usr/local/cargo/git", "id": "cargo-git"},
+              "cargo-cache/modules-target": {"target": "/src/modules/target", "id": "modules-target"},
+              "cargo-cache/server-target": {"target": "/src/target", "id": "server-target-${{ env.ARCH }}"}
+            }
+          skip-extraction: ${{ steps.cargo-cache.outputs.cache-hit }}
       - id: meta
         uses: docker/metadata-action@v6
         with:
