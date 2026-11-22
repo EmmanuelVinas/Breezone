@@ -5,7 +5,8 @@
 //!
 //! `BREEZONE_WRITE_GENERATED=1 cargo test --test views`
 
-use breezone_server::config::Config;
+mod support;
+
 use breezone_server::mock::{self, MockState};
 use serde_json::{json, Map, Value};
 use std::path::PathBuf;
@@ -189,7 +190,7 @@ async fn the_server_answers_as_the_contract_says() {
     tokio::spawn(async move { axum::serve(listener, mock::router(airzone)).await.unwrap() });
     let dir = std::env::temp_dir().join(format!("breezone-views-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let state = breezone_server::init_state(Config::for_tests(dir)).await.unwrap();
+    let state = breezone_server::init_state(support::config(&dir)).await.unwrap();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://127.0.0.1:{}", listener.local_addr().unwrap().port());
     tokio::spawn(async move { axum::serve(listener, breezone_server::app(state)).await.unwrap() });

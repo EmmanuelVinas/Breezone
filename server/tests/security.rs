@@ -1,13 +1,14 @@
 //! Browser protections on every response, and brute-force protection on sign-in.
 
-use breezone_server::config::Config;
+mod support;
+
 use serde_json::json;
 
 #[tokio::test]
 async fn responses_carry_the_security_headers_and_sign_in_is_throttled() {
     let dir = std::env::temp_dir().join(format!("breezone-security-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let state = breezone_server::init_state(Config::for_tests(dir)).await.unwrap();
+    let state = breezone_server::init_state(support::config(&dir)).await.unwrap();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://{}", listener.local_addr().unwrap());
     tokio::spawn(async move { axum::serve(listener, breezone_server::app(state).into_make_service_with_connect_info::<std::net::SocketAddr>()).await.unwrap() });

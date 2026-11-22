@@ -1,7 +1,8 @@
 //! The overview of an installation: each user's own, over the one its administrators set for
 //! everyone, over none (the clients compose one).
 
-use breezone_server::config::Config;
+mod support;
+
 use breezone_server::mock::{self, MockState};
 use reqwest::{Method, StatusCode};
 use serde_json::{json, Value};
@@ -45,7 +46,7 @@ fn layout(blocks: Value) -> Value {
 async fn each_user_may_have_an_overview_over_the_installations_one() {
     let dir = std::env::temp_dir().join(format!("breezone-dashboard-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let mut cfg = Config::for_tests(dir);
+    let mut cfg = support::config(&dir);
     cfg.scan_port = 9;
     let state = breezone_server::init_state(cfg).await.unwrap();
     let base = format!("http://127.0.0.1:{}", serve(breezone_server::app(state)).await);
@@ -117,7 +118,7 @@ async fn each_user_may_have_an_overview_over_the_installations_one() {
 async fn a_zone_has_a_history_a_chart_can_show() {
     let dir = std::env::temp_dir().join(format!("breezone-dashboard-charts-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let mut cfg = Config::for_tests(dir);
+    let mut cfg = support::config(&dir);
     cfg.scan_port = 9;
     let state = breezone_server::init_state(cfg).await.unwrap();
     let base = format!("http://127.0.0.1:{}", serve(breezone_server::app(state)).await);

@@ -6,7 +6,8 @@
 //! (open waits included), as a crash or a network loss would; a restart opens a new server on the
 //! same data and the same port.
 
-use breezone_server::config::Config;
+mod support;
+
 use breezone_server::mock::{self, MockState};
 use reqwest::{Method, StatusCode};
 use serde_json::{json, Value};
@@ -95,7 +96,7 @@ impl Server {
 
     /// Starts (or restarts) the server, with its live links to other nodes.
     async fn start(&mut self) {
-        let mut cfg = Config::for_tests(self.dir.clone());
+        let mut cfg = support::config(&self.dir.clone());
         cfg.scan_port = 9;
         let state = breezone_server::init_state(cfg).await.unwrap();
         let app_port = serve(breezone_server::app(state.clone())).await;

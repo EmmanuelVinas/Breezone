@@ -1,7 +1,8 @@
 //! Automations: a rule "quand… si… alors…" created through the API, run by the engine.
 
+mod support;
+
 use breezone_server::automations::{self, Engine};
-use breezone_server::config::Config;
 use breezone_server::mock::{self, MockState};
 use chrono::Datelike;
 use reqwest::{Method, StatusCode};
@@ -32,7 +33,7 @@ async fn a_rule_drives_a_zone_when_its_measure_crosses_the_threshold() {
     let ws = serve(mock::router(maison.clone())).await;
     let dir = std::env::temp_dir().join(format!("breezone-automations-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let state = breezone_server::init_state(Config::for_tests(dir)).await.unwrap();
+    let state = breezone_server::init_state(support::config(&dir)).await.unwrap();
     let port = serve(breezone_server::app(state.clone())).await;
     let base = format!("http://127.0.0.1:{port}");
     let http = reqwest::Client::new();
@@ -292,7 +293,7 @@ async fn while_a_trigger_holds_then_as_before() {
     let ws = serve(mock::router(maison.clone())).await;
     let dir = std::env::temp_dir().join(format!("breezone-automations-over-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let state = breezone_server::init_state(Config::for_tests(dir)).await.unwrap();
+    let state = breezone_server::init_state(support::config(&dir)).await.unwrap();
     let port = serve(breezone_server::app(state.clone())).await;
     let base = format!("http://127.0.0.1:{port}");
     let http = reqwest::Client::new();
@@ -370,7 +371,7 @@ async fn while_a_trigger_holds_then_as_before() {
 async fn a_rule_written_by_a_newer_version_is_shown_apart_and_can_be_removed() {
     let dir = std::env::temp_dir().join(format!("breezone-automations-newer-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let state = breezone_server::init_state(Config::for_tests(dir)).await.unwrap();
+    let state = breezone_server::init_state(support::config(&dir)).await.unwrap();
     let port = serve(breezone_server::app(state.clone())).await;
     let base = format!("http://127.0.0.1:{port}");
     let http = reqwest::Client::new();

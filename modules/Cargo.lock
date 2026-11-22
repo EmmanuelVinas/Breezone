@@ -85,6 +85,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "breezone-module-airzone_local"
+version = "1.0.0"
+dependencies = [
+ "breezone-module-sdk",
+]
+
+[[package]]
 name = "breezone-module-contract-1-0"
 version = "0.0.0"
 dependencies = [
@@ -108,6 +115,7 @@ dependencies = [
  "breezone-module-sdk",
  "cbc",
  "chrono",
+ "chrono-tz",
  "md-5",
 ]
 

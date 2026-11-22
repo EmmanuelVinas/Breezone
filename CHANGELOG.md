@@ -6,6 +6,19 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The Airzone WebServers are spoken to by a module shipped with Breezone (`airzone_local`), like
+  the other hardware; the installations, zones, history, Airzone Cloud, schedules and the links
+  between servers stay as they are.
+
+### Fixed
+
+- A module sent again in the same version runs its new code at once, without a restart.
+- EZVIZ: the rings just after midnight are no longer missed (the day of the server, not UTC).
+- Mobile app: the kinds of devices a server brings after an update are shown without restarting
+  the app; the colour of a device of an unknown kind can be chosen.
+
 ## [0.12.0-beta.9] - 2026-11-22
 
 ### Changed

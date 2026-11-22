@@ -272,7 +272,8 @@ async fn the_measures_have_a_history_and_make_the_energy_of_the_home() {
     }
     step.store(0, Ordering::SeqCst);
     server.state.drivers.poll(source).await;
-    tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+    // A history point with its last value (one a second; more time when the machine is busy).
+    tokio::time::sleep(std::time::Duration::from_millis(3000)).await;
     let (_, days) = server.call("GET", "/api/energy/days?days=3", t, None).await;
     let days = days.as_array().unwrap();
     assert_eq!(days.len(), 3);

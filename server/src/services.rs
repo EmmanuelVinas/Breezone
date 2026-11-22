@@ -11,6 +11,7 @@ use std::collections::BTreeMap;
 use std::sync::LazyLock;
 
 const FILES: &[(&str, &str)] = &[
+    ("airzone.webserver.json", include_str!("../contracts/services/airzone.webserver.json")),
     ("energy.history.json", include_str!("../contracts/services/energy.history.json")),
     ("tariff.day_color.json", include_str!("../contracts/services/tariff.day_color.json")),
     ("weather.forecast.json", include_str!("../contracts/services/weather.forecast.json")),
@@ -78,6 +79,8 @@ fn accepts(f: &Field, v: &Value) -> bool {
         "number" => v.as_f64().is_some_and(within),
         "string" => v.is_string(),
         "enum" => v.as_str().is_some_and(|s| f.values.iter().any(|x| x == s)),
+        // A document passed as it is (the answer of a device, for the core to read).
+        "json" => !v.is_null(),
         _ => false,
     }
 }
@@ -141,7 +144,12 @@ mod tests {
                 assert!(queries.insert(&q.name), "{}.{} twice", s.name, q.name);
                 assert!(!q.result.is_empty(), "{}.{}: no result", s.name, q.name);
                 for f in q.params.iter().chain(&q.result) {
-                    crate::traits::check_field(&format!("{}.{}", s.name, q.name), f);
+                    // `json`: a document passed as it is, for services only.
+                    if f.kind == "json" {
+                        assert!(f.values.is_empty() && ![&f.label.fr, &f.label.en, &f.label.es].iter().any(|l| l.trim().is_empty()), "{}.{}.{}", s.name, q.name, f.name);
+                    } else {
+                        crate::traits::check_field(&format!("{}.{}", s.name, q.name), f);
+                    }
                 }
             }
             for (what, rev) in &s.since {

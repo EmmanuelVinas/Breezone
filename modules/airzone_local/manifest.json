@@ -1,0 +1,11 @@
+{
+  "id": "airzone_local",
+  "version": "1.0.0",
+  "name": {"fr": "Airzone (WebServer local)", "en": "Airzone (local WebServer)", "es": "Airzone (WebServer local)"},
+  "description": {"fr": "Le dialogue avec les WebServer Airzone du réseau local, pour les installations de Breezone.", "en": "The dialogue with the Airzone WebServers of the local network, for Breezone's installations.", "es": "El diálogo con los WebServer Airzone de la red local, para las instalaciones de Breezone."},
+  "roles": ["service"],
+  "requires": {"api": "^1.1"},
+  "provides": {"services": ["airzone.webserver@1.0"]},
+  "permissions": {"network": {"lan": true}},
+  "internal": true
+}

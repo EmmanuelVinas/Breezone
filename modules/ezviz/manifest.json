@@ -33,6 +33,7 @@
       ]
     }
   },
+  "fills": {"timezone": "server.timezone"},
   "read_every_s": 8,
   "cloud": true,
   "optional_calls": [

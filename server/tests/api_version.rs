@@ -1,13 +1,14 @@
 //! The API announces its version, and refuses clients older than the oldest one it still serves.
 
-use breezone_server::config::Config;
+mod support;
+
 use serde_json::Value;
 
 #[tokio::test]
 async fn the_api_version_is_announced_and_old_clients_are_told_to_update() {
     let dir = std::env::temp_dir().join(format!("breezone-apiversion-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let state = breezone_server::init_state(Config::for_tests(dir)).await.unwrap();
+    let state = breezone_server::init_state(support::config(&dir)).await.unwrap();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://{}", listener.local_addr().unwrap());
     tokio::spawn(async move { axum::serve(listener, breezone_server::app(state).into_make_service_with_connect_info::<std::net::SocketAddr>()).await.unwrap() });

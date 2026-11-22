@@ -99,11 +99,20 @@ class Hub(
 
     fun api(serverId: String): BreezoneApi? = apis[serverId]
 
-    private val catalogs = mutableMapOf<String, List<CatalogTrait>>()
+    /** The catalog of traits of each server, with the version of the server it was read from. */
+    private val catalogs = mutableMapOf<String, Pair<String?, List<CatalogTrait>>>()
 
-    /** The catalog of traits of a server, read once (it changes only with the server's version). */
-    suspend fun catalog(serverId: String): List<CatalogTrait> =
-        catalogs[serverId] ?: runCatching { apis[serverId]?.traits() }.getOrNull().orEmpty().also { if (it.isNotEmpty()) catalogs[serverId] = it }
+    /**
+     * The catalog of traits of a server: read again when the server changed version, or when a
+     * device has a trait it does not hold (a module installed since).
+     */
+    suspend fun catalog(serverId: String, wanted: Collection<String> = emptyList()): List<CatalogTrait> {
+        val version = server(serverId)?.serverVersion
+        catalogs[serverId]?.takeIf { (at, list) -> at == version && wanted.all { list.traitOf(it) != null } }?.let { return it.second }
+        val read = runCatching { apis[serverId]?.traits() }.getOrNull().orEmpty()
+        if (read.isNotEmpty()) catalogs[serverId] = version to read
+        return read.ifEmpty { catalogs[serverId]?.second.orEmpty() }
+    }
 
     fun server(serverId: String): ServerState? = _servers.value.firstOrNull { it.account.id == serverId }
 

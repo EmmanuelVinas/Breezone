@@ -1,7 +1,8 @@
 //! Nodes behind HTTPS certificates that fail the usual checks (self-signed, wrong name): the
 //! certificate is shown, can be trusted by fingerprint, and only that one is then accepted.
 
-use breezone_server::config::Config;
+mod support;
+
 use breezone_server::mock::{self, MockState};
 use reqwest::{Method, StatusCode};
 use serde_json::{json, Value};
@@ -59,7 +60,7 @@ struct Node {
 
 impl Node {
     async fn start(name: &str) -> Node {
-        let mut cfg = Config::for_tests(temp_dir(name));
+        let mut cfg = support::config(&temp_dir(name));
         cfg.scan_port = 9;
         let state = breezone_server::init_state(cfg).await.unwrap();
         let port = serve(breezone_server::app(state)).await;

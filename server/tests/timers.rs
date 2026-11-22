@@ -1,6 +1,7 @@
 //! Timers ("dans 2 h, éteindre l'étage") and delayed actions of routines.
 
-use breezone_server::config::Config;
+mod support;
+
 use breezone_server::mock::{self, MockState};
 use reqwest::{Method, StatusCode};
 use serde_json::{json, Value};
@@ -19,7 +20,7 @@ async fn timers_switch_a_group_off_later() {
     let ws = serve(mock::router(maison.clone())).await;
     let dir = std::env::temp_dir().join(format!("breezone-timers-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let state = breezone_server::init_state(Config::for_tests(dir)).await.unwrap();
+    let state = breezone_server::init_state(support::config(&dir)).await.unwrap();
     let port = serve(breezone_server::app(state.clone())).await;
     let base = format!("http://127.0.0.1:{port}");
     let http = reqwest::Client::new();

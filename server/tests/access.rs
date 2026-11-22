@@ -1,6 +1,7 @@
 //! A user (role "user") only sees the installations given to them, read-only or with control.
 
-use breezone_server::config::Config;
+mod support;
+
 use breezone_server::mock::{self, MockState};
 use reqwest::{Method, StatusCode};
 use serde_json::{json, Value};
@@ -44,7 +45,7 @@ fn ids(v: &Value) -> Vec<i64> {
 async fn users_only_see_and_drive_the_installations_given_to_them() {
     let dir = std::env::temp_dir().join(format!("breezone-access-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let mut cfg = Config::for_tests(dir);
+    let mut cfg = support::config(&dir);
     cfg.scan_port = 9;
     let state = breezone_server::init_state(cfg).await.unwrap();
     let base = format!("http://127.0.0.1:{}", serve(breezone_server::app(state)).await);
@@ -146,7 +147,7 @@ async fn users_only_see_and_drive_the_installations_given_to_them() {
 async fn administrators_choose_what_users_may_change_per_installation() {
     let dir = std::env::temp_dir().join(format!("breezone-rights-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let mut cfg = Config::for_tests(dir);
+    let mut cfg = support::config(&dir);
     cfg.scan_port = 9;
     let state = breezone_server::init_state(cfg).await.unwrap();
     let base = format!("http://127.0.0.1:{}", serve(breezone_server::app(state)).await);

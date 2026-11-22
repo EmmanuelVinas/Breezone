@@ -1,6 +1,16 @@
 package com.breezone.app.ui.home
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -48,7 +58,14 @@ import org.jetbrains.compose.resources.stringResource
 import kotlin.math.roundToInt
 
 /** The widgets this version of the app knows; any other shows its field as a value. */
-private val KNOWN = setOf("value", "toggle", "slider", "stepper", "gauge", "enum", "button")
+private val KNOWN = setOf("value", "toggle", "slider", "stepper", "gauge", "enum", "button", "color")
+
+/** The colours offered by the « color » widget (no colour picker in Compose Multiplatform). */
+private val SWATCHES = listOf("#ffffff", "#ffd8a8", "#ffa94d", "#ff6b6b", "#f06595", "#cc5de8", "#5c7cfa", "#22b8cf", "#51cf66", "#fcc419")
+
+/** "#rrggbb" → its colour. */
+private fun hexColor(hex: String): Color? =
+    hex.removePrefix("#").takeIf { it.length == 6 }?.toLongOrNull(16)?.let { Color(0xFF000000 or it) }
 
 private data class Piece(val trait: CatalogTrait, val widget: CatalogWidget, val field: CatalogField?)
 
@@ -79,7 +96,7 @@ private fun fieldText(field: CatalogField, value: JsonElement?): String? {
  */
 @Composable
 fun GenericEntry(d: DeviceView, ctx: HomeContext) {
-    val catalog by produceState<List<CatalogTrait>?>(null, ctx.serverId) { value = ctx.hub.catalog(ctx.serverId) }
+    val catalog by produceState<List<CatalogTrait>?>(null, ctx.serverId, d.traits) { value = ctx.hub.catalog(ctx.serverId, d.traits) }
     val list = catalog.orEmpty()
     val state = d.state ?: JsonObject(emptyMap())
     val primary = d.traits.firstNotNullOfOrNull { id ->
@@ -160,6 +177,23 @@ private fun PieceControl(d: DeviceView, piece: Piece, state: JsonObject, ctx: Ho
             if (shownWhen) {
                 val label = trait.actions.firstOrNull { it.name == w.action }?.label?.text()?.ifEmpty { null } ?: w.action.orEmpty()
                 OutlinedButton(onClick = { ctx.hub.act(ctx.serverId, d, trait.trait, w.action ?: "set", w.params ?: JsonObject(emptyMap())) }, enabled = enabled) { Text(label) }
+            }
+        }
+        "color" -> Column {
+            Text(name, fontSize = 13.sp, color = Fz.colors.muted)
+            val current = (value as? JsonPrimitive)?.contentOrNull?.lowercase()
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SWATCHES.forEach { hex ->
+                    val selected = hex == current
+                    Box(
+                        Modifier.size(28.dp)
+                            .clip(CircleShape)
+                            .background(hexColor(hex) ?: Fz.colors.muted)
+                            .border(if (selected) 3.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else Fz.colors.muted, CircleShape)
+                            .clickable(enabled = enabled) { send(JsonPrimitive(hex)) }
+                            .semantics { contentDescription = hex },
+                    )
+                }
             }
         }
         else -> {

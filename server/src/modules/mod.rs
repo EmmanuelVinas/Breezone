@@ -97,6 +97,28 @@ pub fn logs(id: &str) -> Vec<LogLine> {
     LOGS.lock().unwrap_or_else(|e| e.into_inner()).get(id).map(|l| l.iter().cloned().collect()).unwrap_or_default()
 }
 
+/// The time zone of this server, given to the modules that ask for it (`server.timezone` in their
+/// `fills`), set at start.
+static TIMEZONE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+pub fn set_timezone(tz: &str) {
+    let _ = TIMEZONE.set(tz.to_string());
+}
+
+/// The configuration of a source with what Breezone fills itself at each start (`server.timezone`
+/// of its manifest's `fills`): a source added before the module asked for it gets it too.
+fn filled(m: &Manifest, config: &serde_json::Value) -> serde_json::Value {
+    let mut config = config.clone();
+    if let (Some(o), Some(tz)) = (config.as_object_mut(), TIMEZONE.get()) {
+        for (key, from) in &m.fills {
+            if from == "server.timezone" {
+                o.insert(key.clone(), tz.clone().into());
+            }
+        }
+    }
+    config
+}
+
 /// The driver of a source, run from its installed module's component (loaded and compiled only
 /// now, when a source needs it).
 /// `source_id`: the source it is for (`None` while its configuration is only checked).
@@ -108,7 +130,7 @@ pub async fn open_source(id: &str, source_id: Option<i64>, config: &serde_json::
     #[cfg(feature = "wasm")]
     {
         let dir = installed_dir(id).ok_or_else(|| format!("the {id} module is not installed"))?;
-        let opened = wasm::source(m, &dir, source_id, config, secret).await;
+        let opened = wasm::source(m, &dir, source_id, &filled(m, config), secret).await;
         if let Err(e) = &opened {
             log(id, "error", e.clone());
         }
@@ -130,6 +152,24 @@ pub fn service_providers(contract: &str) -> Vec<&'static Manifest> {
         .filter(|m| m.has(Role::Service) && installed_dir(&m.id).is_some())
         .filter(|m| m.provides.services.iter().any(|s| s.split_once('@').is_some_and(|(n, v)| n == name && major(v) == version)))
         .collect()
+}
+
+/// Asks the module that provides a service the core uses by itself (`internal` in its manifest:
+/// the protocol of the Airzone WebServer) for `query`; its error as it is (unreachable or not).
+pub async fn ask_internal(contract: &str, query: &str, params: &serde_json::Value) -> Result<serde_json::Value, crate::drivers::DriverError> {
+    use crate::drivers::DriverError;
+    let m = service_providers(contract).into_iter().next().ok_or_else(|| DriverError::Unsupported(format!("no module answers {contract}: Breezone's own modules are missing")))?;
+    #[cfg(feature = "wasm")]
+    {
+        let dir = installed_dir(&m.id).ok_or_else(|| DriverError::Unsupported(format!("the {} module is not installed", m.id)))?;
+        let module = wasm::loaded(m, &dir).await.map_err(DriverError::Invalid)?;
+        module.query(contract, query, params).await
+    }
+    #[cfg(not(feature = "wasm"))]
+    {
+        let _ = (query, params);
+        Err(DriverError::Unsupported(format!("the {} module needs the module host, which this build of Breezone lacks", m.id)))
+    }
 }
 
 /// Asks the modules that provide `contract` for `query`, in turn, and gives the first answer
@@ -203,6 +243,7 @@ pub async fn pair(id: &str, step: String, mut input: serde_json::Value) -> Resul
 
 /// A product found by a module: what it said of the hardware (`identify`), or its name only
 /// (`probe`, a module built before `identify`).
+#[cfg_attr(not(feature = "wasm"), allow(dead_code))]
 fn found_product(m: &'static Manifest, host: &str, port: u16, said: &serde_json::Value) -> crate::discovery::Product {
     let text = |k: &str| said[k].as_str().map(str::trim).filter(|v| !v.is_empty()).map(|v| v.chars().take(200).collect::<String>());
     crate::discovery::Product {

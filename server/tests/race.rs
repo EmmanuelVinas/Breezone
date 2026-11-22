@@ -1,7 +1,8 @@
 //! A poll that started before a command must not bring back the previous value (the "setpoint
 //! jumps back, then forward" glitch).
 
-use breezone_server::config::Config;
+mod support;
+
 use breezone_server::mock::{self, MockState};
 use reqwest::StatusCode;
 use serde_json::{json, Value};
@@ -28,7 +29,7 @@ async fn a_poll_in_flight_does_not_undo_a_command() {
 
     let dir = std::env::temp_dir().join(format!("breezone-race-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let app_state = breezone_server::init_state(Config::for_tests(dir)).await.unwrap();
+    let app_state = breezone_server::init_state(support::config(&dir)).await.unwrap();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://127.0.0.1:{}", listener.local_addr().unwrap().port());
     let app = breezone_server::app(app_state);

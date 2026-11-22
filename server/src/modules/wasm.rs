@@ -1424,18 +1424,20 @@ pub fn allow_loopback(allowed: bool) {
     LOOPBACK.store(allowed, std::sync::atomic::Ordering::SeqCst);
 }
 
-/// The modules compiled in this process, by id and version.
-type Loaded = HashMap<(String, String, std::path::PathBuf), Arc<WasmModule>>;
+/// The modules compiled in this process, by id, version, folder and when its component was written.
+type Loaded = HashMap<(String, String, std::path::PathBuf, Option<std::time::SystemTime>), Arc<WasmModule>>;
 static LOADED: std::sync::LazyLock<Mutex<Loaded>> = std::sync::LazyLock::new(Default::default);
 
 /// An installed module, compiled (the first time one of its sources needs it, kept compiled in
 /// `<modules>/cache`), with the permissions of its manifest.
 pub async fn loaded(m: &crate::modules::manifest::Manifest, dir: &Path) -> Result<Arc<WasmModule>, String> {
-    // Its folder too: the same version installed again (a module in development) is another one.
-    let key = (m.id.clone(), m.version.clone(), dir.to_path_buf());
+    // Its folder and its component too: the same version installed again (a module in
+    // development, a package sent again) is another one.
+    let written = std::fs::metadata(dir.join("module.wasm")).and_then(|f| f.modified()).ok();
+    let key = (m.id.clone(), m.version.clone(), dir.to_path_buf(), written);
     let mut loaded = LOADED.lock().await;
-    // Another version than the one loaded: the older is dropped.
-    loaded.retain(|(id, version, folder), _| id != &m.id || (version == &m.version && folder == dir));
+    // Another than the one loaded: the older is dropped.
+    loaded.retain(|(id, version, folder, at), _| id != &m.id || (version == &m.version && folder == dir && *at == written));
     if let Some(module) = loaded.get(&key) {
         return Ok(module.clone());
     }

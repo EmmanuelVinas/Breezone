@@ -1,7 +1,8 @@
 //! Export and import of the configuration: a server restored from its own file keeps its secrets
 //! and history; a new server gets the configuration, never a secret.
 
-use breezone_server::config::Config;
+mod support;
+
 use reqwest::StatusCode;
 use serde_json::{json, Value};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -18,7 +19,7 @@ impl Server {
         static NEXT: AtomicU64 = AtomicU64::new(0);
         let dir = std::env::temp_dir().join(format!("breezone-backup-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::SeqCst)));
         let _ = std::fs::remove_dir_all(&dir);
-        let mut cfg = Config::for_tests(dir);
+        let mut cfg = support::config(&dir);
         cfg.scan_port = 9;
         let state = breezone_server::init_state(cfg).await.unwrap();
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

@@ -22,6 +22,7 @@
   "permissions": { "network": { "lan": true, "hosts": [], "udp_broadcast": false, "mdns": ["_shelly._tcp"] }, "memory_mb": 16 },
   "read_every_s": 5,
   "cloud": false,
+  "internal": false,
   "oauth": null,
   "optional_calls": ["probe", "listen", "diagnostic"]
 }

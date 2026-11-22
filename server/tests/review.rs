@@ -1,6 +1,7 @@
 //! Regression tests for the code review of 2026-11-06: races on accounts and input checks.
 
-use breezone_server::config::Config;
+mod support;
+
 use reqwest::StatusCode;
 use serde_json::{json, Value};
 
@@ -9,7 +10,7 @@ async fn start(name: &str) -> String {
     let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     let dir = std::env::temp_dir().join(format!("breezone-review-{name}-{}-{n}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let state = breezone_server::init_state(Config::for_tests(dir)).await.unwrap();
+    let state = breezone_server::init_state(support::config(&dir)).await.unwrap();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
     let app = breezone_server::app(state);

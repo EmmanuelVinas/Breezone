@@ -104,6 +104,12 @@ provided, types, bounds, required fields). `modules/tasmota/src/lib.rs` has exam
   `{"shown": {...}}` with `host::account_update` (the homes of Netatmo, the devices of EZVIZ);
   it is shown with the account, never as part of its secret. A field of its form may also be kept
   as written (a meter number without the spaces typed: `modules/linky/`).
+- A service the core uses by itself sets `"internal": true` in its manifest: never switched off,
+  not listed in Settings › Accounts and services. `modules/airzone_local/` is one: the core keeps
+  the installations and zones of Airzone, the module speaks to the WebServers
+  (`airzone.webserver@1`, a document passed as it is: the type `json` of a contract).
+- The configuration of a source gets what its manifest's `fills` ask (`server.timezone`) at each
+  start, also for a source that came with its account.
 - A call computes for 10 s at most; the time it waits in the host (the network, `host::wait`)
   is not counted, so that a slow device (a key checked in 12 s) is not cut.
 - Versions of the interface: `driver` and `service` stay as in 1.0, so that a module built

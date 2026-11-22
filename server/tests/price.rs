@@ -1,7 +1,8 @@
 //! The price of electricity: the contract and the tariffs administrators set, the price everyone
 //! reads.
 
-use breezone_server::config::Config;
+mod support;
+
 use breezone_server::mock::{self, MockState};
 use reqwest::{Method, StatusCode};
 use serde_json::{json, Value};
@@ -57,7 +58,7 @@ fn flat(price: f64) -> Value {
 async fn administrators_set_the_prices_everyone_reads() {
     let dir = std::env::temp_dir().join(format!("breezone-price-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let mut cfg = Config::for_tests(dir);
+    let mut cfg = support::config(&dir);
     cfg.scan_port = 9;
     let state = breezone_server::init_state(cfg).await.unwrap();
     let base = format!("http://127.0.0.1:{}", serve(breezone_server::app(state)).await);
@@ -131,7 +132,7 @@ async fn a_regulated_offer_takes_the_prices_of_the_cre() {
     let cre_port = serve(cre).await;
     let dir = std::env::temp_dir().join(format!("breezone-cre-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let mut cfg = Config::for_tests(dir);
+    let mut cfg = support::config(&dir);
     cfg.scan_port = 9;
     cfg.cre_url = Some(format!("http://127.0.0.1:{cre_port}"));
     let state = breezone_server::init_state(cfg).await.unwrap();
@@ -161,7 +162,7 @@ async fn a_regulated_offer_takes_the_prices_of_the_cre() {
 async fn without_internet_a_regulated_offer_is_refused() {
     let dir = std::env::temp_dir().join(format!("breezone-cre-off-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let mut cfg = Config::for_tests(dir);
+    let mut cfg = support::config(&dir);
     cfg.scan_port = 9;
     let state = breezone_server::init_state(cfg).await.unwrap();
     let base = format!("http://127.0.0.1:{}", serve(breezone_server::app(state)).await);

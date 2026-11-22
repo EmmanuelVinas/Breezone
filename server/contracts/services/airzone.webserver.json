@@ -1,0 +1,44 @@
+{
+  "service": "airzone.webserver",
+  "version": 1,
+  "revision": 0,
+  "label": { "fr": "WebServer Airzone (API locale)", "en": "Airzone WebServer (local API)", "es": "WebServer Airzone (API local)" },
+  "queries": [
+    {
+      "name": "read",
+      "label": { "fr": "Lire toutes les zones", "en": "Read every zone", "es": "Leer todas las zonas" },
+      "params": [
+        { "name": "host", "type": "string", "label": { "fr": "Adresse", "en": "Address", "es": "Dirección" } },
+        { "name": "port", "type": "integer", "min": 1, "max": 65535, "label": { "fr": "Port", "en": "Port", "es": "Puerto" } }
+      ],
+      "result": [
+        { "name": "answer", "type": "json", "label": { "fr": "Réponse du WebServer", "en": "Answer of the WebServer", "es": "Respuesta del WebServer" } }
+      ]
+    },
+    {
+      "name": "write",
+      "label": { "fr": "Régler une zone", "en": "Set a zone", "es": "Ajustar una zona" },
+      "params": [
+        { "name": "host", "type": "string", "label": { "fr": "Adresse", "en": "Address", "es": "Dirección" } },
+        { "name": "port", "type": "integer", "min": 1, "max": 65535, "label": { "fr": "Port", "en": "Port", "es": "Puerto" } },
+        { "name": "system_id", "type": "integer", "label": { "fr": "Système", "en": "System", "es": "Sistema" } },
+        { "name": "zone_id", "type": "integer", "label": { "fr": "Zone", "en": "Zone", "es": "Zona" } },
+        { "name": "params", "type": "json", "label": { "fr": "Réglages", "en": "Settings", "es": "Ajustes" } }
+      ],
+      "result": [
+        { "name": "answer", "type": "json", "label": { "fr": "Réponse du WebServer", "en": "Answer of the WebServer", "es": "Respuesta del WebServer" } }
+      ]
+    },
+    {
+      "name": "info",
+      "label": { "fr": "Informations du WebServer", "en": "Information of the WebServer", "es": "Información del WebServer" },
+      "params": [
+        { "name": "host", "type": "string", "label": { "fr": "Adresse", "en": "Address", "es": "Dirección" } },
+        { "name": "port", "type": "integer", "min": 1, "max": 65535, "label": { "fr": "Port", "en": "Port", "es": "Puerto" } }
+      ],
+      "result": [
+        { "name": "answer", "type": "json", "label": { "fr": "Réponse du WebServer", "en": "Answer of the WebServer", "es": "Respuesta del WebServer" } }
+      ]
+    }
+  ]
+}

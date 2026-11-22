@@ -383,12 +383,19 @@ fn state_of(cam: &Cam, last: Option<&Event>, now: i64) -> State {
     out
 }
 
+/// The day of `ts` as the account sees it ("20261123"), in the server's time zone.
+fn day_of(ts: i64, tz: chrono_tz::Tz) -> String {
+    chrono::DateTime::from_timestamp(ts, 0).map(|t| t.with_timezone(&tz).format("%Y%m%d").to_string()).unwrap_or_default()
+}
+
 pub struct Ezviz {
     cams: RefCell<(Vec<Cam>, Option<i64>)>,
     /// The last event of each device.
     last: RefCell<HashMap<String, Event>>,
     /// The newest ring seen of each doorbell (none yet: the first reading only notes it).
     rung: RefCell<Option<HashMap<String, i64>>>,
+    /// The server's time zone: EZVIZ lists the messages of a day as its account sees it.
+    tz: chrono_tz::Tz,
 }
 
 impl Ezviz {
@@ -412,7 +419,7 @@ impl Ezviz {
             return Ok(());
         }
         let serials = cams.iter().map(|c| c.serial.as_str()).collect::<Vec<_>>().join(",");
-        let today = chrono::DateTime::from_timestamp(host::now(), 0).map(|t| t.format("%Y%m%d").to_string()).unwrap_or_default();
+        let today = day_of(host::now(), self.tz);
         let body = get(&format!("/v3/unifiedmsg/list?serials={serials}&stype={MESSAGE_TYPES}&limit=20&date={today}&endTime="))?;
         let messages = body["message"].as_array().or_else(|| body["messages"].as_array()).cloned().unwrap_or_default();
         let mut events: Vec<(String, Event)> = messages.iter().filter_map(event_of).collect();
@@ -437,8 +444,9 @@ impl Ezviz {
 }
 
 impl Driver for Ezviz {
-    fn open(_config: Value, _secret: Option<Value>) -> Result<Self> {
-        Ok(Self { cams: RefCell::new((vec![], None)), last: RefCell::new(HashMap::new()), rung: RefCell::new(None) })
+    fn open(config: Value, _secret: Option<Value>) -> Result<Self> {
+        let tz = config["timezone"].as_str().and_then(|t| t.parse().ok()).unwrap_or(chrono_tz::Europe::Paris);
+        Ok(Self { cams: RefCell::new((vec![], None)), last: RefCell::new(HashMap::new()), rung: RefCell::new(None), tz })
     }
 
     fn describe(&self) -> Result<Described> {
@@ -526,6 +534,14 @@ mod tests {
     use breezone_module_sdk::testing;
 
     const MANIFEST: &str = include_str!("../manifest.json");
+
+    /// Just after midnight in France, it is still the day before in UTC: the day of the server.
+    #[test]
+    fn the_messages_of_the_day_of_the_server() {
+        let ts = 1_795_390_200; // 2026-11-22 23:30 UTC
+        assert_eq!(day_of(ts, chrono_tz::Europe::Paris), "20261123");
+        assert_eq!(day_of(ts, chrono_tz::UTC), "20261122");
+    }
 
     #[test]
     fn a_region_is_an_address() {

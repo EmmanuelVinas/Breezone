@@ -1,7 +1,8 @@
 //! Airzone Cloud synchronisation: automatic creation of installations found on the LAN,
 //! groups import, installations on other sites, non-destructive daily sync.
 
-use breezone_server::config::Config;
+mod support;
+
 use breezone_server::mock;
 use reqwest::StatusCode;
 use serde_json::{json, Value};
@@ -45,7 +46,7 @@ async fn cloud_sync_creates_installations_and_groups() {
 
     let dir = std::env::temp_dir().join(format!("breezone-cloud-test-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let mut cfg = Config::for_tests(dir);
+    let mut cfg = support::config(&dir);
     cfg.airzone_cloud_url = format!("http://127.0.0.1:{cloud_port}");
     cfg.scan_subnet = Some("127.0.0.0/30".into());
     cfg.scan_port = airzone_port;
@@ -144,7 +145,7 @@ async fn airzone_schedules_are_mirrored_and_edited_on_airzone_cloud() {
     let cloud_port = serve(mock::cloud_router(mock::cloud_account("A8:03:2A:00:FE:ED"))).await;
     let dir = std::env::temp_dir().join(format!("breezone-sched-test-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let mut cfg = Config::for_tests(dir);
+    let mut cfg = support::config(&dir);
     cfg.airzone_cloud_url = format!("http://127.0.0.1:{cloud_port}");
     cfg.scan_port = airzone_port;
     let state = breezone_server::init_state(cfg).await.unwrap();

@@ -52,6 +52,10 @@ pub struct Manifest {
     /// Reaches the hardware through its maker's cloud (its devices may be the twins of local ones).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub cloud: bool,
+    /// A service the core uses by itself (the protocol of the Airzone WebServer): never switched
+    /// off, not listed in Settings › Accounts and services.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub internal: bool,
     /// The calls of the interface it answers beyond the required ones.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub optional_calls: Vec<String>,

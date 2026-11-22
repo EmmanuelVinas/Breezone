@@ -1,6 +1,8 @@
 //! Federation between two Breezone nodes (ADR 0008), and linking installations added by hand
 //! to the Airzone account.
 
+mod support;
+
 use breezone_server::config::Config;
 use breezone_server::mock::{self, MockState};
 use reqwest::{Method, StatusCode};
@@ -32,7 +34,7 @@ struct Node {
 impl Node {
     /// A Breezone server with its administrator.
     async fn start(name: &str, configure: impl FnOnce(&mut Config)) -> Node {
-        let mut cfg = Config::for_tests(temp_dir(name));
+        let mut cfg = support::config(&temp_dir(name));
         configure(&mut cfg);
         let state = breezone_server::init_state(cfg).await.unwrap();
         let port = serve(breezone_server::app(state.clone())).await;

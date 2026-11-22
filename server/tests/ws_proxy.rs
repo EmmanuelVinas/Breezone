@@ -1,13 +1,14 @@
 //! A reverse proxy that drops the WebSocket headers is explained, not silent.
 
-use breezone_server::config::Config;
+mod support;
+
 use serde_json::{json, Value};
 
 #[tokio::test]
 async fn a_websocket_request_without_its_headers_is_explained() {
     let dir = std::env::temp_dir().join(format!("breezone-wsproxy-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let state = breezone_server::init_state(Config::for_tests(dir)).await.unwrap();
+    let state = breezone_server::init_state(support::config(&dir)).await.unwrap();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://{}", listener.local_addr().unwrap());
     tokio::spawn(async move { axum::serve(listener, breezone_server::app(state).into_make_service_with_connect_info::<std::net::SocketAddr>()).await.unwrap() });

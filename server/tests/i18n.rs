@@ -1,6 +1,7 @@
 //! Messages follow the language of the request; the profile remembers the user's choice.
 
-use breezone_server::config::Config;
+mod support;
+
 use reqwest::StatusCode;
 use serde_json::{json, Value};
 
@@ -15,7 +16,7 @@ async fn serve(router: axum::Router) -> u16 {
 async fn messages_follow_the_request_language() {
     let dir = std::env::temp_dir().join(format!("breezone-i18n-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let state = breezone_server::init_state(Config::for_tests(dir)).await.unwrap();
+    let state = breezone_server::init_state(support::config(&dir)).await.unwrap();
     let base = format!("http://127.0.0.1:{}", serve(breezone_server::app(state)).await);
     let http = reqwest::Client::new();
     let v: Value = http.post(format!("{base}/api/setup")).json(&json!({"username":"admin","password":"motdepasse1"})).send().await.unwrap().json().await.unwrap();

@@ -27,7 +27,9 @@ use crate::modules::manifest::Role;
 /// The kinds of accounts, in the order of Settings › Accounts: the Airzone Cloud account, then the
 /// modules that are an account or a service.
 pub fn kinds() -> Vec<&'static str> {
-    std::iter::once(crate::cloud::ACCOUNT).chain(crate::modules::manifests().filter(|m| m.has(Role::Account) || m.has(Role::Service)).map(|m| m.id.as_str())).collect()
+    std::iter::once(crate::cloud::ACCOUNT)
+        .chain(crate::modules::manifests().filter(|m| (m.has(Role::Account) || m.has(Role::Service)) && !m.internal).map(|m| m.id.as_str()))
+        .collect()
 }
 
 pub fn is_kind(kind: &str) -> bool {

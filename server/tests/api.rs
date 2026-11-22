@@ -1,6 +1,7 @@
 //! End-to-end test: a real Breezone server talking to the fake Airzone WebServer.
 
-use breezone_server::config::Config;
+mod support;
+
 use breezone_server::mock::{self, MockState};
 use futures_util::{SinkExt, StreamExt};
 use reqwest::StatusCode;
@@ -37,7 +38,7 @@ async fn start() -> Env {
 
     // Breezone server with a throw-away data directory.
     let dir = std::env::temp_dir().join(format!("breezone-test-{}-{}", std::process::id(), rand_suffix()));
-    let state = breezone_server::init_state(Config::for_tests(dir)).await.unwrap();
+    let state = breezone_server::init_state(support::config(&dir)).await.unwrap();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
     let app = breezone_server::app(state);

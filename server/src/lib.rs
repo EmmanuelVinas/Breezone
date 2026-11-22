@@ -88,6 +88,7 @@ pub struct AppState {
 /// environment and loads the hub.
 pub async fn init_state(cfg: Config) -> anyhow::Result<AppState> {
     let cfg = Arc::new(cfg);
+    modules::set_timezone(cfg.timezone.name());
     migrate_legacy_database(&cfg.data_dir);
     let db = db::connect(&cfg.data_dir.join("breezone.db")).await?;
     // The drivers once compiled into the server are modules now: their rows go.

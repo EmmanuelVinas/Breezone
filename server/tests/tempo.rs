@@ -1,9 +1,10 @@
 //! The colour of the Tempo days: read from the relay when a tariff follows it, then used by the
 //! price of the day.
 
+mod support;
+
 use axum::routing::get;
 use axum::Json;
-use breezone_server::config::Config;
 use breezone_server::mock::{self, MockState};
 use serde_json::{json, Value};
 use std::sync::{Arc, Mutex};
@@ -33,7 +34,7 @@ async fn a_red_day_is_priced_as_red() {
 
     let dir = std::env::temp_dir().join(format!("breezone-tempo-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let mut cfg = Config::for_tests(dir);
+    let mut cfg = support::config(&dir);
     cfg.scan_port = 9;
     cfg.tempo_url = Some(format!("http://127.0.0.1:{relay_port}"));
     let state = breezone_server::init_state(cfg).await.unwrap();
