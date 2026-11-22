@@ -73,10 +73,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "breezone-module-hue"
+version = "1.0.0"
+dependencies = [
+ "breezone-module-sdk",
+]
+
+[[package]]
 name = "breezone-module-misbehave"
 version = "0.0.0"
 dependencies = [
  "wit-bindgen",
+]
+
+[[package]]
+name = "breezone-module-renson"
+version = "1.0.0"
+dependencies = [
+ "breezone-module-sdk",
 ]
 
 [[package]]

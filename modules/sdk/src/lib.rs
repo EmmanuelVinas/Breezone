@@ -32,7 +32,7 @@ pub mod bindings {
     });
 }
 
-pub use bindings::breezone::module::types::{Curve, Described, DeviceInfo, Error, HardwareRoom, Header, LengthPrefix, Picture, ReadUntil, Scene};
+pub use bindings::breezone::module::types::{Curve, Described, DeviceInfo, Error, HardwareRoom, Header, LengthPrefix, Paired, PairedSource, Picture, ReadUntil, Scene};
 pub use serde_json;
 pub use serde_json::{json, Map, Value};
 
@@ -94,6 +94,12 @@ pub trait Driver: Sized + 'static {
     fn probe(_host: &str) -> Option<String> {
         None
     }
+    /// A step of the appairage (`pairing` of the manifest: `button` has the step `link`, `code`
+    /// has `start`, `finish` and `cancel`); `input` has the address (`host`) of the hardware and
+    /// the user's language (`lang`: "fr", "en", "es").
+    fn pair(_step: &str, _input: Value) -> Result<Paired> {
+        unsupported("pair")
+    }
 }
 
 /// A [`Driver`] as the interface wants it (made by [`module!`]).
@@ -105,7 +111,8 @@ fn parsed(json: &str) -> Result<Value> {
 
 impl<T: Driver> bindings::exports::breezone::module::driver::GuestSource for Adapter<T> {
     fn open(config: String, secret: Option<String>) -> Result<bindings::exports::breezone::module::driver::Source> {
-        let secret = secret.map(|s| parsed(&s)).transpose()?;
+        // A secret that is not JSON (a key on its own) comes as a string.
+        let secret = secret.map(|s| serde_json::from_str(&s).unwrap_or(Value::String(s)));
         Ok(bindings::exports::breezone::module::driver::Source::new(Adapter(T::open(parsed(&config)?, secret)?)))
     }
 
@@ -174,6 +181,11 @@ macro_rules! module {
             fn probe(host: String) -> Option<String> {
                 <$driver as $crate::Driver>::probe(&host)
             }
+
+            fn pair(step: String, input: String) -> $crate::Result<$crate::Paired> {
+                let input = $crate::serde_json::from_str(&input).map_err(|e| $crate::Error::Invalid(e.to_string()))?;
+                <$driver as $crate::Driver>::pair(&step, input)
+            }
         }
 
         // Only a WebAssembly component has these exports; a native build (the tests) has none.
@@ -239,7 +251,7 @@ pub mod host {
         Ok((a.status, a.json()?))
     }
 
-    /// A WebSocket (`ws://`) or TCP stream (`tcp://host:port`) kept open by Breezone: each message
+    /// A WebSocket (`ws://`, `wss://`: a device of the local network may have its own certificate) or TCP stream (`tcp://host:port`) kept open by Breezone: each message
     /// comes to [`super::Driver::on_message`] with the number returned.
     pub fn subscribe(url: &str) -> Result<u32> {
         imp::subscribe(url).map_err(Error::Unreachable)

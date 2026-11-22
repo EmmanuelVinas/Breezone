@@ -100,6 +100,24 @@ interface types {
         media-type: string,
     }
 
+    /// A source made by an appairage: its configuration, its secret, a name for it.
+    record paired-source {
+        config: json,
+        secret: string,
+        name: string,
+    }
+
+    /// Where an appairage is.
+    variant paired {
+        /// Waiting for the next step (the code the hardware shows…).
+        next,
+        /// Something to do on the hardware first (press its button), then the same step again:
+        /// what to tell the user.
+        waiting(string),
+        /// Done: the source to add.
+        done(paired-source),
+    }
+
     /// A curve a device forecasts: (unix time, value), in time order.
     record curve {
         name: string,
@@ -159,7 +177,7 @@ interface host {
 }
 
 interface driver {
-    use types.{json, error, described, hardware-room, scene, picture, curve};
+    use types.{json, error, described, hardware-room, scene, picture, curve, paired};
 
     /// One configured piece of hardware.
     resource source {
@@ -188,6 +206,12 @@ interface driver {
 
     /// Whether this address is hardware of this module, and its name (discovery).
     probe: func(host: string) -> option<string>;
+
+    /// A step of the appairage (`pairing` of the manifest other than `form`): `button` has one
+    /// step, `link`; `code` has `start`, `finish` (with `code`) and `cancel`. `input` has the
+    /// address (`host`) of the hardware found and the user's language (`lang`: "fr", "en", "es"). Each step runs in an instance of its own: what a
+    /// step keeps for the next goes in the store.
+    pair: func(step: string, input: json) -> result<paired, error>;
 }
 
 world module {

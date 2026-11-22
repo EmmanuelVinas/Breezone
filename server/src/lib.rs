@@ -31,6 +31,7 @@ pub mod hub;
 pub mod i18n;
 pub mod incidents;
 pub mod matter;
+pub mod mdns;
 pub mod mock;
 pub mod mock_devices;
 pub mod modules;

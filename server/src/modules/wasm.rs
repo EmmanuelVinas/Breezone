@@ -277,49 +277,29 @@ impl breezone::module::host::Host for HostState {
     }
 }
 
-/// Opens a subscription (`ws://` or `tcp://`) to an allowed address, and the task that hands its
+/// Opens a subscription (`ws://`, `wss://` or `tcp://`) to an allowed address, and the task that hands its
 /// messages to `messages` and writes what is sent on it.
 async fn subscribe(permissions: &Permissions, url: &str, id: u32, messages: tokio::sync::mpsc::UnboundedSender<(u32, Vec<u8>)>) -> Result<Subscription, String> {
-    use futures_util::{SinkExt, StreamExt};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    use tokio_tungstenite::tungstenite::Message;
     let parsed = reqwest::Url::parse(url).map_err(|e| e.to_string())?;
     let addrs = permissions.resolve(&parsed).await?;
     let connect = tokio::time::timeout(Duration::from_secs(10), tokio::net::TcpStream::connect(&addrs[..]));
     let (out, mut outgoing) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
     let task = match parsed.scheme() {
-        "ws" => {
+        scheme @ ("ws" | "wss") => {
             let tcp = connect.await.map_err(|_| "no answer".to_string())?.map_err(|e| e.to_string())?;
-            let (ws, _) = tokio_tungstenite::client_async(url, tcp).await.map_err(|e| e.to_string())?;
-            let (mut write, mut read) = ws.split();
-            tokio::spawn(async move {
-                loop {
-                    tokio::select! {
-                        incoming = read.next() => match incoming {
-                            Some(Ok(m @ (Message::Text(_) | Message::Binary(_)))) => {
-                                let data = m.into_data();
-                                if data.len() <= MAX_MESSAGE && messages.send((id, data.to_vec())).is_err() {
-                                    break;
-                                }
-                            }
-                            Some(Ok(Message::Close(_))) | Some(Err(_)) | None => break,
-                            Some(Ok(_)) => {}
-                        },
-                        sent = outgoing.recv() => match sent {
-                            Some(data) => {
-                                let m = match String::from_utf8(data) {
-                                    Ok(text) => Message::Text(text.into()),
-                                    Err(e) => Message::Binary(e.into_bytes().into()),
-                                };
-                                if write.send(m).await.is_err() {
-                                    break;
-                                }
-                            }
-                            None => break,
-                        },
-                    }
-                }
-            })
+            if scheme == "wss" {
+                // A device on the local network has its own certificate; a service, a real one.
+                let device = addrs.iter().all(|a| local(a.ip()));
+                let config = crate::tls::client_config(device).ok_or("no TLS")?;
+                let name = rustls::pki_types::ServerName::try_from(parsed.host_str().unwrap_or_default().to_string()).map_err(|e| e.to_string())?;
+                let tls = tokio_rustls::TlsConnector::from(Arc::new(config)).connect(name, tcp).await.map_err(|e| e.to_string())?;
+                let (ws, _) = tokio_tungstenite::client_async(url, tls).await.map_err(|e| e.to_string())?;
+                websocket(ws, id, messages, outgoing)
+            } else {
+                let (ws, _) = tokio_tungstenite::client_async(url, tcp).await.map_err(|e| e.to_string())?;
+                websocket(ws, id, messages, outgoing)
+            }
         }
         "tcp" => {
             let tcp = connect.await.map_err(|_| "no answer".to_string())?.map_err(|e| e.to_string())?;
@@ -348,9 +328,53 @@ async fn subscribe(permissions: &Permissions, url: &str, id: u32, messages: toki
                 }
             })
         }
-        other => return Err(format!("{other}: only ws:// and tcp://")),
+        other => return Err(format!("{other}: only ws://, wss:// and tcp://")),
     };
     Ok(Subscription { out, task: task.abort_handle() })
+}
+
+/// The task of a WebSocket subscription: hands its text and binary frames to `messages`, sends
+/// what comes on `outgoing` (text when it is UTF-8).
+fn websocket<S>(
+    ws: tokio_tungstenite::WebSocketStream<S>,
+    id: u32,
+    messages: tokio::sync::mpsc::UnboundedSender<(u32, Vec<u8>)>,
+    mut outgoing: tokio::sync::mpsc::UnboundedReceiver<Vec<u8>>,
+) -> tokio::task::JoinHandle<()>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+{
+    use futures_util::{SinkExt, StreamExt};
+    use tokio_tungstenite::tungstenite::Message;
+    let (mut write, mut read) = ws.split();
+    tokio::spawn(async move {
+        loop {
+            tokio::select! {
+                incoming = read.next() => match incoming {
+                    Some(Ok(m @ (Message::Text(_) | Message::Binary(_)))) => {
+                        let data = m.into_data();
+                        if data.len() <= MAX_MESSAGE && messages.send((id, data.to_vec())).is_err() {
+                            break;
+                        }
+                    }
+                    Some(Ok(Message::Close(_))) | Some(Err(_)) | None => break,
+                    Some(Ok(_)) => {}
+                },
+                sent = outgoing.recv() => match sent {
+                    Some(data) => {
+                        let m = match String::from_utf8(data) {
+                            Ok(text) => Message::Text(text.into()),
+                            Err(e) => Message::Binary(e.into_bytes().into()),
+                        };
+                        if write.send(m).await.is_err() {
+                            break;
+                        }
+                    }
+                    None => break,
+                },
+            }
+        }
+    })
 }
 
 /// An address of the local network (or the machine itself).
@@ -561,6 +585,26 @@ impl WasmModule {
         let (ctx, _) = self.context(None);
         let (mut store, module) = self.instantiate(ctx).await.ok()?;
         tokio::time::timeout(CALL_TIMEOUT, module.breezone_module_driver().call_probe(&mut store, host)).await.ok()?.ok()?
+    }
+
+    /// A step of the appairage, in an instance of its own.
+    pub async fn pair(&self, step: &str, input: &serde_json::Value) -> Result<crate::modules::native::Paired, DriverError> {
+        use crate::modules::native::Paired;
+        use breezone::module::types::Paired as P;
+        let (ctx, _) = self.context(None);
+        let (mut store, module) = self.instantiate(ctx).await?;
+        let answer = tokio::time::timeout(CALL_TIMEOUT, module.breezone_module_driver().call_pair(&mut store, step, &input.to_string()))
+            .await
+            .map_err(|_| DriverError::Unreachable(format!("{}: no answer", self.id)))?
+            .map_err(|e| DriverError::Invalid(format!("{}: {e}", self.id)))?;
+        match answer.map_err(from_wit)? {
+            P::Next => Ok(Paired::Next),
+            P::Waiting(message) => Ok(Paired::Waiting(message)),
+            P::Done(s) => {
+                let config = serde_json::from_str(&s.config).map_err(|e| DriverError::Invalid(format!("{}: {e}", self.id)))?;
+                Ok(Paired::Done { config, secret: s.secret, name: s.name.chars().take(60).collect() })
+            }
+        }
     }
 
     /// A source of this module (`source_id`: the one it is for, `None` while its configuration is
@@ -798,7 +842,7 @@ static LOADED: std::sync::LazyLock<Mutex<Loaded>> = std::sync::LazyLock::new(Def
 
 /// An installed module, compiled (the first time one of its sources needs it, kept compiled in
 /// `<modules>/cache`), with the permissions of its manifest.
-async fn loaded(m: &crate::modules::manifest::Manifest, dir: &Path) -> Result<Arc<WasmModule>, String> {
+pub async fn loaded(m: &crate::modules::manifest::Manifest, dir: &Path) -> Result<Arc<WasmModule>, String> {
     let key = (m.id.clone(), m.version.clone());
     let mut loaded = LOADED.lock().await;
     // Another version than the one loaded: the older is dropped.

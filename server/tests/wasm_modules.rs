@@ -342,6 +342,66 @@ async fn subscriptions_store_and_accounts() {
     assert!(matches!(curious.read().await, Err(DriverError::Unsupported(e)) if e.contains("not an account this module requires")));
 }
 
+/// A WebSocket in TLS (`wss://`): a device of the local network with its own certificate is
+/// heard; the usual checks, for a service on the Internet, refuse that certificate.
+#[tokio::test]
+async fn a_secure_websocket_is_heard() {
+    use breezone_server::drivers::{Heard, Sink};
+    use futures_util::SinkExt;
+    let _serial = SERIAL.lock().await;
+    let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
+    let key = rustls::pki_types::PrivateKeyDer::Pkcs8(cert.signing_key.serialize_der().into());
+    let config = rustls::ServerConfig::builder_with_provider(Arc::new(rustls::crypto::ring::default_provider()))
+        .with_safe_default_protocol_versions()
+        .unwrap()
+        .with_no_client_auth()
+        .with_single_cert(vec![cert.cert.der().clone()], key)
+        .unwrap();
+    let acceptor = tokio_rustls::TlsAcceptor::from(Arc::new(config));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        while let Ok((tcp, _)) = listener.accept().await {
+            let acceptor = acceptor.clone();
+            tokio::spawn(async move {
+                let Ok(tls) = acceptor.accept(tcp).await else { return };
+                let mut ws = tokio_tungstenite::accept_async(tls).await.unwrap();
+                ws.send(tokio_tungstenite::tungstenite::Message::Text("hello".into())).await.unwrap();
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            });
+        }
+    });
+    let module = Arc::new(WasmModule::load("misbehave", &wasm("misbehave"), local(), None).unwrap());
+    let source = module.open(Some(8), &json!(format!("sub:wss://localhost:{port}/rpc")), None).await.unwrap();
+    let (tx, mut heard) = tokio::sync::mpsc::unbounded_channel();
+    source.listen(Sink::new(8, tx));
+    loop {
+        let h = tokio::time::timeout(std::time::Duration::from_secs(10), heard.recv()).await.expect("the module heard nothing").unwrap();
+        if h == Heard::Changed(8) {
+            break;
+        }
+    }
+    assert_eq!(source.read().await.unwrap()["sub"]["last"], "hello");
+    // The usual checks (a service on the Internet) refuse that certificate.
+    let usual = tokio_rustls::TlsConnector::from(Arc::new(breezone_server::tls::client_config(false).unwrap()));
+    let tcp = tokio::net::TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+    assert!(usual.connect(rustls::pki_types::ServerName::try_from("localhost").unwrap(), tcp).await.is_err());
+}
+
+/// The appairage of a module (`pair`): waiting for its button, then the source to add.
+#[tokio::test]
+async fn a_module_pairs() {
+    use breezone_server::modules::native::Paired;
+    let _serial = SERIAL.lock().await;
+    let module = Arc::new(WasmModule::load("misbehave", &wasm("misbehave"), local(), None).unwrap());
+    assert!(matches!(module.pair("link", &json!({"host": "192.168.1.9"})).await, Ok(Paired::Waiting(m)) if m == "press the button"));
+    match module.pair("link", &json!({"host": "192.168.1.9", "pressed": true})).await {
+        Ok(Paired::Done { config, secret, name }) => assert_eq!((config, secret.as_str(), name.as_str()), (json!("store"), "key", "Misbehave")),
+        other => panic!("{other:?}"),
+    }
+    assert!(matches!(module.pair("finish", &json!({})).await, Err(DriverError::Unsupported(_))));
+}
+
 /// A module that comes with Breezone (lot L6): beside its web UI, unsigned (the image or the signed
 /// archive vouches for it), it replaces the driver compiled in with the same id; removed, the
 /// driver compiled in drives the same sources again.
@@ -517,6 +577,8 @@ async fn the_shipped_modules_load() {
         ("reolink", json!({"host": "192.168.1.50"})),
         ("hoymiles", json!({"host": "192.168.1.60"})),
         ("tplink", json!({"host": "192.168.1.31"})),
+        ("hue", json!({"host": "192.168.1.20", "device_id": "001788FFFE6DBD26"})),
+        ("renson", json!({"host": "192.168.1.70"})),
         ("forecast_solar", json!({"kwp": 4.5, "declination": 30, "azimuth": 0, "latitude": 43.5, "longitude": 1.5, "timezone": "Europe/Paris"})),
     ];
     let host = breezone_server::capabilities::Host::local();
@@ -528,7 +590,9 @@ async fn the_shipped_modules_load() {
         let native = breezone_server::modules::native::get(id).unwrap_or_else(|| panic!("{id} replaces a driver compiled in"));
         assert_eq!(manifest.provides.traits, native.manifest.provides.traits, "{id}: the same traits as the driver it replaces");
         let module = Arc::new(WasmModule::load(id, &wasm(id), local(), None).unwrap_or_else(|e| panic!("{id}: {e}")));
-        module.open(None, &config, None).await.unwrap_or_else(|e| panic!("{id}: {e}"));
+        // A Hue bridge is opened with the key it gave (a plain string).
+        let secret = (id == "hue").then_some("key-1");
+        module.open(None, &config, secret).await.unwrap_or_else(|e| panic!("{id}: {e}"));
     }
 }
 

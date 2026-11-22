@@ -467,6 +467,7 @@ dependencies = [
  "tracing-subscriber",
  "wasmtime",
  "wasmtime-wasi",
+ "webpki-roots",
  "x25519-dalek",
  "x509-parser",
 ]

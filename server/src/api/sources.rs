@@ -211,13 +211,15 @@ pub struct PairingInput {
 /// source added (`201`) once done.
 pub async fn pairing(State(state): State<AppState>, _admin: AdminUser, Path(module): Path<String>, Json(input): Json<PairingInput>) -> ApiResult<axum::response::Response> {
     use axum::response::IntoResponse;
-    let native = crate::modules::native::get(&module).ok_or_else(|| ApiError::not_found("unknown module"))?;
-    let pair = native.pair.ok_or_else(|| ApiError::bad_request("this module is added with its form"))?;
-    let crate::modules::native::Paired::Done { config, secret, name: default } = pair(input.step, input.input).await? else { return Ok(StatusCode::NO_CONTENT.into_response()) };
+    let (config, secret, default) = match crate::modules::pair(&module, input.step, input.input).await? {
+        crate::modules::native::Paired::Done { config, secret, name } => (config, secret, name),
+        crate::modules::native::Paired::Waiting(message) => return Err(ApiError::new(StatusCode::CONFLICT, message).with_detail("code", "button")),
+        crate::modules::native::Paired::Next => return Ok(StatusCode::NO_CONTENT.into_response()),
+    };
     let name: String = input.name.trim().chars().take(60).collect();
     let encrypted = crate::crypto::encrypt(&state.data_key, &secret);
     let stored = async {
-        let id = db::insert_source(&state.db, &module, if name.is_empty() { default } else { &name }, &config.to_string()).await?;
+        let id = db::insert_source(&state.db, &module, if name.is_empty() { &default } else { &name }, &config.to_string()).await?;
         db::set_source_secret(&state.db, id, Some(&encrypted)).await?;
         Ok::<i64, sqlx::Error>(id)
     }
@@ -226,7 +228,7 @@ pub async fn pairing(State(state): State<AppState>, _admin: AdminUser, Path(modu
         Ok(id) => Ok((StatusCode::CREATED, Json(polled(&state, id).await?)).into_response()),
         Err(e) => {
             // Paired but not kept: the hardware forgets Breezone, to be paired again.
-            if let Some(on_delete) = native.on_delete {
+            if let Some(on_delete) = crate::modules::native::get(&module).and_then(|n| n.on_delete) {
                 on_delete(config, Some(secret)).await;
             }
             Err(e.into())
@@ -271,7 +273,7 @@ pub struct FoundProduct {
 }
 
 /// The modules of the library not installed whose hardware the scan looks for too: those with
-/// devices, HTTP hints, and a version that works here (the index kept for the day, not read again).
+/// devices, HTTP or mDNS hints, and a version that works here (the index kept for the day, not read again).
 async fn candidates(state: &AppState) -> Vec<crate::discovery::Candidate> {
     let Ok(indexes) = state.library.indexes(&state.db, false).await else { return vec![] };
     let host = crate::capabilities::Host::local();
@@ -285,13 +287,14 @@ async fn candidates(state: &AppState) -> Vec<crate::discovery::Candidate> {
             }
             let Some(best) = entry.best(&host, env!("CARGO_PKG_VERSION"), &fits) else { continue };
             let m = &best.manifest;
-            if !m.has(crate::modules::manifest::Role::Driver) || m.discovery.http.is_empty() {
+            if !m.has(crate::modules::manifest::Role::Driver) || (m.discovery.http.is_empty() && m.discovery.mdns.is_empty()) {
                 continue;
             }
             out.push(crate::discovery::Candidate {
                 id: crate::discovery::interned(&m.id),
                 name: m.name.fr.clone(),
                 hints: m.discovery.http.clone(),
+                mdns: m.discovery.mdns.clone(),
                 install: crate::discovery::Install { repository: repo.id, repository_name: repo.name.clone(), official: repo.official, version: m.version.clone() },
             });
         }

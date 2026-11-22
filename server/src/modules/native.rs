@@ -42,11 +42,14 @@ pub enum Create {
 }
 
 /// Where an appairage stands after a step.
+#[derive(Debug)]
 pub enum Paired {
     /// Waiting for the next step (the code shown on the accessory…).
     Next,
+    /// Something to do on the hardware first (press its button), then the same step again.
+    Waiting(String),
     /// Done: the source to add, with its secret and the name to give it if none is given.
-    Done { config: Value, secret: String, name: &'static str },
+    Done { config: Value, secret: String, name: String },
 }
 
 pub type PairStep = fn(String, Value) -> BoxFuture<Result<Paired, ApiError>>;
@@ -314,7 +317,7 @@ async fn pair_hue(step: String, input: Value) -> Result<Paired, ApiError> {
             ApiError::new(StatusCode::BAD_GATEWAY, crate::text!("Le pont Hue ne répond pas : {0}", "The Hue bridge does not answer: {0}", "El puente Hue no responde: {0}", m))
         }
     })?;
-    Ok(Paired::Done { config: serde_json::json!({"host": host, "device_id": bridge.id}), secret: key, name: "Philips Hue" })
+    Ok(Paired::Done { config: serde_json::json!({"host": host, "device_id": bridge.id}), secret: key, name: "Philips Hue".into() })
 }
 
 /// HomeKit pairings started, by accessory address, until their code is typed.
@@ -363,7 +366,7 @@ async fn pair_homekit(step: String, input: Value) -> Result<Paired, ApiError> {
             };
             let pairing = paired.map_err(|e| ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, e.explain()))?;
             let config = serde_json::json!({"host": host, "device_id": pairing.accessory_id});
-            Ok(Paired::Done { config, secret: serde_json::to_string(&pairing).unwrap_or_default(), name: "HomeKit" })
+            Ok(Paired::Done { config, secret: serde_json::to_string(&pairing).unwrap_or_default(), name: "HomeKit".into() })
         }
         other => Err(ApiError::bad_request(format!("unknown step {other}"))),
     }

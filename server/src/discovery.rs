@@ -157,12 +157,14 @@ pub struct Install {
 }
 
 /// A module of the library, not installed, that a product on the network may need: its HTTP hints
-/// (`discovery.http` of its manifest) are tried on the addresses where nothing else answered.
+/// (`discovery.http` of its manifest) are tried on the addresses where nothing else answered, and
+/// the services it announces by mDNS (`discovery.mdns`) are asked for.
 #[derive(Debug, Clone)]
 pub struct Candidate {
     pub id: &'static str,
     pub name: String,
     pub hints: Vec<crate::modules::manifest::HttpHint>,
+    pub mdns: Vec<crate::modules::manifest::MdnsHint>,
     pub install: Install,
 }
 
@@ -206,6 +208,14 @@ pub async fn scan_products(subnet: &str, airzone_port: u16, quiet: &[std::net::I
     let browsed = tokio::spawn({
         let hosts = hosts.clone();
         async move { futures_util::future::join_all(crate::modules::native::all().iter().filter_map(|n| n.browse).map(|browse| browse(hosts.clone()))).await }
+    });
+    // And the services the modules of the library announce.
+    let announced = tokio::spawn({
+        let hosts = hosts.clone();
+        let mut services: Vec<String> = candidates.iter().flat_map(|c| c.mdns.iter().map(|h| h.service.clone())).collect();
+        services.sort();
+        services.dedup();
+        async move { crate::mdns::browse(&services.iter().map(String::as_str).collect::<Vec<_>>(), Duration::from_secs(2), &hosts).await }
     });
     // Every port a module wants open before its probe, checked once per address.
     let mut ports: Vec<u16> =
@@ -290,8 +300,38 @@ pub async fn scan_products(subnet: &str, airzone_port: u16, quiet: &[std::net::I
     for p in browsed.await.unwrap_or_default().into_iter().flatten().filter(|p| !probed.iter().any(|n| n == ip_of(&p.host))) {
         found.push(p);
     }
+    found.extend(announced_products(&announced.await.unwrap_or_default(), &candidates, &found));
     found.sort_by_key(|p| (p.host.split(':').next().and_then(|h| h.parse::<Ipv4Addr>().ok()).map(u32::from).unwrap_or(0), p.brand));
     Ok(found)
+}
+
+/// The products of the modules of the library that announced themselves by mDNS, at addresses
+/// where nothing else was found (one per address, the first module whose hint matches).
+fn announced_products(announced: &[crate::mdns::Service], candidates: &[Candidate], found: &[Product]) -> Vec<Product> {
+    let same = |a: &str, b: &str| a.trim_end_matches(".local").eq_ignore_ascii_case(b.trim_end_matches(".local"));
+    let mut out: Vec<Product> = vec![];
+    for s in announced {
+        let ip = s.ip.to_string();
+        if found.iter().chain(out.iter()).any(|p| ip_of(&p.host) == ip) {
+            continue;
+        }
+        let Some(c) = candidates.iter().find(|c| c.mdns.iter().any(|h| same(&h.service, &s.service) && crate::mdns::txt_matches(s, &h.txt))) else { continue };
+        out.push(Product {
+            brand: c.id,
+            driver: c.id,
+            model: c.name.clone(),
+            host: ip,
+            port: s.port,
+            mac: None,
+            device_id: None,
+            firmware: None,
+            note: Some(s.name.clone()),
+            supported: true,
+            flags: 0,
+            install: Some(c.install.clone()),
+        });
+    }
+    out
 }
 
 fn ip_of(host: &str) -> &str {
@@ -367,6 +407,34 @@ pub async fn save_global_subnet(db: &crate::db::Db, subnet: Option<&str>) -> Res
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A module of the library whose hardware announces `_hue._tcp`, and what the network said.
+    #[test]
+    fn a_module_of_the_library_is_proposed_for_what_announces_its_service() {
+        use crate::modules::manifest::MdnsHint;
+        let install = Install { repository: 1, repository_name: "Breezone".into(), official: true, version: "1.0.0".into() };
+        let hue = Candidate {
+            id: "hue",
+            name: "Philips Hue".into(),
+            hints: vec![],
+            mdns: vec![MdnsHint { service: "_hue._tcp".into(), txt: [("md".to_string(), "BSB002".to_string())].into() }],
+            install,
+        };
+        let service = |ip: [u8; 4], service: &str, md: &str| crate::mdns::Service {
+            service: service.into(),
+            name: "Hue Bridge - 1A2B3C".into(),
+            ip: ip.into(),
+            port: 443,
+            txt: [("md".to_string(), md.to_string())].into(),
+        };
+        let announced = [service([192, 168, 1, 20], "_hue._tcp", "BSB002"), service([192, 168, 1, 21], "_hue._tcp", "BSB001"), service([192, 168, 1, 22], "_hap._tcp", "BSB002")];
+        let found = announced_products(&announced, std::slice::from_ref(&hue), &[]);
+        assert_eq!(found.len(), 1, "the TXT values and the service must match");
+        assert_eq!((found[0].driver, found[0].host.as_str(), found[0].port), ("hue", "192.168.1.20", 443));
+        assert_eq!(found[0].install.as_ref().map(|i| i.version.as_str()), Some("1.0.0"));
+        // An address where something was found already is left alone.
+        assert!(announced_products(&announced, &[hue], &found).is_empty());
+    }
 
     #[test]
     fn the_subnet_of_the_hardware_already_added() {

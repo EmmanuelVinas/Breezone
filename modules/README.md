@@ -42,7 +42,7 @@ module!(Plug);
 
 **Test it natively** with the bench of the SDK (`breezone_module_sdk::testing`): recorded HTTP
 answers (`answer`, `answer_json`), answers computed from the request (`respond`, for a device
-that proves something, as a handshake), TCP exchanges (`answer_exchange`, `queue_exchanges`), the
+that proves something, as a handshake), TCP exchanges (`answer_exchange`, `queue_exchanges`), the time asked to wait (`waited_ms`), the
 requests made (`requests`), and `check(&source, manifest)`,
 which reads the source and checks it against the catalog of traits and your manifest (traits
 provided, types, bounds, required fields). `modules/tasmota/src/lib.rs` has examples;
@@ -58,7 +58,10 @@ provided, types, bounds, required fields). `modules/tasmota/src/lib.rs` has exam
   kept open by the host, each message
   handed to `on-message`), `store-get` / `store-set` (small values of the source), `account`,
   `pressed`, `changed`. The module gives a `source` resource (`open`, `describe`, `read`, `act`,
-  `on-message`, `diagnostic`, and the optional calls) and `probe`.
+  `on-message`, `diagnostic`, and the optional calls), `probe`, and `pair` (the steps of the
+  appairage when the manifest's `pairing` is `button` or `code`: `Driver::pair` in the SDK,
+  `modules/hue/` as an example). Subscriptions take `ws://`, `wss://` (a device of the local
+  network may have its own certificate) and `tcp://`.
 - `server/contracts/module.schema.json`: the manifest (`manifest.json`), with
   `server/contracts/module.example.json` as an example. The traits a module provides are those
   of `server/contracts/traits/`.

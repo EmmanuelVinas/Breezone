@@ -123,6 +123,26 @@ pub async fn open_source(id: &str, source_id: Option<i64>, config: &serde_json::
     }
 }
 
+/// A step of the appairage of a module: the installed (or shipped) module when there is one, else
+/// the driver compiled in.
+pub async fn pair(id: &str, step: String, mut input: serde_json::Value) -> Result<native::Paired, crate::error::ApiError> {
+    use crate::error::ApiError;
+    // The module speaks to the user in their language.
+    if let Some(o) = input.as_object_mut() {
+        o.insert("lang".into(), crate::i18n::current().code().into());
+    }
+    #[cfg(feature = "wasm")]
+    if let (Some(m), Some(dir)) = (manifest(id).filter(|m| m.pairing != manifest::Pairing::Form), installed_dir(id)) {
+        if native::get(id).is_none() || replaces_native(id) {
+            let module = wasm::loaded(m, &dir).await.map_err(ApiError::bad_request)?;
+            return module.pair(&step, &input).await.map_err(|e| ApiError::new(axum::http::StatusCode::BAD_GATEWAY, e.to_string()));
+        }
+    }
+    let native = native::get(id).ok_or_else(|| ApiError::not_found("unknown module"))?;
+    let pair = native.pair.ok_or_else(|| ApiError::bad_request("this module is added with its form"))?;
+    pair(step, input).await
+}
+
 /// What the installed modules (not those compiled in) say of `host`, whose ports `open` are open:
 /// each one that probes and listens on one of them is asked.
 pub async fn probe_installed(host: &str, open: &[u16]) -> Vec<crate::discovery::Product> {

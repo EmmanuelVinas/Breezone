@@ -9,7 +9,7 @@ wit_bindgen::generate!({
 });
 
 use breezone::module::host;
-use breezone::module::types::{Curve, Described, Error, HardwareRoom, LengthPrefix, Picture, ReadUntil, Request, Scene};
+use breezone::module::types::{Curve, Described, Error, HardwareRoom, LengthPrefix, Paired, PairedSource, Picture, ReadUntil, Request, Scene};
 use exports::breezone::module::driver::{Guest, GuestSource, Source as SourceHandle};
 
 struct Module;
@@ -134,6 +134,15 @@ impl Guest for Module {
 
     fn probe(_host: String) -> Option<String> {
         None
+    }
+
+    /// `link`: waits for its button, unless the input says it was pressed.
+    fn pair(step: String, input: String) -> Result<Paired, Error> {
+        match step.as_str() {
+            "link" if input.contains("pressed") => Ok(Paired::Done(PairedSource { config: r#""store""#.into(), secret: "key".into(), name: "Misbehave".into() })),
+            "link" => Ok(Paired::Waiting("press the button".into())),
+            _ => Err(Error::Unsupported(step)),
+        }
     }
 }
 
