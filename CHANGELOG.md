@@ -6,7 +6,10 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
-## [0.12.0-beta.5] - 2026-11-22
+## [0.12.0-beta.6] - 2026-11-22
+
+The 0.12.0-beta.5 published before was built from the wrong commit (it said 0.12.0-beta.4, so the
+self-update refused it): this is the same content, released properly.
 
 ### Added
 
@@ -46,6 +49,9 @@ All notable changes are documented here. The format follows
   gone, and the Open / Stop / Close buttons keep their label on one line. A shutter moves smoothly
   to its target.
 - iOS: the bundle identifier is `io.monkeypatch.mobile.breezone`.
+- Build: the Docker image compiles only what changed (the compilation caches are kept, by the CI
+  too), and a full build takes minutes instead of most of an hour. A release whose tag is not the
+  version of the server, or has no section here, now stops before anything is published.
 
 ## [0.12.0-beta.4] - 2026-11-20
 

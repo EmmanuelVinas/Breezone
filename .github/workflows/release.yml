@@ -28,6 +28,16 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      # The tag must be the version written in the server (its `--version`, which the self-update
+      # checks) and have its section in the changelog (the release notes): a tag put on the wrong
+      # commit stops here, before anything is published.
+      - name: The tag is the version of the server
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          written=$(sed -n 's/^version = "\(.*\)"/\1/p' server/Cargo.toml | head -1)
+          test "$version" = "$written" || { echo "::error::$GITHUB_REF_NAME is put on a commit whose server/Cargo.toml says $written: commit the release first, then tag it."; exit 1; }
+          grep -q "^## \[$version\]" CHANGELOG.md || { echo "::error::CHANGELOG.md has no section [$version]."; exit 1; }
       - id: channel
         run: |
           set -euo pipefail
@@ -178,6 +188,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v8
         with:
           path: /tmp/archives
@@ -211,16 +223,20 @@ jobs:
           ls -l
       # The release notes are this version's section of the changelog: installations show them
       # before updating (Settings › Breezone).
+      # The comparison is with the previous version of Breezone, never a tag of a module.
       - name: Release notes from the changelog
         run: |
+          set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
           awk -v v="$version" 'index($0, "## [" v "]") == 1 {on=1; next} on && /^## \[/ {exit} on' CHANGELOG.md > /tmp/notes.md
-          test -s /tmp/notes.md || echo "See CHANGELOG.md." > /tmp/notes.md
+          test -s /tmp/notes.md || { echo "::error::the section [$version] of CHANGELOG.md is empty"; exit 1; }
+          if previous=$(git describe --tags --abbrev=0 --match 'v[0-9]*' "${GITHUB_SHA}^" 2>/dev/null); then
+            printf '\n**Full Changelog**: %s/%s/compare/%s...%s\n' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$previous" "$GITHUB_REF_NAME" >> /tmp/notes.md
+          fi
       # A pre-release is never "Latest": /releases/latest, which installations query, skips it.
       - uses: softprops/action-gh-release@v3
         with:
           prerelease: ${{ needs.channel.outputs.stable != 'true' }}
           make_latest: ${{ needs.channel.outputs.stable == 'true' }}
           body_path: /tmp/notes.md
-          generate_release_notes: true
           files: /tmp/archives/*
