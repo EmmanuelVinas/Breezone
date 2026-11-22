@@ -6,8 +6,14 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.12.0-beta.8] - 2026-11-22
+
 ### Fixed
 
+- Forecast.Solar: after the service refuses (12 requests an hour from one address, every server
+  behind it together) or fails, the forecast is no longer asked again at each reading, but at the
+  time the service says (an hour without one, ten minutes after a failure); the last forecast is
+  kept across restarts, so that a restart does not ask again.
 - Library of modules: the modules published for an earlier version of Breezone load again (a call
   added to the interface no longer refuses them), and a module that needs a newer Breezone is no
   longer offered to an older one. Tasmota 1.0.1 replaces a 1.0.0 that no server could load.

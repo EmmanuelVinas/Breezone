@@ -1,6 +1,6 @@
 [package]
 name = "breezone-module-forecast_solar"
-version = "1.0.0"
+version = "1.0.1"
 edition.workspace = true
 description = "Forecast.Solar: what the solar panels should produce"
 

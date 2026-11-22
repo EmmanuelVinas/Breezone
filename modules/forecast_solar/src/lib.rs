@@ -7,7 +7,9 @@
 //!        watt_hours_day: {"YYYY-MM-DD": Wh}}, message: {type, text, info: {timezone}}}
 //!
 //! The free service answers 12 times an hour from one address: the forecast is asked again every
-//! 30 minutes, and what is shown in between is worked out from it.
+//! 30 minutes, and what is shown in between is worked out from it. It is kept in the store of the
+//! source (a restart does not ask again), and after a refusal or a failure it is not asked again
+//! before the time the service says (an hour without one, ten minutes after a failure).
 
 use breezone_module_sdk::{device, host, json, module, Curve, Described, Driver, Error, Map, Result, State, Value};
 use chrono::{NaiveDateTime, TimeZone};
@@ -94,30 +96,91 @@ pub struct ForecastSolar {
     last: RefCell<Option<(i64, Forecast)>>,
 }
 
+/// After a refusal without a time to come back: an hour (the free service counts by the hour).
+const WAIT_LIMITED: i64 = 3600;
+/// After a failure (no network, a service down).
+const WAIT_FAILED: i64 = 600;
+
+impl Forecast {
+    fn to_value(&self) -> Value {
+        json!({"watts": self.watts, "cumulated": self.cumulated, "days": self.days})
+    }
+
+    fn from_value(v: &Value) -> Option<Self> {
+        let series = |k: &str| v[k].as_array().map(|a| a.iter().filter_map(|p| Some((p[0].as_i64()?, p[1].as_f64()?))).collect::<Vec<_>>());
+        let days = v["days"].as_object()?.iter().filter_map(|(d, wh)| Some((d.clone(), wh.as_f64()?))).collect();
+        Some(Self { watts: series("watts")?, cumulated: series("cumulated")?, days })
+    }
+}
+
+/// When a refusal says to come back: `X-Ratelimit-Retry-At` (an RFC 3339 time), else in an hour.
+fn retry_at(answer: &host::Answer, now: i64) -> i64 {
+    answer
+        .headers
+        .iter()
+        .find(|h| h.name.eq_ignore_ascii_case("x-ratelimit-retry-at"))
+        .and_then(|h| chrono::DateTime::parse_from_rfc3339(h.value.trim()).ok())
+        .map(|t| t.timestamp().clamp(now + 60, now + 6 * 3600))
+        .unwrap_or(now + WAIT_LIMITED)
+}
+
 impl ForecastSolar {
-    /// The forecast, asked again when it is old (the last one kept when the service refuses).
+    /// The last forecast: in memory, else in the store of the source (kept across restarts, so
+    /// that a restart does not ask again).
+    fn last(&self) -> Option<(i64, Forecast)> {
+        if let Some(l) = self.last.borrow().clone() {
+            return Some(l);
+        }
+        let kept: Value = breezone_module_sdk::serde_json::from_slice(&host::store_get("forecast")?).ok()?;
+        let l = (kept["at"].as_i64()?, Forecast::from_value(&kept["forecast"])?);
+        *self.last.borrow_mut() = Some(l.clone());
+        Some(l)
+    }
+
+    /// The forecast, asked again when it is old; after a refusal or a failure, not before the
+    /// time it says (the free service answers 12 times an hour from one address, every source and
+    /// every server behind it together): the last forecast holds meanwhile.
     fn forecast(&self) -> Result<Forecast> {
         let now = host::now();
-        if let Some((_, f)) = self.last.borrow().as_ref().filter(|(at, _)| now - at < ASK_EVERY) {
+        let last = self.last();
+        if let Some((_, f)) = last.as_ref().filter(|(at, _)| now - at < ASK_EVERY) {
             return Ok(f.clone());
         }
-        let asked = host::request("GET", &self.url, &[("Accept", "application/json")], None, 20_000)
-            .and_then(|a| a.json())
-            .and_then(|body| parse(&body).map_err(|e| Error::Unreachable(format!("Forecast.Solar: {e}"))));
+        let not_before = host::store_get("retry_at").and_then(|b| String::from_utf8(b).ok()).and_then(|s| s.parse::<i64>().ok()).unwrap_or(0);
+        let asked = if now < not_before {
+            let at = chrono::DateTime::from_timestamp(not_before, 0).map(|t| t.with_timezone(&self.tz).format("%H:%M").to_string()).unwrap_or_default();
+            Err(Error::Unreachable(format!("Forecast.Solar: rate limit for API calls reached, asked again at {at}")))
+        } else {
+            self.ask(now)
+        };
         match asked {
             Ok(f) => {
                 *self.last.borrow_mut() = Some((now, f.clone()));
+                host::store_set("forecast", Some(json!({"at": now, "forecast": f.to_value()}).to_string().as_bytes()));
+                host::store_set("retry_at", None);
                 Ok(f)
             }
-            // Too many requests, or a moment without network: the last forecast holds.
-            Err(e) => match self.last.borrow().as_ref() {
+            Err(e) => match last {
                 Some((_, f)) => {
                     host::log("debug", &format!("{e:?}: the last forecast is kept"));
-                    Ok(f.clone())
+                    Ok(f)
                 }
                 None => Err(e),
             },
         }
+    }
+
+    /// One request; a refusal or a failure sets when to ask again.
+    fn ask(&self, now: i64) -> Result<Forecast> {
+        let not_before = |at: i64| host::store_set("retry_at", Some(at.to_string().as_bytes()));
+        let answer = host::request("GET", &self.url, &[("Accept", "application/json")], None, 20_000).inspect_err(|_| not_before(now + WAIT_FAILED))?;
+        let parsed = answer.json().and_then(|body| parse(&body).map_err(|e| Error::Unreachable(format!("Forecast.Solar: {e}"))));
+        if answer.status == 429 || parsed.as_ref().is_err_and(|e| matches!(e, Error::Unreachable(m) if m.to_lowercase().contains("rate limit"))) {
+            not_before(retry_at(&answer, now));
+        } else if parsed.is_err() {
+            not_before(now + WAIT_FAILED);
+        }
+        parsed
     }
 }
 
@@ -223,5 +286,36 @@ mod tests {
         assert_eq!(asked[0], "GET https://api.forecast.solar/k/estimate/43.5/1.5/30/0/4.5");
         assert_eq!(Driver::forecast(&f, REFERENCE).unwrap()[0].points.len(), 1);
         assert!(ForecastSolar::open(json!({"latitude": 1, "longitude": 1}), None).is_err(), "no peak power");
+    }
+
+    /// Refused: not asked again before the time the service says, at each reading or after a
+    /// restart; a forecast kept is read from the store after a restart, without asking.
+    #[test]
+    fn a_refusal_is_not_asked_again_before_its_time() {
+        testing::reset();
+        let config = json!({"kwp": 4.5, "latitude": 43.5, "longitude": 1.5});
+        testing::respond("GET", "/estimate/", |_, _| breezone_module_sdk::host::Answer {
+            status: 429,
+            headers: vec![breezone_module_sdk::Header { name: "X-Ratelimit-Retry-At".into(), value: "2099-01-01T10:00:00+01:00".into() }],
+            body: br#"{"message": {"type": "error", "code": 429, "text": "Rate limit for API calls reached."}}"#.to_vec(),
+        });
+        let f: ForecastSolar = testing::open(config.clone(), None);
+        assert!(f.read().is_err());
+        assert!(f.read().unwrap_err().to_string().contains("asked again at"), "told when");
+        let again: ForecastSolar = testing::open(config.clone(), None);
+        assert!(again.read().is_err());
+        assert_eq!(testing::requests().len(), 1, "asked once, not at each reading nor after a restart");
+
+        testing::reset();
+        testing::answer_json(
+            "GET",
+            "/estimate/",
+            &json!({"result": {"watts": {"2026-11-19 12:00:00": 2000}, "watt_hours": {"2026-11-19 12:00:00": 4000}, "watt_hours_day": {"2026-11-19": 9000}}, "message": {"type": "success"}}),
+        );
+        let first: ForecastSolar = testing::open(config.clone(), None);
+        first.read().unwrap();
+        let restarted: ForecastSolar = testing::open(config, None);
+        assert_eq!(Driver::forecast(&restarted, REFERENCE).unwrap()[0].points.len(), 1);
+        assert_eq!(testing::requests().len(), 1, "the forecast kept is read from the store");
     }
 }

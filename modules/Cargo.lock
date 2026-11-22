@@ -113,7 +113,7 @@ dependencies = [
 
 [[package]]
 name = "breezone-module-forecast_solar"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "breezone-module-sdk",
  "chrono",
