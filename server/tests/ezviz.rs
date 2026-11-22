@@ -1,12 +1,13 @@
-//! The EZVIZ account and module against a fake EZVIZ: two-step verification, the session renewed,
-//! a doorbell whose ring is a press, and its encrypted picture.
+//! The EZVIZ account and module against a fake EZVIZ (its requests sent there): two-step
+//! verification, the session renewed, a doorbell whose ring is a press, and its encrypted picture.
+
+mod support;
 
 use aes::cipher::{BlockModeEncrypt, KeyIvInit};
 use axum::extract::{Form, Query};
 use axum::http::{HeaderMap, StatusCode as Code};
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
-use breezone_server::config::Config;
 use md5::{Digest, Md5};
 use reqwest::StatusCode;
 use serde_json::{json, Value};
@@ -160,8 +161,8 @@ async fn an_ezviz_doorbell_rings_and_shows_its_picture() {
     *fake.base.lock().unwrap() = format!("http://127.0.0.1:{port}");
     let dir = std::env::temp_dir().join(format!("breezone-ezviz-test-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let mut cfg = Config::for_tests(dir);
-    cfg.ezviz_url = format!("http://127.0.0.1:{port}");
+    let cfg = support::config(&dir);
+    breezone_server::modules::wasm::redirect_for_tests("apiieu.ezvizlife.com", &format!("127.0.0.1:{port}"));
     let state = breezone_server::init_state(cfg).await.unwrap();
     let port = serve(breezone_server::app(state)).await;
     let mut c = Client { base: format!("http://127.0.0.1:{port}"), http: reqwest::Client::new(), token: None };

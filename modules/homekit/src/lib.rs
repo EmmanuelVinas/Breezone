@@ -12,7 +12,7 @@ mod hap;
 mod srp;
 mod tlv;
 
-use breezone_module_sdk::{device, host, json, module, Described, DeviceInfo, Driver, Error, Paired, PairedSource, Result, State, Value};
+use breezone_module_sdk::{device, host, json, module, Described, DeviceInfo, Driver, Error, Found, Paired, PairedSource, Result, State, Value};
 use ed25519_dalek::{Signer, SigningKey, Verifier, VerifyingKey};
 use hap::{hkdf, label, open, random, seal, Conn};
 use std::cell::RefCell;
@@ -716,6 +716,36 @@ impl Driver for HomeKit {
         *self.conn.borrow_mut() = None;
     }
 
+    /// An accessory as it announces itself (`_hap._tcp`): nothing is asked of it (the gateways
+    /// already added keep their few connections for their sessions).
+    fn identify(host_: &str, announced: Option<&Value>) -> Option<Found> {
+        let a = announced?;
+        let txt = |k: &str| a["txt"][k].as_str().map(|v| v.trim_end_matches('\0').trim().to_string()).filter(|v| !v.is_empty());
+        let id = txt("id")?;
+        let name = a["name"].as_str().unwrap_or("HomeKit").to_string();
+        let port = a["port"].as_u64().and_then(|p| u16::try_from(p).ok())?;
+        let model = txt("md").unwrap_or_else(|| name.clone());
+        let flags = txt("ff").and_then(|f| f.parse().ok()).unwrap_or(0);
+        let paired = txt("sf").is_some_and(|sf| sf == "0");
+        let kind = match txt("ci").and_then(|c| c.parse::<u32>().ok()) {
+            Some(2) => "pont",
+            Some(14) => "volet",
+            Some(15) => "fenêtre",
+            Some(7) => "prise",
+            Some(5) => "lumière",
+            _ => "accessoire",
+        };
+        // The Legrand Ecometer gives HomeKit nothing it measures: its lines come from the cloud.
+        let (note, unsupported) = if format!("{model} {name}").to_lowercase().contains("ecometer") {
+            ("ses mesures ne passent pas par HomeKit : elles viennent du compte Netatmo".to_string(), true)
+        } else if paired {
+            (format!("HomeKit · {kind} « {name} » · déjà appairé à un autre contrôleur"), true)
+        } else {
+            (format!("HomeKit · {kind} « {name} » · à appairer avec son code"), false)
+        };
+        Some(Found { model, note: Some(note), device_id: Some(id), unsupported, flags, port: Some(port), host: Some(format!("{host_}:{port}")), ..Found::default() })
+    }
+
     /// `start` (an accessory with a screen shows its code now), then `finish` with its setup code
     /// (8 digits), or `cancel`.
     fn pair(step: &str, input: Value) -> Result<Paired> {
@@ -846,6 +876,22 @@ mod tests {
         let chunked = b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nabc\r\n2\r\nde\r\n0\r\n\r\n";
         let (_, body, used) = hap::parse_message(chunked).unwrap().unwrap();
         assert_eq!((body.as_slice(), used), (b"abcde".as_slice(), chunked.len()));
+    }
+
+    /// Found by its mDNS announce: what to pair, what is paired elsewhere, the Ecometer.
+    #[test]
+    fn accessories_as_they_announce_themselves() {
+        let announce = |name: &str, txt: Value| json!({"service": "_hap._tcp", "name": name, "port": 5001, "txt": txt});
+        let gateway =
+            HomeKit::identify("192.168.1.25", Some(&announce("Module Control", json!({"id": "A1:B8", "md": "Legrand Gateway", "ci": "2", "ff": "1", "sf": "1"})))).unwrap();
+        assert_eq!((gateway.model.as_str(), gateway.device_id.as_deref(), gateway.flags, gateway.unsupported), ("Legrand Gateway", Some("A1:B8"), 1, false));
+        assert_eq!(gateway.host.as_deref(), Some("192.168.1.25:5001"), "the port stays in its address");
+        assert!(gateway.note.unwrap().contains("pont « Module Control » · à appairer"));
+        let taken = HomeKit::identify("192.168.1.26", Some(&announce("Volet", json!({"id": "B2", "ci": "14", "sf": "0"})))).unwrap();
+        assert!(taken.unsupported && taken.note.unwrap().contains("déjà appairé"));
+        let ecometer = HomeKit::identify("192.168.1.27", Some(&announce("Ecometer", json!({"id": "C3", "md": "Legrand Ecometer"})))).unwrap();
+        assert!(ecometer.unsupported && ecometer.note.unwrap().contains("Netatmo"));
+        assert_eq!(HomeKit::identify("192.168.1.25", None), None, "never asked by an open port");
     }
 
     /// The secret of a source paired by the driver compiled in.

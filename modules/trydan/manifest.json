@@ -1,6 +1,6 @@
 {
   "id": "trydan",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "name": {
     "en": "V2C Trydan",
     "es": "V2C Trydan",
@@ -10,7 +10,7 @@
     "driver"
   ],
   "requires": {
-    "api": "^1.0"
+    "api": "^1.1"
   },
   "provides": {
     "traits": [
@@ -43,6 +43,7 @@
     }
   },
   "optional_calls": [
+    "identify",
     "probe",
     "diagnostic"
   ]

@@ -112,10 +112,13 @@ fn curve(day: NaiveDate) -> Result<Value> {
 pub struct Linky;
 
 impl Service for Linky {
-    /// The meter must answer with its last days.
+    /// The meter must answer with its last days; its number is kept as Enedis writes it (14
+    /// digits, without the spaces typed).
     fn check() -> Result<()> {
         let today = chrono::DateTime::from_timestamp(host::now(), 0).map(|t| t.date_naive()).unwrap_or_default();
-        readings("daily_consumption", today - Days::new(7), today).map(|_| ())
+        readings("daily_consumption", today - Days::new(7), today)?;
+        let (_, prm) = account()?;
+        host::account_update(&json!({ "prm": prm }))
     }
 
     fn query(contract: &str, query: &str, params: Value) -> Result<Value> {

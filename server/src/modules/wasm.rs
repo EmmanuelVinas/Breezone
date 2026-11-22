@@ -48,7 +48,9 @@ use breezone::module::types::{Error as WitError, Header, ReadUntil, Request, Res
 
 /// Ticks of the engine's epoch: one each `TICK`.
 const TICK: Duration = Duration::from_millis(100);
-/// Longest time a call into a module may compute (time spent waiting for the network excluded).
+/// Longest time a call into a module may compute (time spent waiting in the host excluded).
+const CALL_COMPUTE: Duration = Duration::from_secs(10);
+/// The same, in ticks: when the engine looks at what was computed.
 const CALL_TICKS: u64 = 100;
 /// Longest time a call may take, waits for the network included.
 const CALL_TIMEOUT: Duration = Duration::from_secs(60);
@@ -201,6 +203,18 @@ struct HostState {
     wasi: WasiCtx,
     table: ResourceTable,
     limits: StoreLimits,
+    /// When the current call into the module began, and how long it has waited in the host since
+    /// (the network, a wait): only the rest counts against `CALL_COMPUTE`.
+    call_started: std::time::Instant,
+    waited: Duration,
+}
+
+/// The next call into the module begins: its time to compute starts again.
+fn start_call(store: &mut Store<HostState>) {
+    let state = store.data_mut();
+    state.call_started = std::time::Instant::now();
+    state.waited = Duration::ZERO;
+    store.set_epoch_deadline(CALL_TICKS);
 }
 
 impl WasiView for HostState {
@@ -244,55 +258,86 @@ impl breezone::module::host::Host for HostState {
     }
 
     async fn wait(&mut self, ms: u32) {
-        tokio::time::sleep(Duration::from_millis(u64::from(ms.min(10_000)))).await;
+        let started = std::time::Instant::now();
+        let r: () = async {
+            tokio::time::sleep(Duration::from_millis(u64::from(ms.min(10_000)))).await;
+        }
+        .await;
+        self.waited += started.elapsed();
+        r
     }
 
     async fn http(&mut self, req: Request) -> Result<Response, String> {
-        let url = req.url.clone();
-        let r = http(&self.permissions, req).await;
-        if let Err(e) = &r {
-            crate::modules::log(&self.ctx.module, "warn", format!("{url}: {e}"));
+        let started = std::time::Instant::now();
+        let r: Result<Response, String> = async {
+            let url = req.url.clone();
+            let r = http(&self.permissions, req).await;
+            if let Err(e) = &r {
+                crate::modules::log(&self.ctx.module, "warn", format!("{url}: {e}"));
+            }
+            r
         }
+        .await;
+        self.waited += started.elapsed();
         r
     }
 
     async fn exchange(&mut self, url: String, data: Vec<u8>, until: ReadUntil, timeout_ms: u32) -> Result<Vec<u8>, String> {
-        let r = exchange(&self.permissions, &url, &data, until, timeout_ms).await;
-        if let Err(e) = &r {
-            crate::modules::log(&self.ctx.module, "warn", format!("{url}: {e}"));
+        let started = std::time::Instant::now();
+        let r: Result<Vec<u8>, String> = async {
+            let r = exchange(&self.permissions, &url, &data, until, timeout_ms).await;
+            if let Err(e) = &r {
+                crate::modules::log(&self.ctx.module, "warn", format!("{url}: {e}"));
+            }
+            r
         }
+        .await;
+        self.waited += started.elapsed();
         r
     }
 
     async fn subscribe(&mut self, url: String) -> Result<u32, String> {
-        if self.subscriptions.len() >= MAX_SUBSCRIPTIONS {
-            return Err(format!("at most {MAX_SUBSCRIPTIONS} subscriptions"));
+        let started = std::time::Instant::now();
+        let r: Result<u32, String> = async {
+            if self.subscriptions.len() >= MAX_SUBSCRIPTIONS {
+                return Err(format!("at most {MAX_SUBSCRIPTIONS} subscriptions"));
+            }
+            self.next_subscription += 1;
+            let id = self.next_subscription;
+            let sub =
+                subscribe(&self.permissions, &url, id, self.ctx.messages.clone()).await.inspect_err(|e| crate::modules::log(&self.ctx.module, "warn", format!("{url}: {e}")))?;
+            self.subscriptions.insert(id, sub);
+            Ok(id)
         }
-        self.next_subscription += 1;
-        let id = self.next_subscription;
-        let sub = subscribe(&self.permissions, &url, id, self.ctx.messages.clone()).await.inspect_err(|e| crate::modules::log(&self.ctx.module, "warn", format!("{url}: {e}")))?;
-        self.subscriptions.insert(id, sub);
-        Ok(id)
+        .await;
+        self.waited += started.elapsed();
+        r
     }
 
     async fn receive(&mut self, subscription: u32, timeout_ms: u32) -> Result<Vec<u8>, String> {
-        if !self.subscriptions.contains_key(&subscription) {
-            return Err("unknown subscription".into());
+        let started = std::time::Instant::now();
+        let r: Result<Vec<u8>, String> = async {
+            if !self.subscriptions.contains_key(&subscription) {
+                return Err("unknown subscription".into());
+            }
+            let deadline = tokio::time::Instant::now() + Duration::from_millis(u64::from(timeout_ms.clamp(100, 30_000)));
+            let inbox = self.ctx.inbox.clone();
+            loop {
+                let arrived = inbox.arrived.notified();
+                if let Some(data) = inbox.take(subscription) {
+                    return Ok(data);
+                }
+                if inbox.closed.load(std::sync::atomic::Ordering::SeqCst) {
+                    return Err("the subscription is closed".into());
+                }
+                if tokio::time::timeout_at(deadline, arrived).await.is_err() {
+                    return Err("timeout".into());
+                }
+            }
         }
-        let deadline = tokio::time::Instant::now() + Duration::from_millis(u64::from(timeout_ms.clamp(100, 30_000)));
-        let inbox = self.ctx.inbox.clone();
-        loop {
-            let arrived = inbox.arrived.notified();
-            if let Some(data) = inbox.take(subscription) {
-                return Ok(data);
-            }
-            if inbox.closed.load(std::sync::atomic::Ordering::SeqCst) {
-                return Err("the subscription is closed".into());
-            }
-            if tokio::time::timeout_at(deadline, arrived).await.is_err() {
-                return Err("timeout".into());
-            }
-        }
+        .await;
+        self.waited += started.elapsed();
+        r
     }
 
     fn send(&mut self, subscription: u32, data: Vec<u8>) -> wasmtime::Result<Result<(), String>> {
@@ -308,138 +353,168 @@ impl breezone::module::host::Host for HostState {
     }
 
     async fn store_get(&mut self, key: String) -> Option<Vec<u8>> {
-        match (self.ctx.source_id, context()) {
-            (Some(id), Some((db, _))) => crate::db::store_get(&db, id, &key).await.ok().flatten(),
-            _ => self.ctx.memory_store.lock().unwrap_or_else(|e| e.into_inner()).get(&key).cloned(),
+        let started = std::time::Instant::now();
+        let r: Option<Vec<u8>> = async {
+            match (self.ctx.source_id, context()) {
+                (Some(id), Some((db, _))) => crate::db::store_get(&db, id, &key).await.ok().flatten(),
+                _ => self.ctx.memory_store.lock().unwrap_or_else(|e| e.into_inner()).get(&key).cloned(),
+            }
         }
+        .await;
+        self.waited += started.elapsed();
+        r
     }
 
     async fn store_set(&mut self, key: String, value: Option<Vec<u8>>) {
-        if key.len() > 200 || value.as_ref().is_some_and(|v| v.len() > MAX_STORED) {
-            crate::modules::log(&self.ctx.module, "warn", format!("store: {key} too large, not kept"));
-            return;
-        }
-        match (self.ctx.source_id, context()) {
-            (Some(id), Some((db, _))) => {
-                if let Err(e) = crate::db::store_set(&db, id, &key, value.as_deref()).await {
-                    crate::modules::log(&self.ctx.module, "error", format!("store: {e}"));
+        let started = std::time::Instant::now();
+        let r: () = async {
+            if key.len() > 200 || value.as_ref().is_some_and(|v| v.len() > MAX_STORED) {
+                crate::modules::log(&self.ctx.module, "warn", format!("store: {key} too large, not kept"));
+                return;
+            }
+            match (self.ctx.source_id, context()) {
+                (Some(id), Some((db, _))) => {
+                    if let Err(e) = crate::db::store_set(&db, id, &key, value.as_deref()).await {
+                        crate::modules::log(&self.ctx.module, "error", format!("store: {e}"));
+                    }
+                }
+                _ => {
+                    let mut store = self.ctx.memory_store.lock().unwrap_or_else(|e| e.into_inner());
+                    match value {
+                        Some(v) => store.insert(key, v),
+                        None => store.remove(&key),
+                    };
                 }
             }
-            _ => {
-                let mut store = self.ctx.memory_store.lock().unwrap_or_else(|e| e.into_inner());
-                match value {
-                    Some(v) => store.insert(key, v),
-                    None => store.remove(&key),
-                };
-            }
         }
+        .await;
+        self.waited += started.elapsed();
+        r
     }
 
     async fn account(&mut self, kind: String) -> Result<String, String> {
-        // Only the accounts its manifest requires.
-        if !self.permissions.accounts.contains(&kind) {
-            return Err(format!("{kind}: not an account this module requires"));
+        let started = std::time::Instant::now();
+        let r: Result<String, String> = async {
+            // Only the accounts its manifest requires.
+            if !self.permissions.accounts.contains(&kind) {
+                return Err(format!("{kind}: not an account this module requires"));
+            }
+            if let Some(fields) = self.ctx.checked_account.lock().unwrap_or_else(|e| e.into_inner()).clone().filter(|_| *kind == *self.ctx.module) {
+                return Ok(fields);
+            }
+            let (db, key) = context().ok_or("no account here")?;
+            let row = crate::db::account(&db, &kind).await.map_err(|e| e.to_string())?.ok_or_else(|| format!("{kind}: not connected"))?;
+            if !row.enabled {
+                return Err(format!("{kind}: switched off"));
+            }
+            let secret = row.secret.as_deref().and_then(|s| crate::crypto::decrypt(&key, s)).ok_or_else(|| format!("{kind}: not connected"))?;
+            // What is not secret (a meter number) with the secret, the secret's fields first.
+            let mut fields: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&row.config).unwrap_or_default();
+            match serde_json::from_str::<serde_json::Value>(&secret) {
+                Ok(serde_json::Value::Object(s)) => fields.extend(s),
+                _ => return Ok(secret),
+            }
+            Ok(serde_json::Value::Object(fields).to_string())
         }
-        if let Some(fields) = self.ctx.checked_account.lock().unwrap_or_else(|e| e.into_inner()).clone().filter(|_| *kind == *self.ctx.module) {
-            return Ok(fields);
-        }
-        let (db, key) = context().ok_or("no account here")?;
-        let row = crate::db::account(&db, &kind).await.map_err(|e| e.to_string())?.ok_or_else(|| format!("{kind}: not connected"))?;
-        if !row.enabled {
-            return Err(format!("{kind}: switched off"));
-        }
-        let secret = row.secret.as_deref().and_then(|s| crate::crypto::decrypt(&key, s)).ok_or_else(|| format!("{kind}: not connected"))?;
-        // What is not secret (a meter number) with the secret, the secret's fields first.
-        let mut fields: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&row.config).unwrap_or_default();
-        match serde_json::from_str::<serde_json::Value>(&secret) {
-            Ok(serde_json::Value::Object(s)) => fields.extend(s),
-            _ => return Ok(secret),
-        }
-        Ok(serde_json::Value::Object(fields).to_string())
+        .await;
+        self.waited += started.elapsed();
+        r
     }
 
     async fn access_token(&mut self) -> Result<String, String> {
-        let token_url = self.permissions.oauth_token_url.clone().ok_or("this module has no OAuth account")?;
-        let kind = self.ctx.module.to_string();
-        // One renewal at a time: the service replaces the refresh token at each.
-        let lock = oauth_lock(&kind);
-        let _one = lock.lock().await;
-        let checked = self.ctx.checked_account.lock().unwrap_or_else(|e| e.into_inner()).clone();
-        let stored = match &checked {
-            Some(_) => None,
-            None => {
-                let (db, key) = context().ok_or("no account here")?;
-                let row = crate::db::account(&db, &kind).await.map_err(|e| e.to_string())?.filter(|r| r.enabled).ok_or_else(|| format!("{kind}: not connected"))?;
-                let secret = row.secret.as_deref().and_then(|s| crate::crypto::decrypt(&key, s)).ok_or_else(|| format!("{kind}: not connected"))?;
-                Some((db, key, row.config, secret))
-            }
-        };
-        let text = checked.clone().or_else(|| stored.as_ref().map(|s| s.3.clone())).unwrap_or_default();
-        let mut fields: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&text).map_err(|e| e.to_string())?;
-        let now = crate::db::now();
-        if let (Some(token), Some(until)) = (fields.get("access_token").and_then(|v| v.as_str()), fields.get("expires_at").and_then(|v| v.as_i64())) {
-            if until - 60 > now {
-                return Ok(token.to_string());
-            }
-        }
-        let renewed = renew_oauth(&self.permissions, &token_url, &mut fields, now).await;
-        if let Some((db, key, config, _)) = &stored {
-            match &renewed {
-                Ok(()) => {
-                    let config: serde_json::Value = serde_json::from_str(config).unwrap_or_default();
-                    let expires = fields.get("expires_at").and_then(|v| v.as_i64());
-                    crate::accounts::save_in(db, key, &kind, &config, &serde_json::Value::Object(fields.clone()), expires).await.map_err(|e| e.message.en)?;
-                    let _ = crate::db::set_account_state(db, &kind, "ok", None).await;
+        let started = std::time::Instant::now();
+        let r: Result<String, String> = async {
+            let token_url = self.permissions.oauth_token_url.clone().ok_or("this module has no OAuth account")?;
+            let kind = self.ctx.module.to_string();
+            // One renewal at a time: the service replaces the refresh token at each.
+            let lock = oauth_lock(&kind);
+            let _one = lock.lock().await;
+            let checked = self.ctx.checked_account.lock().unwrap_or_else(|e| e.into_inner()).clone();
+            let stored = match &checked {
+                Some(_) => None,
+                None => {
+                    let (db, key) = context().ok_or("no account here")?;
+                    let row = crate::db::account(&db, &kind).await.map_err(|e| e.to_string())?.filter(|r| r.enabled).ok_or_else(|| format!("{kind}: not connected"))?;
+                    let secret = row.secret.as_deref().and_then(|s| crate::crypto::decrypt(&key, s)).ok_or_else(|| format!("{kind}: not connected"))?;
+                    Some((db, key, row.config, secret))
                 }
-                Err(e) => {
-                    let _ = crate::db::set_account_state(db, &kind, "error", Some(&crate::i18n::Text::plain(e.clone()).store())).await;
+            };
+            let text = checked.clone().or_else(|| stored.as_ref().map(|s| s.3.clone())).unwrap_or_default();
+            let mut fields: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+            let now = crate::db::now();
+            if let (Some(token), Some(until)) = (fields.get("access_token").and_then(|v| v.as_str()), fields.get("expires_at").and_then(|v| v.as_i64())) {
+                if until - 60 > now {
+                    return Ok(token.to_string());
                 }
             }
-        } else if renewed.is_ok() {
-            *self.ctx.checked_account.lock().unwrap_or_else(|e| e.into_inner()) = Some(serde_json::Value::Object(fields.clone()).to_string());
+            let renewed = renew_oauth(&self.permissions, &token_url, &mut fields, now).await;
+            if let Some((db, key, config, _)) = &stored {
+                match &renewed {
+                    Ok(()) => {
+                        let config: serde_json::Value = serde_json::from_str(config).unwrap_or_default();
+                        let expires = fields.get("expires_at").and_then(|v| v.as_i64());
+                        crate::accounts::save_in(db, key, &kind, &config, &serde_json::Value::Object(fields.clone()), expires).await.map_err(|e| e.message.en)?;
+                        let _ = crate::db::set_account_state(db, &kind, "ok", None).await;
+                    }
+                    Err(e) => {
+                        let _ = crate::db::set_account_state(db, &kind, "error", Some(&crate::i18n::Text::plain(e.clone()).store())).await;
+                    }
+                }
+            } else if renewed.is_ok() {
+                *self.ctx.checked_account.lock().unwrap_or_else(|e| e.into_inner()) = Some(serde_json::Value::Object(fields.clone()).to_string());
+            }
+            renewed?;
+            fields.get("access_token").and_then(|v| v.as_str()).map(str::to_string).ok_or_else(|| "no access token".to_string())
         }
-        renewed?;
-        fields.get("access_token").and_then(|v| v.as_str()).map(str::to_string).ok_or_else(|| "no access token".to_string())
+        .await;
+        self.waited += started.elapsed();
+        r
     }
 
     async fn account_update(&mut self, fields: String) -> Result<(), String> {
-        let kind = self.ctx.module.to_string();
-        if !self.permissions.accounts.contains(&kind) {
-            return Err("this module is not an account".into());
-        }
-        let update: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&fields).map_err(|e| e.to_string())?;
-        let merge = |fields: &mut serde_json::Map<String, serde_json::Value>| {
-            for (k, v) in &update {
-                if v.is_null() {
-                    fields.remove(k);
-                } else {
-                    fields.insert(k.clone(), v.clone());
+        let started = std::time::Instant::now();
+        let r: Result<(), String> = async {
+            let kind = self.ctx.module.to_string();
+            if !self.permissions.accounts.contains(&kind) {
+                return Err("this module is not an account".into());
+            }
+            let update: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&fields).map_err(|e| e.to_string())?;
+            let merge = |fields: &mut serde_json::Map<String, serde_json::Value>| {
+                for (k, v) in &update {
+                    if v.is_null() {
+                        fields.remove(k);
+                    } else {
+                        fields.insert(k.clone(), v.clone());
+                    }
+                }
+            };
+            // While it is checked: what it keeps of what was typed (a password made a hash…).
+            {
+                let mut checked = self.ctx.checked_account.lock().unwrap_or_else(|e| e.into_inner());
+                if let Some(text) = checked.as_ref() {
+                    let mut fields: serde_json::Map<String, serde_json::Value> = serde_json::from_str(text).unwrap_or_default();
+                    merge(&mut fields);
+                    *checked = Some(serde_json::Value::Object(fields).to_string());
+                    return Ok(());
                 }
             }
-        };
-        // While it is checked: what it keeps of what was typed (a password made a hash…).
-        {
-            let mut checked = self.ctx.checked_account.lock().unwrap_or_else(|e| e.into_inner());
-            if let Some(text) = checked.as_ref() {
-                let mut fields: serde_json::Map<String, serde_json::Value> = serde_json::from_str(text).unwrap_or_default();
-                merge(&mut fields);
-                *checked = Some(serde_json::Value::Object(fields).to_string());
-                return Ok(());
+            // Kept: only what it adds itself (a session), never the fields of its form.
+            if let Some(k) = update.keys().find(|k| self.permissions.account_fields.contains(k)) {
+                return Err(format!("{k}: a field of the account's form, changed only by the user"));
             }
+            let lock = oauth_lock(&kind);
+            let _one = lock.lock().await;
+            let (db, key) = context().ok_or("no account here")?;
+            let row = crate::db::account(&db, &kind).await.map_err(|e| e.to_string())?.ok_or_else(|| format!("{kind}: not connected"))?;
+            let secret = row.secret.as_deref().and_then(|s| crate::crypto::decrypt(&key, s)).ok_or_else(|| format!("{kind}: not connected"))?;
+            let mut fields: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&secret).map_err(|e| e.to_string())?;
+            merge(&mut fields);
+            let config: serde_json::Value = serde_json::from_str(&row.config).unwrap_or_default();
+            crate::accounts::save_in(&db, &key, &kind, &config, &serde_json::Value::Object(fields), row.expires_at).await.map_err(|e| e.message.en)
         }
-        // Kept: only what it adds itself (a session), never the fields of its form.
-        if let Some(k) = update.keys().find(|k| self.permissions.account_fields.contains(k)) {
-            return Err(format!("{k}: a field of the account's form, changed only by the user"));
-        }
-        let lock = oauth_lock(&kind);
-        let _one = lock.lock().await;
-        let (db, key) = context().ok_or("no account here")?;
-        let row = crate::db::account(&db, &kind).await.map_err(|e| e.to_string())?.ok_or_else(|| format!("{kind}: not connected"))?;
-        let secret = row.secret.as_deref().and_then(|s| crate::crypto::decrypt(&key, s)).ok_or_else(|| format!("{kind}: not connected"))?;
-        let mut fields: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&secret).map_err(|e| e.to_string())?;
-        merge(&mut fields);
-        let config: serde_json::Value = serde_json::from_str(&row.config).unwrap_or_default();
-        crate::accounts::save_in(&db, &key, &kind, &config, &serde_json::Value::Object(fields), row.expires_at).await.map_err(|e| e.message.en)
+        .await;
+        self.waited += started.elapsed();
+        r
     }
 
     fn pressed(&mut self, reference: String, button: u32, press: String) -> wasmtime::Result<()> {
@@ -577,6 +652,10 @@ async fn renew_oauth(permissions: &Permissions, token_url: &str, fields: &mut se
         return Err("no refresh token".into());
     }
     let parsed = reqwest::Url::parse(token_url).map_err(|e| e.to_string())?;
+    let parsed = match redirected(&parsed) {
+        Some(to) if permissions.allows_name(parsed.host_str().unwrap_or_default()) => to,
+        _ => parsed,
+    };
     permissions.resolve(&parsed).await?;
     let form = [("grant_type", "refresh_token"), ("refresh_token", refresh.as_str()), ("client_id", id.as_str()), ("client_secret", secret.as_str())];
     let http = reqwest::Client::builder().timeout(Duration::from_secs(20)).build().map_err(|e| e.to_string())?;
@@ -657,11 +736,36 @@ async fn exchange(permissions: &Permissions, url: &str, data: &[u8], until: Read
     tokio::time::timeout(Duration::from_millis(u64::from(timeout_ms.clamp(100, 30_000))), io).await.map_err(|_| "no answer in time".to_string())?
 }
 
+/// Where the tests send the requests of the modules to a service of the Internet (`host` →
+/// "127.0.0.1:port", a fake): development builds only.
+static REDIRECTS: std::sync::LazyLock<std::sync::RwLock<HashMap<String, String>>> = std::sync::LazyLock::new(Default::default);
+
+/// The requests of the modules to `host` go to `to` ("127.0.0.1:port", in clear) instead: for
+/// the tests, whose fakes stand for services of the Internet (development builds only).
+pub fn redirect_for_tests(host: &str, to: &str) {
+    if cfg!(debug_assertions) {
+        REDIRECTS.write().unwrap_or_else(|e| e.into_inner()).insert(host.to_ascii_lowercase(), to.to_string());
+    }
+}
+
+fn redirected(url: &reqwest::Url) -> Option<reqwest::Url> {
+    if !cfg!(debug_assertions) {
+        return None;
+    }
+    let to = REDIRECTS.read().unwrap_or_else(|e| e.into_inner()).get(&url.host_str()?.to_ascii_lowercase()).cloned()?;
+    reqwest::Url::parse(&format!("http://{to}{}{}", url.path(), url.query().map(|q| format!("?{q}")).unwrap_or_default())).ok()
+}
+
 async fn http(permissions: &Permissions, req: Request) -> Result<Response, String> {
     let url = reqwest::Url::parse(&req.url).map_err(|e| e.to_string())?;
     if !matches!(url.scheme(), "http" | "https") {
         return Err(format!("{}: only http and https", url.scheme()));
     }
+    // A test's fake, for a host the module may reach.
+    let url = match redirected(&url) {
+        Some(to) if permissions.allows_name(url.host_str().unwrap_or_default()) => to,
+        _ => url,
+    };
     let addrs = permissions.resolve(&url).await?;
     let host = url.host_str().unwrap_or_default().to_string();
     let timeout = Duration::from_millis(u64::from(req.timeout_ms.clamp(100, 30_000)));
@@ -820,11 +924,30 @@ impl WasmModule {
         let wasi = WasiCtxBuilder::new().allow_tcp(false).allow_udp(false).allow_ip_name_lookup(false).socket_addr_check(|_, _| Box::pin(async { false })).build();
         let memory = self.permissions.memory_mb.clamp(1, 64) << 20;
         let limits = StoreLimitsBuilder::new().memory_size(memory).instances(16).trap_on_grow_failure(true).build();
-        let state = HostState { permissions: self.permissions.clone(), ctx, subscriptions: HashMap::new(), next_subscription: 0, wasi, table: ResourceTable::new(), limits };
+        let state = HostState {
+            permissions: self.permissions.clone(),
+            ctx,
+            subscriptions: HashMap::new(),
+            next_subscription: 0,
+            wasi,
+            table: ResourceTable::new(),
+            limits,
+            call_started: std::time::Instant::now(),
+            waited: Duration::ZERO,
+        };
         let mut store = Store::new(engine(), state);
         store.limiter(|s| &mut s.limits);
-        store.epoch_deadline_trap();
-        store.set_epoch_deadline(CALL_TICKS);
+        // At the deadline, what the call computed (its waits in the host left out) decides.
+        store.epoch_deadline_callback(|ctx| {
+            let s = ctx.data();
+            let computed = s.call_started.elapsed().saturating_sub(s.waited);
+            if computed >= CALL_COMPUTE {
+                return Err(wasmtime::Error::msg(format!("computed for more than {} s without a pause", CALL_COMPUTE.as_secs())));
+            }
+            let left = (CALL_COMPUTE - computed).as_millis() / TICK.as_millis();
+            Ok(wasmtime::UpdateDeadline::Continue((left as u64).max(1)))
+        });
+        start_call(&mut store);
         let instance = self.linker.instantiate_async(&mut store, &self.component).await.map_err(|e| DriverError::Invalid(format!("{}: {e}", self.id)))?;
         let module = Module::new(&mut store, &instance).map_err(|e| DriverError::Invalid(format!("{}: {e}", self.id)))?;
         Ok((store, module, instance))
@@ -869,6 +992,17 @@ impl WasmModule {
     }
 
     /// Whether `host` is hardware of this module (discovery), in an instance of its own.
+    /// `extras.identify` on an instance of its own (`None` when the module does not export it, or
+    /// does not know this hardware): what the network scan shows of it.
+    pub async fn identify(&self, host: &str, announced: Option<&serde_json::Value>) -> Option<serde_json::Value> {
+        let (mut store, _, instance) = self.instantiate_with(self.one_shot()).await.ok()?;
+        let extras = instance.get_export_index(&mut store, None, EXTRAS)?;
+        let index = instance.get_export_index(&mut store, Some(&extras), "identify")?;
+        let func = instance.get_typed_func::<(String, Option<String>), (Option<String>,)>(&mut store, &index).ok()?;
+        let (answer,) = tokio::time::timeout(CALL_TIMEOUT, func.call_async(&mut store, (host.to_string(), announced.map(|a| a.to_string())))).await.ok()?.ok()?;
+        serde_json::from_str(&answer?).ok().filter(serde_json::Value::is_object)
+    }
+
     pub async fn probe(&self, host: &str) -> Option<String> {
         let ctx = self.one_shot();
         let (mut store, module) = self.instantiate(ctx).await.ok()?;
@@ -907,8 +1041,8 @@ impl WasmModule {
 
     /// A step of the appairage, in an instance of its own; one that answers `next` keeps it for
     /// the next step at the same address (a pairing started, waiting for its code).
-    pub async fn pair(self: &Arc<Self>, step: &str, input: &serde_json::Value) -> Result<crate::modules::native::Paired, DriverError> {
-        use crate::modules::native::Paired;
+    pub async fn pair(self: &Arc<Self>, step: &str, input: &serde_json::Value) -> Result<crate::modules::Paired, DriverError> {
+        use crate::modules::Paired;
         use breezone::module::types::Paired as P;
         static GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let host = input["host"].as_str().unwrap_or_default().to_string();
@@ -917,6 +1051,8 @@ impl WasmModule {
             Some(p) => (p.store, p.module),
             None => self.instantiate(self.one_shot()).await?,
         };
+        // The instance of the previous step, maybe: a new call.
+        start_call(&mut store);
         let answer = tokio::time::timeout(CALL_TIMEOUT, module.breezone_module_driver().call_pair(&mut store, step, &input.to_string()))
             .await
             .map_err(|_| DriverError::Unreachable(format!("{}: no answer", self.id)))?
@@ -1122,7 +1258,7 @@ impl WasmSource {
             *guard = Some(self.start().await?);
         }
         let live = guard.as_mut().expect("instance");
-        live.store.set_epoch_deadline(CALL_TICKS);
+        start_call(&mut live.store);
         let outcome = tokio::time::timeout(CALL_TIMEOUT, f(live)).await;
         match outcome {
             Ok(Ok(result)) => result.map_err(from_wit),
@@ -1315,7 +1451,10 @@ pub async fn loaded(m: &crate::modules::manifest::Manifest, dir: &Path) -> Resul
         oauth_token_url: m.oauth.as_ref().map(|o| o.token_url.clone()),
         account_fields: m.config.iter().map(|f| f.name.clone()).collect(),
     };
-    let cache = dir.parent().and_then(Path::parent).map(|modules| modules.join("cache"));
+    // The tests share one cache (`BREEZONE_MODULES_CACHE`, development builds only): each of their
+    // servers would compile the same modules again.
+    let shared = std::env::var_os("BREEZONE_MODULES_CACHE").filter(|_| cfg!(debug_assertions)).map(std::path::PathBuf::from);
+    let cache = shared.or_else(|| dir.parent().and_then(Path::parent).map(|modules| modules.join("cache")));
     let id = m.id.clone();
     let mut module = tokio::task::spawn_blocking(move || WasmModule::load(&id, &wasm, permissions, cache.as_deref()))
         .await
@@ -1343,6 +1482,10 @@ pub async fn source(
 /// Whether `host` is hardware of an installed module (discovery).
 pub async fn probe(m: &crate::modules::manifest::Manifest, dir: &Path, host: &str) -> Option<String> {
     loaded(m, dir).await.ok()?.probe(host).await
+}
+
+pub async fn identify(m: &crate::modules::manifest::Manifest, dir: &Path, host: &str, announced: Option<&serde_json::Value>) -> Option<serde_json::Value> {
+    loaded(m, dir).await.ok()?.identify(host, announced).await
 }
 
 #[cfg(test)]

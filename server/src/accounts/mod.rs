@@ -3,22 +3,15 @@
 //! replaces it. The secrets (password, client secret, tokens) are encrypted with the data key.
 //!
 //! - `airzone`: the Airzone Cloud account (names, groups, schedules), see `cloud`;
-//! - `rte`: RTE's data portal, for the official colour of the Tempo days;
-//! - `linky`: Conso API, which reads what Enedis measured (Linky) with a personal token;
-//! - `netatmo`: Netatmo (Legrand Home + Control), by OAuth with one's own Netatmo app;
-//! - `ezviz`: EZVIZ (cameras, doorbells), with the account of its app;
-//! - `forecast_solar`: Forecast.Solar, the forecast of the solar production (the panels, a key
-//!   optional), which comes with its module;
-//! - `weather`: a service rather than an account (Open-Meteo, MeteoAlarm): no credentials, only
-//!   the switch.
+//! - the modules that are an account or a service (RTE, Linky, Netatmo, EZVIZ, the weather…): their
+//!   form comes from their manifest, and they check their account themselves;
+//! - `forecast_solar`: the panels (a key optional), set here with the position of the home, which
+//!   come with its module.
 //!
 //! Each can be switched off without being forgotten: what uses it then does as if it were not set.
 
-pub mod ezviz;
 pub mod forecast_solar;
 pub mod linky;
-pub mod netatmo;
-pub mod rte;
 
 use crate::crypto::{decrypt, encrypt};
 use crate::db;
@@ -180,12 +173,10 @@ pub fn unreachable(service: &str, e: reqwest::Error) -> ApiError {
     ApiError::bad_gateway(crate::text!("{0} injoignable : {1}", "{0} unreachable: {1}", "{0} inaccesible: {1}", service, e.to_string()))
 }
 
-/// An account that is a module run by the host (installed, or shipped in place of the code of the
-/// core): connected, checked and tested from the fields of its manifest's form.
+/// An account that is a module run by the host (installed, or shipped with Breezone): connected,
+/// checked and tested from the fields of its manifest's form.
 pub fn is_module_account(kind: &str) -> bool {
-    crate::modules::manifest(kind).is_some_and(|m| m.has(Role::Account))
-        && crate::modules::installed_dir(kind).is_some()
-        && (crate::modules::native::get(kind).is_none() || crate::modules::replaces_native(kind))
+    crate::modules::manifest(kind).is_some_and(|m| m.has(Role::Account)) && crate::modules::installed_dir(kind).is_some()
 }
 
 /// The fields of the form of a module's account, from what was typed: (what is not secret, all of
@@ -220,13 +211,34 @@ async fn check_module_account(kind: &str, fields: &str) -> ApiResult<String> {
         let m = crate::modules::manifest(kind).ok_or_else(|| ApiError::not_found("unknown account"))?;
         let dir = crate::modules::installed_dir(kind).ok_or_else(|| ApiError::not_found("unknown account"))?;
         let module = crate::modules::wasm::loaded(m, &dir).await.map_err(ApiError::bad_gateway)?;
-        module.check_account(fields).await.map_err(|e| ApiError::bad_gateway(e.to_string()))
+        // What was typed is refused (a wrong password): the user's to fix; else the service fails.
+        module.check_account(fields).await.map_err(|e| match e {
+            crate::drivers::DriverError::Unreachable(m) => ApiError::bad_gateway(m),
+            crate::drivers::DriverError::Invalid(m) | crate::drivers::DriverError::Unsupported(m) => ApiError::bad_request(m),
+        })
     }
     #[cfg(not(feature = "wasm"))]
     {
         let _ = (kind, fields);
         Err::<String, _>(ApiError::bad_request("this build of Breezone has no module host"))
     }
+}
+
+/// What is shown of an account, from what its module kept: the fields of its form that are not
+/// secret, as the module kept them (a number without its spaces), and what it gives to be shown
+/// (`shown`: the homes the account reaches…), which leaves the secret part.
+fn shown(m: &crate::modules::manifest::Manifest, mut config: Value, mut kept: Value) -> (Value, Value) {
+    for f in m.config.iter().filter(|f| f.kind != "password") {
+        if let Some(v) = kept.get(&f.name).filter(|v| !v.is_null()) {
+            config[&f.name] = v.clone();
+        }
+    }
+    if let Some(Value::Object(extra)) = kept.as_object_mut().and_then(|k| k.remove("shown")) {
+        for (k, v) in extra {
+            config[&k] = v;
+        }
+    }
+    (config, kept)
 }
 
 /// Connects the account of a module: the module checks it, then it is kept (what is not secret
@@ -236,6 +248,7 @@ pub async fn connect_module(state: &AppState, kind: &str, input: &Value) -> ApiR
     let (config, all) = account_fields(m, input)?;
     let kept: Value = serde_json::from_str(&check_module_account(kind, &all.to_string()).await?).unwrap_or(all);
     let expires = kept["expires_at"].as_i64();
+    let (config, kept) = shown(m, config, kept);
     save(state, kind, &config, &kept, expires).await?;
     db::set_account_state(&state.db, kind, "ok", None).await?;
     ensure_module_source(state, kind).await
@@ -257,9 +270,11 @@ pub async fn ensure_module_source(state: &AppState, kind: &str) -> ApiResult<()>
 pub async fn test_module(state: &AppState, kind: &str) -> ApiResult<()> {
     let Some((config, fields)) = load::<Value>(state, kind).await? else { return Err(ApiError::bad_request("not connected")) };
     let result = check_module_account(kind, &fields.to_string()).await;
-    if let Ok(kept) = &result {
+    if let (Ok(kept), Some(m)) = (&result, crate::modules::manifest(kind)) {
         let kept: Value = serde_json::from_str(kept).unwrap_or(fields);
-        save(state, kind, &config, &kept, kept["expires_at"].as_i64()).await?;
+        let expires = kept["expires_at"].as_i64();
+        let (config, kept) = shown(m, config, kept);
+        save(state, kind, &config, &kept, expires).await?;
     }
     record(state, kind, result.map(|_| ())).await?;
     ensure_module_source(state, kind).await
@@ -271,7 +286,7 @@ mod tests {
 
     #[test]
     fn the_fields_of_an_account_are_split() {
-        let m = crate::modules::manifest::Manifest::parse(include_str!("../modules/native/manifests/rte.json")).unwrap();
+        let m = crate::modules::manifest::Manifest::parse(include_str!("../../../modules/rte/manifest.json")).unwrap();
         let (config, all) = account_fields(&m, &serde_json::json!({"client_id": " id ", "client_secret": "s", "other": 1})).unwrap();
         assert_eq!(config, serde_json::json!({"client_id": "id"}));
         assert_eq!(all, serde_json::json!({"client_id": "id", "client_secret": "s"}));

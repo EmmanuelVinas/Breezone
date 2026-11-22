@@ -10,7 +10,7 @@
 //! Besides the readings, the module keeps the Shelly's WebSocket (`/rpc`): each `NotifyStatus`
 //! makes Breezone read it at once (a relay switched by hand shows without waiting).
 
-use breezone_module_sdk::{device, host, json, module, Described, DeviceInfo, Driver, Error, Map, Result, State, Value};
+use breezone_module_sdk::{device, host, json, module, Described, DeviceInfo, Driver, Error, Found, Map, Result, State, Value};
 use std::cell::Cell;
 
 /// Shelly models by firmware application (`app` of `/shelly`): the name shown, and a note when the
@@ -287,6 +287,16 @@ impl Driver for Shelly {
         if let Some(s) = self.socket.take() {
             host::unsubscribe(s);
         }
+    }
+
+    fn identify(host_: &str, announced: Option<&Value>) -> Option<Found> {
+        if announced.is_some() {
+            return None;
+        }
+        let (_, info) = host::get_json(&format!("http://{host_}/shelly"), 2000).ok()?;
+        let i = identify(&info)?;
+        let mac = info["mac"].as_str().map(str::to_string);
+        Some(Found { model: i.model, note: i.note, device_id: Some(i.id), firmware: i.firmware, mac, unsupported: !i.supported, ..Found::default() })
     }
 
     fn probe(host_: &str) -> Option<String> {

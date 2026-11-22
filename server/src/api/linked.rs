@@ -14,29 +14,10 @@ pub async fn list(State(state): State<AppState>, _admin: AdminUser) -> ApiResult
     Ok(Json(accounts::list(&state).await?))
 }
 
-/// What connecting an account takes, by kind (Airzone is connected from its module).
+/// What connecting Forecast.Solar takes (the modules that are an account take the fields of their
+/// form; Airzone is connected from its module).
 #[derive(Deserialize, Default)]
 pub struct ConnectInput {
-    #[serde(default)]
-    pub client_id: String,
-    #[serde(default)]
-    pub client_secret: String,
-    #[serde(default)]
-    pub refresh_token: String,
-    #[serde(default)]
-    pub token: String,
-    #[serde(default)]
-    pub prm: String,
-    #[serde(default)]
-    pub account: String,
-    #[serde(default)]
-    pub password: String,
-    /// The code of a two-step verification, when the service sent one.
-    #[serde(default)]
-    pub code: String,
-    /// The verification code of the cameras, for their encrypted pictures.
-    #[serde(default)]
-    pub image_code: String,
     /// Forecast.Solar: the panels (peak power in kWp, tilt, orientation) and its optional key.
     #[serde(default)]
     pub kwp: String,
@@ -51,24 +32,18 @@ pub struct ConnectInput {
 pub async fn connect(State(state): State<AppState>, AdminUser(user): AdminUser, Path(kind): Path<String>, Json(fields): Json<Value>) -> ApiResult<Json<AccountView>> {
     let input: ConnectInput = serde_json::from_value(fields.clone()).map_err(|e| ApiError::bad_request(e.to_string()))?;
     match kind.as_str() {
+        // Its panels, with the position of the home.
+        accounts::forecast_solar::KIND => accounts::forecast_solar::connect(&state, &input.kwp, &input.declination, &input.azimuth, &input.api_key).await?,
         // A module run by the host checks its account itself, from the fields of its form.
         k if accounts::is_module_account(k) => {
             accounts::connect_module(&state, k, &fields).await?;
             // A year of the meter at once: the history and its costs are there from the start.
             if k == accounts::linky::KIND {
-                let state = state.clone();
-                tokio::spawn(async move {
-                    if let Err(e) = accounts::linky::refresh_from(&state, 365).await {
-                        tracing::warn!("Linky not read: {}", e.message.en);
-                    }
-                });
+                if let Err(e) = accounts::linky::refresh_from(&state, 365).await {
+                    tracing::warn!("Linky not read: {}", e.message.en);
+                }
             }
         }
-        accounts::rte::KIND => accounts::rte::connect(&state, &input.client_id, &input.client_secret).await?,
-        accounts::linky::KIND => accounts::linky::connect(&state, &input.token, &input.prm).await?,
-        accounts::netatmo::KIND => accounts::netatmo::connect(&state, &input.client_id, &input.client_secret, &input.refresh_token).await?,
-        accounts::ezviz::KIND => accounts::ezviz::connect(&state, &input.account, &input.password, &input.code, &input.image_code).await?,
-        accounts::forecast_solar::KIND => accounts::forecast_solar::connect(&state, &input.kwp, &input.declination, &input.azimuth, &input.api_key).await?,
         crate::cloud::ACCOUNT => return Err(ApiError::bad_request("le compte Airzone se connecte depuis Réglages › Modules › Airzone")),
         _ => return Err(ApiError::not_found("unknown account")),
     }
@@ -79,12 +54,8 @@ pub async fn connect(State(state): State<AppState>, AdminUser(user): AdminUser, 
 /// Uses the account once more: its state says whether it still works.
 pub async fn test(State(state): State<AppState>, AdminUser(user): AdminUser, Path(kind): Path<String>) -> ApiResult<Json<AccountView>> {
     let result = match kind.as_str() {
-        k if accounts::is_module_account(k) => accounts::test_module(&state, k).await,
-        accounts::rte::KIND => accounts::rte::test(&state).await,
-        accounts::linky::KIND => accounts::linky::test(&state).await,
-        accounts::netatmo::KIND => accounts::netatmo::test(&state).await,
-        accounts::ezviz::KIND => accounts::ezviz::test(&state).await,
         accounts::forecast_solar::KIND => accounts::forecast_solar::test(&state).await,
+        k if accounts::is_module_account(k) => accounts::test_module(&state, k).await,
         crate::cloud::ACCOUNT => crate::cloud::sync_stored(&state, &user.username).await.map(|_| ()),
         accounts::WEATHER => {
             state.weather.refresh().await;

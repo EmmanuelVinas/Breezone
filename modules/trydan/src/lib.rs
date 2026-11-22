@@ -10,7 +10,7 @@
 //! (`auto_limit`). Starting with a maximum current turns `Dynamic` off. Charging is started and
 //! stopped with `Paused`.
 
-use breezone_module_sdk::{device, host, json, module, Described, Driver, Error, Map, Result, State, Value};
+use breezone_module_sdk::{device, host, json, module, Described, Driver, Error, Found, Map, Result, State, Value};
 
 /// The only device of a charger.
 pub const REFERENCE: &str = "charger";
@@ -206,6 +206,15 @@ impl Driver for Trydan {
             d.remove(k);
         }
         Ok(Value::Object(d))
+    }
+
+    fn identify(host_: &str, announced: Option<&Value>) -> Option<Found> {
+        if announced.is_some() {
+            return None;
+        }
+        let (_, data) = host::get_json(&format!("http://{host_}/RealTimeData"), 2000).ok()?;
+        let t = identify(&data)?;
+        Some(Found { model: "V2C Trydan".into(), note: t.note, device_id: (!t.id.is_empty()).then_some(t.id), firmware: t.firmware, ..Found::default() })
     }
 
     fn probe(host_: &str) -> Option<String> {

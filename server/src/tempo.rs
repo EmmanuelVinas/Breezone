@@ -102,11 +102,7 @@ pub async fn refresh(state: &AppState) -> anyhow::Result<()> {
             return Ok(());
         }
         Some(Err(e)) => tracing::warn!("Tempo colours not read from a module: {e}"),
-        None => match crate::accounts::rte::refresh(state, season).await {
-            Ok(true) => return Ok(()),
-            Ok(false) => {}
-            Err(e) => tracing::warn!("Tempo colours not read from RTE: {}", e.message.en),
-        },
+        None => {}
     }
     let Some(base) = state.cfg.tempo_url.clone() else { return Ok(()) };
     let http = reqwest::Client::builder().timeout(Duration::from_secs(10)).user_agent("Breezone").build()?;

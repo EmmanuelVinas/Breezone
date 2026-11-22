@@ -507,7 +507,10 @@ impl Service for Account {
             "rf_session_id": s.rf_session_id,
             "api_url": s.api_url,
         }))?;
-        devices().map(|_| ())
+        // What the account reaches, shown with it.
+        let names: Vec<Value> = devices()?.iter().filter_map(|d| d["name"].as_str()).map(|n| json!(n)).collect();
+        let image_code = typed["image_code"].as_str().is_some_and(|c| !c.trim().is_empty());
+        host::account_update(&json!({"shown": {"devices": names, "image_code": image_code}}))
     }
 
     fn query(contract: &str, query: &str, _params: Value) -> Result<Value> {

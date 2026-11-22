@@ -282,7 +282,8 @@ pub async fn next(State(state): State<AppState>, _admin: AdminUser, axum::extrac
     let host: crate::capabilities::Host = serde_json::from_slice(&bytes).map_err(|e| unreachable(e.to_string()))?;
     let running = target.to_string();
     let mut out = vec![];
-    for row in db::list_modules(&state.db).await?.into_iter().filter(|r| r.origin != "native") {
+    // Those that come with Breezone come with the next version too.
+    for row in db::list_modules(&state.db).await?.into_iter().filter(|r| r.origin != "native" && r.origin != "builtin") {
         let repo = match db::module_repository(&state.db, &row.id).await? {
             Some(id) => state.library.repository(&state.db, id).await?,
             None => Some(state.library.official(&state.db).await?),

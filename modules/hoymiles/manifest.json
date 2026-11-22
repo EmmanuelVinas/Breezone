@@ -1,6 +1,6 @@
 {
   "id": "hoymiles",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "name": {
     "en": "Hoymiles (DTU Wi-Fi)",
     "es": "Hoymiles (DTU Wi-Fi)",
@@ -10,7 +10,7 @@
     "driver"
   ],
   "requires": {
-    "api": "^1.0"
+    "api": "^1.1"
   },
   "provides": {
     "traits": [
@@ -48,6 +48,7 @@
   },
   "read_every_s": 30,
   "optional_calls": [
+    "identify",
     "probe",
     "diagnostic"
   ]

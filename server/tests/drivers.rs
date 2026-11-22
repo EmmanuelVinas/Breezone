@@ -1,6 +1,8 @@
 //! Drivers (ADR 0013): a source of devices is configured, read through its driver, and its devices
 //! are listed and driven through their traits like the Airzone zones.
 
+mod support;
+
 use axum::extract::{Query, State};
 use axum::routing::get;
 use axum::{Json, Router};
@@ -72,7 +74,7 @@ impl Server {
     async fn start_with(tune: impl FnOnce(&mut Config), read: bool) -> (Server, String) {
         let dir = std::env::temp_dir().join(format!("breezone-drivers-{}-{}", std::process::id(), rand_suffix()));
         let _ = std::fs::remove_dir_all(&dir);
-        let mut cfg = Config::for_tests(dir);
+        let mut cfg = support::config(&dir);
         cfg.scan_port = 9;
         tune(&mut cfg);
         let (read_every, record_every) = (cfg.device_read_ms, cfg.history_interval_secs as u64);
@@ -219,8 +221,9 @@ async fn the_measures_have_a_history_and_make_the_energy_of_the_home() {
     };
     let (server, token) = Server::start_with(tune, true).await;
     let t = Some(token.as_str());
-    let (s, _) = server.call("POST", "/api/sources", t, Some(json!({"driver":"shelly","name":"Tableau","config":{"host": format!("127.0.0.1:{shelly}")}}))).await;
+    let (s, source) = server.call("POST", "/api/sources", t, Some(json!({"driver":"shelly","name":"Tableau","config":{"host": format!("127.0.0.1:{shelly}")}}))).await;
     assert_eq!(s, StatusCode::CREATED);
+    let source = source["id"].as_i64().unwrap();
 
     // Nothing is shown until the measures have a role.
     let (_, live) = server.call("GET", "/api/energy/live", t, None).await;
@@ -262,7 +265,13 @@ async fn the_measures_have_a_history_and_make_the_energy_of_the_home() {
 
     // Its counter went up: energy drawn from the grid today, used by the home. It stops counting
     // and a history point records its last value, so the day and the days read the same energy.
+    // Read a few times now (its module reads every 5 s), then it stops counting.
+    for _ in 0..3 {
+        server.state.drivers.poll(source).await;
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    }
     step.store(0, Ordering::SeqCst);
+    server.state.drivers.poll(source).await;
     tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
     let (_, days) = server.call("GET", "/api/energy/days?days=3", t, None).await;
     let days = days.as_array().unwrap();
@@ -877,7 +886,7 @@ async fn modules_are_listed_and_loaded_only_when_used() {
         assert!(ids.contains(&id), "{id} in {ids:?}");
     }
     assert_eq!(loaded(&modules, "shelly"), Some(json!(false)), "no source yet");
-    assert_eq!(modules[0]["origin"], "native");
+    assert_eq!(modules[0]["origin"], "builtin", "shipped with Breezone");
     assert!(modules[0]["manifest"]["requires"]["api"].is_string());
 
     // The drivers' forms come from the manifests.

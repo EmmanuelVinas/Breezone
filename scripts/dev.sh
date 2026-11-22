@@ -6,8 +6,8 @@
 #   ./scripts/dev.sh --real     # no fake Airzone: use BREEZONE_* from .env (real WebServers)
 #   ./scripts/dev.sh --modules  # also one fake module of each kind (lights, shutters, energy…), added
 #                               # for the admin (BREEZONE_ADMIN_USER / _PASSWORD, admin / motdepasse1)
-#   ./scripts/dev.sh --shipped  # the modules shipped with Breezone (WebAssembly) in place of the drivers
-#                               # compiled in, as in the image (built and packed into data/dev-modules)
+#   (the modules shipped with Breezone, which drive the hardware, are always built and packed into
+#   data/dev-modules, as in the image; `--shipped` is still accepted)
 #   BREEZONE_DEV_PORT=8091 ./scripts/dev.sh   # server on another port (e.g. for the mobile E2E test)
 #   BREEZONE_DEV_DATA=data/screenshots ./scripts/dev.sh --reset --modules   # a fresh demonstration home
 
@@ -20,13 +20,12 @@ cd "${PROJECT_DIR}"
 FAKE=true
 RESET=false
 MODULES=false
-SHIPPED=false
 for arg in "$@"; do
   case $arg in
     --reset) RESET=true ;;
     --real) FAKE=false ;;
     --modules) MODULES=true ;;
-    --shipped) SHIPPED=true ;;
+    --shipped) ;;
     -h|--help) sed -n '2,12p' "$0"; exit 0 ;;
     *) echo "Unknown option: $arg" >&2; exit 1 ;;
   esac
@@ -67,7 +66,7 @@ if [ "${FAKE}" = "true" ]; then
   export BREEZONE_AIRZONE_CLOUD_URL="http://127.0.0.1:3900" BREEZONE_SCAN_SUBNET="127.0.0.0/30" BREEZONE_POLL_INTERVAL_SECS=5
 fi
 
-if [ "${SHIPPED}" = "true" ]; then
+{
   # The same list as the image (Dockerfile, SHIPPED_MODULES).
   SHIPPED_MODULES="$(sed -n 's/^ARG SHIPPED_MODULES="\(.*\)"/\1/p' Dockerfile)"
   SHIPPED_DIR="${PROJECT_DIR}/data/dev-modules"
@@ -82,7 +81,7 @@ if [ "${SHIPPED}" = "true" ]; then
   export BREEZONE_MODULES_DEV="${SHIPPED_DIR}"
   # The fake devices answer on this machine: the modules may reach it (development builds only).
   [ "${FAKE}" = "true" ] && export BREEZONE_MODULES_LOOPBACK=1
-fi
+}
 
 echo "▸ Breezone server :${DEV_PORT}"
 (cd server && cargo run -q --bin breezone-server) &

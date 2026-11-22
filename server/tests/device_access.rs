@@ -1,10 +1,11 @@
 //! The devices of the modules are given to a user apart: all of them, a room, a type or one
 //! device, read-only or with control.
 
+mod support;
+
 use axum::extract::{Query, State};
 use axum::routing::get;
 use axum::{Json, Router};
-use breezone_server::config::Config;
 use reqwest::{Method, StatusCode};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -79,7 +80,7 @@ async fn modules(c: &Client) -> Vec<(String, bool)> {
 async fn the_devices_of_the_modules_are_given_by_type_room_or_device() {
     let dir = std::env::temp_dir().join(format!("breezone-device-access-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let mut cfg = Config::for_tests(dir);
+    let mut cfg = support::config(&dir);
     cfg.scan_port = 9;
     let state = breezone_server::init_state(cfg).await.unwrap();
     let base = format!("http://127.0.0.1:{}", serve(breezone_server::app(state)).await);
@@ -158,7 +159,7 @@ async fn user_id(admin: &Client, name: &str) -> i64 {
 async fn a_group_drives_every_device_of_a_type() {
     let dir = std::env::temp_dir().join(format!("breezone-device-groups-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let mut cfg = Config::for_tests(dir);
+    let mut cfg = support::config(&dir);
     cfg.scan_port = 9;
     let state = breezone_server::init_state(cfg).await.unwrap();
     let base = format!("http://127.0.0.1:{}", serve(breezone_server::app(state)).await);

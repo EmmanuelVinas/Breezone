@@ -1,201 +1,244 @@
-//! A HomeKit controller (HAP over IP): Breezone pairs with an accessory (a Legrand gateway, a VELUX
-//! gateway…) with its setup code, then reads and drives it on the local network, through encrypted
-//! sessions. No Apple device or account is involved.
-//!
-//! Pairing with Breezone changes nothing else on the accessory: the devices its own app set up stay
-//! as they are. Breezone never resets an accessory: the only pairing it removes is its own.
+//! A HomeKit accessory for the tests (it pairs, serves its database on an encrypted session and
+//! sends events), with the pieces of HAP it needs: TLV8, the accessory's side of SRP, the
+//! encryption of the sessions.
+#![allow(dead_code)]
 
-pub mod discovery;
-pub mod session;
-mod srp;
-mod tlv;
+use chacha20poly1305::aead::{Aead, KeyInit, Payload};
+use chacha20poly1305::{ChaCha20Poly1305, Nonce};
+use hkdf::Hkdf;
+use sha2::Sha512;
 
-use ed25519_dalek::SigningKey;
-use serde::{Deserialize, Serialize};
-pub use session::Connection;
-use session::{hkdf, label, open, seal};
-
-/// What an accessory and Breezone keep of their pairing: the accessory's identity and long-term
-/// public key, Breezone's identity and long-term secret key (never shown, stored encrypted).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Pairing {
-    pub accessory_id: String,
-    /// Hex.
-    pub accessory_ltpk: String,
-    pub controller_id: String,
-    /// Hex.
-    pub controller_ltsk: String,
+pub fn hkdf(salt: &str, ikm: &[u8], info: &str) -> [u8; 32] {
+    let mut out = [0u8; 32];
+    Hkdf::<Sha512>::new(Some(salt.as_bytes()), ikm).expand(info.as_bytes(), &mut out).expect("32 bytes");
+    out
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum HapError {
-    Unreachable(String),
-    Protocol(String),
-    /// An error code of the accessory (HAP, table 5-5).
-    Accessory(u8),
-    /// The accessory no longer knows Breezone's pairing (removed, or the accessory was reset): it
-    /// refuses Breezone's key, or closes the connection when it is shown.
-    Forgotten,
+fn nonce(tail: [u8; 8]) -> Nonce {
+    let mut n = [0u8; 12];
+    n[4..].copy_from_slice(&tail);
+    Nonce::from(n)
 }
 
-impl HapError {
-    /// What it means for the person pairing.
-    pub fn explain(&self) -> crate::i18n::Text {
-        match self {
-            HapError::Accessory(2) => crate::text!(
-                "Code incorrect : vérifiez le code HomeKit à 8 chiffres de l'accessoire.",
-                "Wrong code: check the 8-digit HomeKit code of the accessory.",
-                "Código incorrecto: compruebe el código HomeKit de 8 cifras del accesorio."
-            ),
-            HapError::Accessory(3) | HapError::Accessory(5) => crate::text!(
-                "Trop d'essais : l'accessoire refuse l'appairage pour l'instant. Réessayez plus tard.",
-                "Too many tries: the accessory refuses pairing for now. Try again later.",
-                "Demasiados intentos: el accesorio rechaza el emparejamiento por ahora. Inténtelo más tarde."
-            ),
-            HapError::Accessory(4) => {
-                crate::text!("L'accessoire n'accepte plus d'autre contrôleur.", "The accessory accepts no other controller.", "El accesorio no acepta más controladores.")
+pub fn label(text: &str) -> [u8; 8] {
+    let mut out = [0u8; 8];
+    out.copy_from_slice(&text.as_bytes()[..8]);
+    out
+}
+
+pub fn seal(key: &[u8; 32], tail: [u8; 8], aad: &[u8], plain: &[u8]) -> Vec<u8> {
+    let cipher = ChaCha20Poly1305::new_from_slice(key).expect("32-byte key");
+    cipher.encrypt(&nonce(tail), Payload { msg: plain, aad }).expect("encryption")
+}
+
+pub fn open(key: &[u8; 32], tail: [u8; 8], aad: &[u8], sealed: &[u8]) -> Result<Vec<u8>, String> {
+    let cipher = ChaCha20Poly1305::new_from_slice(key).expect("32-byte key");
+    cipher.decrypt(&nonce(tail), Payload { msg: sealed, aad }).map_err(|_| "cannot decrypt".to_string())
+}
+
+pub mod tlv {
+    //! TLV8, the format of the pairing messages: one byte of type, one of length (at most 255), the
+    //! value; a longer value is split in fragments of the same type.
+
+    pub const METHOD: u8 = 0x00;
+    pub const IDENTIFIER: u8 = 0x01;
+    pub const SALT: u8 = 0x02;
+    pub const PUBLIC_KEY: u8 = 0x03;
+    pub const PROOF: u8 = 0x04;
+    pub const ENCRYPTED_DATA: u8 = 0x05;
+    pub const STATE: u8 = 0x06;
+    pub const ERROR: u8 = 0x07;
+    pub const SIGNATURE: u8 = 0x0a;
+
+    pub fn encode(items: &[(u8, &[u8])]) -> Vec<u8> {
+        let mut out = vec![];
+        for (kind, value) in items {
+            if value.is_empty() {
+                out.extend_from_slice(&[*kind, 0]);
+                continue;
             }
-            HapError::Accessory(6) => crate::text!(
-                "L'accessoire est déjà appairé à un autre contrôleur HomeKit.",
-                "The accessory is already paired with another HomeKit controller.",
-                "El accesorio ya está emparejado con otro controlador HomeKit."
-            ),
-            HapError::Accessory(7) => crate::text!(
-                "L'accessoire est occupé par un autre appairage. Réessayez dans un instant.",
-                "The accessory is busy with another pairing. Try again in a moment.",
-                "El accesorio está ocupado con otro emparejamiento. Inténtelo de nuevo en un momento."
-            ),
-            HapError::Forgotten => crate::text!(
-                "L'accessoire ne reconnaît plus Breezone (appairage retiré, ou accessoire réinitialisé) : retirez ce module, puis appairez-le de nouveau avec son code.",
-                "The accessory no longer knows Breezone (pairing removed, or accessory reset): remove this module, then pair it again with its code.",
-                "El accesorio ya no reconoce Breezone (emparejamiento eliminado o accesorio restablecido): quite este módulo y vuelva a emparejarlo con su código."
-            ),
-            HapError::Accessory(code) => crate::text!("L'accessoire refuse (erreur {0}).", "The accessory refuses (error {0}).", "El accesorio rechaza (error {0}).", code),
-            HapError::Unreachable(e) => crate::text!("Accessoire injoignable : {0}", "Accessory unreachable: {0}", "Accesorio inaccesible: {0}", e),
-            HapError::Protocol(e) => {
-                crate::text!("Réponse inattendue de l'accessoire : {0}", "Unexpected answer from the accessory: {0}", "Respuesta inesperada del accesorio: {0}", e)
+            for chunk in value.chunks(255) {
+                out.push(*kind);
+                out.push(chunk.len() as u8);
+                out.extend_from_slice(chunk);
             }
         }
+        out
+    }
+
+    /// The items of a message, a value split in fragments put back together.
+    pub fn decode(buf: &[u8]) -> Result<Vec<(u8, Vec<u8>)>, String> {
+        let mut out: Vec<(u8, Vec<u8>)> = vec![];
+        let mut i = 0;
+        let mut last_len = 0;
+        while i < buf.len() {
+            let (kind, len) = (buf[i], *buf.get(i + 1).ok_or("truncated TLV")? as usize);
+            let value = buf.get(i + 2..i + 2 + len).ok_or("truncated TLV")?;
+            match out.last_mut() {
+                Some((k, v)) if *k == kind && last_len == 255 => v.extend_from_slice(value),
+                _ => out.push((kind, value.to_vec())),
+            }
+            last_len = len;
+            i += 2 + len;
+        }
+        Ok(out)
+    }
+
+    pub fn get(items: &[(u8, Vec<u8>)], kind: u8) -> Option<&[u8]> {
+        items.iter().find(|(k, _)| *k == kind).map(|(_, v)| v.as_slice())
     }
 }
 
-impl std::fmt::Display for HapError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            HapError::Unreachable(e) => write!(f, "unreachable: {e}"),
-            HapError::Protocol(e) => write!(f, "{e}"),
-            HapError::Accessory(code) => write!(f, "the accessory refuses (error {code})"),
-            HapError::Forgotten => write!(f, "the accessory no longer knows Breezone's pairing: remove this module, then pair it again with its code"),
+pub mod srp {
+    //! SRP-6a as HomeKit uses it for pairing (HAP, chapter 5.6): the 3072-bit group of RFC 5054,
+    //! g = 5, SHA-512, user "Pair-Setup", the setup code as the password. Numbers are hashed padded to
+    //! the length of N, as the HomeKit accessory kits do.
+
+    use num_bigint::BigUint;
+    use sha2::{Digest, Sha512};
+
+    const N_HEX: &str = "\
+    FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E088A67CC74020BBEA63B139B22514A08798E3404DD\
+    EF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245E485B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7ED\
+    EE386BFB5A899FA5AE9F24117C4B1FE649286651ECE45B3DC2007CB8A163BF0598DA48361C55D39A69163FA8FD24CF5F\
+    83655D23DCA3AD961C62F356208552BB9ED529077096966D670C354E4ABC9804F1746C08CA18217C32905E462E36CE3B\
+    E39E772C180E86039B2783A2EC07A28FB5C55DF06F4C52C9DE2BCBF6955817183995497CEA956AE515D2261898FA0510\
+    15728E5A8AAAC42DAD33170D04507A33A85521ABDF1CBA64ECFB850458DBEF0A8AEA71575D060C7DB3970F85A6E1E4C7\
+    ABF5AE8CDB0933D71E8C94E04A25619DCEE3D2261AD2EE6BF12FFA06D98A0864D87602733EC86A64521F2B18177B200C\
+    BBE117577A615D6C770988C0BAD946E208E24FA074E5AB3143DB5BFCE0FD108E4B82D120A93AD2CAFFFFFFFFFFFFFFFF";
+    const G: u32 = 5;
+    /// Bytes of N.
+    pub const LEN: usize = 384;
+    pub const USER: &str = "Pair-Setup";
+
+    fn n() -> BigUint {
+        BigUint::parse_bytes(N_HEX.as_bytes(), 16).expect("N")
+    }
+
+    fn hash(parts: &[&[u8]]) -> Vec<u8> {
+        let mut h = Sha512::new();
+        for p in parts {
+            h.update(p);
+        }
+        h.finalize().to_vec()
+    }
+
+    /// A number as `LEN` big-endian bytes.
+    pub fn pad(x: &BigUint) -> Vec<u8> {
+        let bytes = x.to_bytes_be();
+        let mut out = vec![0u8; LEN.saturating_sub(bytes.len())];
+        out.extend(bytes);
+        out
+    }
+
+    fn k() -> BigUint {
+        BigUint::from_bytes_be(&hash(&[&pad(&n()), &pad(&BigUint::from(G))]))
+    }
+
+    fn x(salt: &[u8], password: &str) -> BigUint {
+        let inner = hash(&[format!("{USER}:{password}").as_bytes()]);
+        BigUint::from_bytes_be(&hash(&[salt, &inner]))
+    }
+
+    fn u(a_pub: &[u8], b_pub: &[u8]) -> BigUint {
+        BigUint::from_bytes_be(&hash(&[a_pub, b_pub]))
+    }
+
+    /// M1 = H(H(N) xor H(g) | H(user) | salt | A | B | K).
+    fn proof(salt: &[u8], a_pub: &[u8], b_pub: &[u8], key: &[u8]) -> Vec<u8> {
+        let hn = hash(&[&pad(&n())]);
+        let hg = hash(&[&[G as u8]]);
+        let xor: Vec<u8> = hn.iter().zip(&hg).map(|(a, b)| a ^ b).collect();
+        hash(&[&xor, &hash(&[USER.as_bytes()]), salt, a_pub, b_pub, key])
+    }
+
+    /// What both sides know once the accessory's proof checks out.
+    pub struct Agreed {
+        /// K, the session key the next steps derive their keys from.
+        pub key: Vec<u8>,
+        /// M1, sent to the accessory.
+        pub proof: Vec<u8>,
+        /// M2, expected from the accessory.
+        pub expected: Vec<u8>,
+    }
+
+    /// The controller's side.
+    pub struct Client {
+        a: BigUint,
+        /// A, padded.
+        pub public: Vec<u8>,
+    }
+
+    impl Client {
+        /// `secret`: random bytes (the private value a).
+        pub fn new(secret: &[u8; 32]) -> Self {
+            let a = BigUint::from_bytes_be(secret);
+            let public = pad(&BigUint::from(G).modpow(&a, &n()));
+            Self { a, public }
+        }
+
+        /// From the accessory's salt and public value B, the proof to send and the session key.
+        pub fn agree(&self, salt: &[u8], b_pub: &[u8], password: &str) -> Result<Agreed, String> {
+            let n = n();
+            let b = BigUint::from_bytes_be(b_pub);
+            if (&b % &n) == BigUint::ZERO {
+                return Err("invalid public value from the accessory".into());
+            }
+            let b_pub = pad(&b);
+            let u = u(&self.public, &b_pub);
+            if u == BigUint::ZERO {
+                return Err("invalid public value from the accessory".into());
+            }
+            let x = x(salt, password);
+            let gx = (k() * BigUint::from(G).modpow(&x, &n)) % &n;
+            let base = ((&b % &n) + &n - gx) % &n;
+            let s = base.modpow(&(&self.a + &u * &x), &n);
+            let key = hash(&[&pad(&s)]);
+            let proof = proof(salt, &self.public, &b_pub, &key);
+            let expected = hash(&[&self.public, &proof, &key]);
+            Ok(Agreed { key, proof, expected })
+        }
+    }
+
+    /// The accessory's side: only used to test the controller against a fake accessory.
+    pub struct Server {
+        b: BigUint,
+        v: BigUint,
+        pub salt: Vec<u8>,
+        pub public: Vec<u8>,
+    }
+
+    impl Server {
+        pub fn new(salt: &[u8], password: &str, secret: &[u8; 32]) -> Self {
+            let n = n();
+            let v = BigUint::from(G).modpow(&x(salt, password), &n);
+            let b = BigUint::from_bytes_be(secret);
+            let public = pad(&((k() * &v + BigUint::from(G).modpow(&b, &n)) % &n));
+            Self { b, v, salt: salt.to_vec(), public }
+        }
+
+        /// Checks the controller's proof; gives the session key and M2.
+        pub fn verify(&self, a_pub: &[u8], m1: &[u8]) -> Option<(Vec<u8>, Vec<u8>)> {
+            let n = n();
+            let a = BigUint::from_bytes_be(a_pub);
+            let a_pub = pad(&a);
+            let u = u(&a_pub, &self.public);
+            let s = (a * self.v.modpow(&u, &n)).modpow(&self.b, &n);
+            let key = hash(&[&pad(&s)]);
+            if proof(&self.salt, &a_pub, &self.public, &key) != m1 {
+                return None;
+            }
+            let m2 = hash(&[&a_pub, m1, &key]);
+            Some((key, m2))
         }
     }
 }
 
-/// "123-45-678", from the code as typed ("12345678", "123 45 678"…).
-pub fn setup_code(typed: &str) -> Option<String> {
-    let digits: String = typed.chars().filter(char::is_ascii_digit).collect();
-    if digits.len() != 8 || typed.chars().any(|c| !(c.is_ascii_digit() || c == '-' || c == ' ')) {
-        return None;
-    }
-    Some(format!("{}-{}-{}", &digits[..3], &digits[3..5], &digits[5..]))
-}
-
-fn uuid_v4(mut b: [u8; 16]) -> String {
-    b[6] = (b[6] & 0x0f) | 0x40;
-    b[8] = (b[8] & 0x3f) | 0x80;
-    let h = hex::encode_upper(b);
-    format!("{}-{}-{}-{}-{}", &h[..8], &h[8..12], &h[12..16], &h[16..20], &h[20..])
-}
-
-/// Pair Setup (HAP, chapter 5.6) in one go, for an accessory whose code is printed.
-pub async fn pair_setup(addr: &str, code: &str, with_auth: bool) -> Result<Pairing, HapError> {
-    PairSetup::start(addr, with_auth).await?.finish(code).await
-}
-
-/// A pairing started on an accessory, waiting for its code. An accessory with a screen shows a
-/// new code each time a pairing starts: the code is only asked once it is shown.
-pub struct PairSetup {
-    conn: Connection,
-    salt: Vec<u8>,
-    b_pub: Vec<u8>,
-}
-
-impl PairSetup {
-    /// `with_auth`: the accessory announces Apple authentication (feature flag 1), as most
-    /// certified ones do.
-    pub async fn start(addr: &str, with_auth: bool) -> Result<Self, HapError> {
-        let mut conn = Connection::connect(addr).await?;
-        let method = [if with_auth { 1u8 } else { 0 }];
-        let m2 = conn.tlv("/pair-setup", &[(tlv::STATE, &[1]), (tlv::METHOD, &method)]).await?;
-        let salt = tlv::get(&m2, tlv::SALT).ok_or_else(|| HapError::Protocol("pair-setup: no salt".into()))?.to_vec();
-        let b_pub = tlv::get(&m2, tlv::PUBLIC_KEY).ok_or_else(|| HapError::Protocol("pair-setup: no public key".into()))?.to_vec();
-        Ok(Self { conn, salt, b_pub })
-    }
-
-    pub async fn finish(self, code: &str) -> Result<Pairing, HapError> {
-        let Self { mut conn, salt, b_pub } = self;
-        let client = srp::Client::new(&crate::auth::random_bytes::<32>());
-        let agreed = client.agree(&salt, &b_pub, code).map_err(HapError::Protocol)?;
-        let m4 = conn.tlv("/pair-setup", &[(tlv::STATE, &[3]), (tlv::PUBLIC_KEY, &client.public), (tlv::PROOF, &agreed.proof)]).await?;
-        if tlv::get(&m4, tlv::PROOF) != Some(agreed.expected.as_slice()) {
-            return Err(HapError::Protocol("the accessory's proof does not match".into()));
-        }
-
-        // Breezone's long-term identity for this accessory.
-        // A UUID, as Apple's controllers send it: some accessories (Legrand) refuse anything else.
-        let controller_id = uuid_v4(crate::auth::random_bytes::<16>());
-        let me = SigningKey::from_bytes(&crate::auth::random_bytes::<32>());
-        let ltpk = me.verifying_key().to_bytes();
-        let x = hkdf("Pair-Setup-Controller-Sign-Salt", &agreed.key, "Pair-Setup-Controller-Sign-Info");
-        let mut info = x.to_vec();
-        info.extend_from_slice(controller_id.as_bytes());
-        info.extend_from_slice(&ltpk);
-        use ed25519_dalek::Signer;
-        let signature = me.sign(&info).to_bytes();
-        let inner = tlv::encode(&[(tlv::IDENTIFIER, controller_id.as_bytes()), (tlv::PUBLIC_KEY, &ltpk), (tlv::SIGNATURE, &signature)]);
-        let key = hkdf("Pair-Setup-Encrypt-Salt", &agreed.key, "Pair-Setup-Encrypt-Info");
-        let sealed = seal(&key, label("PS-Msg05"), &[], &inner);
-        // The code was right: a refusal now is about Breezone's identity, not the code.
-        let m6 = conn.tlv("/pair-setup", &[(tlv::STATE, &[5]), (tlv::ENCRYPTED_DATA, &sealed)]).await.map_err(|e| match e {
-            HapError::Accessory(code) => HapError::Protocol(format!("code accepted, identity refused (M6, error {code})")),
-            e => e,
-        })?;
-
-        let sealed = tlv::get(&m6, tlv::ENCRYPTED_DATA).ok_or_else(|| HapError::Protocol("pair-setup: no data".into()))?;
-        let inner = tlv::decode(&open(&key, label("PS-Msg06"), &[], sealed)?).map_err(HapError::Protocol)?;
-        let accessory_id = tlv::get(&inner, tlv::IDENTIFIER).ok_or_else(|| HapError::Protocol("pair-setup: no identifier".into()))?;
-        let accessory_ltpk = tlv::get(&inner, tlv::PUBLIC_KEY).ok_or_else(|| HapError::Protocol("pair-setup: no key".into()))?;
-        let pairing = Pairing {
-            accessory_id: String::from_utf8_lossy(accessory_id).into_owned(),
-            accessory_ltpk: hex::encode(accessory_ltpk),
-            controller_id,
-            controller_ltsk: hex::encode(me.to_bytes()),
-        };
-        let signature =
-            tlv::get(&inner, tlv::SIGNATURE).and_then(|s| ed25519_dalek::Signature::from_slice(s).ok()).ok_or_else(|| HapError::Protocol("pair-setup: no signature".into()))?;
-        let x = hkdf("Pair-Setup-Accessory-Sign-Salt", &agreed.key, "Pair-Setup-Accessory-Sign-Info");
-        let mut info = x.to_vec();
-        info.extend_from_slice(accessory_id);
-        info.extend_from_slice(accessory_ltpk);
-        use ed25519_dalek::Verifier;
-        pairing.accessory_key()?.verify(&info, &signature).map_err(|_| HapError::Protocol("the accessory's signature does not match".into()))?;
-        Ok(pairing)
-    }
-}
-
-/// Removes Breezone's own pairing from the accessory (and nothing else): the accessory forgets
-/// Breezone, and can be paired again.
-pub async fn remove_own_pairing(addr: &str, pairing: &Pairing) -> Result<(), HapError> {
-    let mut conn = Connection::verify(addr, pairing).await?;
-    conn.tlv("/pairings", &[(tlv::STATE, &[1]), (tlv::METHOD, &[4]), (tlv::IDENTIFIER, pairing.controller_id.as_bytes())]).await?;
-    Ok(())
-}
-
-#[doc(hidden)]
 pub mod fake {
     //! An accessory that pairs and serves its database on an encrypted session, enough to test
     //! the controller end to end (the integration tests of the modules too), not for use.
 
-    use super::session::{hkdf, label, open, seal};
+    use super::{hkdf, label, open, seal};
     use super::{srp, tlv};
     use ed25519_dalek::{Signer, SigningKey, Verifier, VerifyingKey};
     use serde_json::{json, Value};
@@ -484,50 +527,5 @@ pub mod fake {
             };
             reply(&mut socket, &mut keys, "200 OK", "application/pairing+tlv8", &answer).await;
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn setup_codes_as_typed() {
-        assert_eq!(setup_code("03145154").as_deref(), Some("031-45-154"));
-        assert_eq!(setup_code("031-45-154").as_deref(), Some("031-45-154"));
-        assert_eq!(setup_code("031 45 154").as_deref(), Some("031-45-154"));
-        assert_eq!(setup_code("0314515"), None);
-        assert_eq!(setup_code("03145154a"), None);
-    }
-
-    #[tokio::test]
-    async fn pairs_reads_writes_and_removes_its_own_pairing() {
-        let fake = fake::start().await;
-        let addr = format!("127.0.0.1:{}", fake.port);
-
-        // A wrong code is refused and pairs nothing.
-        assert_eq!(pair_setup(&addr, "111-11-111", true).await, Err(HapError::Accessory(2)));
-        let pairing = pair_setup(&addr, fake::CODE, true).await.expect("pairs");
-        assert_eq!(pairing.accessory_id, "AA:BB:CC:DD:EE:FF");
-        assert_eq!(fake.state.lock().unwrap().controllers.len(), 1);
-        // Already paired: another controller cannot take it.
-        assert_eq!(pair_setup(&addr, fake::CODE, true).await, Err(HapError::Accessory(6)));
-
-        // An encrypted session: the database, a read, a write.
-        let mut conn = Connection::verify(&addr, &pairing).await.expect("verifies");
-        let db = conn.get_json("/accessories").await.unwrap();
-        assert_eq!(db["accessories"][1]["services"][1]["characteristics"][0]["value"], 40);
-        conn.put_json("/characteristics", &serde_json::json!({"characteristics": [{"aid": 2, "iid": 10, "value": 75}]})).await.unwrap();
-        let values = conn.get_json("/characteristics?id=2.9,2.10,2.11").await.unwrap();
-        assert_eq!(values["characteristics"][0]["value"], 75);
-
-        // A pairing that is not the accessory's is refused.
-        let mut other = pairing.clone();
-        other.controller_id = "someone-else".into();
-        assert_eq!(Connection::verify(&addr, &other).await.err(), Some(HapError::Forgotten));
-
-        // Breezone removes its own pairing, and only it.
-        remove_own_pairing(&addr, &pairing).await.unwrap();
-        assert!(fake.state.lock().unwrap().controllers.is_empty());
     }
 }

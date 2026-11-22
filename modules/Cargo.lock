@@ -102,7 +102,7 @@ dependencies = [
 
 [[package]]
 name = "breezone-module-ezviz"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "aes",
  "breezone-module-sdk",
@@ -137,7 +137,7 @@ dependencies = [
 
 [[package]]
 name = "breezone-module-hoymiles"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "breezone-module-sdk",
  "chrono",
@@ -145,14 +145,14 @@ dependencies = [
 
 [[package]]
 name = "breezone-module-hue"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "breezone-module-sdk",
 ]
 
 [[package]]
 name = "breezone-module-linky"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "breezone-module-sdk",
  "chrono",
@@ -167,21 +167,21 @@ dependencies = [
 
 [[package]]
 name = "breezone-module-netatmo"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "breezone-module-sdk",
 ]
 
 [[package]]
 name = "breezone-module-renson"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "breezone-module-sdk",
 ]
 
 [[package]]
 name = "breezone-module-reolink"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "breezone-module-sdk",
 ]
@@ -205,7 +205,7 @@ dependencies = [
 
 [[package]]
 name = "breezone-module-shelly"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "breezone-module-sdk",
 ]
@@ -219,7 +219,7 @@ dependencies = [
 
 [[package]]
 name = "breezone-module-tplink"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "aes",
  "base64",
@@ -233,7 +233,7 @@ dependencies = [
 
 [[package]]
 name = "breezone-module-trydan"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "breezone-module-sdk",
 ]

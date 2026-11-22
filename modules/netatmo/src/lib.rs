@@ -322,9 +322,24 @@ impl Driver for Netatmo {
 /// The account: Netatmo must give an access and the homes it reaches.
 pub struct Account;
 
+/// What the account reaches, in a few figures: each home, its rooms and its modules.
+fn summary(data: &Value) -> Value {
+    let homes: Vec<Value> = data["body"]["homes"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(
+            |h| json!({"name": h["name"].as_str().unwrap_or_default(), "rooms": h["rooms"].as_array().map_or(0, Vec::len), "modules": h["modules"].as_array().map_or(0, Vec::len)}),
+        )
+        .collect();
+    Value::Array(homes)
+}
+
 impl Service for Account {
+    /// The homes must answer; what they hold is shown with the account.
     fn check() -> Result<()> {
-        get("/api/homesdata").map(|_| ())
+        let data = get("/api/homesdata")?;
+        host::account_update(&json!({"shown": {"homes": summary(&data)}}))
     }
 
     fn query(contract: &str, query: &str, _params: Value) -> Result<Value> {

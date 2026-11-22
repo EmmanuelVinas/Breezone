@@ -6,6 +6,28 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.12.0-beta.9] - 2026-11-22
+
+### Changed
+
+- The drivers compiled into the server are gone: the modules shipped with Breezone drive all the
+  hardware and the online services (Airzone stays part of the core). Nothing to do: the sources,
+  accounts and pairings are kept, and the modules were already the ones running since the betas
+  of 0.12.
+- The network search asks the modules what they find, with the same details as before (model,
+  serial number, firmware, what to do to add it); the HomeKit accessories are told by what they
+  announce, without connecting to them.
+- Settings › Accounts and services lists the modules by name, after the Airzone account.
+
+### Fixed
+
+- Forecast.Solar could not be connected from Settings › Accounts and services.
+- A module that waits for its hardware (the key of a Renson unit, checked in a few seconds) was
+  stopped after 10 seconds: only the time it computes counts now.
+- Netatmo and EZVIZ show again what their account reaches (homes, devices); a refused password or
+  key is told as such, no longer as a service that does not answer.
+- Linky: the history of the past year is there as soon as the account is connected.
+
 ## [0.12.0-beta.8] - 2026-11-22
 
 ### Fixed

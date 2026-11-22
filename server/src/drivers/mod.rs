@@ -6,20 +6,6 @@
 //! whose zones are still read by the hub for now (they are already devices, and their actions go
 //! through the same generic route). The future WASM modules (ADR 0012) will be drivers too.
 
-pub mod esphome;
-pub mod ezviz;
-pub mod forecast_solar;
-pub mod homekit;
-pub mod hoymiles;
-pub mod hue;
-pub mod netatmo;
-pub mod renson;
-pub mod reolink;
-pub mod shelly;
-pub mod tasmota;
-pub mod tplink;
-pub mod trydan;
-
 use crate::db::{self, Db};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -292,16 +278,6 @@ impl DriverInfo {
 /// The drivers of the modules, in the order of the lists.
 pub fn available() -> Vec<DriverInfo> {
     crate::modules::with_role(crate::modules::manifest::Role::Driver).map(DriverInfo::of).collect()
-}
-
-/// The driver of a source, from its configuration and its secret (decrypted).
-pub fn create(driver: &str, config: &Value, secret: Option<&str>) -> Result<Arc<dyn Driver>, String> {
-    match crate::modules::native::get(driver).map(|n| &n.create) {
-        Some(crate::modules::native::Create::Config(make)) => make(config, secret),
-        // Created by the runtime, which holds what reaches its account (see `Runtime::reload`).
-        Some(crate::modules::native::Create::Account(_)) => Err(format!("the {driver} module comes with its linked account")),
-        _ => Err(format!("unknown driver: {driver}")),
-    }
 }
 
 // ---------------------------------------------------------------------------------------
@@ -586,8 +562,6 @@ pub struct Runtime {
     /// The presses of the remotes, sent by the drivers that listen (`Driver::listen`).
     presses: tokio::sync::mpsc::UnboundedSender<Heard>,
     heard: std::sync::Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<Heard>>>,
-    /// What the modules that come with their linked account are made from.
-    context: crate::modules::native::Context,
     /// When this server started: a source not read since is not lost before `RELOCATE_AFTER`.
     started: i64,
 }
@@ -617,11 +591,9 @@ impl Goal {
 }
 
 impl Runtime {
-    /// `key`: decrypts the secrets of the sources (the server key); `urls`: the address of the
-    /// maker's service of the modules that reach theirs through an account, by module.
-    pub fn new(db: Db, key: [u8; 32], urls: HashMap<String, String>) -> Self {
+    /// `key`: decrypts the secrets of the sources (the server key).
+    pub fn new(db: Db, key: [u8; 32]) -> Self {
         let (presses, heard) = tokio::sync::mpsc::unbounded_channel();
-        let context_db = db.clone();
         Self {
             db,
             key,
@@ -630,7 +602,6 @@ impl Runtime {
             searched: RwLock::new(HashMap::new()),
             presses,
             heard: std::sync::Mutex::new(Some(heard)),
-            context: crate::modules::native::Context { db: context_db, key, urls },
             started: db::now(),
         }
     }
@@ -653,11 +624,7 @@ impl Runtime {
                     let config: Value = serde_json::from_str(&source.config).unwrap_or(Value::Null);
                     let secret = source.secret.as_deref().and_then(|s| crate::crypto::decrypt(&self.key, s));
                     // A module is loaded only for a source that runs.
-                    let created = match crate::modules::native::get(&source.driver).map(|n| &n.create) {
-                        _ if !source.enabled => Err(String::new()),
-                        Some(crate::modules::native::Create::Account(make)) => Ok(make(&self.context)),
-                        _ => crate::modules::open_source(&source.driver, Some(source.id), &config, secret.as_deref()).await,
-                    };
+                    let created = if source.enabled { crate::modules::open_source(&source.driver, Some(source.id), &config, secret.as_deref()).await } else { Err(String::new()) };
                     let (driver, error) = match created {
                         Err(e) if e.is_empty() => (None, None),
                         Ok(d) => {
@@ -1345,7 +1312,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let db = db::connect(&dir.join("breezone.db")).await.unwrap();
-        let rt = Runtime::new(db.clone(), [0; 32], HashMap::new());
+        let rt = Runtime::new(db.clone(), [0; 32]);
         let local_id = db::insert_source(&db, "homekit", "Passerelle", "{}").await.unwrap();
         let cloud_id = db::insert_source(&db, "netatmo", "Netatmo", "{}").await.unwrap();
         let sources = db::list_sources(&db).await.unwrap();

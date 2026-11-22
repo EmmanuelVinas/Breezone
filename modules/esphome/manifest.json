@@ -14,5 +14,5 @@
   "discovery": {"tcp": [6053], "mdns": [{"service": "_esphomelib._tcp"}]},
   "permissions": {"network": {"lan": true, "mdns": ["_esphomelib._tcp"]}},
   "read_every_s": 3,
-  "optional_calls": ["probe", "diagnostic"]
+  "optional_calls": ["identify", "probe", "diagnostic"]
 }

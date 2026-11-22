@@ -1,10 +1,11 @@
 //! Solar surplus steering: a charger and a water heater follow what goes back to the grid, read on a
 //! Shelly meter.
 
+mod support;
+
 use axum::extract::{Path, Query, State};
 use axum::routing::get;
 use axum::{Json, Router};
-use breezone_server::config::Config;
 use reqwest::StatusCode;
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -92,7 +93,7 @@ async fn a_charger_and_a_heater_follow_the_surplus() {
 
     let dir = std::env::temp_dir().join(format!("breezone-surplus-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let mut cfg = Config::for_tests(dir);
+    let mut cfg = support::config(&dir);
     cfg.scan_port = 9;
     let state = breezone_server::init_state(cfg).await.unwrap();
     let base = format!("http://127.0.0.1:{}", serve(breezone_server::app(state.clone())).await);
@@ -136,9 +137,14 @@ async fn a_charger_and_a_heater_follow_the_surplus() {
         let (state, meter) = (state.clone(), meter.clone());
         async move {
             *meter.grid.lock().unwrap() = grid;
-            state.drivers.poll_all().await;
+            // Read now, whatever the time their modules ask between two readings.
+            for source in [1, 2] {
+                state.drivers.poll(source).await;
+            }
             breezone_server::surplus::tick(&state, t).await;
-            state.drivers.poll_all().await;
+            for source in [1, 2] {
+                state.drivers.poll(source).await;
+            }
         }
     };
     // 2,3 kW go back to the grid: after a minute the charger charges at 10 A.

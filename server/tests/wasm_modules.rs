@@ -5,6 +5,8 @@
 //! (`modules/`, target `wasm32-wasip2`).
 #![cfg(feature = "wasm")]
 
+mod support;
+
 use axum::extract::Query;
 use axum::response::IntoResponse;
 use axum::routing::get;
@@ -262,8 +264,10 @@ async fn an_installed_module_runs_its_sources() {
     assert!(modules.as_array().unwrap().iter().any(|m| m["id"] == "tasmotawasm" && m["loaded"] == true));
 
     // Found by the network scan through its own probe (port 80 said open: the fake listens elsewhere).
-    let found = breezone_server::modules::probe_installed(&host, &[80]).await;
-    assert_eq!(found.iter().map(|p| (p.driver, p.note.clone())).collect::<Vec<_>>(), [("tasmotawasm", Some("« Salon »".to_string()))]);
+    // (Other tests of this file may have installed the shipped Tasmota, which knows it too.)
+    let found = breezone_server::modules::identify_at(&host, &[80]).await;
+    let mine: Vec<_> = found.iter().filter(|p| p.driver == "tasmotawasm").map(|p| (p.model.clone(), p.note.clone())).collect();
+    assert_eq!(mine, [("Tasmota".to_string(), Some("« Salon »".to_string()))]);
 
     // Its log says what went wrong: an address its permissions refuse.
     let (code, _) = call("POST", "/api/sources", Some(json!({"driver": "tasmotawasm", "name": "Dehors", "config": {"host": "1.1.1.1"}})), t()).await;
@@ -393,7 +397,7 @@ async fn a_secure_websocket_is_heard() {
 /// The appairage of a module (`pair`): waiting for its button, then the source to add.
 #[tokio::test]
 async fn a_module_pairs() {
-    use breezone_server::modules::native::Paired;
+    use breezone_server::modules::Paired;
     let _serial = SERIAL.lock().await;
     let module = Arc::new(WasmModule::load("misbehave", &wasm("misbehave"), local(), None).unwrap());
     assert!(matches!(module.pair("link", &json!({"host": "192.168.1.9"})).await, Ok(Paired::Waiting(m)) if m == "press the button"));
@@ -465,7 +469,7 @@ async fn an_oauth_access_is_renewed_by_the_host() {
 /// driven.
 #[tokio::test]
 async fn the_esphome_module_speaks_to_an_encrypted_node() {
-    use breezone_server::drivers::esphome::{decode, Fields, Msg};
+    use breezone_server::esphome_wire::{decode, Fields, Msg};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let _serial = SERIAL.lock().await;
     let psk: [u8; 32] = std::array::from_fn(|i| i as u8 + 1);
@@ -576,10 +580,9 @@ fn base64_encode(b: &[u8]) -> String {
 }
 
 /// A module that comes with Breezone (lot L6): beside its web UI, unsigned (the image or the signed
-/// archive vouches for it), it replaces the driver compiled in with the same id; removed, the
-/// driver compiled in drives the same sources again.
+/// archive vouches for it), installed at start, never removed (installed again if missing).
 #[tokio::test]
-async fn a_module_that_comes_with_breezone_replaces_the_native_driver() {
+async fn a_module_that_comes_with_breezone_is_installed_with_it() {
     use breezone_server::modules::package;
     let _serial = SERIAL.lock().await;
     breezone_server::modules::wasm::allow_loopback(true);
@@ -616,15 +619,20 @@ async fn a_module_that_comes_with_breezone_replaces_the_native_driver() {
     let (_, modules) = call("GET", "/api/modules", None).await;
     assert_eq!(tasmota(&modules)["loaded"], true);
 
-    // Removed: the driver compiled in takes the same source over.
-    let (code, _) = call("DELETE", "/api/modules/tasmota", None).await;
-    assert_eq!(code, 204);
-    let (_, modules) = call("GET", "/api/modules", None).await;
-    assert_eq!(tasmota(&modules)["origin"], "native");
-    let id = s["id"].as_i64().unwrap();
-    let (code, s) = call("POST", &format!("/api/sources/{id}/refresh"), None).await;
-    assert_eq!((code, s["status"]["state"].clone()), (200, json!("online")), "{s}");
     assert!(commands.lock().unwrap().iter().any(|c| c == "Status 0"));
+
+    // Part of Breezone: not removed, even once no source uses it.
+    let (code, _) = call("DELETE", &format!("/api/sources/{}", s["id"]), None).await;
+    assert_eq!(code, 204);
+    let (code, _) = call("DELETE", "/api/modules/tasmota", None).await;
+    assert_eq!(code, 400, "it comes with Breezone");
+    // Missing at a start (a damaged install): installed again.
+    breezone_server::modules::unregister("tasmota");
+    let _ = std::fs::remove_dir_all(dir.join("data/modules/tasmota"));
+    let mut cfg = breezone_server::config::Config::for_tests(dir.join("data"));
+    cfg.web_dir = dir.join("app/web");
+    breezone_server::init_state(cfg).await.unwrap();
+    assert_eq!(breezone_server::modules::manifest("tasmota").map(|m| m.version.as_str()), Some("1.0.1"), "shipped with Breezone: installed again");
 }
 
 /// A service module that comes with Breezone, with an account (lot L9): its account is connected
@@ -661,7 +669,7 @@ async fn a_service_module_with_an_account_answers_the_core() {
     let asked = json!({"from": "2026-11-22", "until": "2026-11-22"});
     assert!(breezone_server::modules::ask_service(&db, "tariff.day_color@1", "colors", &asked).await.is_none());
     assert_eq!(put(json!({})).await.unwrap().status().as_u16(), 400, "the token is required");
-    assert_eq!(put(json!({"token": "wrong"})).await.unwrap().status().as_u16(), 502, "refused by the module");
+    assert_eq!(put(json!({"token": "wrong"})).await.unwrap().status().as_u16(), 400, "refused by the module");
     let resp = put(json!({"token": "red"})).await.unwrap();
     assert_eq!(resp.status().as_u16(), 200);
     let view: Value = resp.json().await.unwrap();
@@ -894,9 +902,6 @@ async fn the_shipped_modules_load() {
         let manifest = breezone_server::modules::manifest::Manifest::parse(&text).unwrap_or_else(|e| panic!("{id}: {e:?}"));
         assert_eq!(manifest.id, id);
         assert_eq!(breezone_server::modules::compat::check(&manifest, &host, env!("CARGO_PKG_VERSION"), |_| true), Ok(()), "{id}");
-        let native = breezone_server::modules::native::get(id).unwrap_or_else(|| panic!("{id} replaces a driver compiled in"));
-        assert_eq!(manifest.provides.traits, native.manifest.provides.traits, "{id}: the same traits as the driver it replaces");
-        assert_eq!(manifest.provides.services, native.manifest.provides.services, "{id}: the same services as the code it replaces");
         let module = Arc::new(WasmModule::load(id, &wasm(id), local(), None).unwrap_or_else(|e| panic!("{id}: {e}")));
         if config.is_null() {
             continue;
@@ -951,8 +956,8 @@ async fn a_tcp_exchange_reads_the_length_announced() {
 /// Breezone's own pairing removed with the source.
 #[tokio::test]
 async fn the_homekit_module_pairs_drives_and_forgets() {
-    use breezone_server::homekit::fake;
     use breezone_server::modules::package;
+    use support::hap::fake;
     let _serial = SERIAL.lock().await;
     breezone_server::modules::wasm::allow_loopback(true);
     let accessory = fake::start().await;

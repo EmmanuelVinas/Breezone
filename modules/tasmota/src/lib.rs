@@ -9,7 +9,7 @@
 //! Its devices: each relay (a light when the module dims), the energy it measures, and each
 //! sensor that gives a temperature, a humidity… (`environment.sensor@1`).
 
-use breezone_module_sdk::{host, json, module, Described, DeviceInfo, Driver, Error, Map, Result, State, Value};
+use breezone_module_sdk::{host, json, module, Described, DeviceInfo, Driver, Error, Found, Map, Result, State, Value};
 use std::cell::RefCell;
 
 fn encode(s: &str) -> String {
@@ -218,6 +218,13 @@ impl Driver for Tasmota {
             o.remove("StatusMQT");
         }
         Ok(v)
+    }
+
+    fn identify(host: &str, announced: Option<&Value>) -> Option<Found> {
+        if announced.is_some() {
+            return None;
+        }
+        Self::probe(host).map(|name| Found { model: "Tasmota".into(), note: Some(format!("« {name} »")), ..Found::default() })
     }
 
     fn probe(host: &str) -> Option<String> {

@@ -1,9 +1,10 @@
 //! The forecast curves of a device: the power Forecast.Solar expects along the day, against a fake
 //! Forecast.Solar; a device that forecasts nothing says so.
 
+mod support;
+
 use axum::routing::get;
 use axum::{Json, Router};
-use breezone_server::config::Config;
 use reqwest::{Method, StatusCode};
 use serde_json::{json, Value};
 
@@ -60,7 +61,7 @@ impl Client {
 async fn a_solar_forecast_gives_its_curve_of_the_day() {
     let dir = std::env::temp_dir().join(format!("breezone-forecast-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let state = breezone_server::init_state(Config::for_tests(dir)).await.unwrap();
+    let state = breezone_server::init_state(support::config(&dir)).await.unwrap();
     // The module as connecting the service adds it (that needs a city found by Open-Meteo).
     let forecast = fake_forecast_solar().await;
     let config = json!({"kwp": 3, "declination": 30, "azimuth": 0, "latitude": 43.6, "longitude": 1.4, "timezone": "UTC", "url": format!("http://127.0.0.1:{forecast}")});

@@ -12,7 +12,7 @@
 //! Devices: `unit`, the whole house (`ventilation.unit@1`), and `room:{id}`, one per room
 //! (`ventilation.room@1`).
 
-use breezone_module_sdk::{device, host, json, module, Described, Driver, Error, HardwareRoom, Map, Result, State, Value};
+use breezone_module_sdk::{device, host, json, module, Described, Driver, Error, Found, HardwareRoom, Map, Result, State, Value};
 use std::collections::HashMap;
 
 pub const UNIT: &str = "unit";
@@ -295,6 +295,15 @@ impl Driver for Renson {
             }
         }
         Ok(false)
+    }
+
+    fn identify(host_: &str, announced: Option<&Value>) -> Option<Found> {
+        if announced.is_some() {
+            return None;
+        }
+        let a = host::request("GET", &format!("http://{host_}/v2/api/data/current"), &[], None, 2000).ok()?;
+        let r = identify(&a.json().ok()?)?;
+        Some(Found { model: r.model, note: Some(format!("{} bouches · API locale", r.rooms)), device_id: (!r.serial.is_empty()).then_some(r.serial), ..Found::default() })
     }
 
     fn probe(host_: &str) -> Option<String> {

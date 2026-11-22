@@ -110,15 +110,62 @@ pub trait Driver: Sized + 'static {
     }
     /// Ends the connections it keeps, before the server stops.
     fn close(&self) {}
-    /// Whether this address is hardware of this module, and its name (the network scan).
+    /// Whether this address is hardware of this module, and its name (the network scan, by a
+    /// server that does not ask `identify`).
     fn probe(_host: &str) -> Option<String> {
         None
+    }
+    /// What the hardware at `host` is, for the network scan (`identify` in `optional_calls`):
+    /// `announced` is what it said of itself by mDNS (`service`, `name`, `port`, `txt`; nothing to
+    /// ask it then), `None` when a port of `discovery.tcp` is open there. By default, its name
+    /// from [`Driver::probe`].
+    fn identify(host: &str, announced: Option<&Value>) -> Option<Found> {
+        if announced.is_some() {
+            return None;
+        }
+        Self::probe(host).map(|name| Found { note: Some(format!("« {name} »")), ..Found::default() })
     }
     /// A step of the appairage (`pairing` of the manifest: `button` has the step `link`, `code`
     /// has `start`, `finish` and `cancel`); `input` has the address (`host`) of the hardware and
     /// the user's language (`lang`: "fr", "en", "es").
     fn pair(_step: &str, _input: Value) -> Result<Paired> {
         unsupported("pair")
+    }
+}
+
+/// Hardware found on the network, as the scan shows it ([`Driver::identify`]).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Found {
+    /// The model shown ("Shelly Pro 3EM"); the module's name when empty.
+    pub model: String,
+    /// What to know before adding it ("appuyez sur son bouton pour l'ajouter").
+    pub note: Option<String>,
+    /// What tells it apart (serial number, pairing id): a source with it is « already added ».
+    pub device_id: Option<String>,
+    pub firmware: Option<String>,
+    pub mac: Option<String>,
+    /// Found, but this module cannot drive it (a firmware not supported yet…).
+    pub unsupported: bool,
+    /// Given to the appairage (`flags` of its input): what the hardware announced it needs.
+    pub flags: u32,
+    /// Its port, when not the one it was found on.
+    pub port: Option<u16>,
+    /// "ip:port", when the port must be kept in its address (a HomeKit accessory).
+    pub host: Option<String>,
+}
+
+impl Found {
+    pub fn to_json(&self) -> Value {
+        let mut v = json!({"model": self.model, "supported": !self.unsupported, "flags": self.flags});
+        for (k, x) in [("note", &self.note), ("device_id", &self.device_id), ("firmware", &self.firmware), ("mac", &self.mac), ("host", &self.host)] {
+            if let Some(x) = x {
+                v[k] = json!(x);
+            }
+        }
+        if let Some(p) = self.port {
+            v["port"] = json!(p);
+        }
+        v
     }
 }
 
@@ -269,6 +316,11 @@ macro_rules! module {
                 let config = $crate::serde_json::from_str(&config).map_err(|e| $crate::Error::Invalid(e.to_string()))?;
                 let secret = secret.map(|s| $crate::serde_json::from_str(&s).unwrap_or($crate::Value::String(s)));
                 <$driver as $crate::Driver>::forget(config, secret)
+            }
+
+            fn identify(host: String, announced: Option<String>) -> Option<String> {
+                let announced: Option<$crate::Value> = announced.and_then(|a| $crate::serde_json::from_str(&a).ok());
+                <$driver as $crate::Driver>::identify(&host, announced.as_ref()).map(|f| f.to_json().to_string())
             }
         }
 

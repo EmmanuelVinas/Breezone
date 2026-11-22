@@ -25,8 +25,9 @@ pub mod discovery;
 pub mod drivers;
 pub mod energy;
 pub mod error;
+#[doc(hidden)]
+pub mod esphome_wire;
 pub mod federation;
-pub mod homekit;
 pub mod hub;
 pub mod i18n;
 pub mod incidents;
@@ -89,17 +90,16 @@ pub async fn init_state(cfg: Config) -> anyhow::Result<AppState> {
     let cfg = Arc::new(cfg);
     migrate_legacy_database(&cfg.data_dir);
     let db = db::connect(&cfg.data_dir.join("breezone.db")).await?;
-    let native: Vec<(&str, &str)> = modules::native::all().iter().map(|n| (n.manifest.id.as_str(), n.manifest.version.as_str())).collect();
-    db::sync_native_modules(&db, &native).await?;
+    // The drivers once compiled into the server are modules now: their rows go.
+    db::forget_native_modules(&db).await?;
     modules::install::load_installed(&db, &cfg.data_dir).await?;
-    if cfg.modules_library.is_none() {
-        // The modules that come with Breezone, beside its web UI (`/app/modules` in the image).
-        let builtin = cfg.web_dir.parent().unwrap_or(std::path::Path::new(".")).join("modules");
-        modules::install::install_builtin(&db, &cfg.data_dir, &builtin, update::RELEASE_PUBLIC_KEY).await;
-    }
+    // The modules that come with Breezone, beside its web UI (`/app/modules` in the image): they
+    // drive the hardware, whatever library is read.
+    let builtin = cfg.web_dir.parent().unwrap_or(std::path::Path::new(".")).join("modules");
+    modules::install::install_builtin(&db, &cfg.data_dir, &builtin, update::RELEASE_PUBLIC_KEY).await;
     if let Some(dev) = &cfg.modules_dev {
         modules::install::install_dev(&db, &cfg.data_dir, dev).await;
-        // In development, the fake devices answer on this machine (`dev.sh --modules --shipped`):
+        // In development, the fake devices answer on this machine (`dev.sh --modules`):
         // the modules may reach it. Never in a release build.
         #[cfg(feature = "wasm")]
         if cfg!(debug_assertions) && std::env::var("BREEZONE_MODULES_LOOPBACK").is_ok_and(|v| v == "1") {
@@ -115,7 +115,7 @@ pub async fn init_state(cfg: Config) -> anyhow::Result<AppState> {
     updater.set_beta(db::get_setting(&db, update::CHANNEL_SETTING).await?.as_deref() == Some("beta"));
     #[cfg(feature = "wasm")]
     modules::wasm::set_context(db.clone(), *data_key);
-    let drivers = Arc::new(drivers::Runtime::new(db.clone(), *data_key, cfg.module_urls()));
+    let drivers = Arc::new(drivers::Runtime::new(db.clone(), *data_key));
     drivers.reload().await?;
     drivers.clone().hear();
     let weather = Arc::new(weather::Weather::new(db.clone(), cfg.timezone, cfg.weather));
@@ -124,12 +124,11 @@ pub async fn init_state(cfg: Config) -> anyhow::Result<AppState> {
     let library = Arc::new(modules::library::Library::new(&cfg));
     let state = AppState { db, cfg, hub, auth, data_key, updater, drivers, weather, automations, surplus, library };
     bootstrap(&state).await?;
-    // An account linked before the Netatmo module existed gets it now.
-    if let Err(e) = accounts::netatmo::ensure_source(&state).await {
-        tracing::warn!("Netatmo module not added: {}", e.message.en);
-    }
-    if let Err(e) = accounts::ezviz::ensure_source(&state).await {
-        tracing::warn!("EZVIZ module not added: {}", e.message.en);
+    // An account whose module brings its devices (Netatmo, EZVIZ) has its source.
+    for m in modules::manifests().filter(|m| accounts::comes_with_account(&m.id)) {
+        if let Err(e) = accounts::ensure_module_source(&state, &m.id).await {
+            tracing::warn!("{} module not added: {}", m.id, e.message.en);
+        }
     }
     state.hub.reload_installations().await?;
     Ok(state)

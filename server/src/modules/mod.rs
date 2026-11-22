@@ -5,7 +5,7 @@
 pub const INTERFACE: &str = "1.1";
 
 /// Versions of the module interface (`contracts/wit/breezone-module.wit`) this server hosts: none
-/// while the WebAssembly host is not built in (the modules compiled into the server need none).
+/// while the WebAssembly host is not built in (only Airzone then, which is part of the core).
 #[cfg(feature = "wasm")]
 pub const HOST_API: &[&str] = &[INTERFACE];
 #[cfg(not(feature = "wasm"))]
@@ -15,7 +15,6 @@ pub mod compat;
 pub mod install;
 pub mod library;
 pub mod manifest;
-pub mod native;
 pub mod package;
 
 use manifest::{Manifest, Role};
@@ -23,21 +22,26 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock, RwLock};
 
+/// Where an appairage stands after a step.
+#[derive(Debug)]
+pub enum Paired {
+    /// Waiting for the next step (the code shown on the accessory…).
+    Next,
+    /// Something to do on the hardware first (press its button), then the same step again.
+    Waiting(String),
+    /// Done: the source to add, with its secret and the name to give it if none is given.
+    Done { config: serde_json::Value, secret: String, name: String },
+}
+
 /// The modules installed from a package (the library, the archive of Breezone, a file).
 static INSTALLED: RwLock<Vec<&'static Manifest>> = RwLock::new(Vec::new());
 
-/// Every module this server knows, in the order of the lists: those compiled in (or the installed
-/// module that replaces one of them, same id), then the other installed ones.
+/// Every module this server knows: those installed (shipped with Breezone, from the library, from
+/// a file), in the order of the lists.
 pub fn manifests() -> std::vec::IntoIter<&'static Manifest> {
-    let installed = INSTALLED.read().unwrap_or_else(|e| e.into_inner());
-    let mut all: Vec<&'static Manifest> = native::all().iter().map(|n| installed.iter().find(|m| m.id == n.manifest.id).copied().unwrap_or(&n.manifest)).collect();
-    all.extend(installed.iter().filter(|m| native::get(&m.id).is_none()).copied());
+    let mut all: Vec<&'static Manifest> = INSTALLED.read().unwrap_or_else(|e| e.into_inner()).clone();
+    all.sort_by_key(|m| m.name.fr.to_lowercase());
     all.into_iter()
-}
-
-/// An installed module replaces the one compiled in with the same id (the WebAssembly one runs).
-pub fn replaces_native(id: &str) -> bool {
-    native::get(id).is_some() && installed_dir(id).is_some()
 }
 
 /// Where each installed module's files are, by id.
@@ -93,13 +97,10 @@ pub fn logs(id: &str) -> Vec<LogLine> {
     LOGS.lock().unwrap_or_else(|e| e.into_inner()).get(id).map(|l| l.iter().cloned().collect()).unwrap_or_default()
 }
 
-/// The driver of a source: compiled into the server, or run from an installed module's component
-/// (loaded and compiled only now, when a source needs it).
+/// The driver of a source, run from its installed module's component (loaded and compiled only
+/// now, when a source needs it).
 /// `source_id`: the source it is for (`None` while its configuration is only checked).
 pub async fn open_source(id: &str, source_id: Option<i64>, config: &serde_json::Value, secret: Option<&str>) -> Result<Arc<dyn crate::drivers::Driver>, String> {
-    if native::get(id).is_some() && !replaces_native(id) {
-        return crate::drivers::create(id, config, secret);
-    }
     let m = manifest(id).ok_or_else(|| format!("unknown driver: {id}"))?;
     if !m.has(Role::Driver) {
         return Err(format!("the {id} module has no devices"));
@@ -107,14 +108,11 @@ pub async fn open_source(id: &str, source_id: Option<i64>, config: &serde_json::
     #[cfg(feature = "wasm")]
     {
         let dir = installed_dir(id).ok_or_else(|| format!("the {id} module is not installed"))?;
-        match wasm::source(m, &dir, source_id, config, secret).await {
-            // The module compiled in takes over when the one that replaces it cannot start.
-            Err(e) if native::get(id).is_some() => {
-                log(id, "error", format!("{e}: the module compiled into Breezone takes over"));
-                crate::drivers::create(id, config, secret)
-            }
-            other => other,
+        let opened = wasm::source(m, &dir, source_id, config, secret).await;
+        if let Err(e) = &opened {
+            log(id, "error", e.clone());
         }
+        opened
     }
     #[cfg(not(feature = "wasm"))]
     {
@@ -124,13 +122,12 @@ pub async fn open_source(id: &str, source_id: Option<i64>, config: &serde_json::
 }
 
 /// The installed (or shipped) modules that answer `contract` ("tariff.day_color@1"), in the
-/// order they were installed: those of the `service` role whose `provides.services` has it, and
-/// which replace the code of the core when it has the same id.
+/// order of the lists: those of the `service` role whose `provides.services` has it.
 pub fn service_providers(contract: &str) -> Vec<&'static Manifest> {
     let major = |c: &str| c.split('.').next().map(str::to_string);
     let (name, version) = contract.split_once('@').map(|(n, v)| (n.to_string(), major(v))).unwrap_or_default();
     manifests()
-        .filter(|m| m.has(Role::Service) && installed_dir(&m.id).is_some() && (native::get(&m.id).is_none() || replaces_native(&m.id)))
+        .filter(|m| m.has(Role::Service) && installed_dir(&m.id).is_some())
         .filter(|m| m.provides.services.iter().any(|s| s.split_once('@').is_some_and(|(n, v)| n == name && major(v) == version)))
         .collect()
 }
@@ -138,7 +135,7 @@ pub fn service_providers(contract: &str) -> Vec<&'static Manifest> {
 /// Asks the modules that provide `contract` for `query`, in turn, and gives the first answer
 /// (checked against the contract). A module that is an account is asked only when its account is
 /// connected and switched on; how it went is noted on the account. `None`: no module answers
-/// this contract here, the core does it itself.
+/// this contract here.
 pub async fn ask_service(db: &crate::db::Db, contract: &str, query: &str, params: &serde_json::Value) -> Option<Result<serde_json::Value, String>> {
     #[cfg_attr(not(feature = "wasm"), allow(unused_mut))]
     let mut last: Option<Result<serde_json::Value, String>> = None;
@@ -171,62 +168,120 @@ pub async fn ask_service(db: &crate::db::Db, contract: &str, query: &str, params
     last
 }
 
-/// A step of the appairage of a module: the installed (or shipped) module when there is one, else
-/// the driver compiled in.
-pub async fn pair(id: &str, step: String, mut input: serde_json::Value) -> Result<native::Paired, crate::error::ApiError> {
+/// A step of the appairage of a module.
+pub async fn pair(id: &str, step: String, mut input: serde_json::Value) -> Result<Paired, crate::error::ApiError> {
     use crate::error::ApiError;
     // The module speaks to the user in their language.
     if let Some(o) = input.as_object_mut() {
         o.insert("lang".into(), crate::i18n::current().code().into());
     }
-    #[cfg(feature = "wasm")]
-    if let (Some(m), Some(dir)) = (manifest(id).filter(|m| m.pairing != manifest::Pairing::Form), installed_dir(id)) {
-        if native::get(id).is_none() || replaces_native(id) {
-            let module = wasm::loaded(m, &dir).await.map_err(ApiError::bad_request)?;
-            // As the drivers compiled in: what was typed or the hardware refuses (a wrong code) is
-            // the user's to fix, a step the module does not know is a bad request.
-            return module.pair(&step, &input).await.map_err(|e| {
-                let status = match &e {
-                    crate::drivers::DriverError::Invalid(_) => axum::http::StatusCode::UNPROCESSABLE_ENTITY,
-                    crate::drivers::DriverError::Unsupported(_) => axum::http::StatusCode::BAD_REQUEST,
-                    crate::drivers::DriverError::Unreachable(_) => axum::http::StatusCode::BAD_GATEWAY,
-                };
-                ApiError::new(status, e.to_string())
-            });
-        }
+    let m = manifest(id).ok_or_else(|| ApiError::not_found("unknown module"))?;
+    if matches!(m.pairing, manifest::Pairing::Form | manifest::Pairing::Oauth) {
+        return Err(ApiError::bad_request("this module is added with its form"));
     }
-    let native = native::get(id).ok_or_else(|| ApiError::not_found("unknown module"))?;
-    let pair = native.pair.ok_or_else(|| ApiError::bad_request("this module is added with its form"))?;
-    pair(step, input).await
+    #[cfg(feature = "wasm")]
+    {
+        let dir = installed_dir(id).ok_or_else(|| ApiError::not_found("unknown module"))?;
+        let module = wasm::loaded(m, &dir).await.map_err(ApiError::bad_request)?;
+        // What was typed or the hardware refuses (a wrong code) is the user's to fix, a step the
+        // module does not know is a bad request.
+        module.pair(&step, &input).await.map_err(|e| {
+            let status = match &e {
+                crate::drivers::DriverError::Invalid(_) => axum::http::StatusCode::UNPROCESSABLE_ENTITY,
+                crate::drivers::DriverError::Unsupported(_) => axum::http::StatusCode::BAD_REQUEST,
+                crate::drivers::DriverError::Unreachable(_) => axum::http::StatusCode::BAD_GATEWAY,
+            };
+            ApiError::new(status, e.to_string())
+        })
+    }
+    #[cfg(not(feature = "wasm"))]
+    {
+        let _ = (step, input);
+        Err(ApiError::bad_request(format!("the {id} module needs the module host, which this build of Breezone lacks")))
+    }
 }
 
-/// What the installed modules (not those compiled in) say of `host`, whose ports `open` are open:
-/// each one that probes and listens on one of them is asked.
-pub async fn probe_installed(host: &str, open: &[u16]) -> Vec<crate::discovery::Product> {
+/// A product found by a module: what it said of the hardware (`identify`), or its name only
+/// (`probe`, a module built before `identify`).
+fn found_product(m: &'static Manifest, host: &str, port: u16, said: &serde_json::Value) -> crate::discovery::Product {
+    let text = |k: &str| said[k].as_str().map(str::trim).filter(|v| !v.is_empty()).map(|v| v.chars().take(200).collect::<String>());
+    crate::discovery::Product {
+        brand: m.id.as_str(),
+        driver: m.id.as_str(),
+        model: text("model").unwrap_or_else(|| m.name.fr.clone()),
+        host: text("host").filter(|h| h.split(':').next() == host.split(':').next()).unwrap_or_else(|| host.to_string()),
+        port: said["port"].as_u64().and_then(|p| u16::try_from(p).ok()).unwrap_or(port),
+        mac: text("mac"),
+        device_id: text("device_id"),
+        firmware: text("firmware"),
+        note: text("note"),
+        supported: said["supported"].as_bool().unwrap_or(true),
+        flags: said["flags"].as_u64().and_then(|f| u32::try_from(f).ok()).unwrap_or(0),
+        install: None,
+    }
+}
+
+fn identifies(m: &Manifest) -> bool {
+    m.optional_calls.iter().any(|c| c == "identify")
+}
+
+/// What the installed modules say of `host`, whose ports `open` are open: each one that listens on
+/// one of them and identifies (or probes) its hardware is asked.
+pub async fn identify_at(host: &str, open: &[u16]) -> Vec<crate::discovery::Product> {
     let asked: Vec<&'static Manifest> =
-        manifests().filter(|m| native::get(&m.id).is_none() && m.optional_calls.iter().any(|c| c == "probe") && m.discovery.tcp.iter().any(|p| open.contains(p))).collect();
+        manifests().filter(|m| (identifies(m) || m.optional_calls.iter().any(|c| c == "probe")) && m.discovery.tcp.iter().any(|p| open.contains(p))).collect();
     #[cfg_attr(not(feature = "wasm"), allow(unused_mut))]
     let mut found = vec![];
     for m in asked {
         #[cfg(feature = "wasm")]
         {
             let Some(dir) = installed_dir(&m.id) else { continue };
-            if let Some(name) = wasm::probe(m, &dir, host).await {
-                let port = m.discovery.tcp.iter().copied().find(|p| open.contains(p)).unwrap_or(80);
-                found.push(crate::discovery::Product {
-                    brand: m.id.as_str(),
-                    driver: m.id.as_str(),
-                    model: m.name.fr.clone(),
-                    host: host.to_string(),
-                    port,
-                    mac: None,
-                    device_id: None,
-                    firmware: None,
-                    note: Some(format!("« {name} »")),
-                    supported: true,
-                    flags: 0,
-                    install: None,
-                });
+            let port = m.discovery.tcp.iter().copied().find(|p| open.contains(p)).unwrap_or(80);
+            if identifies(m) {
+                if let Some(said) = wasm::identify(m, &dir, host, None).await {
+                    found.push(found_product(m, host, port, &said));
+                }
+            } else if let Some(name) = wasm::probe(m, &dir, host).await {
+                found.push(found_product(m, host, port, &serde_json::json!({"note": format!("« {name} »")})));
+            }
+        }
+        #[cfg(not(feature = "wasm"))]
+        let _ = (m, host);
+    }
+    found
+}
+
+/// The mDNS services the installed modules announce their hardware with.
+pub fn announced_services() -> Vec<String> {
+    let mut services: Vec<String> = manifests().filter(|m| m.has(Role::Driver)).flat_map(|m| m.discovery.mdns.iter().map(|h| h.service.clone())).collect();
+    services.sort();
+    services.dedup();
+    services
+}
+
+/// What the installed modules say of the hardware that announced itself by mDNS (nothing is asked
+/// of it: the gateways already added keep their few connections for their sessions).
+pub async fn identify_announced(announced: &[crate::mdns::Service]) -> Vec<crate::discovery::Product> {
+    let same = |a: &str, b: &str| a.trim_end_matches(".local").eq_ignore_ascii_case(b.trim_end_matches(".local"));
+    #[cfg_attr(not(feature = "wasm"), allow(unused_mut))]
+    let mut found = vec![];
+    for s in announced {
+        let Some(m) = manifests().find(|m| m.has(Role::Driver) && m.discovery.mdns.iter().any(|h| same(&h.service, &s.service) && crate::mdns::txt_matches(s, &h.txt))) else {
+            continue;
+        };
+        let host = s.ip.to_string();
+        #[cfg(feature = "wasm")]
+        {
+            let said = match installed_dir(&m.id) {
+                Some(dir) if identifies(m) => {
+                    let txt: serde_json::Map<String, serde_json::Value> = s.txt.iter().map(|(k, v)| (k.clone(), v.clone().into())).collect();
+                    let announce = serde_json::json!({"service": s.service, "name": s.name, "port": s.port, "txt": txt});
+                    wasm::identify(m, &dir, &host, Some(&announce)).await
+                }
+                _ => Some(serde_json::json!({"note": s.name})),
+            };
+            if let Some(said) = said {
+                found.push(found_product(m, &host, s.port, &said));
             }
         }
         #[cfg(not(feature = "wasm"))]
@@ -254,22 +309,25 @@ pub mod wasm;
 
 #[cfg(test)]
 mod tests {
-    /// Files of the core that still name a module, and the lot that takes the name away: no other
-    /// file may (docs/roadmap/modules.md § 8.4).
+    /// Files of the core that still name a module, and why: no other file may
+    /// (docs/roadmap/modules.md § 8.4).
     const PENDING: &[(&str, &str)] = &[
-        // Accounts and services: their forms, tests, loops and the sources they bring (L9).
-        ("api/linked.rs", "L9"),
-        ("lib.rs", "L9"),
-        ("tempo.rs", "L9"),
-        ("config.rs", "L9"),
-        ("accounts/mod.rs", "L9"),
+        // What the core does with these services itself: the history of the meter (Linky), the
+        // panels set with the position of the home (Forecast.Solar), the switch of the weather.
+        ("lib.rs", "linky"),
+        ("api/linked.rs", "linky, forecast_solar"),
+        ("accounts/mod.rs", "weather"),
     ];
 
     /// The core names no module but Airzone: what a module is, does and needs is in its manifest.
     #[test]
     fn the_core_names_no_module() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-        let ids: Vec<&str> = super::manifests().map(|m| m.id.as_str()).collect();
+        // The modules of Breezone (`modules/`), installed or not.
+        let modules = root.join("../../modules");
+        let ids: Vec<String> =
+            std::fs::read_dir(&modules).unwrap().flatten().filter(|e| e.path().join("manifest.json").is_file()).map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+        assert!(ids.len() > 10, "{ids:?}");
         let mut found = vec![];
         let mut stack = vec![root.clone()];
         while let Some(dir) = stack.pop() {
@@ -280,10 +338,8 @@ mod tests {
                     continue;
                 }
                 let rel = path.strip_prefix(&root).unwrap().to_string_lossy().replace('\\', "/");
-                let module_own = rel == "modules/native.rs"
-                    || rel == "mock_devices.rs"
-                    || ["drivers/", "accounts/"].iter().any(|d| rel.starts_with(d) && !rel.ends_with("/mod.rs"))
-                    || PENDING.iter().any(|(f, _)| *f == rel);
+                let module_own =
+                    rel == "mock_devices.rs" || ["drivers/", "accounts/"].iter().any(|d| rel.starts_with(d) && !rel.ends_with("/mod.rs")) || PENDING.iter().any(|(f, _)| *f == rel);
                 if module_own || !rel.ends_with(".rs") {
                     continue;
                 }

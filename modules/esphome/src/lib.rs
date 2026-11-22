@@ -20,7 +20,7 @@
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use breezone_module_sdk::{device, host, json, module, Described, DeviceInfo, Driver, Error, Map, Result, State, Value};
+use breezone_module_sdk::{device, host, json, module, Described, DeviceInfo, Driver, Error, Found, Map, Result, State, Value};
 use std::cell::RefCell;
 use std::collections::HashMap;
 
@@ -776,21 +776,46 @@ impl Driver for EspHome {
 
     /// A node answering on the native API: its name, or that it asks for its key.
     fn probe(host_: &str) -> Option<String> {
-        let address = if host_.contains(':') { format!("tcp://{host_}") } else { format!("tcp://{host_}:{PORT}") };
-        let subscription = host::subscribe(&address).ok()?;
-        let mut link = Link { subscription, buf: vec![], noise: None, last_heard: 0, last_ping: 0 };
-        let answer = link.send(1, &Msg::default().string(1, "Breezone").varint(2, 1).varint(3, 10).0).and_then(|_| link.next_frame());
-        let name = match answer {
-            Ok(Frame::Plain(2, msg)) => {
-                let _ = link.send(5, &[]);
-                Some(Fields(decode(&msg)).string(4)).filter(|n| !n.is_empty()).or(Some("ESPHome".into()))
-            }
-            Ok(Frame::Noise(_)) => Some("ESPHome".into()),
-            _ => None,
-        };
-        host::unsubscribe(subscription);
-        name
+        hello(host_).map(|name| name.unwrap_or_else(|| "ESPHome".into()))
     }
+
+    /// From its mDNS announce (name, MAC, version, whether its API is encrypted), else by saying
+    /// hello on its native API.
+    fn identify(host_: &str, announced: Option<&Value>) -> Option<Found> {
+        let (name, encrypted, mac, firmware) = match announced {
+            Some(a) => {
+                let txt = |k: &str| a["txt"][k].as_str().map(str::trim).filter(|v| !v.is_empty()).map(str::to_string);
+                let name = txt("friendly_name").or_else(|| a["name"].as_str().map(str::to_string));
+                (name, txt("api_encryption").is_some(), txt("mac"), txt("version"))
+            }
+            None => match hello(host_)? {
+                Some(name) => (Some(name), false, None, None),
+                None => (None, true, None, None),
+            },
+        };
+        let note = if encrypted { "chiffré : clé de l'API requise".to_string() } else { format!("« {} »", name.as_deref().unwrap_or("ESPHome")) };
+        Some(Found { model: "ESPHome".into(), note: Some(note), mac, firmware, port: Some(PORT), ..Found::default() })
+    }
+}
+
+/// Says hello on the native API: `Some(Some(name))` in clear, `Some(None)` when the node asks for
+/// its key, `None` when nothing answers as ESPHome.
+fn hello(host_: &str) -> Option<Option<String>> {
+    let address = if host_.contains(':') { format!("tcp://{host_}") } else { format!("tcp://{host_}:{PORT}") };
+    let subscription = host::subscribe(&address).ok()?;
+    let mut link = Link { subscription, buf: vec![], noise: None, last_heard: 0, last_ping: 0 };
+    let answer = link.send(1, &Msg::default().string(1, "Breezone").varint(2, 1).varint(3, 10).0).and_then(|_| link.next_frame());
+    let name = match answer {
+        Ok(Frame::Plain(2, msg)) => {
+            let _ = link.send(5, &[]);
+            let name = Fields(decode(&msg)).string(4);
+            Some(Some(if name.is_empty() { "ESPHome".into() } else { name }))
+        }
+        Ok(Frame::Noise(_)) => Some(None),
+        _ => None,
+    };
+    host::unsubscribe(subscription);
+    name
 }
 
 module!(EspHome);
@@ -798,6 +823,18 @@ module!(EspHome);
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_node_as_it_announces_itself() {
+        let found = EspHome::identify(
+            "192.168.1.62",
+            Some(&json!({"service": "_esphomelib._tcp", "name": "bureau", "port": 6053, "txt": {"friendly_name": "Bureau", "mac": "aabbccddeeff", "version": "2025.11.0"}})),
+        )
+        .unwrap();
+        assert_eq!((found.note.as_deref(), found.mac.as_deref(), found.firmware.as_deref()), (Some("« Bureau »"), Some("aabbccddeeff"), Some("2025.11.0")));
+        let locked = EspHome::identify("192.168.1.63", Some(&json!({"name": "garage", "txt": {"api_encryption": "Noise_NNpsk0_25519_ChaChaPoly_SHA256"}}))).unwrap();
+        assert_eq!(locked.note.as_deref(), Some("chiffré : clé de l'API requise"));
+    }
     use breezone_module_sdk::testing;
 
     const MANIFEST: &str = include_str!("../manifest.json");

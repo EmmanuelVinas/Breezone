@@ -94,6 +94,18 @@ provided, types, bounds, required fields). `modules/tasmota/src/lib.rs` has exam
   with `module!(service: MyService)` (or `module!(driver: MyDriver, service: MyService)`). Its
   account's fields (the `config` of its manifest) come from `host::account("<its id>")`; Breezone
   checks each answer against the contract and keeps the caches. `modules/rte/` is an example.
+- The network scan: a module lists `identify` in `optional_calls` and implements
+  `Driver::identify(host, announced)`, which gives a `Found` (model, note, device id, firmware,
+  MAC, flags for its appairage, whether it is supported). It is asked for an address where one of
+  the ports of `discovery.tcp` is open (`announced` is `None`: it may ask the hardware), or with
+  what the hardware announced by mDNS (`discovery.mdns`: service, name, port, TXT; nothing to ask
+  it). `modules/homekit/` (mDNS only) and `modules/esphome/` (both) are examples.
+- An account may show what it reaches beside its fields: during `check`, the module keeps
+  `{"shown": {...}}` with `host::account_update` (the homes of Netatmo, the devices of EZVIZ);
+  it is shown with the account, never as part of its secret. A field of its form may also be kept
+  as written (a meter number without the spaces typed: `modules/linky/`).
+- A call computes for 10 s at most; the time it waits in the host (the network, `host::wait`)
+  is not counted, so that a slow device (a key checked in 12 s) is not cut.
 - Versions of the interface: `driver` and `service` stay as in 1.0, so that a module built
   before still loads on a newer server; a call added later goes in `extras` (each one optional,
   looked up by the host only if the module exports it). A module that uses a function of `host`
@@ -103,6 +115,10 @@ provided, types, bounds, required fields). `modules/tasmota/src/lib.rs` has exam
 - `server/contracts/module.schema.json`: the manifest (`manifest.json`), with
   `server/contracts/module.example.json` as an example. The traits a module provides are those
   of `server/contracts/traits/`.
+- The tests of the server run the modules shipped with Breezone (`server/tests/support`): built
+  once, packed as in the image, their requests to a service of the Internet sent to a local fake
+  (`breezone_server::modules::wasm::redirect_for_tests("api.netatmo.com", "127.0.0.1:port")`,
+  development builds only).
 - `modules/tasmota/`: a complete module on the SDK, with its tests, to start from.
 - `modules/testing/misbehave`: a module written on the raw interface (no SDK), which misbehaves
   on purpose for the tests of the host.

@@ -5,7 +5,7 @@
 //! Breezone gets its access key the way the Hue app does: the bridge's button is pressed, then
 //! `POST /api` gives a key (the source's secret, stored encrypted): the step `link` of `pair`.
 
-use breezone_module_sdk::{device, host, json, module, Described, DeviceInfo, Driver, Error, HardwareRoom, Map, Paired, PairedSource, Result, Scene, State, Value};
+use breezone_module_sdk::{device, host, json, module, Described, DeviceInfo, Driver, Error, Found, HardwareRoom, Map, Paired, PairedSource, Result, Scene, State, Value};
 
 /// What answers `/api/config` without a key: a Hue bridge.
 #[derive(Debug, Clone, PartialEq)]
@@ -308,6 +308,20 @@ impl Driver for Hue {
         // A scene of a room is recalled on that room; any other on all the lights (group 0).
         let group = scene["group"].as_str().filter(|g| g.chars().all(|c| c.is_ascii_digit())).unwrap_or("0");
         self.put(&format!("/groups/{group}/action"), &json!({ "scene": id }))
+    }
+
+    fn identify(host_: &str, announced: Option<&Value>) -> Option<Found> {
+        if announced.is_some() {
+            return None;
+        }
+        let config = answer_json(&host::request("GET", &format!("http://{host_}/api/config"), &[], None, 2000).ok()?).ok()?;
+        let b = identify(&config)?;
+        let model = format!("Philips Hue {}", if b.model.is_empty() { "Bridge".to_string() } else { format!("Bridge ({})", b.model) });
+        let note = match config["apiversion"].as_str() {
+            Some(api) => format!("« {} » · API {api} · appuyez sur son bouton pour l'ajouter", b.name),
+            None => format!("« {} » · appuyez sur son bouton pour l'ajouter", b.name),
+        };
+        Some(Found { model, note: Some(note), device_id: Some(b.id), firmware: b.firmware, ..Found::default() })
     }
 
     fn probe(host_: &str) -> Option<String> {

@@ -17,7 +17,7 @@
 use aes::cipher::{BlockModeDecrypt, BlockModeEncrypt, KeyIvInit};
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use breezone_module_sdk::{device, host, json, module, serde_json, Described, DeviceInfo, Driver, Error, LengthPrefix, Map, ReadUntil, Result, State, Value};
+use breezone_module_sdk::{device, host, json, module, serde_json, Described, DeviceInfo, Driver, Error, Found, LengthPrefix, Map, ReadUntil, Result, State, Value};
 use sha2::{Digest, Sha256};
 use std::cell::RefCell;
 
@@ -558,6 +558,17 @@ impl Driver for TpLink {
             }
         }
         Ok(v)
+    }
+
+    fn identify(host_: &str, announced: Option<&Value>) -> Option<Found> {
+        if announced.is_some() {
+            return None;
+        }
+        let v = kasa_call(host_, &json!({"system": {"get_sysinfo": {}}}), 2000).ok()?;
+        let info = &v["system"]["get_sysinfo"];
+        let model = info["model"].as_str()?;
+        let alias = info["alias"].as_str().unwrap_or_default();
+        Some(Found { model: format!("TP-Link Kasa {model}"), note: (!alias.is_empty()).then(|| format!("« {alias} »")), port: Some(KASA_PORT), ..Found::default() })
     }
 
     fn probe(host_: &str) -> Option<String> {

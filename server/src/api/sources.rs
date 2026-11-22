@@ -185,11 +185,8 @@ pub async fn update(State(state): State<AppState>, _admin: AdminUser, Path(id): 
 /// unpaired from Breezone, so that it can be paired again).
 pub async fn delete(State(state): State<AppState>, _admin: AdminUser, Path(id): Path<i64>) -> ApiResult<StatusCode> {
     if let Some(source) = db::source_by_id(&state.db, id).await? {
-        let module = crate::modules::manifest(&source.driver).filter(|m| m.optional_calls.iter().any(|c| c == "forget"));
-        let by_module = module.is_some()
-            && crate::modules::installed_dir(&source.driver).is_some()
-            && (crate::modules::native::get(&source.driver).is_none() || crate::modules::replaces_native(&source.driver));
-        if by_module {
+        let forgets = crate::modules::manifest(&source.driver).is_some_and(|m| m.optional_calls.iter().any(|c| c == "forget"));
+        if forgets && crate::modules::installed_dir(&source.driver).is_some() {
             // The module tells its hardware to forget Breezone (its own source, opened for that).
             if let Some(driver) = state.drivers.driver(id).await {
                 if let Err(e) = tokio::time::timeout(std::time::Duration::from_secs(20), driver.forget())
@@ -199,9 +196,6 @@ pub async fn delete(State(state): State<AppState>, _admin: AdminUser, Path(id): 
                     tracing::warn!("source {id}: the hardware may still know Breezone: {e}");
                 }
             }
-        } else if let Some(on_delete) = crate::modules::native::get(&source.driver).and_then(|n| n.on_delete) {
-            let secret = source.secret.as_deref().and_then(|s| crate::crypto::decrypt(&state.data_key, s));
-            on_delete(serde_json::from_str(&source.config).unwrap_or(Value::Null), secret).await;
         }
     }
     if !db::delete_source(&state.db, id).await? {
@@ -226,9 +220,9 @@ pub struct PairingInput {
 pub async fn pairing(State(state): State<AppState>, _admin: AdminUser, Path(module): Path<String>, Json(input): Json<PairingInput>) -> ApiResult<axum::response::Response> {
     use axum::response::IntoResponse;
     let (config, secret, default) = match crate::modules::pair(&module, input.step, input.input).await? {
-        crate::modules::native::Paired::Done { config, secret, name } => (config, secret, name),
-        crate::modules::native::Paired::Waiting(message) => return Err(ApiError::new(StatusCode::CONFLICT, message).with_detail("code", "button")),
-        crate::modules::native::Paired::Next => return Ok(StatusCode::NO_CONTENT.into_response()),
+        crate::modules::Paired::Done { config, secret, name } => (config, secret, name),
+        crate::modules::Paired::Waiting(message) => return Err(ApiError::new(StatusCode::CONFLICT, message).with_detail("code", "button")),
+        crate::modules::Paired::Next => return Ok(StatusCode::NO_CONTENT.into_response()),
     };
     let name: String = input.name.trim().chars().take(60).collect();
     let encrypted = crate::crypto::encrypt(&state.data_key, &secret);
@@ -242,9 +236,14 @@ pub async fn pairing(State(state): State<AppState>, _admin: AdminUser, Path(modu
         Ok(id) => Ok((StatusCode::CREATED, Json(polled(&state, id).await?)).into_response()),
         Err(e) => {
             // Paired but not kept: the hardware forgets Breezone, to be paired again.
-            if let Some(on_delete) = crate::modules::native::get(&module).and_then(|n| n.on_delete) {
-                on_delete(config, Some(secret)).await;
+            #[cfg(feature = "wasm")]
+            if let (Some(m), Some(dir)) = (crate::modules::manifest(&module).filter(|m| m.optional_calls.iter().any(|c| c == "forget")), crate::modules::installed_dir(&module)) {
+                if let Ok(loaded) = crate::modules::wasm::loaded(m, &dir).await {
+                    let _ = loaded.forget(&config, Some(&secret)).await;
+                }
             }
+            #[cfg(not(feature = "wasm"))]
+            let _ = (config, secret);
             Err(e.into())
         }
     }

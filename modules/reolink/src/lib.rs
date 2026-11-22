@@ -13,7 +13,7 @@
 //! that the pages put in words. The camera's own certificate is accepted (Breezone allows it on
 //! the local network only).
 
-use breezone_module_sdk::{device, host, json, module, Described, Driver, Error, Map, Picture, Result, State, Value};
+use breezone_module_sdk::{device, host, json, module, Described, Driver, Error, Found, Map, Picture, Result, State, Value};
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 
@@ -280,6 +280,13 @@ impl Driver for Reolink {
     }
 
     /// A Reolink camera or NVR on `host`: its API answers, asking to log in.
+    fn identify(host_: &str, announced: Option<&Value>) -> Option<Found> {
+        if announced.is_some() {
+            return None;
+        }
+        Self::probe(host_).map(|_| Found { model: "Reolink".into(), note: Some("identifiant et mot de passe de la caméra".into()), ..Found::default() })
+    }
+
     fn probe(host_: &str) -> Option<String> {
         let ask = json!([{"cmd": "GetDevInfo", "action": 0, "param": {"channel": 0}}]);
         for base in [format!("https://{host_}"), format!("http://{host_}")] {

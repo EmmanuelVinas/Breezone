@@ -2,13 +2,14 @@
 //! the tests, from which modules are installed, updated, rolled back and removed through the API;
 //! what is not signed, or older than what was seen, is refused.
 
+mod support;
+
 use axum::extract::{Path, State};
 use axum::http::StatusCode as Code;
 use axum::routing::get;
 use axum::Router;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use breezone_server::config::Config;
 use breezone_server::modules::library::{self, Entry, Index, Published};
 use breezone_server::modules::package;
 use ed25519_dalek::{Signer, SigningKey};
@@ -97,7 +98,7 @@ impl Server {
     async fn start(library: String) -> Server {
         let dir = std::env::temp_dir().join(format!("breezone-library-{}-{}", std::process::id(), library.rsplit(':').next().unwrap()));
         let _ = std::fs::remove_dir_all(&dir);
-        let mut cfg = Config::for_tests(dir);
+        let mut cfg = support::config(&dir);
         cfg.modules_library = Some((library, STANDARD.encode(key().verifying_key().to_bytes())));
         let state = breezone_server::init_state(cfg).await.unwrap();
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -191,7 +192,7 @@ async fn modules_come_from_the_signed_library() {
     let (_, list) = server.call("GET", "/api/modules", None).await;
     assert!(!list.as_array().unwrap().iter().any(|m| m["id"] == "plugdemo"));
     let (code, _) = server.call("DELETE", "/api/modules/shelly", None).await;
-    assert_eq!(code, StatusCode::BAD_REQUEST, "compiled in");
+    assert_eq!(code, StatusCode::BAD_REQUEST, "it comes with Breezone");
 }
 
 /// Sources of modules besides Breezone's (a developer's, a community's): each signs with its own

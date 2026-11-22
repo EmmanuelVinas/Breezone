@@ -12,7 +12,7 @@
 //!
 //! [`spawn`] starts them on consecutive ports; [`Module::source`] is what to add in Breezone.
 
-use crate::drivers::esphome::{decode, Fields, Frames, Msg};
+use crate::esphome_wire::{decode, Fields, Frames, Msg};
 use axum::extract::{Path, Query, State};
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
@@ -427,7 +427,7 @@ async fn esphome_node(listener: tokio::net::TcpListener) {
 }
 
 /// The states of the node's entities.
-async fn push(frames: &mut Frames<tokio::net::TcpStream>, covers: &Mutex<HashMap<u32, f32>>, valve: &Mutex<bool>) -> Result<(), crate::drivers::DriverError> {
+async fn push(frames: &mut Frames<tokio::net::TcpStream>, covers: &Mutex<HashMap<u32, f32>>, valve: &Mutex<bool>) -> std::io::Result<()> {
     let h = hour();
     let covers: Vec<(u32, f32)> = covers.lock().unwrap().iter().map(|(k, v)| (*k, *v)).collect();
     for (key, position) in covers {

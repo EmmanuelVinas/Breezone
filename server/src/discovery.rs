@@ -204,15 +204,11 @@ async fn hinted(host: &str, open: &[u16], hints: &[crate::modules::manifest::Htt
 /// `candidates`: modules of the library not installed, whose hardware is looked for too.
 pub async fn scan_products(subnet: &str, airzone_port: u16, quiet: &[std::net::Ipv4Addr], candidates: &[Candidate]) -> Result<Vec<Product>, String> {
     let hosts = hosts_in(subnet)?;
-    // The modules found by mDNS are asked meanwhile.
-    let browsed = tokio::spawn({
-        let hosts = hosts.clone();
-        async move { futures_util::future::join_all(crate::modules::native::all().iter().filter_map(|n| n.browse).map(|browse| browse(hosts.clone()))).await }
-    });
-    // And the services the modules of the library announce.
+    // Meanwhile, the services the installed modules and those of the library announce by mDNS.
     let announced = tokio::spawn({
         let hosts = hosts.clone();
-        let mut services: Vec<String> = candidates.iter().flat_map(|c| c.mdns.iter().map(|h| h.service.clone())).collect();
+        let mut services: Vec<String> = crate::modules::announced_services();
+        services.extend(candidates.iter().flat_map(|c| c.mdns.iter().map(|h| h.service.clone())));
         services.sort();
         services.dedup();
         async move { crate::mdns::browse(&services.iter().map(String::as_str).collect::<Vec<_>>(), Duration::from_secs(2), &hosts).await }
@@ -234,10 +230,8 @@ pub async fn scan_products(subnet: &str, airzone_port: u16, quiet: &[std::net::I
             let _permit = limit.acquire().await.ok()?;
             let host = host.to_string();
             let (airzone, open) = tokio::join!(probe(&host, airzone_port), open_ports(&host, &ports));
-            // Each module with a port open here is asked (they answer in parallel).
-            let asked =
-                crate::modules::native::all().iter().filter(|n| n.manifest.discovery.tcp.iter().any(|p| open.contains(p))).filter_map(|n| n.probe).map(|probe| probe(host.clone()));
-            let (products, installed) = tokio::join!(futures_util::future::join_all(asked), crate::modules::probe_installed(&host, &open));
+            // Each module with a port open here is asked.
+            let installed = crate::modules::identify_at(&host, &open).await;
             let mut found = vec![];
             if let Some(a) = airzone {
                 let note = match (&a.ws_type, a.zones) {
@@ -261,7 +255,6 @@ pub async fn scan_products(subnet: &str, airzone_port: u16, quiet: &[std::net::I
                     install: None,
                 });
             }
-            found.extend(products.into_iter().flatten());
             found.extend(installed);
             // Nothing installed knows it: the modules of the library are asked by their hints.
             if found.is_empty() {
@@ -296,11 +289,15 @@ pub async fn scan_products(subnet: &str, airzone_port: u16, quiet: &[std::net::I
         }
     }
     let probed: Vec<String> = found.iter().map(|p| ip_of(&p.host).to_string()).collect();
-    // A Hue bridge (and others) also answers as a HomeKit accessory: the module that probed it is better.
-    for p in browsed.await.unwrap_or_default().into_iter().flatten().filter(|p| !probed.iter().any(|n| n == ip_of(&p.host))) {
-        found.push(p);
-    }
-    found.extend(announced_products(&announced.await.unwrap_or_default(), &candidates, &found));
+    let announced = announced.await.unwrap_or_default();
+    // A Hue bridge (and others) also answers as a HomeKit accessory: the module that probed it is
+    // better. An accessory answers once per interface: kept once.
+    let mut by_mdns = crate::modules::identify_announced(&announced).await;
+    by_mdns.retain(|p| !probed.iter().any(|n| n == ip_of(&p.host)));
+    by_mdns.sort_by(|a, b| (a.driver, &a.device_id, &a.host).cmp(&(b.driver, &b.device_id, &b.host)));
+    by_mdns.dedup_by(|a, b| a.driver == b.driver && (a.device_id.is_some() && a.device_id == b.device_id || a.host == b.host));
+    found.extend(by_mdns);
+    found.extend(announced_products(&announced, &candidates, &found));
     found.sort_by_key(|p| (p.host.split(':').next().and_then(|h| h.parse::<Ipv4Addr>().ok()).map(u32::from).unwrap_or(0), p.brand));
     Ok(found)
 }

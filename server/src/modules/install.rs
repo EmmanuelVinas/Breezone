@@ -33,25 +33,13 @@ pub async fn install(
 }
 
 /// Installs a package already checked (signed, or one of those that come with Breezone, whose
-/// archive is signed as a whole). A module with the id of one compiled into the server replaces it
-/// (its code must then be there: data alone cannot drive hardware).
+/// archive is signed as a whole).
 /// `from`: the source it comes from (`None`: it comes with Breezone).
 pub async fn install_package(db: &Db, data_dir: &Path, package: Package, origin: Origin, from: Option<&super::library::Repository>) -> Result<(String, String), ApiError> {
     let m = &package.manifest;
     let official = from.is_none_or(|r| r.official);
-    // A source other than Breezone's never takes the place of one of its modules, nor of a module
-    // that came from elsewhere: its updates come from where it was installed from.
-    if !official && super::native::get(&m.id).is_some() {
-        return Err(ApiError::new(
-            StatusCode::CONFLICT,
-            crate::text!(
-                "Seule la bibliothèque de Breezone peut remplacer son module {0}.",
-                "Only Breezone's library may replace its {0} module.",
-                "Solo la biblioteca de Breezone puede sustituir su módulo {0}.",
-                m.id.clone()
-            ),
-        ));
-    }
+    // A source other than Breezone's never takes the place of a module that came from elsewhere
+    // (one that came with Breezone among them): its updates come from where it was installed from.
     if let Some(installed) = db::module_row(db, &m.id).await?.filter(|r| r.origin != "native") {
         let was = db::module_repository(db, &m.id).await?;
         let now = from.map(|r| r.id);
@@ -68,12 +56,6 @@ pub async fn install_package(db: &Db, data_dir: &Path, package: Package, origin:
                 ),
             ));
         }
-    }
-    if super::native::get(&m.id).is_some() && (package.wasm.is_none() || !cfg!(feature = "wasm")) {
-        return Err(ApiError::new(
-            StatusCode::CONFLICT,
-            crate::text!("Le module {0} est déjà compris dans Breezone.", "The {0} module is already part of Breezone.", "El módulo {0} ya forma parte de Breezone.", m.id.clone()),
-        ));
     }
     if db::rejected_versions(db, &m.id).await?.contains(&m.version) {
         return Err(ApiError::new(
@@ -152,14 +134,17 @@ fn leak_origin(origin: &str) -> Origin {
     }
 }
 
-/// Removes a module no source and no account uses.
+/// Removes a module no source and no account uses (not one that comes with Breezone: it would be
+/// installed again at the next start).
 pub async fn uninstall(db: &Db, data_dir: &Path, id: &str) -> Result<(), ApiError> {
-    let native = super::native::get(id).is_some();
-    if native && !super::replaces_native(id) {
-        return Err(ApiError::bad_request("a module compiled into Breezone cannot be removed"));
+    if db::module_row(db, id).await?.is_some_and(|r| r.origin == "builtin") {
+        return Err(ApiError::bad_request(crate::text!(
+            "Ce module est livré avec Breezone : il ne se retire pas.",
+            "This module comes with Breezone: it cannot be removed.",
+            "Este módulo viene con Breezone: no se puede quitar."
+        )));
     }
-    // One that replaces a module compiled in leaves its sources to it.
-    let used = if native { 0 } else { db::list_sources(db).await?.iter().filter(|s| s.driver == id).count() };
+    let used = db::list_sources(db).await?.iter().filter(|s| s.driver == id).count();
     let account = db::list_accounts(db).await?.iter().any(|a| a.kind == id && a.secret.is_some());
     if used > 0 || account {
         return Err(ApiError::new(
@@ -176,12 +161,6 @@ pub async fn uninstall(db: &Db, data_dir: &Path, id: &str) -> Result<(), ApiErro
     }
     let _ = std::fs::remove_dir_all(super::modules_dir(data_dir).join(id));
     super::unregister(id);
-    if native {
-        // The module compiled in is the one again.
-        if let Some(n) = super::native::get(id) {
-            db::restore_native_module(db, &n.manifest.id, &n.manifest.version).await?;
-        }
-    }
     tracing::info!(module = id, "module removed");
     Ok(())
 }
@@ -208,8 +187,11 @@ pub async fn install_builtin(db: &Db, data_dir: &Path, dir: &Path, public_key: &
             continue;
         };
         let installed = db::module_row(db, &package.manifest.id).await.ok().flatten();
-        // Missing here, still the driver compiled in, or older than this one.
-        let newer = installed.as_ref().is_none_or(|r| r.origin == "native" || semver::Version::parse(&r.version).ok() < Some(package.manifest.semver()));
+        // Missing here (or its files gone), or older than this one.
+        let id = package.manifest.id.clone();
+        let newer = installed.as_ref().is_none_or(|r| {
+            r.origin == "native" || semver::Version::parse(&r.version).ok() < Some(package.manifest.semver()) || !super::modules_dir(data_dir).join(&id).join(&r.version).is_dir()
+        });
         if newer {
             if let Err(e) = install_package(db, data_dir, package, "builtin", None).await {
                 tracing::warn!("{}: {}", path.display(), e.message.en);
@@ -341,12 +323,9 @@ mod tests {
         assert_eq!((row.version.as_str(), row.previous_version.as_deref()), ("1.1.0", Some("1.0.0")));
         assert_eq!(crate::modules::manifest("plugtest").unwrap().version, "1.1.0");
 
-        // Refused: an interface this server does not host, a module compiled in, a bad signature.
+        // Refused: an interface this server does not host, a bad signature.
         let (b, s) = package("2.0.0", "^9.0");
         assert_eq!(install(&db, &dir, &b, &s, &official, "file", None).await.unwrap_err().status, StatusCode::UNPROCESSABLE_ENTITY);
-        let bytes = build(&manifest("shelly", "9.0.0", api), None, &[]).unwrap();
-        let sig = sign(&key, &signed_message("shelly", "9.0.0", &bytes));
-        assert_eq!(install(&db, &dir, &bytes, &sig, &official, "file", None).await.unwrap_err().status, StatusCode::CONFLICT);
         let (b, _) = package("1.2.0", api);
         assert_eq!(install(&db, &dir, &b, "AAAA", &official, "file", None).await.unwrap_err().status, StatusCode::FORBIDDEN);
 

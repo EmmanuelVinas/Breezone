@@ -13,7 +13,7 @@
 // * a function added to `host` raises the minor version of the interface (`INTERFACE` of the
 //   server): a module that uses it requires it (`requires.api` of its manifest, "^1.1"), and an
 //   older server does not offer it.
-// Version 1.1: `host.receive`, `extras.forget`.
+// Version 1.1: `host.receive`, `extras.forget`, `extras.identify`.
 package breezone:module@1.0.0;
 
 interface types {
@@ -298,6 +298,14 @@ interface extras {
     /// Breezone's pairing, so that it can be paired again), from the source's configuration and
     /// secret. `forget` in `optional-calls`.
     forget: func(config: json, secret: option<string>) -> result<_, error>;
+
+    /// What the hardware at `host` is, for the network scan (`identify` in `optional-calls`, in
+    /// place of `probe`): `announced` is what it says of itself by mDNS (JSON: service, name,
+    /// port, txt; nothing to ask it then), none when one of the ports of `discovery.tcp` is open
+    /// there (the module may ask it). Its answer, JSON: model, and optionally note, device_id,
+    /// firmware, mac, supported (false: found but not usable), flags, port, host ("ip:port" when
+    /// the port must be kept).
+    identify: func(host: string, announced: option<json>) -> option<json>;
 }
 
 /// What a module is built against.

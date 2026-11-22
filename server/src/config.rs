@@ -57,12 +57,6 @@ pub struct Config {
     /// when the server may look things up on the internet, else none.
     pub cre_url: Option<String>,
     /// The services of the linked accounts (`accounts`), only reached once an account is set:
-    /// RTE's data portal (Tempo), Conso API (Linky, through Enedis), Netatmo, EZVIZ (its European
-    /// API: an account elsewhere is sent to its own region at login).
-    pub rte_url: String,
-    pub conso_api_url: String,
-    pub netatmo_url: String,
-    pub ezviz_url: String,
     /// Where the library of modules is read, and the key that signs it: the official repository
     /// and the key of the releases, always (no variable changes them); the tests point elsewhere.
     pub modules_library: Option<(String, String)>,
@@ -128,10 +122,6 @@ impl Config {
             cre_url: var("BREEZONE_CRE_URL")
                 .or_else(|| flag("BREEZONE_WEATHER").unwrap_or(!cfg!(debug_assertions)).then(|| "https://www.cre.fr/fileadmin/Documents/Open_data/Marches_de_detail".into())),
             tempo_url: var("BREEZONE_TEMPO_URL").or_else(|| flag("BREEZONE_WEATHER").unwrap_or(!cfg!(debug_assertions)).then(|| "https://www.api-couleur-tempo.fr".into())),
-            rte_url: var("BREEZONE_RTE_URL").unwrap_or_else(|| "https://digital.iservices.rte-france.com".into()),
-            conso_api_url: var("BREEZONE_CONSO_API_URL").unwrap_or_else(|| "https://conso.boris.sh".into()),
-            netatmo_url: var("BREEZONE_NETATMO_URL").unwrap_or_else(|| "https://api.netatmo.com".into()),
-            ezviz_url: var("BREEZONE_EZVIZ_URL").unwrap_or_else(|| "https://apiieu.ezvizlife.com".into()),
             modules_library: None,
             modules_dev: if cfg!(debug_assertions) { var("BREEZONE_MODULES_DEV").map(PathBuf::from) } else { None },
         }
@@ -144,11 +134,6 @@ impl Config {
             None if self.airzone_cloud_url.contains("m.airzonecloud.com") => "https://prodctrl.airzonecloud.com".into(),
             None => self.airzone_cloud_url.clone(),
         }
-    }
-
-    /// The address of the maker's service of the modules that reach it through their account.
-    pub fn module_urls(&self) -> std::collections::HashMap<String, String> {
-        [("netatmo", &self.netatmo_url), ("ezviz", &self.ezviz_url)].into_iter().map(|(k, v)| (k.to_string(), v.clone())).collect()
     }
 
     pub fn for_tests(data_dir: PathBuf) -> Self {
@@ -182,10 +167,6 @@ impl Config {
             matter_interface: None,
             tempo_url: None,
             cre_url: None,
-            rte_url: "http://127.0.0.1:9".into(),
-            conso_api_url: "http://127.0.0.1:9".into(),
-            netatmo_url: "http://127.0.0.1:9".into(),
-            ezviz_url: "http://127.0.0.1:9".into(),
             modules_library: None,
             modules_dev: None,
         }

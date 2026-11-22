@@ -41,6 +41,7 @@
   },
   "read_every_s": 10,
   "optional_calls": [
+    "identify",
     "listen",
     "diagnostic",
     "forget"

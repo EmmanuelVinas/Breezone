@@ -1,10 +1,12 @@
-//! Linked accounts against fake services: RTE (Tempo), Conso API (Linky), Netatmo.
+//! Linked accounts against fake services: RTE (Tempo), Conso API (Linky), Netatmo, through the
+//! modules shipped with Breezone (their requests sent to the fakes).
+
+mod support;
 
 use axum::extract::{Form, Query};
 use axum::http::{HeaderMap, StatusCode as Code};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use breezone_server::config::Config;
 use reqwest::StatusCode;
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -104,7 +106,8 @@ fn conso() -> Router {
         .route("/api/daily_production", get(|| async { (Code::NOT_FOUND, Json(json!({"message": "pas de production"}))) }))
 }
 
-/// Netatmo: each refresh token works once and is replaced by the next one; a home with its
+/// Netatmo: each refresh token works once and is replaced by the next one (each access lasts 30 s,
+/// renewed at each use); a home with its
 /// gateway, a shutter and a line of an Ecometer; the changes asked are kept in `set`.
 fn netatmo(used: Arc<Mutex<Vec<String>>>, set: Arc<Mutex<Vec<Value>>>) -> Router {
     Router::new()
@@ -120,7 +123,8 @@ fn netatmo(used: Arc<Mutex<Vec<String>>>, set: Arc<Mutex<Vec<Value>>>) -> Router
                     }
                     used.push(token.clone());
                     let next = format!("refresh-{}", used.len() + 1);
-                    (Code::OK, Json(json!({"access_token": "net-access", "refresh_token": next, "expires_in": 10800})))
+                    // About to end at once: Breezone renews it at each use.
+                    (Code::OK, Json(json!({"access_token": "net-access", "refresh_token": next, "expires_in": 30})))
                 }
             }),
         )
@@ -178,10 +182,11 @@ async fn accounts_are_linked_used_and_removed() {
     let set = Arc::new(Mutex::new(vec![]));
     let dir = std::env::temp_dir().join(format!("breezone-accounts-test-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let mut cfg = Config::for_tests(dir);
-    cfg.rte_url = format!("http://127.0.0.1:{}", serve(rte()).await);
-    cfg.conso_api_url = format!("http://127.0.0.1:{}", serve(conso()).await);
-    cfg.netatmo_url = format!("http://127.0.0.1:{}", serve(netatmo(used.clone(), set.clone())).await);
+    let cfg = support::config(&dir);
+    let redirect = breezone_server::modules::wasm::redirect_for_tests;
+    redirect("digital.iservices.rte-france.com", &format!("127.0.0.1:{}", serve(rte()).await));
+    redirect("conso.boris.sh", &format!("127.0.0.1:{}", serve(conso()).await));
+    redirect("api.netatmo.com", &format!("127.0.0.1:{}", serve(netatmo(used.clone(), set.clone())).await));
     let state = breezone_server::init_state(cfg).await.unwrap();
     let port = serve(breezone_server::app(state)).await;
     let mut c = Client { base: format!("http://127.0.0.1:{port}"), http: reqwest::Client::new(), token: None };
@@ -192,9 +197,14 @@ async fn accounts_are_linked_used_and_removed() {
     let (s, list) = c.call(reqwest::Method::GET, "/api/accounts", None).await;
     assert_eq!(s, StatusCode::OK, "{list}");
     let kinds: Vec<&str> = list.as_array().unwrap().iter().map(|a| a["kind"].as_str().unwrap()).collect();
-    assert_eq!(kinds, ["airzone", "rte", "linky", "netatmo", "ezviz", "weather", "forecast_solar"]);
-    assert!(list.as_array().unwrap()[..5].iter().all(|a| a["connected"] == false && a["state"] == "none" && a["enabled"] == true));
-    assert_eq!((list[5]["connected"].clone(), list[5]["service"].clone(), list[5]["enabled"].clone()), (json!(true), json!(true), json!(true)));
+    assert_eq!(kinds, ["airzone", "ezviz", "forecast_solar", "linky", "weather", "netatmo", "rte"], "the Airzone account, then the modules by name");
+    let account = |list: &Value, kind: &str| list.as_array().unwrap().iter().find(|a| a["kind"] == kind).cloned().unwrap();
+    assert!(["airzone", "ezviz", "linky", "netatmo", "rte"].iter().all(|k| {
+        let a = account(&list, k);
+        a["connected"] == false && a["state"] == "none" && a["enabled"] == true
+    }));
+    let weather = account(&list, "weather");
+    assert_eq!((weather["connected"].clone(), weather["service"].clone(), weather["enabled"].clone()), (json!(true), json!(true), json!(true)));
     let (s, v) = c.call(reqwest::Method::PUT, "/api/accounts/weather/enabled", Some(json!({"enabled": false}))).await;
     assert_eq!((s, v["enabled"].clone()), (StatusCode::OK, json!(false)), "{v}");
     let (_, v) = c.call(reqwest::Method::GET, "/api/weather", None).await;
@@ -204,9 +214,9 @@ async fn accounts_are_linked_used_and_removed() {
 
     // RTE: wrong credentials refused and nothing kept; the right ones read the colours.
     let (s, v) = c.call(reqwest::Method::PUT, "/api/accounts/rte", Some(json!({"client_id": "breezone", "client_secret": "faux"}))).await;
-    assert_eq!(s, StatusCode::BAD_GATEWAY, "{v}");
+    assert_eq!(s, StatusCode::BAD_REQUEST, "{v}");
     let (_, list) = c.call(reqwest::Method::GET, "/api/accounts", None).await;
-    assert_eq!(list[1]["connected"], false);
+    assert_eq!(account(&list, "rte")["connected"], false);
     let (s, v) = c.call(reqwest::Method::PUT, "/api/accounts/rte", Some(json!({"client_id": "breezone", "client_secret": "secret"}))).await;
     assert_eq!(s, StatusCode::OK, "{v}");
     assert_eq!((v["connected"].clone(), v["state"].clone(), v["config"]["client_id"].clone()), (json!(true), json!("ok"), json!("breezone")));
@@ -229,7 +239,7 @@ async fn accounts_are_linked_used_and_removed() {
     assert_eq!(v["config"]["homes"], json!([{"name": "Maison", "rooms": 3, "modules": 4}]));
     let (s, v) = c.call(reqwest::Method::POST, "/api/accounts/netatmo/test", None).await;
     assert_eq!((s, v["state"].clone()), (StatusCode::OK, json!("ok")), "the second refresh token was kept: {v}");
-    assert_eq!(*used.lock().unwrap(), ["refresh-1", "refresh-2"]);
+    assert_eq!(used.lock().unwrap()[..2], ["refresh-1", "refresh-2"]);
 
     // The Netatmo module came with the account: a shutter (no local one here) and the Ecometer's line.
     let (_, sources) = c.call(reqwest::Method::GET, "/api/sources", None).await;
@@ -284,5 +294,5 @@ async fn accounts_are_linked_used_and_removed() {
     let (s, _) = c.call(reqwest::Method::DELETE, "/api/accounts/rte", None).await;
     assert_eq!(s, StatusCode::NO_CONTENT);
     let (_, list) = c.call(reqwest::Method::GET, "/api/accounts", None).await;
-    assert_eq!(list[1]["connected"], false);
+    assert_eq!(account(&list, "rte")["connected"], false);
 }

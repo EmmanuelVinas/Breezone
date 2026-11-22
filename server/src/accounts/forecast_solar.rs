@@ -43,7 +43,7 @@ async fn module_config(state: &AppState, panels: &Value) -> ApiResult<Value> {
 /// Asks the forecast once with these panels: an answer, or why there is none.
 async fn check(config: &Value, secret: &Secret) -> ApiResult<()> {
     let secret = json!({"api_key": secret.api_key}).to_string();
-    let driver = crate::drivers::create("forecast_solar", config, Some(&secret)).map_err(ApiError::bad_request)?;
+    let driver = crate::modules::open_source(KIND, None, config, Some(&secret)).await.map_err(ApiError::bad_request)?;
     driver.read().await.map(|_| ()).map_err(|e| match e {
         DriverError::Invalid(m) => ApiError::bad_request(m),
         e => ApiError::bad_gateway(format!("Forecast.Solar : {e}")),

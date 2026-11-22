@@ -1,6 +1,6 @@
 [package]
 name = "breezone-module-hoymiles"
-version = "1.0.0"
+version = "1.1.0"
 edition.workspace = true
 description = "Hoymiles micro-inverters, through their Wi-Fi DTU (local protocol on TCP 10081)"
 

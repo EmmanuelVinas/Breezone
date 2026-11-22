@@ -10,7 +10,7 @@
 //! Devices: each inverter (`energy.power@1`, `solar.inverter@1`), which can be given the role of
 //! the solar production on the energy page, and each of its panels (`solar.panel@1`).
 
-use breezone_module_sdk::{device, host, json, module, Described, Driver, Error, LengthPrefix, ReadUntil, Result, State, Value};
+use breezone_module_sdk::{device, host, json, module, Described, Driver, Error, Found, LengthPrefix, ReadUntil, Result, State, Value};
 use std::cell::Cell;
 
 pub const PORT: u16 = 10081;
@@ -444,6 +444,24 @@ impl Driver for Hoymiles {
         let info = self.request(APP_INFO, &time_request(1, 2, 5, &[]))?;
         let found = identify_msg(&info).ok_or_else(|| Error::Invalid("not a Hoymiles DTU".into()))?;
         Ok(json!({"model": found.model, "firmware": found.firmware, "inverters": found.inverters.len(), "panels": found.panels, "encrypted": found.encrypted}))
+    }
+
+    fn identify(host_: &str, announced: Option<&Value>) -> Option<Found> {
+        if announced.is_some() {
+            return None;
+        }
+        let addr = if host_.contains(':') { host_.to_string() } else { format!("{host_}:{PORT}") };
+        let answer = host::exchange(&format!("tcp://{addr}"), &frame(APP_INFO, 1, &time_request(1, 2, 5, &[])), until(), 2000).ok()?;
+        let h = identify(unframe(&answer).ok()?)?;
+        Some(Found {
+            note: Some(h.note()),
+            unsupported: h.encrypted,
+            device_id: Some(h.serial.clone()),
+            firmware: h.firmware.clone(),
+            model: h.model,
+            port: Some(PORT),
+            ..Found::default()
+        })
     }
 
     fn probe(host_: &str) -> Option<String> {

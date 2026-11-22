@@ -22,29 +22,10 @@ pub async fn list_modules(db: &Db) -> sqlx::Result<Vec<ModuleRow>> {
     sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {COLUMNS} FROM modules ORDER BY id"))).fetch_all(db).await
 }
 
-/// Writes the modules compiled into this server at their version, and forgets those it no longer
-/// has (a module of another origin is left as it is).
-pub async fn sync_native_modules(db: &Db, modules: &[(&str, &str)]) -> sqlx::Result<()> {
-    let now = now();
-    let mut tx = db.begin().await?;
-    for (id, version) in modules {
-        sqlx::query(
-            "INSERT INTO modules (id, version, origin, installed_at, updated_at) VALUES (?, ?, 'native', ?, ?) \
-             ON CONFLICT (id) DO UPDATE SET version = excluded.version, updated_at = excluded.updated_at WHERE modules.origin = 'native' AND modules.version <> excluded.version",
-        )
-        .bind(id)
-        .bind(version)
-        .bind(now)
-        .bind(now)
-        .execute(&mut *tx)
-        .await?;
-    }
-    let ids: Vec<&str> = modules.iter().map(|(id, _)| *id).collect();
-    let all: Vec<(String,)> = sqlx::query_as("SELECT id FROM modules WHERE origin = 'native'").fetch_all(&mut *tx).await?;
-    for (id,) in all.into_iter().filter(|(id,)| !ids.contains(&id.as_str())) {
-        sqlx::query("DELETE FROM modules WHERE id = ?").bind(id).execute(&mut *tx).await?;
-    }
-    tx.commit().await
+/// Forgets the rows of the drivers once compiled into the server (origin `native`): they are
+/// modules shipped with Breezone now, installed at start.
+pub async fn forget_native_modules(db: &Db) -> sqlx::Result<()> {
+    sqlx::query("DELETE FROM modules WHERE origin = 'native'").execute(db).await.map(|_| ())
 }
 
 pub async fn module_row(db: &Db, id: &str) -> sqlx::Result<Option<ModuleRow>> {
@@ -112,19 +93,6 @@ pub async fn reject_version(db: &Db, id: &str, version: &str) -> sqlx::Result<()
     }
     let json = serde_json::to_string(&rejected).unwrap_or_else(|_| "[]".into());
     sqlx::query("UPDATE modules SET rejected = ? WHERE id = ?").bind(json).bind(id).execute(db).await.map(|_| ())
-}
-
-/// Writes back the module compiled in for `id` (the installed one that replaced it was removed).
-pub async fn restore_native_module(db: &Db, id: &str, version: &str) -> sqlx::Result<()> {
-    let now = now();
-    sqlx::query("INSERT OR REPLACE INTO modules (id, version, origin, installed_at, updated_at) VALUES (?, ?, 'native', ?, ?)")
-        .bind(id)
-        .bind(version)
-        .bind(now)
-        .bind(now)
-        .execute(db)
-        .await
-        .map(|_| ())
 }
 
 /// A source of modules (see `module_repositories`).
