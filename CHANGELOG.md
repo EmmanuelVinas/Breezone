@@ -6,6 +6,28 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.12.0-beta.7] - 2026-11-22
+
+### Added
+
+- ESPHome and HomeKit come as modules shipped with Breezone too, in place of their drivers compiled
+  in: ESPHome nodes in clear or encrypted, HomeKit accessories (Legrand, VELUX…) with their shutters,
+  switches and remotes. Paired accessories and existing sources are kept as they are, without
+  pairing them again; removing a HomeKit source still removes Breezone's own pairing from the
+  accessory.
+- Library: it comes first in Settings › Modules, lists the modules shipped with Breezone, and has
+  a search field.
+- Mobile app: the energy flow of the home now, as on the web; a Modules card in the settings of
+  each server (administrators); the controls of the kinds of devices this version does not know,
+  as their module describes them (on the web too).
+
+### Fixed
+
+- Memory: each source of a module took about 2 MB more than needed; a server with a few sources
+  of modules uses about a third less memory.
+- Pairing a module: a wrong code or a refused entry is told as such, no longer as hardware that
+  does not answer.
+
 ## [0.12.0-beta.6] - 2026-11-22
 
 The 0.12.0-beta.5 published before was built from the wrong commit (it said 0.12.0-beta.4, so the
