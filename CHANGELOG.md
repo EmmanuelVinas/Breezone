@@ -6,6 +6,12 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Library of modules: the modules published for an earlier version of Breezone load again (a call
+  added to the interface no longer refuses them), and a module that needs a newer Breezone is no
+  longer offered to an older one. Tasmota 1.0.1 replaces a 1.0.0 that no server could load.
+
 ## [0.12.0-beta.7] - 2026-11-22
 
 ### Added

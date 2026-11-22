@@ -3,9 +3,10 @@
 //! and announces; `"store"`: a counter in the store of the source; `"account:<kind>"`: the secret
 //! of an account); otherwise answers one device.
 
+// The world without `extras`: a module that exports none of them loads.
 wit_bindgen::generate!({
     path: "../../../server/contracts/wit",
-    world: "module",
+    world: "core",
 });
 
 use breezone::module::host;
@@ -167,10 +168,6 @@ impl GuestSource for Source {
 
     fn delete_schedule(&self, id: String) -> Result<(), Error> {
         self.schedules.borrow_mut().retain(|s| s.id != id);
-        Ok(())
-    }
-
-    fn forget(&self) -> Result<(), Error> {
         Ok(())
     }
 

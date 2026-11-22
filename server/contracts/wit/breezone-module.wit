@@ -5,6 +5,15 @@
 // A module never runs long: each call it exports has a deadline. What the hardware says without
 // being asked (a WebSocket, a TCP stream) comes through subscriptions: the host keeps the
 // connection open and hands each message to `on-message`.
+//
+// Keeping modules and servers of different versions working together:
+// * `driver` and `service` are those of version 1.0, never changed: a call added later goes in
+//   `extras`, which the host looks up function by function, so that a module built before still
+//   loads (the host binds the world `core`, without `extras`);
+// * a function added to `host` raises the minor version of the interface (`INTERFACE` of the
+//   server): a module that uses it requires it (`requires.api` of its manifest, "^1.1"), and an
+//   older server does not offer it.
+// Version 1.1: `host.receive`, `extras.forget`.
 package breezone:module@1.0.0;
 
 interface types {
@@ -253,9 +262,6 @@ interface driver {
         schedules: func() -> result<list<schedule>, error>;
         save-schedule: func(schedule: schedule) -> result<string, error>;
         delete-schedule: func(id: string) -> result<_, error>;
-        /// The source is removed: the hardware forgets Breezone (a HomeKit accessory removes
-        /// Breezone's pairing, so that it can be paired again). `forget` in `optional-calls`.
-        forget: func() -> result<_, error>;
         /// Ends the connections it keeps, before the server stops.
         close: func();
     }
@@ -284,7 +290,26 @@ interface service {
     query: func(contract: string, query: string, params: json) -> result<json, error>;
 }
 
+/// Calls added after 1.0, each one optional: a module may export some of them, or none.
+interface extras {
+    use types.{json, error};
+
+    /// The source is removed: the hardware forgets Breezone (a HomeKit accessory removes
+    /// Breezone's pairing, so that it can be paired again), from the source's configuration and
+    /// secret. `forget` in `optional-calls`.
+    forget: func(config: json, secret: option<string>) -> result<_, error>;
+}
+
+/// What a module is built against.
 world module {
+    import host;
+    export driver;
+    export service;
+    export extras;
+}
+
+/// What the host binds: what every module has; `extras` is looked up apart.
+world core {
     import host;
     export driver;
     export service;

@@ -2,7 +2,7 @@
 # loaded by the server only when a source uses them.
 [workspace]
 resolver = "2"
-members = ["sdk", "forecast_solar", "hoymiles", "reolink", "shelly", "tasmota", "trydan", "tplink", "hue", "renson", "rte", "weather", "linky", "netatmo", "ezviz", "esphome", "homekit", "testing/misbehave"]
+members = ["sdk", "forecast_solar", "hoymiles", "reolink", "shelly", "tasmota", "trydan", "tplink", "hue", "renson", "rte", "weather", "linky", "netatmo", "ezviz", "esphome", "homekit", "testing/misbehave", "testing/contract-1-0"]
 
 [workspace.package]
 edition = "2021"

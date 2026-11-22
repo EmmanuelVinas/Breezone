@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "name": {"en": "ESPHome", "es": "ESPHome", "fr": "ESPHome"},
   "roles": ["driver"],
-  "requires": {"api": "^1.0"},
+  "requires": {"api": "^1.1"},
   "provides": {"traits": ["switch.relay@1.0", "light@1.0", "cover.position@1.0", "energy.power@1.0", "environment.sensor@1.0"]},
   "models": ["ESPHome (API native)"],
   "config": [

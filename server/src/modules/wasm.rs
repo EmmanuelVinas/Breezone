@@ -21,7 +21,8 @@ use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 
 wasmtime::component::bindgen!({
     path: "contracts/wit",
-    world: "module",
+    // Without `extras`: a module built before one of them was added still loads.
+    world: "core",
     imports: {
         "breezone:module/host.http": async,
         "breezone:module/host.subscribe": async,
@@ -37,6 +38,11 @@ wasmtime::component::bindgen!({
     },
     exports: { default: async },
 });
+
+type Module = Core;
+
+/// The interface of the calls added after 1.0, looked up function by function.
+const EXTRAS: &str = "breezone:module/extras@1.0.0";
 
 use breezone::module::types::{Error as WitError, Header, ReadUntil, Request, Response};
 
@@ -806,6 +812,11 @@ impl WasmModule {
     }
 
     async fn instantiate(&self, ctx: Arc<SourceCtx>) -> Result<(Store<HostState>, Module), DriverError> {
+        let (store, module, _) = self.instantiate_with(ctx).await?;
+        Ok((store, module))
+    }
+
+    async fn instantiate_with(&self, ctx: Arc<SourceCtx>) -> Result<(Store<HostState>, Module, wasmtime::component::Instance), DriverError> {
         let wasi = WasiCtxBuilder::new().allow_tcp(false).allow_udp(false).allow_ip_name_lookup(false).socket_addr_check(|_, _| Box::pin(async { false })).build();
         let memory = self.permissions.memory_mb.clamp(1, 64) << 20;
         let limits = StoreLimitsBuilder::new().memory_size(memory).instances(16).trap_on_grow_failure(true).build();
@@ -814,8 +825,25 @@ impl WasmModule {
         store.limiter(|s| &mut s.limits);
         store.epoch_deadline_trap();
         store.set_epoch_deadline(CALL_TICKS);
-        let module = Module::instantiate_async(&mut store, &self.component, &self.linker).await.map_err(|e| DriverError::Invalid(format!("{}: {e}", self.id)))?;
-        Ok((store, module))
+        let instance = self.linker.instantiate_async(&mut store, &self.component).await.map_err(|e| DriverError::Invalid(format!("{}: {e}", self.id)))?;
+        let module = Module::new(&mut store, &instance).map_err(|e| DriverError::Invalid(format!("{}: {e}", self.id)))?;
+        Ok((store, module, instance))
+    }
+
+    /// `extras.forget` on an instance of its own, when the module exports it (one built before
+    /// 1.1 does not: nothing to do then).
+    pub async fn forget(&self, config: &serde_json::Value, secret: Option<&str>) -> Result<(), DriverError> {
+        let (mut store, _, instance) = self.instantiate_with(self.one_shot()).await?;
+        let Some(extras) = instance.get_export_index(&mut store, None, EXTRAS) else { return Ok(()) };
+        let Some(index) = instance.get_export_index(&mut store, Some(&extras), "forget") else { return Ok(()) };
+        let func = instance
+            .get_typed_func::<(String, Option<String>), (Result<(), WitError>,)>(&mut store, &index)
+            .map_err(|e| DriverError::Invalid(format!("{}: forget: {e}", self.id)))?;
+        let (answer,) = tokio::time::timeout(CALL_TIMEOUT, func.call_async(&mut store, (config.to_string(), secret.map(str::to_string))))
+            .await
+            .map_err(|_| DriverError::Unreachable(format!("{}: no answer", self.id)))?
+            .map_err(|e| DriverError::Invalid(format!("{}: {e}", self.id)))?;
+        answer.map_err(from_wit)
     }
 
     /// The context of an instance of its own (a probe, a step of an appairage, a query): what its
@@ -1188,7 +1216,8 @@ impl Driver for WasmSource {
             if self.has("forget").is_err() {
                 return Ok(());
             }
-            guest!(self, call_forget).await
+            let config = serde_json::from_str(&self.config).unwrap_or(serde_json::Value::Null);
+            self.module.forget(&config, self.secret.as_deref()).await
         })
     }
 

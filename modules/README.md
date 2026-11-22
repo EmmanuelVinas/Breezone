@@ -82,7 +82,8 @@ provided, types, bounds, required fields). `modules/tasmota/src/lib.rs` has exam
   hardware shows) keeps its state in the module's memory (a `thread_local!`): while a step answers
   `Paired::Next`, Breezone keeps the same instance for the next step on the same `host`, two
   minutes at most. Hardware that remembers its controllers lists `forget` in `optional_calls`:
-  `Driver::forget` is called when the source is removed, so that it can be paired again.
+  `Driver::forget(config, secret)` is called when the source is removed (in an instance of its
+  own), so that it can be paired again.
   `modules/homekit/` is an example (HAP: SRP, Ed25519, X25519, ChaCha20-Poly1305 in pure Rust).
 - Hardware that keeps schedules of its own lists `schedules` in `optional_calls` and implements
   `Driver::schedules`, `save_schedule` and `delete_schedule` (days, time, devices, an action of a
@@ -93,6 +94,12 @@ provided, types, bounds, required fields). `modules/tasmota/src/lib.rs` has exam
   with `module!(service: MyService)` (or `module!(driver: MyDriver, service: MyService)`). Its
   account's fields (the `config` of its manifest) come from `host::account("<its id>")`; Breezone
   checks each answer against the contract and keeps the caches. `modules/rte/` is an example.
+- Versions of the interface: `driver` and `service` stay as in 1.0, so that a module built
+  before still loads on a newer server; a call added later goes in `extras` (each one optional,
+  looked up by the host only if the module exports it). A module that uses a function of `host`
+  added later requires its version: `"requires": {"api": "^1.1"}` for `host::receive` (1.1),
+  and an older server does not offer it. `modules/testing/contract-1-0` is built against the
+  1.0 interface, kept as it was, and must keep loading.
 - `server/contracts/module.schema.json`: the manifest (`manifest.json`), with
   `server/contracts/module.example.json` as an example. The traits a module provides are those
   of `server/contracts/traits/`.

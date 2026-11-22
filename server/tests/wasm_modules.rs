@@ -188,6 +188,7 @@ async fn an_installed_module_runs_its_sources() {
     // The Tasmota module under an id of its own (the native one keeps `tasmota`).
     let mut manifest: breezone_server::modules::manifest::Manifest = serde_json::from_str(include_str!("../../modules/tasmota/manifest.json")).unwrap();
     manifest.id = "tasmotawasm".into();
+    manifest.version = "1.0.0".into();
     let files: Arc<Mutex<HashMap<String, Vec<u8>>>> = Arc::default();
     // Publishes the versions given (manifest, then the component) with an index numbered `seq`.
     let publish = |seq: u64, versions: Vec<breezone_server::modules::manifest::Manifest>| {
@@ -585,7 +586,7 @@ async fn a_module_that_comes_with_breezone_replaces_the_native_driver() {
     let dir = tempfile_dir("builtin");
     std::fs::create_dir_all(dir.join("app/modules")).unwrap();
     let manifest = include_str!("../../modules/tasmota/manifest.json");
-    std::fs::write(dir.join("app/modules/tasmota-1.0.0.bzm"), package::build(manifest, Some(&wasm("tasmota")), &[]).unwrap()).unwrap();
+    std::fs::write(dir.join("app/modules/tasmota-1.0.1.bzm"), package::build(manifest, Some(&wasm("tasmota")), &[]).unwrap()).unwrap();
     let mut cfg = breezone_server::config::Config::for_tests(dir.join("data"));
     cfg.web_dir = dir.join("app/web");
     let state = breezone_server::init_state(cfg).await.unwrap();
@@ -1052,4 +1053,19 @@ async fn the_homekit_module_pairs_drives_and_forgets() {
     let (s, _, _) = call("DELETE", &format!("/api/sources/{}", source["id"]), None).await;
     assert_eq!(s, 204);
     assert!(accessory.state.lock().unwrap().controllers.is_empty(), "Breezone removed its own pairing");
+}
+
+/// A module built against version 1.0 of the interface, kept as it was: still loaded and driven,
+/// whatever the interface added since (a call it does not export is answered for it).
+#[tokio::test]
+async fn a_module_of_the_first_interface_still_works() {
+    let _serial = SERIAL.lock().await;
+    let module = Arc::new(WasmModule::load("contract", &wasm("contract_1_0"), local(), None).unwrap().with_optional_calls(&["forget".to_string()]));
+    let source = module.open(None, &json!({}), None).await.expect("loaded");
+    let described = source.describe().await.unwrap();
+    assert_eq!(described.devices.len(), 1);
+    let states = source.read().await.unwrap();
+    assert_eq!(states["plug"]["on"], true);
+    // Added in 1.1, not exported by this module: nothing to forget.
+    source.forget().await.expect("no `extras.forget`: nothing done");
 }

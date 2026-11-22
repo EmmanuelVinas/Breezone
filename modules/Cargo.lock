@@ -85,6 +85,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "breezone-module-contract-1-0"
+version = "0.0.0"
+dependencies = [
+ "wit-bindgen",
+]
+
+[[package]]
 name = "breezone-module-esphome"
 version = "1.0.0"
 dependencies = [
@@ -205,7 +212,7 @@ dependencies = [
 
 [[package]]
 name = "breezone-module-tasmota"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "breezone-module-sdk",
 ]

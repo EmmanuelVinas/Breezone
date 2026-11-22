@@ -505,6 +505,13 @@ impl HomeKit {
         unreachable!()
     }
 
+    fn unpair(&self) -> Result<()> {
+        let id = self.pairing.controller_id.clone();
+        self.on_session(|c| c.tlv("/pairings", &[(tlv::STATE, &[1]), (tlv::METHOD, &[4]), (tlv::IDENTIFIER, id.as_bytes())]))?;
+        *self.conn.borrow_mut() = None;
+        Ok(())
+    }
+
     fn layout(&self) -> std::result::Result<Layout, HapError> {
         if let Some(l) = self.layout.borrow().clone() {
             return Ok(l);
@@ -700,12 +707,8 @@ impl Driver for HomeKit {
 
     /// Removes Breezone's own pairing from the accessory (and nothing else): the accessory forgets
     /// Breezone, and can be paired again.
-    fn forget(&self) -> Result<()> {
-        *self.listener.borrow_mut() = None;
-        let id = self.pairing.controller_id.clone();
-        self.on_session(|c| c.tlv("/pairings", &[(tlv::STATE, &[1]), (tlv::METHOD, &[4]), (tlv::IDENTIFIER, id.as_bytes())]))?;
-        *self.conn.borrow_mut() = None;
-        Ok(())
+    fn forget(config: Value, secret: Option<Value>) -> Result<()> {
+        Self::open(config, secret)?.unpair()
     }
 
     fn close(&self) {

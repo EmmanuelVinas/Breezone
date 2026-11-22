@@ -2,7 +2,7 @@
 //! a source or an account uses it.
 
 /// The version of the module interface this server is built against.
-pub const INTERFACE: &str = "1.0";
+pub const INTERFACE: &str = "1.1";
 
 /// Versions of the module interface (`contracts/wit/breezone-module.wit`) this server hosts: none
 /// while the WebAssembly host is not built in (the modules compiled into the server need none).

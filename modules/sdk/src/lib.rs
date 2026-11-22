@@ -102,8 +102,10 @@ pub trait Driver: Sized + 'static {
     fn delete_schedule(&self, _id: &str) -> Result<()> {
         unsupported("schedules")
     }
-    /// The source is removed: the hardware forgets Breezone (`forget` in `optional_calls`).
-    fn forget(&self) -> Result<()> {
+    /// The source is removed: the hardware forgets Breezone (`forget` in `optional_calls`), from
+    /// the source's configuration and secret, in an instance of its own (the source may be
+    /// unreachable or already closed).
+    fn forget(_config: Value, _secret: Option<Value>) -> Result<()> {
         Ok(())
     }
     /// Ends the connections it keeps, before the server stops.
@@ -237,10 +239,6 @@ impl<T: Driver> bindings::exports::breezone::module::driver::GuestSource for Ada
         self.0.delete_schedule(&id)
     }
 
-    fn forget(&self) -> Result<()> {
-        self.0.forget()
-    }
-
     fn close(&self) {
         self.0.close()
     }
@@ -263,6 +261,14 @@ macro_rules! module {
             fn pair(step: String, input: String) -> $crate::Result<$crate::Paired> {
                 let input = $crate::serde_json::from_str(&input).map_err(|e| $crate::Error::Invalid(e.to_string()))?;
                 <$driver as $crate::Driver>::pair(&step, input)
+            }
+        }
+
+        impl $crate::bindings::exports::breezone::module::extras::Guest for __BreezoneModule {
+            fn forget(config: String, secret: Option<String>) -> $crate::Result<()> {
+                let config = $crate::serde_json::from_str(&config).map_err(|e| $crate::Error::Invalid(e.to_string()))?;
+                let secret = secret.map(|s| $crate::serde_json::from_str(&s).unwrap_or($crate::Value::String(s)));
+                <$driver as $crate::Driver>::forget(config, secret)
             }
         }
 
