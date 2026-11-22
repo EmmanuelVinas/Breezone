@@ -78,6 +78,12 @@ provided, types, bounds, required fields). `modules/tasmota/src/lib.rs` has exam
   comes between calls still reaches `on_message`, in order. `modules/esphome/` is an example
   (Noise encryption with `snow` without its default features: they bring `ring`, which does not
   build for WebAssembly).
+- A pairing in several steps (`pairing: "code"`: `start`, then `finish` with the code the
+  hardware shows) keeps its state in the module's memory (a `thread_local!`): while a step answers
+  `Paired::Next`, Breezone keeps the same instance for the next step on the same `host`, two
+  minutes at most. Hardware that remembers its controllers lists `forget` in `optional_calls`:
+  `Driver::forget` is called when the source is removed, so that it can be paired again.
+  `modules/homekit/` is an example (HAP: SRP, Ed25519, X25519, ChaCha20-Poly1305 in pure Rust).
 - Hardware that keeps schedules of its own lists `schedules` in `optional_calls` and implements
   `Driver::schedules`, `save_schedule` and `delete_schedule` (days, time, devices, an action of a
   trait with its parameters, an optional end; `editable: false` with a `note` for those only its

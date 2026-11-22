@@ -102,6 +102,10 @@ pub trait Driver: Sized + 'static {
     fn delete_schedule(&self, _id: &str) -> Result<()> {
         unsupported("schedules")
     }
+    /// The source is removed: the hardware forgets Breezone (`forget` in `optional_calls`).
+    fn forget(&self) -> Result<()> {
+        Ok(())
+    }
     /// Ends the connections it keeps, before the server stops.
     fn close(&self) {}
     /// Whether this address is hardware of this module, and its name (the network scan).
@@ -231,6 +235,10 @@ impl<T: Driver> bindings::exports::breezone::module::driver::GuestSource for Ada
 
     fn delete_schedule(&self, id: String) -> Result<()> {
         self.0.delete_schedule(&id)
+    }
+
+    fn forget(&self) -> Result<()> {
+        self.0.forget()
     }
 
     fn close(&self) {

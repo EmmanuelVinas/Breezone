@@ -170,6 +170,10 @@ impl GuestSource for Source {
         Ok(())
     }
 
+    fn forget(&self) -> Result<(), Error> {
+        Ok(())
+    }
+
     fn close(&self) {}
 }
 

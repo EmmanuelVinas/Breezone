@@ -739,7 +739,23 @@ pub struct WasmModule {
     component: Component,
     linker: Arc<Linker<HostState>>,
     permissions: Arc<Permissions>,
+    /// The instance of an appairage that waits for its next step (a code to type): kept while a
+    /// step answers `next`, for the same address, and dropped after a while.
+    pairing: tokio::sync::Mutex<Option<Pairing>>,
 }
+
+/// An appairage between two steps.
+struct Pairing {
+    /// The address it is for (`host` of the steps).
+    host: String,
+    store: Store<HostState>,
+    module: Module,
+    /// Tells it apart from a later one (its timer drops only it).
+    generation: u64,
+}
+
+/// How long an appairage waits for its next step.
+const PAIRING_FOR: Duration = Duration::from_secs(120);
 
 impl WasmModule {
     /// Compiles a component, or takes it from `cache` (a directory) when it was compiled before by
@@ -772,7 +788,15 @@ impl WasmModule {
         let mut linker = Linker::new(engine);
         wasmtime_wasi::p2::add_to_linker_async(&mut linker).map_err(|e| anyhow::anyhow!("{e}"))?;
         Module::add_to_linker::<_, wasmtime::component::HasSelf<_>>(&mut linker, |s| s).map_err(|e| anyhow::anyhow!("{e}"))?;
-        Ok(Self { id: id.into(), read_every: Duration::ZERO, optional: vec![], component, linker: Arc::new(linker), permissions: Arc::new(permissions) })
+        Ok(Self {
+            pairing: Default::default(),
+            id: id.into(),
+            read_every: Duration::ZERO,
+            optional: vec![],
+            component,
+            linker: Arc::new(linker),
+            permissions: Arc::new(permissions),
+        })
     }
 
     /// The calls it answers beyond the required ones.
@@ -794,6 +818,14 @@ impl WasmModule {
         Ok((store, module))
     }
 
+    /// The context of an instance of its own (a probe, a step of an appairage, a query): what its
+    /// subscriptions receive goes to its inbox, for `receive`.
+    fn one_shot(&self) -> Arc<SourceCtx> {
+        let (ctx, received) = self.context(None);
+        tokio::spawn(forward(received, ctx.inbox.clone()));
+        ctx
+    }
+
     fn context(&self, source_id: Option<i64>) -> (Arc<SourceCtx>, tokio::sync::mpsc::UnboundedReceiver<(u32, Vec<u8>)>) {
         let (messages, received) = tokio::sync::mpsc::unbounded_channel();
         let ctx = SourceCtx {
@@ -810,7 +842,7 @@ impl WasmModule {
 
     /// Whether `host` is hardware of this module (discovery), in an instance of its own.
     pub async fn probe(&self, host: &str) -> Option<String> {
-        let (ctx, _) = self.context(None);
+        let ctx = self.one_shot();
         let (mut store, module) = self.instantiate(ctx).await.ok()?;
         tokio::time::timeout(CALL_TIMEOUT, module.breezone_module_driver().call_probe(&mut store, host)).await.ok()?.ok()?
     }
@@ -818,7 +850,7 @@ impl WasmModule {
     /// Checks the module's own account (`fields`: those of its form, as JSON) before it is kept;
     /// the fields to keep (an OAuth access renewed during the check comes with them).
     pub async fn check_account(&self, fields: &str) -> Result<String, DriverError> {
-        let (ctx, _) = self.context(None);
+        let ctx = self.one_shot();
         *ctx.checked_account.lock().unwrap_or_else(|e| e.into_inner()) = Some(fields.to_string());
         let (mut store, module) = self.instantiate(ctx.clone()).await?;
         tokio::time::timeout(CALL_TIMEOUT, module.breezone_module_service().call_check(&mut store))
@@ -833,7 +865,7 @@ impl WasmModule {
     /// A query of a service contract (`contract`: "tariff.day_color@1"), in an instance of its own;
     /// the answer is checked against the contract.
     pub async fn query(&self, contract: &str, query: &str, params: &serde_json::Value) -> Result<serde_json::Value, DriverError> {
-        let (ctx, _) = self.context(None);
+        let ctx = self.one_shot();
         let (mut store, module) = self.instantiate(ctx).await?;
         let answer = tokio::time::timeout(CALL_TIMEOUT, module.breezone_module_service().call_query(&mut store, contract, query, &params.to_string()))
             .await
@@ -845,18 +877,39 @@ impl WasmModule {
         Ok(value)
     }
 
-    /// A step of the appairage, in an instance of its own.
-    pub async fn pair(&self, step: &str, input: &serde_json::Value) -> Result<crate::modules::native::Paired, DriverError> {
+    /// A step of the appairage, in an instance of its own; one that answers `next` keeps it for
+    /// the next step at the same address (a pairing started, waiting for its code).
+    pub async fn pair(self: &Arc<Self>, step: &str, input: &serde_json::Value) -> Result<crate::modules::native::Paired, DriverError> {
         use crate::modules::native::Paired;
         use breezone::module::types::Paired as P;
-        let (ctx, _) = self.context(None);
-        let (mut store, module) = self.instantiate(ctx).await?;
+        static GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let host = input["host"].as_str().unwrap_or_default().to_string();
+        let mut slot = self.pairing.lock().await;
+        let (mut store, module) = match slot.take().filter(|p| p.host == host) {
+            Some(p) => (p.store, p.module),
+            None => self.instantiate(self.one_shot()).await?,
+        };
         let answer = tokio::time::timeout(CALL_TIMEOUT, module.breezone_module_driver().call_pair(&mut store, step, &input.to_string()))
             .await
             .map_err(|_| DriverError::Unreachable(format!("{}: no answer", self.id)))?
             .map_err(|e| DriverError::Invalid(format!("{}: {e}", self.id)))?;
         match answer.map_err(from_wit)? {
-            P::Next => Ok(Paired::Next),
+            P::Next => {
+                let generation = GENERATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                *slot = Some(Pairing { host, store, module, generation });
+                // Never finished: dropped (its connections closed), else the hardware stays busy.
+                let me = Arc::downgrade(self);
+                tokio::spawn(async move {
+                    tokio::time::sleep(PAIRING_FOR).await;
+                    if let Some(me) = me.upgrade() {
+                        let mut slot = me.pairing.lock().await;
+                        if slot.as_ref().is_some_and(|p| p.generation == generation) {
+                            *slot = None;
+                        }
+                    }
+                });
+                Ok(Paired::Next)
+            }
             P::Waiting(message) => Ok(Paired::Waiting(message)),
             P::Done(s) => {
                 let config = serde_json::from_str(&s.config).map_err(|e| DriverError::Invalid(format!("{}: {e}", self.id)))?;
@@ -1127,6 +1180,15 @@ impl Driver for WasmSource {
         Box::pin(async move {
             self.has("unlock")?;
             guest!(self, call_unlock, &key).await
+        })
+    }
+
+    fn forget(&self) -> DriverFuture<'_, ()> {
+        Box::pin(async move {
+            if self.has("forget").is_err() {
+                return Ok(());
+            }
+            guest!(self, call_forget).await
         })
     }
 

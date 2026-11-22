@@ -100,6 +100,10 @@ pub trait Driver: Send + Sync {
     fn activate_scene<'a>(&'a self, id: &'a str) -> DriverFuture<'a, ()> {
         Box::pin(async move { Err(DriverError::Unsupported(format!("scene {id}"))) })
     }
+    /// The source is removed: the hardware forgets Breezone (its pairing removed).
+    fn forget(&self) -> DriverFuture<'_, ()> {
+        Box::pin(async { Ok(()) })
+    }
     /// The schedules the hardware keeps and runs itself (`schedule.hardware`).
     fn schedules(&self) -> DriverFuture<'_, Vec<Schedule>> {
         Box::pin(async { Err(DriverError::Unsupported("schedules".into())) })

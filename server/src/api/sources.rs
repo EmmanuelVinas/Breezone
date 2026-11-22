@@ -185,7 +185,21 @@ pub async fn update(State(state): State<AppState>, _admin: AdminUser, Path(id): 
 /// unpaired from Breezone, so that it can be paired again).
 pub async fn delete(State(state): State<AppState>, _admin: AdminUser, Path(id): Path<i64>) -> ApiResult<StatusCode> {
     if let Some(source) = db::source_by_id(&state.db, id).await? {
-        if let Some(on_delete) = crate::modules::native::get(&source.driver).and_then(|n| n.on_delete) {
+        let module = crate::modules::manifest(&source.driver).filter(|m| m.optional_calls.iter().any(|c| c == "forget"));
+        let by_module = module.is_some()
+            && crate::modules::installed_dir(&source.driver).is_some()
+            && (crate::modules::native::get(&source.driver).is_none() || crate::modules::replaces_native(&source.driver));
+        if by_module {
+            // The module tells its hardware to forget Breezone (its own source, opened for that).
+            if let Some(driver) = state.drivers.driver(id).await {
+                if let Err(e) = tokio::time::timeout(std::time::Duration::from_secs(20), driver.forget())
+                    .await
+                    .unwrap_or_else(|_| Err(crate::drivers::DriverError::Unreachable("no answer".into())))
+                {
+                    tracing::warn!("source {id}: the hardware may still know Breezone: {e}");
+                }
+            }
+        } else if let Some(on_delete) = crate::modules::native::get(&source.driver).and_then(|n| n.on_delete) {
             let secret = source.secret.as_deref().and_then(|s| crate::crypto::decrypt(&state.data_key, s));
             on_delete(serde_json::from_str(&source.config).unwrap_or(Value::Null), secret).await;
         }

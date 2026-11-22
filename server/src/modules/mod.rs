@@ -183,7 +183,16 @@ pub async fn pair(id: &str, step: String, mut input: serde_json::Value) -> Resul
     if let (Some(m), Some(dir)) = (manifest(id).filter(|m| m.pairing != manifest::Pairing::Form), installed_dir(id)) {
         if native::get(id).is_none() || replaces_native(id) {
             let module = wasm::loaded(m, &dir).await.map_err(ApiError::bad_request)?;
-            return module.pair(&step, &input).await.map_err(|e| ApiError::new(axum::http::StatusCode::BAD_GATEWAY, e.to_string()));
+            // As the drivers compiled in: what was typed or the hardware refuses (a wrong code) is
+            // the user's to fix, a step the module does not know is a bad request.
+            return module.pair(&step, &input).await.map_err(|e| {
+                let status = match &e {
+                    crate::drivers::DriverError::Invalid(_) => axum::http::StatusCode::UNPROCESSABLE_ENTITY,
+                    crate::drivers::DriverError::Unsupported(_) => axum::http::StatusCode::BAD_REQUEST,
+                    crate::drivers::DriverError::Unreachable(_) => axum::http::StatusCode::BAD_GATEWAY,
+                };
+                ApiError::new(status, e.to_string())
+            });
         }
     }
     let native = native::get(id).ok_or_else(|| ApiError::not_found("unknown module"))?;

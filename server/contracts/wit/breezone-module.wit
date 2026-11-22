@@ -253,6 +253,9 @@ interface driver {
         schedules: func() -> result<list<schedule>, error>;
         save-schedule: func(schedule: schedule) -> result<string, error>;
         delete-schedule: func(id: string) -> result<_, error>;
+        /// The source is removed: the hardware forgets Breezone (a HomeKit accessory removes
+        /// Breezone's pairing, so that it can be paired again). `forget` in `optional-calls`.
+        forget: func() -> result<_, error>;
         /// Ends the connections it keeps, before the server stops.
         close: func();
     }

@@ -884,6 +884,7 @@ async fn the_shipped_modules_load() {
         ("ezviz", json!({})),
         // The connection is opened at the first description, not before.
         ("esphome", json!({"host": "192.168.1.62"})),
+        ("homekit", json!({"host": "192.168.1.25:5001", "device_id": "AA:BB:CC:DD:EE:FF"})),
         ("forecast_solar", json!({"kwp": 4.5, "declination": 30, "azimuth": 0, "latitude": 43.5, "longitude": 1.5, "timezone": "Europe/Paris"})),
     ];
     let host = breezone_server::capabilities::Host::local();
@@ -900,7 +901,13 @@ async fn the_shipped_modules_load() {
             continue;
         }
         // A Hue bridge is opened with the key it gave (a plain string).
-        let secret = (id == "hue").then_some("key-1");
+        let pairing = json!({"accessory_id": "AA:BB:CC:DD:EE:FF", "accessory_ltpk": "00".repeat(32), "controller_id": "C", "controller_ltsk": "11".repeat(32)}).to_string();
+        let secret = match id {
+            "hue" => Some("key-1"),
+            // A HomeKit accessory with the pairing the driver compiled in kept.
+            "homekit" => Some(pairing.as_str()),
+            _ => None,
+        };
         module.open(None, &config, secret).await.unwrap_or_else(|e| panic!("{id}: {e}"));
     }
 }
@@ -936,4 +943,113 @@ async fn a_tcp_exchange_reads_the_length_announced() {
     let strict = Arc::new(WasmModule::load("misbehave", &wasm("misbehave"), Permissions { loopback: false, ..local() }, None).unwrap());
     let s = strict.open(None, &json!(format!("exchange:tcp://{addr}")), None).await.unwrap();
     assert!(matches!(s.read().await, Err(DriverError::Unreachable(e)) if e.contains("not allowed")));
+}
+
+/// The HomeKit module, as the driver compiled in: paired with the code (typed once the accessory
+/// shows it), a shutter read and driven, the remote's buttons heard on a session of their own, and
+/// Breezone's own pairing removed with the source.
+#[tokio::test]
+async fn the_homekit_module_pairs_drives_and_forgets() {
+    use breezone_server::homekit::fake;
+    use breezone_server::modules::package;
+    let _serial = SERIAL.lock().await;
+    breezone_server::modules::wasm::allow_loopback(true);
+    let accessory = fake::start().await;
+    let dir = tempfile_dir("homekit");
+    std::fs::create_dir_all(dir.join("app/modules")).unwrap();
+    let manifest = include_str!("../../modules/homekit/manifest.json");
+    std::fs::write(dir.join("app/modules/homekit-1.0.0.bzm"), package::build(manifest, Some(&wasm("homekit")), &[]).unwrap()).unwrap();
+    let mut cfg = breezone_server::config::Config::for_tests(dir.join("data"));
+    cfg.web_dir = dir.join("app/web");
+    let state = breezone_server::init_state(cfg).await.unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(listener, breezone_server::app(state)).await.unwrap() });
+    let http = reqwest::Client::new();
+    let v: Value = http.post(format!("{base}/api/setup")).json(&json!({"username":"admin","password":"motdepasse1"})).send().await.unwrap().json().await.unwrap();
+    let token = v["access_token"].as_str().unwrap().to_string();
+    let call = |method: &str, path: &str, body: Option<Value>| {
+        let mut req = http.request(method.parse().unwrap(), format!("{base}{path}")).bearer_auth(&token);
+        if let Some(b) = body {
+            req = req.json(&b);
+        }
+        async move {
+            let resp = req.send().await.unwrap();
+            let status = resp.status().as_u16();
+            let text = resp.text().await.unwrap();
+            (status, text.clone(), serde_json::from_str::<Value>(&text).unwrap_or(Value::Null))
+        }
+    };
+    let (_, _, modules) = call("GET", "/api/modules", None).await;
+    assert_eq!(modules.as_array().unwrap().iter().find(|m| m["id"] == "homekit").unwrap()["origin"], "builtin", "the module, not the driver compiled in");
+    let host = format!("127.0.0.1:{}", accessory.port);
+    let pair = |step: &str, input: Value| call("POST", "/api/modules/homekit/pairing", Some(json!({"step": step, "input": input, "name": "Legrand"})));
+
+    let (s, _, v) = pair("finish", json!({"host": host, "code": "1234"})).await;
+    assert_eq!(s, 422, "not a code: {v}");
+    let (s, _, v) = pair("finish", json!({"host": host, "code": "111-11-111", "flags": 1})).await;
+    assert_eq!(s, 422);
+    assert!(v.to_string().contains("Code incorrect") || v.to_string().contains("Wrong code"), "{v}");
+    // With a screen, the code shown changes when a pairing starts: it is typed afterwards.
+    accessory.state.lock().unwrap().screen = true;
+    let (s, text, _) = pair("start", json!({"host": host, "flags": 1})).await;
+    assert_eq!(s, 204, "{text}");
+    let shown = accessory.state.lock().unwrap().shown.clone().unwrap();
+    // Started again (the dialog reopened): the first one is dropped, a new code shows.
+    let (s, _, _) = pair("start", json!({"host": host, "flags": 1})).await;
+    assert_eq!(s, 204);
+    let (s, _, v) = pair("finish", json!({"host": host, "code": shown})).await;
+    assert_eq!(s, 422, "the code of the dropped pairing: {v}");
+    let (s, _, _) = pair("start", json!({"host": host, "flags": 1})).await;
+    assert_eq!(s, 204);
+    let (s, _, _) = pair("cancel", json!({"host": host})).await;
+    assert_eq!(s, 204);
+    let (s, _, _) = pair("start", json!({"host": host, "flags": 1})).await;
+    assert_eq!(s, 204);
+    let shown = accessory.state.lock().unwrap().shown.clone().unwrap();
+    let (s, text, source) = pair("finish", json!({"host": host, "code": shown, "flags": 1})).await;
+    assert_eq!(s, 201, "{text}");
+    assert_eq!(source["status"]["state"], "online", "{source}");
+    assert_eq!(source["config"]["device_id"], "AA:BB:CC:DD:EE:FF");
+    assert!(!text.contains("controller_ltsk") && !text.contains("secret"), "the pairing key is never shown: {text}");
+
+    let (_, _, devices) = call("GET", "/api/devices", None).await;
+    let cover = devices.as_array().unwrap().iter().find(|d| d["source"] == "homekit" && d["name"] == "Volet salon").unwrap().clone();
+    assert_eq!(cover["traits"], json!(["cover.position@1"]));
+    assert_eq!(cover["state"]["position"], 40);
+    let (s, text, d) = call("POST", &format!("/api/devices/{}/actions", cover["id"]), Some(json!({"trait":"cover.position","action":"set","params":{"position":75}}))).await;
+    assert_eq!(s, 200, "{text}");
+    assert_eq!(accessory.state.lock().unwrap().position, 75);
+    assert_eq!(d["state"]["position"], 75);
+
+    // The remote: its 4 buttons, heard on a session of their own.
+    let remote = devices.as_array().unwrap().iter().find(|d| d["source"] == "homekit" && d["kind"] == "remote").unwrap().clone();
+    assert_eq!((remote["name"].clone(), remote["traits"].clone(), remote["state"]["buttons"].clone()), (json!("Télécommande"), json!(["button@1"]), json!(4)));
+    for _ in 0..50 {
+        if accessory.state.lock().unwrap().subscribed.len() == 4 {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    assert_eq!(accessory.state.lock().unwrap().subscribed.len(), 4, "the 4 buttons are listened to");
+    accessory.press(1, 2);
+    accessory.press(2, 0);
+    let mut remote = remote;
+    for _ in 0..50 {
+        let (_, _, devices) = call("GET", "/api/devices", None).await;
+        remote = devices.as_array().unwrap().iter().find(|d| d["id"] == remote["id"]).unwrap().clone();
+        if remote["state"]["last_button"] == 2 {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    assert_eq!((remote["state"]["last_button"].clone(), remote["state"]["last_press"].clone()), (json!(2), json!("single")));
+    let (_, _, events) = call("GET", "/api/events?limit=10", None).await;
+    let told: Vec<String> = events.as_array().into_iter().flatten().filter(|e| e["kind"] == "button").filter_map(|e| e["message"].as_str().map(str::to_string)).collect();
+    assert!(told.iter().any(|m| m.contains("Télécommande") && m.contains("button 1, long press")), "{events}");
+    assert_eq!(accessory.state.lock().unwrap().position, 75, "the shutter did not move");
+
+    let (s, _, _) = call("DELETE", &format!("/api/sources/{}", source["id"]), None).await;
+    assert_eq!(s, 204);
+    assert!(accessory.state.lock().unwrap().controllers.is_empty(), "Breezone removed its own pairing");
 }
