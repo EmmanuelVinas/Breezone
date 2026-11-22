@@ -10,7 +10,7 @@ const lucide = resolve(root, "web/node_modules/lucide-react/dist/esm/icons")
 const out = resolve(root, "mobile/shared/src/commonMain/kotlin/com/breezone/app/ui/icons/FzIcons.kt")
 
 const ICONS = [
-  "flame", "snowflake", "fan", "droplets", "droplet", "power", "sparkles", "heater", "moon", "wind",
+  "utility-pole", "flame", "snowflake", "fan", "droplets", "droplet", "power", "sparkles", "heater", "moon", "wind",
   "thermometer", "map-pin", "plus", "minus", "chevron-right", "chevron-left", "house", "calendar-clock",
   "settings", "cloud", "cloud-off", "refresh-cw", "play", "trash-2", "pencil", "log-out", "server",
   "battery-warning", "triangle-alert", "check", "x", "clock", "radar", "user", "eye", "eye-off",

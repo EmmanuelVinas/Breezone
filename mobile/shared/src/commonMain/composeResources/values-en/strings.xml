@@ -464,6 +464,12 @@
     <string name="energy_tile_solar">%1$s solar</string>
     <string name="energy_tile_grid">grid %1$s</string>
     <string name="energy_empty">No energy measure: give the measures a role in Settings › Modules, on the web.</string>
+    <string name="energy_flow_hint">Updated every 5 s · the dots go the way the energy goes</string>
+    <string name="energy_covered">%1$d % covered</string>
+    <string name="energy_surplus">Surplus %1$s</string>
+    <string name="energy_grid_drawn">drawn from the grid</string>
+    <string name="energy_grid_injected">fed in</string>
+    <string name="energy_battery_idle">idle</string>
     <string name="energy_now">Right now</string>
     <string name="energy_today">Today</string>
     <string name="energy_solar">Solar</string>

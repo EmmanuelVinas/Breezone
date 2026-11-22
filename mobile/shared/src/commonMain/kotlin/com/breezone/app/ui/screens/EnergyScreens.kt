@@ -115,39 +115,10 @@ internal fun rememberEnergy(hub: Hub, serverId: String): Pair<EnergyLive?, Energ
 }
 
 @Composable
-internal fun FlowTile(icon: ImageVector, label: String, value: String, sub: String?, color: Color, modifier: Modifier = Modifier) {
-    Column(
-        modifier.clip(RoundedCornerShape(18.dp)).background(color.copy(alpha = 0.12f)).padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, null, Modifier.size(14.dp), tint = color)
-            Spacer(Modifier.width(6.dp))
-            Text(label, fontSize = 12.sp, color = color, maxLines = 1)
-        }
-        Text(value, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-        if (sub != null) Text(sub, fontSize = 12.sp, color = Fz.colors.muted, maxLines = 1)
-    }
-}
-
-@Composable
 internal fun Stat(label: String, value: String, color: Color = MaterialTheme.colorScheme.onSurface, modifier: Modifier = Modifier) {
     Column(modifier) {
         Caption(label)
         Text(value, fontWeight = FontWeight.SemiBold, color = color)
-    }
-}
-
-/** Tiles two by two. */
-@Composable
-private fun TwoByTwo(tiles: List<@Composable (Modifier) -> Unit>) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        tiles.chunked(2).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                row.forEach { it(Modifier.weight(1f)) }
-                if (row.size == 1) Spacer(Modifier.weight(1f))
-            }
-        }
     }
 }
 
@@ -171,30 +142,6 @@ fun EnergyScreen(serverId: String, onBack: (() -> Unit)? = null) {
                 if (live.hasUses()) item(key = "uses", contentType = "uses") { EnergyUsesCard(live) }
             }
         }
-    }
-}
-
-/** What the home draws and makes now: a tile per flow it has a measure of. */
-@Composable
-internal fun EnergyNowCard(live: EnergyLive, titled: Boolean = true) {
-    val roles = live.roles
-    val sun = Fz.colors.warning
-    val solarShare = if ((live.solar ?: 0.0) > 0 && (live.home ?: 0.0) > 0) ((minOf(live.solar!!, live.home!!) / live.home) * 100).roundToInt() else null
-    val tiles = buildList<@Composable (Modifier) -> Unit> {
-        if (roles.solar) add { m -> FlowTile(FzIcons.Sun, stringResource(Res.string.energy_solar), formatPower(live.solar), null, sun, m) }
-        add { m -> FlowTile(FzIcons.House, stringResource(Res.string.energy_home), formatPower(live.home), solarShare?.let { stringResource(Res.string.energy_solar_share, it) }, MaterialTheme.colorScheme.onSurface, m) }
-        if (roles.battery) add { m ->
-            val b = live.battery ?: 0.0
-            FlowTile(FzIcons.BatteryMedium, stringResource(Res.string.energy_battery), formatPower(live.battery), stringResource(if (b >= 0) Res.string.energy_battery_charging else Res.string.energy_battery_discharging), Fz.colors.success, m)
-        }
-        if (roles.grid) add { m ->
-            val g = live.grid ?: 0.0
-            FlowTile(FzIcons.Zap, stringResource(Res.string.energy_grid), formatPower(live.grid), stringResource(if (g >= 0) Res.string.energy_grid_buys else Res.string.energy_grid_sells), Fz.colors.muted, m)
-        }
-    }
-    SectionCard {
-        if (titled) SectionTitle(stringResource(Res.string.energy_now))
-        TwoByTwo(tiles)
     }
 }
 

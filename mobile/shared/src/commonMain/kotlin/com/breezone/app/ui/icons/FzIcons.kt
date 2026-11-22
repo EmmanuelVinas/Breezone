@@ -27,6 +27,19 @@ private fun lucide(name: String, vararg paths: String): ImageVector =
         .build()
 
 object FzIcons {
+    val UtilityPole: ImageVector by lazy {
+        lucide(
+            "UtilityPole",
+            "M12 2v20",
+            "M2 5h20",
+            "M3 3v2",
+            "M7 3v2",
+            "M17 3v2",
+            "M21 3v2",
+            "m19 5-7 7-7-7",
+        )
+    }
+
     val Flame: ImageVector by lazy {
         lucide(
             "Flame",
