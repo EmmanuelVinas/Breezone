@@ -32,6 +32,7 @@ wasmtime::component::bindgen!({
         "breezone:module/host.wait": async,
         "breezone:module/host.access-token": async,
         "breezone:module/host.account-update": async,
+        "breezone:module/host.receive": async,
         default: trappable,
     },
     exports: { default: async },
@@ -118,6 +119,47 @@ impl Permissions {
     }
 }
 
+/// The messages of a source's subscriptions, in the order they came: taken by `receive` during a
+/// call of the module, else handed to `on-message` by the pump between calls.
+#[derive(Default)]
+struct Inbox {
+    queue: std::sync::Mutex<std::collections::VecDeque<(u32, Vec<u8>)>>,
+    arrived: tokio::sync::Notify,
+    /// Its subscriptions are all gone (the source is dropped).
+    closed: std::sync::atomic::AtomicBool,
+}
+
+/// Messages a source keeps waiting at most: the oldest go first.
+const MAX_WAITING: usize = 1024;
+
+impl Inbox {
+    fn push(&self, message: (u32, Vec<u8>)) {
+        {
+            let mut q = self.queue.lock().unwrap_or_else(|e| e.into_inner());
+            if q.len() >= MAX_WAITING {
+                q.pop_front();
+            }
+            q.push_back(message);
+        }
+        self.arrived.notify_waiters();
+    }
+
+    fn pop(&self) -> Option<(u32, Vec<u8>)> {
+        self.queue.lock().unwrap_or_else(|e| e.into_inner()).pop_front()
+    }
+
+    /// The first message waiting of a subscription.
+    fn take(&self, subscription: u32) -> Option<Vec<u8>> {
+        let mut q = self.queue.lock().unwrap_or_else(|e| e.into_inner());
+        let at = q.iter().position(|(s, _)| *s == subscription)?;
+        q.remove(at).map(|(_, data)| data)
+    }
+
+    fn is_empty(&self) -> bool {
+        self.queue.lock().unwrap_or_else(|e| e.into_inner()).is_empty()
+    }
+}
+
 /// What a source shares with the host functions of its instances: who it is, where it tells what
 /// it hears, and the messages of its subscriptions, handed to `on-message` by its pump.
 struct SourceCtx {
@@ -126,6 +168,7 @@ struct SourceCtx {
     source_id: Option<i64>,
     sink: std::sync::Mutex<Option<Sink>>,
     messages: tokio::sync::mpsc::UnboundedSender<(u32, Vec<u8>)>,
+    inbox: Arc<Inbox>,
     memory_store: std::sync::Mutex<HashMap<String, Vec<u8>>>,
     /// The fields of the module's own account while it is checked, before Breezone keeps them
     /// (with a renewed OAuth access, to keep too).
@@ -224,6 +267,26 @@ impl breezone::module::host::Host for HostState {
         let sub = subscribe(&self.permissions, &url, id, self.ctx.messages.clone()).await.inspect_err(|e| crate::modules::log(&self.ctx.module, "warn", format!("{url}: {e}")))?;
         self.subscriptions.insert(id, sub);
         Ok(id)
+    }
+
+    async fn receive(&mut self, subscription: u32, timeout_ms: u32) -> Result<Vec<u8>, String> {
+        if !self.subscriptions.contains_key(&subscription) {
+            return Err("unknown subscription".into());
+        }
+        let deadline = tokio::time::Instant::now() + Duration::from_millis(u64::from(timeout_ms.clamp(100, 30_000)));
+        let inbox = self.ctx.inbox.clone();
+        loop {
+            let arrived = inbox.arrived.notified();
+            if let Some(data) = inbox.take(subscription) {
+                return Ok(data);
+            }
+            if inbox.closed.load(std::sync::atomic::Ordering::SeqCst) {
+                return Err("the subscription is closed".into());
+            }
+            if tokio::time::timeout_at(deadline, arrived).await.is_err() {
+                return Err("timeout".into());
+            }
+        }
     }
 
     fn send(&mut self, subscription: u32, data: Vec<u8>) -> wasmtime::Result<Result<(), String>> {
@@ -733,8 +796,15 @@ impl WasmModule {
 
     fn context(&self, source_id: Option<i64>) -> (Arc<SourceCtx>, tokio::sync::mpsc::UnboundedReceiver<(u32, Vec<u8>)>) {
         let (messages, received) = tokio::sync::mpsc::unbounded_channel();
-        let ctx =
-            SourceCtx { module: self.id.clone(), source_id, sink: std::sync::Mutex::new(None), messages, memory_store: Default::default(), checked_account: Default::default() };
+        let ctx = SourceCtx {
+            module: self.id.clone(),
+            source_id,
+            sink: std::sync::Mutex::new(None),
+            messages,
+            inbox: Default::default(),
+            memory_store: Default::default(),
+            checked_account: Default::default(),
+        };
         (Arc::new(ctx), received)
     }
 
@@ -804,17 +874,52 @@ impl WasmModule {
         // Checks the configuration at once, as the native drivers do.
         let started = source.start().await?;
         *source.live.lock().await = Some(started);
-        tokio::spawn(pump(Arc::downgrade(&source), received));
+        let inbox = source.ctx.inbox.clone();
+        tokio::spawn(forward(received, inbox.clone()));
+        tokio::spawn(pump(Arc::downgrade(&source), inbox));
         Ok(source)
     }
 }
 
-/// Hands the messages of a source's subscriptions to its module, until the source is dropped.
-async fn pump(source: std::sync::Weak<WasmSource>, mut received: tokio::sync::mpsc::UnboundedReceiver<(u32, Vec<u8>)>) {
-    while let Some((subscription, data)) = received.recv().await {
+/// Moves the messages of a source's subscriptions into its inbox, as they come (never waiting for
+/// the module), until its subscriptions are all gone.
+async fn forward(mut received: tokio::sync::mpsc::UnboundedReceiver<(u32, Vec<u8>)>, inbox: Arc<Inbox>) {
+    while let Some(message) = received.recv().await {
+        inbox.push(message);
+    }
+    inbox.closed.store(true, std::sync::atomic::Ordering::SeqCst);
+    inbox.arrived.notify_waiters();
+}
+
+/// Hands the messages of a source's subscriptions to its module between its calls (one taken only
+/// once the instance is free, so that `receive` during a call sees them first), until the source is
+/// dropped.
+async fn pump(source: std::sync::Weak<WasmSource>, inbox: Arc<Inbox>) {
+    loop {
+        let arrived = inbox.arrived.notified();
+        if inbox.is_empty() {
+            if inbox.closed.load(std::sync::atomic::Ordering::SeqCst) {
+                break;
+            }
+            // Woken by a message, or now and then to see whether the source is still there.
+            let _ = tokio::time::timeout(Duration::from_secs(60), arrived).await;
+            if source.strong_count() == 0 {
+                break;
+            }
+            continue;
+        }
         let Some(source) = source.upgrade() else { break };
-        let result =
-            source.call(move |l| Box::pin(async move { l.module.breezone_module_driver().source().call_on_message(&mut l.store, l.source, subscription, &data).await })).await;
+        let waiting = inbox.clone();
+        let result = source
+            .call(move |l| {
+                Box::pin(async move {
+                    match waiting.pop() {
+                        Some((subscription, data)) => l.module.breezone_module_driver().source().call_on_message(&mut l.store, l.source, subscription, &data).await,
+                        None => Ok(Ok(())),
+                    }
+                })
+            })
+            .await;
         if let Err(e) = result {
             crate::modules::log(&source.module.id, "warn", format!("on-message: {e}"));
         }

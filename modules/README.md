@@ -54,7 +54,7 @@ provided, types, bounds, required fields). `modules/tasmota/src/lib.rs` has exam
   (time a device wants between two requests, 10 s at most), `http` (with `insecure` to accept a
   camera's own certificate, on the local network only: `host::request_insecure`), `exchange` (a
   question and its answer on TCP, read until a length the answer announces, a close, a number of
-  bytes or a silence: binary protocols), `subscribe` / `send` / `unsubscribe` (WebSocket or TCP
+  bytes or a silence: binary protocols), `subscribe` / `send` / `receive` / `unsubscribe` (WebSocket or TCP
   kept open by the host, each message
   handed to `on-message`), `store-get` / `store-set` (small values of the source), `account`,
   `pressed`, `changed`. The module gives a `source` resource (`open`, `describe`, `read`, `act`,
@@ -73,6 +73,11 @@ provided, types, bounds, required fields). `modules/tasmota/src/lib.rs` has exam
   password kept as its MD5, a one-time code removed); once kept, never the fields of its form.
   `permissions.network.hosts` takes `*.example.com` for a service whose regions and pictures live
   on subdomains. `modules/ezviz/` is an example.
+- A protocol of several questions and answers on a connection kept open (a handshake, then a
+  listing) reads the answers during the call with `host::receive(subscription, timeout)`; what
+  comes between calls still reaches `on_message`, in order. `modules/esphome/` is an example
+  (Noise encryption with `snow` without its default features: they bring `ring`, which does not
+  build for WebAssembly).
 - Hardware that keeps schedules of its own lists `schedules` in `optional_calls` and implements
   `Driver::schedules`, `save_schedule` and `delete_schedule` (days, time, devices, an action of a
   trait with its parameters, an optional end; `editable: false` with a `note` for those only its
@@ -117,5 +122,15 @@ A release build never reads that folder.
    key. Its modules show as « unofficial ». A module of another source never replaces a module of
    Breezone, nor a module installed from another source.
 
-Breezone's own modules are published by `.github/workflows/modules.yml` (tag
-`module-<id>-v<version>`), signed with the key of Breezone's releases.
+Breezone's own modules are published by `.github/workflows/modules.yml`, signed with the key of
+Breezone's releases:
+
+- **raise the `version` of a module's `manifest.json` and push it on `main`**: that module is built,
+  tested, published and tagged (`module-<id>-v<version>`); a change of code without a new version
+  is not published (installations would not see it as an update);
+- or push a tag `module-<id>-v<version>` (one at a time: GitHub starts no workflow for more than
+  three tags pushed at once);
+- or run the workflow by hand (`gh workflow run modules.yml -f modules="shelly trydan"`), for
+  several modules in one run.
+
+A version already in the library is left as it is.

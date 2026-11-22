@@ -348,6 +348,12 @@ pub mod host {
         imp::send(subscription, data).map_err(Error::Unreachable)
     }
 
+    /// The next message of a subscription, waited for during a call (a handshake, a listing): 30 s
+    /// at most. What comes between calls still goes to [`super::Driver::on_message`].
+    pub fn receive(subscription: u32, timeout_ms: u32) -> Result<Vec<u8>> {
+        imp::receive(subscription, timeout_ms).map_err(Error::Unreachable)
+    }
+
     pub fn unsubscribe(subscription: u32) {
         imp::unsubscribe(subscription)
     }
@@ -431,6 +437,10 @@ pub mod host {
             h::send(s, data)
         }
 
+        pub fn receive(s: u32, timeout_ms: u32) -> Result<Vec<u8>, String> {
+            h::receive(s, timeout_ms)
+        }
+
         pub fn unsubscribe(s: u32) {
             h::unsubscribe(s)
         }
@@ -479,6 +489,8 @@ pub mod testing {
     use std::collections::HashMap;
 
     type Responder = std::rc::Rc<dyn Fn(&[(&str, &str)], &[u8]) -> crate::host::Answer>;
+    /// A fake device on a subscription: the pieces it sends back for what it receives.
+    type Device = std::rc::Rc<dyn Fn(u32, &[u8]) -> Vec<Vec<u8>>>;
 
     #[derive(Default)]
     struct Bench {
@@ -496,6 +508,10 @@ pub mod testing {
         access_token: Option<String>,
         logs: Vec<(String, String)>,
         subscriptions: u32,
+        /// What each subscription will receive, in order (`incoming`), and an answer computed from
+        /// what is sent (`answer_sent`).
+        incoming: std::collections::VecDeque<(u32, Vec<u8>)>,
+        on_sent: Option<Device>,
     }
 
     thread_local! {
@@ -565,6 +581,17 @@ pub mod testing {
     /// The secret of an account, as the module will get it.
     pub fn account(kind: &str, secret: &Value) {
         with(|b| b.accounts.insert(kind.to_string(), secret.to_string()));
+    }
+
+    /// Bytes a subscription receives (read by `host::receive`, in order).
+    pub fn incoming(subscription: u32, data: impl Into<Vec<u8>>) {
+        with(|b| b.incoming.push_back((subscription, data.into())));
+    }
+
+    /// A device that answers what is sent on a subscription: each piece `f` returns is received
+    /// after it (a fake device on a TCP stream).
+    pub fn answer_sent(f: impl Fn(u32, &[u8]) -> Vec<Vec<u8>> + 'static) {
+        with(|b| b.on_sent = Some(std::rc::Rc::new(f)));
     }
 
     /// The access `host::access_token` gives (none: the account is not connected).
@@ -706,8 +733,22 @@ pub mod testing {
         }
 
         pub fn send(s: u32, data: &[u8]) -> Result<(), String> {
-            with(|b| b.sent.push((s, data.to_vec())));
+            let answer = with(|b| {
+                b.sent.push((s, data.to_vec()));
+                b.on_sent.clone()
+            });
+            if let Some(f) = answer {
+                let pieces = f(s, data);
+                with(|b| b.incoming.extend(pieces.into_iter().map(|p| (s, p))));
+            }
             Ok(())
+        }
+
+        pub fn receive(s: u32, _timeout_ms: u32) -> Result<Vec<u8>, String> {
+            with(|b| {
+                let at = b.incoming.iter().position(|(sub, _)| *sub == s).ok_or_else(|| "timeout".to_string())?;
+                Ok(b.incoming.remove(at).map(|(_, d)| d).unwrap_or_default())
+            })
         }
 
         pub fn unsubscribe(_s: u32) {}

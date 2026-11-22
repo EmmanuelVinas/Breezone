@@ -1,12 +1,25 @@
-# Publishes a module of `modules/` (docs/roadmap/modules.md § 6): a tag `module-<id>-v<version>`
-# builds its component, packs it with its manifest, signs the package with the key of the
-# releases, adds it to the index of the library (its number grows), signs the index, and uploads
-# both to the `modules` release, where every server reads them.
+# Publishes modules of `modules/`: builds each component, packs it with its manifest, signs the
+# package with the key of the releases, adds it to the index of the library (its number grows),
+# signs the index, and uploads both to the `modules` release, where every server reads them.
+#
+# What is published:
+# * a push on main that changes the version in a module's `manifest.json`: that module (raise its
+#   version to publish a change of its code);
+# * a tag `module-<id>-v<version>`: that module, at that version;
+# * a manual run, with the ids of the modules.
+# A version already in the index is left as it is. Each module published gets its tag.
 name: modules
 
 on:
   push:
+    branches: [main]
+    paths: ["modules/*/manifest.json"]
     tags: ["module-*-v*"]
+  workflow_dispatch:
+    inputs:
+      modules:
+        description: "Ids of the modules to publish, separated by spaces (their version is the one of their manifest)"
+        required: true
 
 permissions:
   contents: write
@@ -21,47 +34,91 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-wasip2
-      - name: Module and version from the tag
-        id: tag
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            server
+            modules
+      - name: The modules to publish
+        id: which
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE: ${{ github.event.before }}
+          ASKED: ${{ github.event.inputs.modules }}
         run: |
           set -euo pipefail
-          rest="${GITHUB_REF_NAME#module-}"
-          id="${rest%-v*}"
-          version="${rest##*-v}"
-          test -f "modules/$id/manifest.json" || { echo "::error::modules/$id/manifest.json is missing"; exit 1; }
-          declared=$(jq -r .version "modules/$id/manifest.json")
-          test "$declared" = "$version" || { echo "::error::the manifest says $declared, the tag $version"; exit 1; }
-          echo "id=$id" >> "$GITHUB_OUTPUT"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-      - name: Build the publishing tool and the component
+          candidates=()
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            rest="${GITHUB_REF_NAME#module-}"
+            id="${rest%-v*}"
+            version="${rest##*-v}"
+            declared=$(jq -r .version "modules/$id/manifest.json")
+            test "$declared" = "$version" || { echo "::error::the manifest of $id says $declared, the tag $version"; exit 1; }
+            candidates=("$id")
+          elif [[ -n "${ASKED:-}" ]]; then
+            read -ra candidates <<< "$ASKED"
+          else
+            # The manifests whose version changed in this push (or that are new).
+            base="$BEFORE"
+            git cat-file -e "$base^{commit}" 2>/dev/null || base="$(git rev-parse HEAD~1)"
+            for f in $(git diff --name-only "$base" HEAD -- 'modules/*/manifest.json'); do
+              test -f "$f" || continue
+              now=$(jq -r .version "$f")
+              was=$(git show "$base:$f" 2>/dev/null | jq -r .version 2>/dev/null || echo "")
+              [[ "$now" != "$was" ]] && candidates+=("$(basename "$(dirname "$f")")")
+            done
+          fi
+          # Leave out what the index already has.
+          gh release download modules -p index.json -D /tmp/current 2>/dev/null || true
+          ids=()
+          for id in "${candidates[@]}"; do
+            test -f "modules/$id/manifest.json" || { echo "::error::modules/$id/manifest.json is missing"; exit 1; }
+            version=$(jq -r .version "modules/$id/manifest.json")
+            if [[ -f /tmp/current/index.json ]] && jq -e --arg id "$id" --arg v "$version" '.modules[] | select(.id == $id) | .versions[] | select(.manifest.version == $v)' /tmp/current/index.json >/dev/null; then
+              echo "$id $version is already published"
+            else
+              ids+=("$id")
+            fi
+          done
+          echo "ids=${ids[*]:-}" >> "$GITHUB_OUTPUT"
+          echo "To publish: ${ids[*]:-nothing}"
+      - name: Build the publishing tool and the components
+        if: steps.which.outputs.ids != ''
         run: |
           set -euo pipefail
+          packages=()
+          for id in ${{ steps.which.outputs.ids }}; do packages+=(-p "breezone-module-$id"); done
           cargo build --release --locked --manifest-path server/Cargo.toml --bin module-publish
-          cargo test --release --manifest-path modules/Cargo.toml -p "breezone-module-${{ steps.tag.outputs.id }}"
-          cargo build --release --manifest-path modules/Cargo.toml --target wasm32-wasip2 -p "breezone-module-${{ steps.tag.outputs.id }}"
+          cargo test --release --manifest-path modules/Cargo.toml "${packages[@]}"
+          cargo build --release --manifest-path modules/Cargo.toml --target wasm32-wasip2 "${packages[@]}"
       - name: Pack, add to the index
+        if: steps.which.outputs.ids != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          id="${{ steps.tag.outputs.id }}"
           tool=server/target/release/module-publish
-          wasm="modules/target/wasm32-wasip2/release/breezone_module_${id}.wasm"
-          extra=()
-          test -d "modules/$id/i18n" && extra+=("modules/$id/i18n")
-          test -f "modules/$id/icon.svg" && extra+=("modules/$id/icon.svg")
           mkdir -p /tmp/out
-          "$tool" pack "modules/$id/manifest.json" "$wasm" "${extra[@]}" /tmp/out
+          for id in ${{ steps.which.outputs.ids }}; do
+            wasm="modules/target/wasm32-wasip2/release/breezone_module_${id}.wasm"
+            extra=()
+            test -d "modules/$id/i18n" && extra+=("modules/$id/i18n")
+            test -f "modules/$id/icon.svg" && extra+=("modules/$id/icon.svg")
+            "$tool" pack "modules/$id/manifest.json" "$wasm" "${extra[@]}" /tmp/out
+          done
           gh release view modules >/dev/null 2>&1 || gh release create modules --title "Modules" --notes "The library of Breezone's modules: index.json and the packages, signed." --latest=false
-          if gh release download modules -p index.json -D /tmp/current; then current=/tmp/current/index.json; else current=-; fi
+          if gh release download modules -p index.json -D /tmp/current --clobber; then current=/tmp/current/index.json; else current=-; fi
           "$tool" index "$current" /tmp/out /tmp/out/*.bzm
       # Same key as the releases, same check that it is the one compiled into the server; the
       # messages say what is signed (`breezone-module …`, `breezone-modules-index …`), so that a
       # signature never passes for something else.
       - name: Sign
+        if: steps.which.outputs.ids != ''
         env:
           SIGNING_KEY: ${{ secrets.BREEZONE_RELEASE_SIGNING_KEY }}
         run: |
@@ -81,6 +138,7 @@ jobs:
           rm -f signature *.message
           ls -l
       - name: Upload
+        if: steps.which.outputs.ids != ''
         env:
           GH_TOKEN: ${{ github.token }}
         # The packages first: the index never names a file that is not there yet.
@@ -88,3 +146,12 @@ jobs:
           set -euo pipefail
           gh release upload modules /tmp/out/*.bzm /tmp/out/*.bzm.sig --clobber
           gh release upload modules /tmp/out/index.json /tmp/out/index.json.sig --clobber
+      # The tag of each module published (a tag pushed with this token starts no other run).
+      - name: Tag what was published
+        if: steps.which.outputs.ids != '' && github.ref_type != 'tag'
+        run: |
+          set -euo pipefail
+          for id in ${{ steps.which.outputs.ids }}; do
+            tag="module-$id-v$(jq -r .version "modules/$id/manifest.json")"
+            git tag "$tag" "$GITHUB_SHA" 2>/dev/null && git push origin "$tag" || echo "$tag already exists"
+          done

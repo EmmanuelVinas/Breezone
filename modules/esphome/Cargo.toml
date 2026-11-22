@@ -1,0 +1,15 @@
+[package]
+name = "breezone-module-esphome"
+version = "1.0.0"
+edition.workspace = true
+description = "ESPHome devices, through their native API (a connection kept open, encrypted or not)"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+breezone-module-sdk = { path = "../sdk" }
+base64 = "0.23.1"
+# Only what ESPHome uses (ChaChaPoly, SHA-256, X25519), in pure Rust: the default features bring
+# `ring` (also through `std`), which does not build for WebAssembly.
+snow = { version = "0.10.0", default-features = false, features = ["default-resolver", "use-chacha20poly1305", "use-sha2", "use-curve25519", "use-getrandom"] }

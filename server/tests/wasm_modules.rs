@@ -459,6 +459,121 @@ async fn an_oauth_access_is_renewed_by_the_host() {
     assert!(module.check_account(r#"{"refresh_token": "revoked"}"#).await.is_err());
 }
 
+/// The ESPHome module (lot L8): an encrypted node on a real connection, its handshake and listing
+/// read during the call (`host.receive`), its states pushed afterwards (`on-message`), a relay
+/// driven.
+#[tokio::test]
+async fn the_esphome_module_speaks_to_an_encrypted_node() {
+    use breezone_server::drivers::esphome::{decode, Fields, Msg};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let _serial = SERIAL.lock().await;
+    let psk: [u8; 32] = std::array::from_fn(|i| i as u8 + 1);
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        let (mut tcp, _) = listener.accept().await.unwrap();
+        async fn frame(tcp: &mut tokio::net::TcpStream) -> Option<Vec<u8>> {
+            let mut head = [0u8; 3];
+            tcp.read_exact(&mut head).await.ok()?;
+            let mut body = vec![0u8; usize::from(u16::from_be_bytes([head[1], head[2]]))];
+            tcp.read_exact(&mut body).await.ok()?;
+            Some(body)
+        }
+        // The empty hello frame, then the client's handshake message.
+        let mut hello = [0u8; 3];
+        tcp.read_exact(&mut hello).await.unwrap();
+        let first = frame(&mut tcp).await.unwrap();
+        let params: snow::params::NoiseParams = "Noise_NNpsk0_25519_ChaChaPoly_SHA256".parse().unwrap();
+        let mut hs = snow::Builder::new(params).prologue(b"NoiseAPIInit\x00\x00").unwrap().psk(0, &psk).unwrap().build_responder().unwrap();
+        let mut buf = vec![0u8; 256];
+        hs.read_message(&first[1..], &mut buf).unwrap();
+        let server_hello = b"\x01bureau\x00AA:BB:CC:DD:EE:FF\x00";
+        tcp.write_all(&[0x01, 0, server_hello.len() as u8]).await.unwrap();
+        tcp.write_all(server_hello).await.unwrap();
+        let n = hs.write_message(&[], &mut buf).unwrap();
+        tcp.write_all(&[0x01, 0, (n + 1) as u8, 0x00]).await.unwrap();
+        tcp.write_all(&buf[..n]).await.unwrap();
+        let mut t = hs.into_transport_mode().unwrap();
+        fn seal(t: &mut snow::TransportState, kind: u16, m: Msg) -> Vec<u8> {
+            let mut plain = kind.to_be_bytes().to_vec();
+            plain.extend_from_slice(&(m.0.len() as u16).to_be_bytes());
+            plain.extend_from_slice(&m.0);
+            let mut cipher = vec![0u8; plain.len() + 16];
+            let n = t.write_message(&plain, &mut cipher).unwrap();
+            let mut f = vec![0x01, (n >> 8) as u8, n as u8];
+            f.extend_from_slice(&cipher[..n]);
+            f
+        }
+        let mut out: Vec<u8>;
+        loop {
+            let Some(cipher) = frame(&mut tcp).await else { return };
+            let mut plain = vec![0u8; cipher.len()];
+            // The same transport decrypts what comes.
+            let n = match t.read_message(&cipher, &mut plain) {
+                Ok(n) => n,
+                Err(_) => return,
+            };
+            let kind = u16::from_be_bytes([plain[0], plain[1]]);
+            let msg = plain[4..n].to_vec();
+            out = vec![];
+            match kind {
+                1 => out.extend(seal(&mut t, 2, Msg::default().varint(1, 1).varint(2, 10).string(4, "bureau"))),
+                9 => out.extend(seal(
+                    &mut t,
+                    10,
+                    Msg::default().string(2, "bureau").string(3, "AA:BB:CC:DD:EE:FF").string(4, "2025.11.0").string(6, "esp32dev").string(13, "Bureau"),
+                )),
+                11 => {
+                    out.extend(seal(&mut t, 17, Msg::default().string(1, "relay").fixed32(2, 1).string(3, "Prise")));
+                    out.extend(seal(&mut t, 16, Msg::default().string(1, "t").fixed32(2, 3).string(3, "Température").string(6, "°C").string(9, "temperature")));
+                    out.extend(seal(&mut t, 19, Msg::default()));
+                }
+                20 => {
+                    out.extend(seal(&mut t, 26, Msg::default().fixed32(1, 1).bool(2, false)));
+                    out.extend(seal(&mut t, 25, Msg::default().fixed32(1, 3).float(2, 19.5)));
+                }
+                33 => {
+                    let f = Fields(decode(&msg));
+                    out.extend(seal(&mut t, 26, Msg::default().fixed32(1, f.fixed32(1)).bool(2, f.bool(2))));
+                }
+                _ => {}
+            }
+            if !out.is_empty() && tcp.write_all(&out).await.is_err() {
+                return;
+            }
+        }
+    });
+    let module = Arc::new(WasmModule::load("esphome", &wasm("esphome"), local(), None).unwrap());
+    let secret = json!({"key": base64_encode(&psk)}).to_string();
+    let node = module.open(Some(42), &json!({"host": addr.to_string()}), Some(&secret)).await.unwrap();
+    let d = node.describe().await.unwrap();
+    assert_eq!((d.model.as_str(), d.identity.as_deref()), ("ESPHome · esp32dev", Some("AA:BB:CC:DD:EE:FF")));
+    assert_eq!(d.devices.iter().map(|x| x.reference.as_str()).collect::<Vec<_>>(), ["switch/relay", "air"]);
+    let mut state = HashMap::new();
+    for _ in 0..100 {
+        state = node.read().await.unwrap();
+        if state.contains_key("air") {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(30)).await;
+    }
+    assert_eq!((state["switch/relay"]["on"].clone(), state["air"]["temperature"].clone()), (json!(false), json!(19.5)));
+    node.act("switch/relay", "switch.relay", "set", &serde_json::Map::from_iter([("on".to_string(), json!(true))])).await.unwrap();
+    for _ in 0..100 {
+        state = node.read().await.unwrap();
+        if state["switch/relay"]["on"] == true {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(30)).await;
+    }
+    assert_eq!(state["switch/relay"]["on"], true, "the node said it switched on");
+}
+
+fn base64_encode(b: &[u8]) -> String {
+    use base64::Engine;
+    base64::engine::general_purpose::STANDARD.encode(b)
+}
+
 /// A module that comes with Breezone (lot L6): beside its web UI, unsigned (the image or the signed
 /// archive vouches for it), it replaces the driver compiled in with the same id; removed, the
 /// driver compiled in drives the same sources again.
@@ -767,6 +882,8 @@ async fn the_shipped_modules_load() {
         // Its devices come with its account: nothing reached before a read.
         ("netatmo", json!({})),
         ("ezviz", json!({})),
+        // The connection is opened at the first description, not before.
+        ("esphome", json!({"host": "192.168.1.62"})),
         ("forecast_solar", json!({"kwp": 4.5, "declination": 30, "azimuth": 0, "latitude": 43.5, "longitude": 1.5, "timezone": "Europe/Paris"})),
     ];
     let host = breezone_server::capabilities::Host::local();

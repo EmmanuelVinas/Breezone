@@ -187,6 +187,11 @@ interface host {
     /// a TCP stream (`tcp://host:port`) gives what it reads, in pieces. Same permissions as `http`.
     subscribe: func(url: string) -> result<u32, string>;
 
+    /// The next message of a subscription, waited for during a call (a protocol of several
+    /// questions and answers on a connection kept: a handshake, then a listing). What comes between
+    /// calls still goes to `on-message`, in order. 30 s at most.
+    receive: func(subscription: u32, timeout-ms: u32) -> result<list<u8>, string>;
+
     /// Sends on a subscription (a WebSocket frame, bytes on a TCP stream).
     send: func(subscription: u32, data: list<u8>) -> result<_, string>;
 
