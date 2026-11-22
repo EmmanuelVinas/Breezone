@@ -1,0 +1,13 @@
+{
+  "id": "ezviz",
+  "version": "1.0.0",
+  "name": {"en": "EZVIZ (cloud)", "es": "EZVIZ (cloud)", "fr": "EZVIZ (cloud)"},
+  "roles": ["account", "driver"],
+  "requires": {"api": "^1.0"},
+  "provides": {"traits": ["camera@1.0", "button@1.0"]},
+  "models": ["EZVIZ DB1C, DB2, EP3x…", "EZVIZ C3, C6, C8…"],
+  "permissions": {"network": {"lan": false, "hosts": ["apiieu.ezvizlife.com"]}},
+  "read_every_s": 8,
+  "cloud": true,
+  "optional_calls": ["listen", "picture", "diagnostic"]
+}

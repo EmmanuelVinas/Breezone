@@ -2,6 +2,9 @@
 //! local API, with users, routines, history, an activity feed, a REST + WebSocket API for
 //! the mobile app, and the web UI served as static files.
 
+// The Matter bridge chains a handler per cluster of each light slot: the types are deep.
+#![recursion_limit = "512"]
+
 pub mod access;
 pub mod accounts;
 pub mod airzone;
@@ -27,11 +30,15 @@ pub mod homekit;
 pub mod hub;
 pub mod i18n;
 pub mod incidents;
+pub mod matter;
+pub mod mdns;
 pub mod mock;
 pub mod mock_devices;
+pub mod modules;
 pub mod price;
 pub mod rollup;
 pub mod routines;
+pub mod services;
 pub mod stats;
 pub mod surplus;
 pub mod tempo;
@@ -72,6 +79,8 @@ pub struct AppState {
     pub automations: Arc<automations::Runs>,
     /// The solar surplus steering (roadmap E6).
     pub surplus: Arc<surplus::Surplus>,
+    /// The library of modules (docs/roadmap/modules.md).
+    pub library: Arc<modules::library::Library>,
 }
 
 /// Opens the database, applies migrations, bootstraps accounts/installations from the
@@ -80,19 +89,40 @@ pub async fn init_state(cfg: Config) -> anyhow::Result<AppState> {
     let cfg = Arc::new(cfg);
     migrate_legacy_database(&cfg.data_dir);
     let db = db::connect(&cfg.data_dir.join("breezone.db")).await?;
+    let native: Vec<(&str, &str)> = modules::native::all().iter().map(|n| (n.manifest.id.as_str(), n.manifest.version.as_str())).collect();
+    db::sync_native_modules(&db, &native).await?;
+    modules::install::load_installed(&db, &cfg.data_dir).await?;
+    if cfg.modules_library.is_none() {
+        // The modules that come with Breezone, beside its web UI (`/app/modules` in the image).
+        let builtin = cfg.web_dir.parent().unwrap_or(std::path::Path::new(".")).join("modules");
+        modules::install::install_builtin(&db, &cfg.data_dir, &builtin, update::RELEASE_PUBLIC_KEY).await;
+    }
+    if let Some(dev) = &cfg.modules_dev {
+        modules::install::install_dev(&db, &cfg.data_dir, dev).await;
+        // In development, the fake devices answer on this machine (`dev.sh --modules --shipped`):
+        // the modules may reach it. Never in a release build.
+        #[cfg(feature = "wasm")]
+        if cfg!(debug_assertions) && std::env::var("BREEZONE_MODULES_LOOPBACK").is_ok_and(|v| v == "1") {
+            tracing::warn!("development: the modules may reach this machine (BREEZONE_MODULES_LOOPBACK)");
+            modules::wasm::allow_loopback(true);
+        }
+    }
     let secret = AuthService::load_secret(cfg.jwt_secret.as_deref(), &cfg.data_dir)?;
     let auth = Arc::new(AuthService::new(&secret, cfg.access_token_ttl_secs, cfg.refresh_token_ttl_days));
     let data_key = Arc::new(crypto::load_key(&cfg.data_dir, &db, &secret).await?);
     let hub = Hub::new(db.clone(), cfg.clone(), data_key.clone());
     let updater = Arc::new(update::Updater::new(cfg.data_dir.clone(), cfg.self_update));
     updater.set_beta(db::get_setting(&db, update::CHANNEL_SETTING).await?.as_deref() == Some("beta"));
-    let drivers = Arc::new(drivers::Runtime::new(db.clone(), *data_key, cfg.netatmo_url.clone(), cfg.ezviz_url.clone()));
+    #[cfg(feature = "wasm")]
+    modules::wasm::set_context(db.clone(), *data_key);
+    let drivers = Arc::new(drivers::Runtime::new(db.clone(), *data_key, cfg.module_urls()));
     drivers.reload().await?;
     drivers.clone().hear();
     let weather = Arc::new(weather::Weather::new(db.clone(), cfg.timezone, cfg.weather));
     let automations = Arc::new(automations::Runs::default());
     let surplus = Arc::new(surplus::Surplus::default());
-    let state = AppState { db, cfg, hub, auth, data_key, updater, drivers, weather, automations, surplus };
+    let library = Arc::new(modules::library::Library::new(&cfg));
+    let state = AppState { db, cfg, hub, auth, data_key, updater, drivers, weather, automations, surplus, library };
     bootstrap(&state).await?;
     // An account linked before the Netatmo module existed gets it now.
     if let Err(e) = accounts::netatmo::ensure_source(&state).await {
@@ -199,6 +229,11 @@ pub fn spawn_background(state: &AppState) {
     tokio::spawn(state.weather.clone().run());
     tokio::spawn(tempo::run_loop(state.clone()));
     tokio::spawn(accounts::linky::run_loop(state.clone()));
+    {
+        let state = state.clone();
+        tokio::spawn(async move { modules::install::replace_incompatible(&state.db, &state.cfg.data_dir, &state.library).await });
+    }
+    tokio::spawn(matter::spawn(state.clone()));
     tokio::spawn(cre::run_loop(state.clone()));
 }
 

@@ -8,6 +8,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::Json;
 use serde::Deserialize;
+use serde_json::Value;
 
 pub async fn list(State(state): State<AppState>, _admin: AdminUser) -> ApiResult<Json<Vec<AccountView>>> {
     Ok(Json(accounts::list(&state).await?))
@@ -47,8 +48,22 @@ pub struct ConnectInput {
     pub api_key: String,
 }
 
-pub async fn connect(State(state): State<AppState>, AdminUser(user): AdminUser, Path(kind): Path<String>, Json(input): Json<ConnectInput>) -> ApiResult<Json<AccountView>> {
+pub async fn connect(State(state): State<AppState>, AdminUser(user): AdminUser, Path(kind): Path<String>, Json(fields): Json<Value>) -> ApiResult<Json<AccountView>> {
+    let input: ConnectInput = serde_json::from_value(fields.clone()).map_err(|e| ApiError::bad_request(e.to_string()))?;
     match kind.as_str() {
+        // A module run by the host checks its account itself, from the fields of its form.
+        k if accounts::is_module_account(k) => {
+            accounts::connect_module(&state, k, &fields).await?;
+            // A year of the meter at once: the history and its costs are there from the start.
+            if k == accounts::linky::KIND {
+                let state = state.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = accounts::linky::refresh_from(&state, 365).await {
+                        tracing::warn!("Linky not read: {}", e.message.en);
+                    }
+                });
+            }
+        }
         accounts::rte::KIND => accounts::rte::connect(&state, &input.client_id, &input.client_secret).await?,
         accounts::linky::KIND => accounts::linky::connect(&state, &input.token, &input.prm).await?,
         accounts::netatmo::KIND => accounts::netatmo::connect(&state, &input.client_id, &input.client_secret, &input.refresh_token).await?,
@@ -64,6 +79,7 @@ pub async fn connect(State(state): State<AppState>, AdminUser(user): AdminUser, 
 /// Uses the account once more: its state says whether it still works.
 pub async fn test(State(state): State<AppState>, AdminUser(user): AdminUser, Path(kind): Path<String>) -> ApiResult<Json<AccountView>> {
     let result = match kind.as_str() {
+        k if accounts::is_module_account(k) => accounts::test_module(&state, k).await,
         accounts::rte::KIND => accounts::rte::test(&state).await,
         accounts::linky::KIND => accounts::linky::test(&state).await,
         accounts::netatmo::KIND => accounts::netatmo::test(&state).await,
@@ -91,11 +107,11 @@ pub struct EnabledInput {
 /// Switches an account or a service on or off, without forgetting it: what uses it does as if it
 /// were not set (the Netatmo or EZVIZ module stops, the Tempo colours come from the public relay…).
 pub async fn set_enabled(State(state): State<AppState>, AdminUser(user): AdminUser, Path(kind): Path<String>, Json(input): Json<EnabledInput>) -> ApiResult<Json<AccountView>> {
-    if !accounts::KINDS.contains(&kind.as_str()) {
+    if !accounts::is_kind(&kind) {
         return Err(ApiError::not_found("unknown account"));
     }
     crate::db::set_account_enabled(&state.db, &kind, input.enabled).await?;
-    if accounts::MODULES.contains(&kind.as_str()) || accounts::SERVICE_MODULES.contains(&kind.as_str()) {
+    if accounts::comes_with_account(&kind) {
         for s in crate::db::list_sources(&state.db).await?.into_iter().filter(|s| s.driver == kind) {
             crate::db::update_source(&state.db, s.id, &s.name, &s.config, input.enabled).await?;
         }
@@ -115,10 +131,10 @@ pub async fn set_enabled(State(state): State<AppState>, AdminUser(user): AdminUs
 }
 
 pub async fn delete(State(state): State<AppState>, AdminUser(user): AdminUser, Path(kind): Path<String>) -> ApiResult<StatusCode> {
-    if !accounts::KINDS.contains(&kind.as_str()) {
+    if !accounts::is_kind(&kind) {
         return Err(ApiError::not_found("unknown account"));
     }
-    if kind == accounts::WEATHER {
+    if accounts::is_service_only(&kind) {
         return Err(ApiError::bad_request("la météo se désactive, elle ne se retire pas"));
     }
     if kind == crate::cloud::ACCOUNT {

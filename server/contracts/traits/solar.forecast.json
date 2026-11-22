@@ -1,6 +1,7 @@
 {
   "trait": "solar.forecast",
   "version": 1,
+  "revision": 0,
   "label": { "fr": "Prévision solaire", "en": "Solar forecast", "es": "Previsión solar" },
   "state": [
     { "name": "power", "type": "number", "unit": "W", "label": { "fr": "Puissance prévue maintenant", "en": "Power expected now", "es": "Potencia prevista ahora" } },
@@ -8,5 +9,21 @@
     { "name": "energy_remaining", "type": "number", "unit": "kWh", "history": false, "optional": true, "label": { "fr": "Reste à produire aujourd'hui", "en": "Still to produce today", "es": "Queda por producir hoy" } },
     { "name": "energy_tomorrow", "type": "number", "unit": "kWh", "history": false, "optional": true, "label": { "fr": "Production prévue demain", "en": "Production expected tomorrow", "es": "Producción prevista mañana" } }
   ],
-  "actions": []
+  "actions": [],
+  "forecast": [
+    { "name": "power", "type": "number", "unit": "W", "label": { "fr": "Puissance prévue", "en": "Expected power", "es": "Potencia prevista" } }
+  ],
+  "ui": {
+    "kind": "solar",
+    "primary": "power",
+    "card": [
+      {"widget": "value", "field": "power"},
+      {"widget": "value", "field": "energy_remaining"}
+    ],
+    "detail": [
+      {"widget": "chart", "field": "power", "forecast": true},
+      {"widget": "value", "field": "energy_today"},
+      {"widget": "value", "field": "energy_tomorrow"}
+    ]
+  }
 }

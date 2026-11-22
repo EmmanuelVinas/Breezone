@@ -40,6 +40,49 @@ pub struct ModuleInfo {
     pub provides: Vec<String>,
 }
 
+/// What this server hosts for modules (docs/roadmap/modules.md § 4.4): the versions of the module
+/// interface, and for each trait and service contract, by major version, the highest revision. A
+/// module fits if all it needs is here; a peer or a client older than this field sends none.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Host {
+    #[serde(default)]
+    pub api: Vec<String>,
+    #[serde(default)]
+    pub traits: BTreeMap<String, BTreeMap<String, u32>>,
+    #[serde(default)]
+    pub services: BTreeMap<String, BTreeMap<String, u32>>,
+}
+
+impl Host {
+    pub fn local() -> Self {
+        let mut traits: BTreeMap<String, BTreeMap<String, u32>> = BTreeMap::new();
+        for t in crate::traits::catalog() {
+            traits.entry(t.name.clone()).or_default().insert(t.version.to_string(), t.revision);
+        }
+        let mut services: BTreeMap<String, BTreeMap<String, u32>> = BTreeMap::new();
+        for s in crate::services::catalog() {
+            services.entry(s.name.clone()).or_default().insert(s.version.to_string(), s.revision);
+        }
+        Self { api: crate::modules::HOST_API.iter().map(|v| v.to_string()).collect(), traits, services }
+    }
+
+    /// The highest revision of `name@major` hosted here.
+    pub fn trait_revision(&self, name: &str, major: u32) -> Option<u32> {
+        self.traits.get(name)?.get(&major.to_string()).copied()
+    }
+
+    pub fn service_revision(&self, name: &str, major: u32) -> Option<u32> {
+        self.services.get(name)?.get(&major.to_string()).copied()
+    }
+}
+
+impl ModuleInfo {
+    fn of(m: &crate::modules::manifest::Manifest) -> Self {
+        let major = |t: &String| crate::modules::manifest::Needed::parse(t).map(|n| format!("{}@{}", n.name, n.major));
+        ModuleInfo { id: m.id.clone(), version: m.version.clone(), provides: m.provides.traits.iter().chain(&m.provides.services).filter_map(major).collect() }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Capabilities {
     /// Version of Breezone ("0.11.0-beta.2"); empty for a node that does not tell (legacy).
@@ -56,6 +99,8 @@ pub struct Capabilities {
     #[serde(default)]
     pub modules: Vec<ModuleInfo>,
     #[serde(default)]
+    pub host: Host,
+    #[serde(default)]
     pub caps_rev: String,
 }
 
@@ -67,20 +112,11 @@ impl Capabilities {
             breezone: version.to_string(),
             channel: if version.is_prerelease() { "beta" } else { "stable" }.into(),
             protocol: Protocol { current: PROTOCOL, min: PROTOCOL_MIN },
-            traits: BTreeMap::from([
-                ("button".into(), vec![1]),
-                ("climate.zone".into(), vec![1]),
-                ("cover.position".into(), vec![1]),
-                ("energy.meter".into(), vec![1]),
-                ("energy.power".into(), vec![1]),
-                ("ev.charger".into(), vec![1]),
-                ("light".into(), vec![1]),
-                ("solar.inverter".into(), vec![1]),
-                ("solar.panel".into(), vec![1]),
-                ("switch.relay".into(), vec![1]),
-                ("ventilation.room".into(), vec![1]),
-                ("ventilation.unit".into(), vec![1]),
-            ]),
+            // Every trait of the catalog, by major version.
+            traits: crate::traits::catalog().iter().fold(BTreeMap::new(), |mut m: BTreeMap<String, Vec<u32>>, t| {
+                m.entry(t.name.clone()).or_default().push(t.version);
+                m
+            }),
             features: [
                 ("federation.watch", 1),
                 ("federation.control", 1),
@@ -97,6 +133,10 @@ impl Capabilities {
                 ("update.beta", 1),
                 // Rooms, devices and the catalog of traits (ADR 0013): /api/rooms, /api/devices, /api/traits.
                 ("home.devices", 1),
+                // Revisions and presentation of the traits, service contracts: /api/ui, /api/services, `host`.
+                ("contracts.ui", 1),
+                // The modules of this server and their state: /api/modules.
+                ("modules", 1),
                 // Sources read by drivers (Shelly…) and the generic action on a device's trait.
                 ("home.sources", 1),
                 ("devices.actions", 1),
@@ -113,16 +153,11 @@ impl Capabilities {
             .into_iter()
             .map(|(k, v)| (k.to_string(), v))
             .collect(),
-            // Airzone is built in: it is announced like the modules to come.
-            modules: vec![
-                ModuleInfo { id: "airzone".into(), version: version.to_string(), provides: vec!["climate.zone@1".into()] },
-                ModuleInfo { id: "shelly".into(), version: version.to_string(), provides: vec!["energy.power@1".into(), "energy.meter@1".into(), "switch.relay@1".into()] },
-                ModuleInfo { id: "trydan".into(), version: version.to_string(), provides: vec!["ev.charger@1".into(), "energy.power@1".into()] },
-                ModuleInfo { id: "homekit".into(), version: version.to_string(), provides: vec!["cover.position@1".into(), "switch.relay@1".into(), "button@1".into()] },
-                ModuleInfo { id: "hue".into(), version: version.to_string(), provides: vec!["light@1".into()] },
-                ModuleInfo { id: "hoymiles".into(), version: version.to_string(), provides: vec!["energy.power@1".into(), "solar.inverter@1".into(), "solar.panel@1".into()] },
-                ModuleInfo { id: "renson".into(), version: version.to_string(), provides: vec!["ventilation.unit@1".into(), "ventilation.room@1".into()] },
-            ],
+            // Airzone is built in: it is announced like the modules.
+            modules: std::iter::once(ModuleInfo { id: "airzone".into(), version: version.to_string(), provides: vec!["climate.zone@1".into()] })
+                .chain(crate::modules::manifests().map(ModuleInfo::of))
+                .collect(),
+            host: Host::local(),
             caps_rev: String::new(),
         };
         caps.caps_rev = caps.compute_rev();
@@ -141,6 +176,7 @@ impl Capabilities {
                 .map(|(k, v)| (k.to_string(), v))
                 .collect(),
             modules: vec![],
+            host: Host::default(),
             caps_rev: "legacy".into(),
         }
     }
@@ -181,6 +217,11 @@ impl Capabilities {
             .collect();
         self.features = self.features.into_iter().take(200).map(|(k, v)| (clip(&k, 64), v)).collect();
         self.modules.truncate(50);
+        self.host.api.truncate(8);
+        self.host.api = self.host.api.iter().map(|v| clip(v, 16)).collect();
+        for map in [&mut self.host.traits, &mut self.host.services] {
+            *map = std::mem::take(map).into_iter().take(200).map(|(k, v)| (clip(&k, 64), v.into_iter().take(8).map(|(m, r)| (clip(&m, 8), r)).collect())).collect();
+        }
         for m in &mut self.modules {
             m.id = clip(&m.id, 64);
             m.version = clip(&m.version, 40);
@@ -296,6 +337,23 @@ mod tests {
         let mut peer = local.clone();
         peer.protocol = Protocol { current: 9, min: 9 };
         assert_eq!(local.compatibility(&peer).state, "outdated");
+    }
+
+    #[test]
+    fn a_peer_without_host_is_read() {
+        let mut v = serde_json::to_value(Capabilities::local()).unwrap();
+        v.as_object_mut().unwrap().remove("host");
+        let peer: Capabilities = serde_json::from_value(v).unwrap();
+        assert_eq!(peer.host, Host::default());
+        assert_eq!(Capabilities::local().compatibility(&peer).state, "compatible");
+    }
+
+    #[test]
+    fn the_host_announces_the_revisions() {
+        let host = Host::local();
+        assert_eq!(host.trait_revision("cover.position", 1), Some(crate::traits::get("cover.position", 1).unwrap().revision));
+        assert_eq!(host.trait_revision("cover.position", 2), None);
+        assert_eq!(host.api.is_empty(), !cfg!(feature = "wasm"), "the module interface is hosted with the WebAssembly host only");
     }
 
     #[test]

@@ -26,7 +26,8 @@ Règles de compatibilité :
 ### Capacités (ADR 0012)
 
 `GET 🔒 /api/capabilities` → ce que le serveur sait faire, fonction par fonction :
-`{breezone, channel, protocol:{current, min}, traits:{"climate.zone":[1]}, features:{"federation.watch":1, …}, modules:[{id, version, provides}], caps_rev}`.
+`{breezone, channel, protocol:{current, min}, traits:{"climate.zone":[1]}, features:{"federation.watch":1, …}, modules:[{id, version, provides}], host:{api:["1.0"], traits:{"climate.zone":{"1":0}}, services:{"tariff.day_color":{"1":0}}}, caps_rev}`.
+`traits` liste tout le catalogue ; `host` dit ce que le serveur héberge pour les modules : versions de l'interface des modules, et pour chaque trait et contrat de service la révision la plus haute de chaque version majeure (absent chez un serveur plus ancien).
 `caps_rev` (empreinte du document) figure aussi dans `/api/version` : un client relit les capacités
 quand elle change, et n'active que les écrans des fonctions annoncées. Les serveurs fédérés
 s'échangent ce même document (`POST /api/federation/hello`).
@@ -169,7 +170,9 @@ avec un identifiant stable. Les routes des zones restent celles qui les pilotent
 
 | Méthode | Chemin | Description |
 |---------|--------|-------------|
-| GET 🔒 | `/api/traits` | Catalogue des traits : `[{trait, version, label{fr,en,es}, state:[champ], actions:[{name, label, params:[champ]}]}]`, champ = `{name, type (bool·integer·number·string·enum), unit?, values?, value_labels?, min?, max?, optional, label}` (`value_labels` : `{valeur: label}` pour chaque valeur d'un `enum`). Sert aussi de descripteur pour un trait inconnu du client |
+| GET 🔒 | `/api/traits` | Catalogue des traits : `[{trait, version, revision, since?, label{fr,en,es}, state:[champ], actions:[{name, label, params:[champ]}], forecast?, ui?}]`, champ = `{name, type (bool·integer·number·string·enum), unit?, values?, value_labels?, min?, max?, optional, label}` (`value_labels` : `{valeur: label}` pour chaque valeur d'un `enum`). Sert aussi de descripteur pour un trait inconnu du client | ; `revision` : ajouts facultatifs depuis la version majeure, `since` : révision d'apparition d'un champ ou d'une action, `ui` : `{kind, primary?, card:[widget], detail:[widget]}`, widget = `{widget, field?, action?, param?, params?, when?, forecast?}` (mots de `GET /api/ui`)
+| GET 🔒 | `/api/ui` | Mots de la présentation des traits : `{kinds:[{id, icon, page?, label}], widgets:{nom: description}, icons:[nom]}` (`contracts/ui.json`). Un client qui ne connaît pas un widget affiche le champ en `value` ; un genre inconnu va dans `other` |
+| GET 🔒 | `/api/services` | Catalogue des contrats de service : `[{service, version, revision, since?, label, queries:[{name, label, params:[champ], list?, result:[champ]}]}]` (`contracts/services/`) : ce que répond un module de service (couleur des jours Tempo, météo, relevés du compteur) |
 | GET 🔒 | `/api/devices` | Appareils visibles par l'utilisateur : `[{id, kind, traits, source, source_id, installation_id, reference, name, room_id, role, measures:{device_id, room_id}, position, available, state, can_control}]` (`state` : valeurs décrites par le catalogue ; `available` faux si la source ne fournit plus l'appareil ; `can_control` : l'utilisateur peut le piloter — une zone selon ses droits sur l'installation, un appareil de module s'il est administrateur) |
 | PUT 🔒 | `/api/devices/{id}` | `{name?, room_id?, position?, role?, measures_device_id?, measures_room_id?}` : seuls les champs donnés changent (`null` efface). `measures_device_id` désigne l'appareil mesuré par une consommation, ou l'onduleur mesuré par une production ; Nom personnalisé (vide = celui de la source), pièce, et pour une mesure d'énergie son **rôle** : `grid` (réseau, toute la maison), `solar`, `battery` ou `consumption` (consommation d'un appareil ou d'une pièce ; sans cible : autres usages). Même droit que pour renommer les zones de l'installation ; administrateurs pour les appareils des sources |
 | GET 🔒 | `/api/rooms` | `[{id, name, position, created_at, icon}]` (`icon` : nom Lucide choisi, `null` : deviné d'après le nom par les clients) |
@@ -179,6 +182,7 @@ avec un identifiant stable. Les routes des zones restent celles qui les pilotent
 | POST 🔒 | `/api/devices/{id}/actions` | `{trait, action, params}` : action d'un trait de l'appareil, quelle que soit sa source (`climate.zone` / `set` pour une zone Airzone, avec les droits de l'installation ; `switch.relay` / `set` pour un relais Shelly, réservé aux administrateurs pour l'instant). Paramètre inconnu → `422 unsupported` ; manquant ou mal typé → `400` → appareil à jour |
 | GET 🔒 | `/api/devices/{id}/history?hours=24&points=96` ou `?from=&until=&bucket=` | `{bucket, series:{field:[[ts, value]]}}` : chaque nombre de l'état d'un appareil d'une source (puissance, énergie, relais en 0/1…), moyenne par intervalle (dernière valeur pour un compteur `energy_in` / `energy_out`). Avec `from` et `until` (horodatages), sur cette période, par exemple un jour local, et `bucket` secondes par point. Un point est enregistré toutes les 5 min (`BREEZONE_HISTORY_INTERVAL_SECS`) : moyenne des lectures depuis le point précédent |
 | GET 🔒 | `/api/devices/{id}/picture` | Image du dernier événement d'une caméra (`camera@1`), déchiffrée : `image/jpeg` ou `image/png` ; `409` sans image (ou chiffrée sans code de vérification) |
+| GET 🔒 | `/api/devices/{id}/forecast` | Courbes prévues par l'appareil (le `forecast` de ses traits, ex. `solar.forecast@1` → `power` en W) : `{series: {power: [[ts, valeur]…]}}`, aujourd'hui et demain ; `409` si l'appareil ne prévoit rien |
 
 ### Énergie
 
@@ -286,12 +290,34 @@ serveur qui a une ville.
 
 `GET /api/sources/{id}/diagnostic` 👑 : ce que le matériel dit de lui-même, brut (base d'un accessoire HomeKit…), avec ce que Breezone en lit ; sans secret.
 
+**Programmations du matériel** 👑 (modules dont le manifeste liste `schedules` dans `optional_calls`) : le
+matériel les garde et les exécute lui-même ; Breezone les montre et les modifie.
+
+| Méthode | Chemin | Description |
+|---|---|---|
+| GET 👑 | `/api/sources/{id}/schedules` | `[{id, name, enabled, days, time, references, trait, action, params, end:{time, params} \| null, editable, note}]` (`days` : jours ISO, 1 lundi … 7 dimanche ; `time` : `HH:MM` ; `editable` faux : seule l'application du fabricant peut la changer, `note` dit pourquoi) |
+| POST 👑 | `/api/sources/{id}/schedules` | `{name, enabled?, days, time, references, trait, action, params, end?}` → la liste. Les appareils doivent être de la source et avoir le trait ; l'action et ses paramètres (et ceux de la fin) sont vérifiés contre le catalogue (400, 422 inconnue) |
+| PUT 👑 | `/api/sources/{id}/schedules/{schedule_id}` | même corps → la liste ; 409 si elle n'est pas modifiable ici |
+| DELETE 👑 | `/api/sources/{id}/schedules/{schedule_id}` | → la liste |
+
 Une **source** est un matériel lu par un **pilote** (ADR 0013) : par exemple un Shelly à
 192.168.1.40. Ses appareils apparaissent dans `/api/devices`.
 
 | Méthode | Chemin | Description |
 |---------|--------|-------------|
-| GET 👑 | `/api/drivers` | Pilotes disponibles : `[{id, label, provides, config:[{name, type, optional, label}]}]` ; `type` : `string`, `integer`, `number` ou `password` |
+| GET 👑 | `/api/drivers` | Pilotes disponibles, tirés des manifestes des modules : `[{id, label, provides, models, config:[{name, type, optional, label}]}]` ; `type` : `string`, `integer`, `number`, `bool` ou `password` |
+| GET 👑 | `/api/modules` | Modules de ce serveur : `[{id, version, origin (native·builtin·library·file), enabled, state, last_error, sources, loaded, manifest}]` ; `loaded` : il tourne (une source active, ou son compte ou service connecté et activé) ; `manifest` : voir `server/contracts/module.schema.json` |
+| GET 👑 | `/api/modules/library?refresh=&repository=` | Bibliothèque de toutes les sources activées (ou d'une seule avec `repository`), triée pour ce serveur : `{modules:[{id, repository:{id, name, official}, manifest (de sa version la plus récente), installed, fits (la plus récente qui fonctionne ici), reasons:[{kind (api·breezone·trait·service·account), …}]}], unreadable:[{repository, error}]}`. L'index de chaque source (`index.json` + `.sig`) est vérifié avec la clé de cette source et relu une fois par jour ; un index plus ancien que le dernier vu, ou mal signé, met la source dans `unreadable` |
+| GET 👑 | `/api/modules/repositories` | Sources de modules : `[{id, name, url (null : la bibliothèque de Breezone), official, enabled, modules (installés depuis elle)}]` |
+| POST 👑 | `/api/modules/repositories` | `{name, url, public_key}` : ajoute une source (adresse du dossier de son `index.json`, en HTTPS ou en HTTP sur le réseau local ; clé publique Ed25519 en base64). Son index doit se lire et être signé par cette clé, sinon 422 → 201 la liste |
+| PATCH 👑 | `/api/modules/repositories/{id}` | `{enabled}` : active ou coupe une source (ses modules restent, sans mises à jour) |
+| DELETE 👑 | `/api/modules/repositories/{id}` | Retire une source dont aucun module n'est installé (409 sinon) ; la bibliothèque de Breezone reste (400) |
+| POST 👑 | `/api/modules` | `{id, repository?, version?}` : installe ou met à jour un module (depuis la source d'où il a été installé, sinon `repository`, sinon la bibliothèque de Breezone, sinon la première source qui l'a ; la version la plus récente qui fonctionne ici si `version` manque). Ses sources repartent sur la nouvelle version ; si aucune ne lit son matériel, retour automatique à la version précédente (écartée ensuite) → 201 le module ; signature fausse → 403 ; incompatible → 422 (`detail.reasons`) ; module de Breezone visé par une autre source, module venu d'une autre source, version déjà en échec → 409 |
+| POST 👑 | `/api/modules/upload` | `{package (base64 du .bzm), signature (contenu du .bzm.sig)}` : accepté s'il est signé par la clé d'une des sources activées (même contrôle, aucune exception pour un fichier) → 201 |
+| POST 👑 | `/api/modules/{id}/rollback` | Revient à la version installée avant |
+| DELETE 👑 | `/api/modules/{id}` | Retire un module qu'aucune source ni compte n'utilise (sinon 409) ; un module compris dans Breezone → 400 |
+| GET 👑 | `/api/modules/next?version=` | Avant une mise à jour : pour chaque module installé, s'il fonctionne avec cette version (son `host.json`, publié avec la release) et, sinon, la version de la bibliothèque qui le remplacera au redémarrage : `[{id, version, fits, reasons, replacement}]` |
+| GET 👑 | `/api/modules/{id}/log` | Journal du module, les 200 dernières lignes : `[{at, level (debug·info·warn·error), message}]` — ce qu'il dit, ses arrêts (panique, délai, mémoire), les adresses que ses permissions refusent, une mise à jour annulée |
 | GET 👑 | `/api/sources` | `[{id, driver, name, config, enabled, created_at, status:{state, last_seen, last_error, model, firmware}, devices}]` (`state` : `online`, `offline`, `error`, `disabled`, `unknown`) |
 | POST 👑 | `/api/sources` | `{driver, name, config, enabled?}` : configuration vérifiée, source lue aussitôt → 201 |
 | PUT 👑 · DELETE 👑 | `/api/sources/{id}` | Modifier (le pilote ne change pas) ; supprimer, avec ses appareils |
@@ -303,10 +329,9 @@ jamais renvoyés ; absents ou vides à la modification, ils restent tels quels. 
 
 | POST 👑 | `/api/sources/{id}/refresh` | Relire maintenant |
 | POST 👑 | `/api/sources/{id}/locate` | Chercher son matériel sur le réseau par son identité (`device_id`) et le suivre s'il a changé d'adresse (« Rechercher ») → la source et `moved` |
-| POST 👑 | `/api/homekit/pair` | `{host, name, code, flags?}` : appaire Breezone à un accessoire HomeKit trouvé par le scanner (`host` « ip:port », `flags` ses indicateurs) avec son code à 8 chiffres, puis l'ajoute comme module → 201 la source ; code incorrect, trop d'essais, déjà appairé ailleurs → 422 avec l'explication |
-| POST 👑 | `/api/hue/link` | `{host, name}` : ajoute un pont Philips Hue trouvé par le scanner ; il donne une clé d'accès dans les 30 secondes après l'appui sur son bouton → 201 la source ; bouton non pressé → 409 (`code` : `button`) |
+| POST 👑 | `/api/modules/{id}/pairing` | `{step, input, name?}` : une étape de l'appairage d'un module dont le manifeste dit `pairing` `button` ou `code` → `204` tant qu'il continue, `201` et la source ajoutée une fois fini. `button` (pont Philips Hue) : étape `link` `{host}`, bouton non pressé → 409 (`code` : `button`). `code` (accessoire HomeKit, `host` « ip:port ») : `start` `{host, flags?}` (un accessoire à écran montre son code), puis `finish` `{host, code, flags?}` (code à 8 chiffres ; incorrect, trop d'essais, déjà appairé ailleurs → 422 avec l'explication), ou `cancel` `{host}`. Module sans étapes → 400, inconnu → 404 |
 
-| POST 👑 | `/api/discovery/products` | `{subnet?}` → `{subnet, duration_ms, products:[{brand, driver, model, host, port, mac, device_id, firmware, note, supported, added}]}` : tous les produits pris en charge du réseau (WebServers Airzone, Shelly…), identifiés jusqu'au modèle, et s'ils sont déjà ajoutés |
+| POST 👑 | `/api/discovery/products` | `{subnet?}` → `{subnet, duration_ms, products:[{brand, driver, model, host, port, mac, device_id, firmware, note, supported, added}]}` : tous les produits pris en charge du réseau (WebServers Airzone, Shelly…), identifiés jusqu'au modèle, et s'ils sont déjà ajoutés ; un produit dont le module n'est pas installé mais publié dans une source de modules (trouvé par les indices `discovery.http` de son manifeste, sans exécuter le module) porte `install:{repository, repository_name, official, version}` : l'installer (`POST /api/modules`) puis relancer la recherche |
 
 Chaque source retient l'identité de son matériel (`device_id` : id du Shelly, `ID` de la Trydan,
 numéro de série de la clé Hoymiles), apprise au premier relevé si elle a été ajoutée par son adresse.
@@ -339,7 +364,7 @@ Ed25519), puis lit et pilote l'accessoire en local, par des sessions chiffrées 
 ChaCha20-Poly1305), sans Apple Maison ni compte. Le scanner trouve les accessoires par mDNS
 (`_hap._tcp`), en posant la question au groupe et à chaque adresse du réseau. `config: {host, device_id}`
 (l'identifiant HomeKit de l'accessoire) ; l'appairage (la clé de Breezone) est le secret de la source,
-chiffré, jamais renvoyé par l'API. Une source HomeKit ne s'ajoute que par `/api/homekit/pair`. Volets,
+chiffré, jamais renvoyé par l'API. Une source HomeKit ne s'ajoute que par son appairage (`/api/modules/homekit/pairing`). Volets,
 fenêtres et portes deviennent des appareils `cover.position@1` (`position` 0 fermé à 100 ouvert,
 `target`, `moving` ; actions `set {position}` et `stop`), prises, interrupteurs et lumières des
 `switch.relay@1`. Lecture toutes les 10 s. Appairer Breezone ne change rien d'autre sur l'accessoire ;

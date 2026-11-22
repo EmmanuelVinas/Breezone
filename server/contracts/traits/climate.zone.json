@@ -1,6 +1,7 @@
 {
   "trait": "climate.zone",
   "version": 1,
+  "revision": 0,
   "label": { "fr": "Climatisation", "en": "Air conditioning", "es": "Climatización" },
   "state": [
     { "name": "on", "type": "bool", "label": { "fr": "Allumée", "en": "On", "es": "Encendida" } },
@@ -29,5 +30,22 @@
         { "name": "sleep", "type": "integer", "unit": "min", "optional": true, "label": { "fr": "Veille", "en": "Sleep", "es": "Reposo" } }
       ]
     }
-  ]
+  ],
+  "ui": {
+    "kind": "climate",
+    "primary": "room_temp",
+    "card": [
+      {"widget": "value", "field": "room_temp"},
+      {"widget": "toggle", "field": "on", "action": "set", "param": "on"},
+      {"widget": "stepper", "field": "setpoint", "action": "set", "param": "setpoint"}
+    ],
+    "detail": [
+      {"widget": "toggle", "field": "on", "action": "set", "param": "on"},
+      {"widget": "stepper", "field": "setpoint", "action": "set", "param": "setpoint"},
+      {"widget": "enum", "field": "mode", "action": "set", "param": "mode"},
+      {"widget": "value", "field": "room_temp"},
+      {"widget": "value", "field": "humidity"},
+      {"widget": "chart", "field": "room_temp"}
+    ]
+  }
 }

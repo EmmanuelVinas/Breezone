@@ -199,6 +199,10 @@ class BreezoneApi(
     suspend fun status(): List<Installation> = call(HttpMethod.Get, "/api/status")
     suspend fun devices(): List<DeviceView> = call(HttpMethod.Get, "/api/devices")
     suspend fun rooms(): List<Room> = call(HttpMethod.Get, "/api/rooms")
+    /** The catalog of traits the server knows (their fields, actions and presentation). */
+    suspend fun traits(): List<CatalogTrait> = call(HttpMethod.Get, "/api/traits")
+    /** The modules of the server (administrators). */
+    suspend fun modules(): List<ModuleInfo> = call(HttpMethod.Get, "/api/modules")
     /** The weather of an installation (servers before 0.11.0-beta.19 give that of the home). */
     suspend fun weather(installationId: Long): WeatherView = call(HttpMethod.Get, "/api/weather?installation_id=$installationId")
     suspend fun energyLive(): EnergyLive = call(HttpMethod.Get, "/api/energy/live")
@@ -212,6 +216,7 @@ class BreezoneApi(
     suspend fun price(installationId: Long): PriceView = call(HttpMethod.Get, "/api/installations/$installationId/electricity/price?hours=24")
     suspend fun deviceHistoryOver(deviceId: Long, hours: Int): DeviceHistory =
         call(HttpMethod.Get, "/api/devices/$deviceId/history?hours=$hours&bucket=${Periods.bucket(hours)}")
+    suspend fun deviceForecast(deviceId: Long): DeviceForecast = call(HttpMethod.Get, "/api/devices/$deviceId/forecast")
     suspend fun deviceHistory(deviceId: Long, hours: Int = 24, points: Int = 96): DeviceHistory =
         call(HttpMethod.Get, "/api/devices/$deviceId/history?hours=$hours&points=$points")
     suspend fun scenes(): List<SceneView> = call(HttpMethod.Get, "/api/scenes")

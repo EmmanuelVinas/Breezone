@@ -9,6 +9,7 @@ mod federation;
 pub(crate) mod home;
 mod hvac;
 mod linked;
+mod modules;
 pub(crate) mod price;
 mod routines;
 mod schedules;
@@ -111,10 +112,13 @@ pub fn router() -> Router<AppState> {
         // Updates of Breezone itself (issue #40)
         .route("/api/capabilities", get(capabilities))
         .route("/api/traits", get(home::traits))
+        .route("/api/ui", get(home::ui))
+        .route("/api/services", get(home::services))
         .route("/api/devices", get(home::list_devices))
         .route("/api/devices/{id}", put(home::update_device))
         .route("/api/devices/{id}/actions", post(home::act))
         .route("/api/devices/{id}/picture", get(home::picture))
+        .route("/api/devices/{id}/forecast", get(home::forecast))
         .route("/api/devices/charted", get(energy::charted))
         .route("/api/devices/{id}/history", get(energy::device_history))
         .route("/api/accounts", get(linked::list))
@@ -137,16 +141,24 @@ pub fn router() -> Router<AppState> {
         .route("/api/weather/history", get(weather::history))
         .route("/api/weather/place", put(weather::set_place))
         .route("/api/drivers", get(sources::drivers))
+        .route("/api/modules", get(modules::list).post(modules::install))
+        .route("/api/modules/library", get(modules::library))
+        .route("/api/modules/repositories", get(modules::repositories).post(modules::add_repository))
+        .route("/api/modules/repositories/{id}", axum::routing::patch(modules::set_repository).delete(modules::remove_repository))
+        .route("/api/modules/next", get(modules::next))
+        .route("/api/modules/upload", post(modules::upload))
+        .route("/api/modules/{id}", axum::routing::delete(modules::remove))
+        .route("/api/modules/{id}/rollback", post(modules::rollback))
+        .route("/api/modules/{id}/log", get(modules::log))
+        .route("/api/modules/{id}/pairing", post(sources::pairing))
         .route("/api/sources", get(sources::list).post(sources::create))
         .route("/api/sources/{id}", put(sources::update).delete(sources::delete))
         .route("/api/sources/{id}/refresh", post(sources::refresh))
         .route("/api/sources/{id}/locate", post(sources::locate))
-        .route("/api/homekit/pair", post(sources::pair_homekit))
-        .route("/api/homekit/pair/start", post(sources::start_homekit_pairing))
-        .route("/api/homekit/pair/cancel", post(sources::cancel_homekit_pairing))
-        .route("/api/hue/link", post(sources::link_hue))
         .route("/api/sources/{id}/rooms", post(sources::take_rooms))
         .route("/api/sources/{id}/key", post(sources::unlock))
+        .route("/api/sources/{id}/schedules", get(sources::schedules).post(sources::create_schedule))
+        .route("/api/sources/{id}/schedules/{schedule_id}", put(sources::update_schedule).delete(sources::delete_schedule))
         .route("/api/sources/{id}/diagnostic", get(sources::diagnostic))
         .route("/api/sources/{id}/twins", get(sources::twins).put(sources::set_twin))
         .route("/api/scenes", get(sources::scenes))

@@ -93,6 +93,41 @@ function useWaitForVersion(expected: string | null, active: boolean) {
 }
 
 /** The version of Breezone, the latest release, and the update from here (administrators). */
+/** The modules installed here that would not work with `version`, and what replaces them. */
+function ModulesAfter({ version }: { version: string }) {
+  const next = useQuery({
+    queryKey: ["modules-next", version],
+    queryFn: () => api.modulesNext(version),
+    retry: false,
+    staleTime: 10 * 60_000,
+  })
+  const broken = (next.data ?? []).filter((m) => !m.fits)
+  if (broken.length === 0) return null
+  return (
+    <Alert>
+      <TriangleAlert />
+      <AlertTitle>{t("Des modules installés sont concernés")}</AlertTitle>
+      <AlertDescription>
+        <ul className="list-disc pl-4">
+          {broken.map((m) => (
+            <li key={m.id}>
+              {m.replacement
+                ? t(
+                    "{id} {version} sera remplacé par la version {replacement}, compatible.",
+                    { id: m.id, version: m.version, replacement: m.replacement }
+                  )
+                : t(
+                    "{id} {version} ne fonctionnera plus : il sera désactivé, sans être supprimé.",
+                    { id: m.id, version: m.version }
+                  )}
+            </li>
+          ))}
+        </ul>
+      </AlertDescription>
+    </Alert>
+  )
+}
+
 export function UpdateTab() {
   const qc = useQueryClient()
   const [confirm, setConfirm] = useState(false)
@@ -263,6 +298,7 @@ export function UpdateTab() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <ModulesAfter version={v.latest} />
             {v.notes && (
               <div className="max-h-72 space-y-2 overflow-auto rounded-2xl bg-muted/60 p-4 text-sm [&_a]:text-primary [&_a]:underline [&_h3]:font-semibold [&_li]:ml-4 [&_li]:list-disc [&_ul]:space-y-1">
                 {/* Release notes from GitHub: Markdown, no raw HTML. */}

@@ -1,19 +1,18 @@
 package com.breezone.app.ui.screens
 
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -31,21 +30,26 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.breezone.app.data.CommandStatus
+import com.breezone.app.data.CoverMotions
 import com.breezone.app.data.CoverPositionMoving
 import com.breezone.app.data.CoverPositionState
 import com.breezone.app.data.DeviceView
@@ -60,6 +64,7 @@ import com.breezone.app.ui.components.groupByRoom
 import com.breezone.app.ui.icons.FzIcons
 import com.breezone.app.ui.theme.Fz
 import kotlinx.coroutines.delay
+import kotlin.math.abs
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -92,8 +97,24 @@ private fun Hub.movingCover(serverId: String, d: DeviceView): CoverPositionState
     return s
 }
 
+/**
+ * How open the shutter is drawn. While it moves, one animation to its target at the speed of a shutter:
+ * restarting a short one at each estimate of the position made it jerk.
+ */
 @Composable
-private fun animatedOpen(position: Long) = animateFloatAsState(position / 100f, tween(300, easing = LinearEasing))
+private fun animatedOpen(s: CoverPositionState): State<Float> {
+    val open = remember { Animatable(s.position / 100f) }
+    val goal = s.target?.takeIf { s.moving() }
+    LaunchedEffect(goal, if (goal == null) s.position else null) {
+        if (goal != null) {
+            val ms = (abs(goal / 100f - open.value) * 100 * CoverMotions.MS_PER_PERCENT).toInt()
+            open.animateTo(goal / 100f, tween(ms, easing = LinearEasing))
+        } else {
+            open.animateTo(s.position / 100f, tween(300, easing = LinearEasing))
+        }
+    }
+    return open.asState()
+}
 
 // Unknown counts as stoppable: only a driver that knows it cannot stop says so.
 private fun CoverPositionState.stoppable() = stoppable != false
@@ -102,9 +123,25 @@ private fun CoverPositionState.stoppable() = stoppable != false
 private fun coverText(s: CoverPositionState): String = when {
     s.moving == CoverPositionMoving.Opening -> s.target?.let { stringResource(Res.string.shutter_opening_to, it) } ?: stringResource(Res.string.shutter_opening)
     s.moving == CoverPositionMoving.Closing -> s.target?.let { stringResource(Res.string.shutter_closing_to, it) } ?: stringResource(Res.string.shutter_closing)
-    s.position <= 0 -> stringResource(Res.string.shutter_closed)
-    s.position >= 100 -> stringResource(Res.string.shutter_open)
-    else -> stringResource(Res.string.shutter_open_at, s.position)
+    else -> positionText(s.position)
+}
+
+/**
+ * What the shutter shows: the position being dragged to, else its state. One call whatever the case:
+ * branches of composable calls in the arguments of [ShutterControl] would recreate it mid-gesture.
+ */
+@Composable
+private fun shutterLabel(draft: Int?, s: CoverPositionState, available: Boolean): String = when {
+    draft != null -> positionText(draft.toLong())
+    !available -> stringResource(Res.string.device_unavailable)
+    else -> coverText(s)
+}
+
+@Composable
+private fun positionText(position: Long): String = when {
+    position <= 0 -> stringResource(Res.string.shutter_closed)
+    position >= 100 -> stringResource(Res.string.shutter_open)
+    else -> stringResource(Res.string.shutter_open_at, position)
 }
 
 @Composable
@@ -201,7 +238,7 @@ private fun CoverButtons(enabled: Boolean, onUp: () -> Unit, onStop: (() -> Unit
 @Composable
 internal fun ShutterRow(d: DeviceView, status: CommandStatus?, onOpen: () -> Unit, hub: Hub, serverId: String) {
     val s = hub.movingCover(serverId, d)
-    val open by animatedOpen(s.position)
+    val open by animatedOpen(s)
     Row(Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         ShutterWindow({ open }, Modifier.width(56.dp).height(44.dp))
         Spacer(Modifier.width(12.dp))
@@ -237,9 +274,7 @@ fun ShutterScreen(serverId: String, deviceId: Long, onBack: () -> Unit) {
         if (d == null) return@Scaffold
         val s = hub.movingCover(serverId, d)
         var draft by remember { mutableStateOf<Int?>(null) }
-        val open by animatedOpen(s.position)
-        // The bar shows where the shutter goes, the window where it is.
-        val shown = draft ?: (if (s.moving()) s.target ?: s.position else s.position).toInt()
+        val open by animatedOpen(s)
         LazyColumn(
             Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
@@ -247,33 +282,31 @@ fun ShutterScreen(serverId: String, deviceId: Long, onBack: () -> Unit) {
         ) {
             item(key = "main", contentType = "main") {
                 SectionCard {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(22.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
-                        ShutterWindow({ draft?.let { it / 100f } ?: open }, Modifier.width(170.dp).height(150.dp))
-                        PositionBar(shown, enabled = d.usable, onDraft = { draft = it }) { v ->
-                            draft = null
-                            hub.setCover(serverId, d, v)
-                        }
+                    ShutterControl(
+                        open = { draft?.let { it / 100f } ?: open },
+                        label = shutterLabel(draft, s, d.available),
+                        moving = draft == null && s.moving(),
+                        enabled = d.usable,
+                        onDraft = { draft = it },
+                    ) { v ->
+                        draft = null
+                        hub.setCover(serverId, d, v)
                     }
-                    Text(
-                        if (draft != null) stringResource(Res.string.shutter_open_at, shown) else if (d.available) coverText(s) else stringResource(Res.string.device_unavailable),
-                        color = if (s.moving()) MaterialTheme.colorScheme.primary else Fz.colors.muted,
-                        modifier = Modifier.align(Alignment.CenterHorizontally),
-                    )
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { hub.setCover(serverId, d, 100) }, enabled = d.usable, modifier = Modifier.weight(1f), shape = Fz.shapes.button) {
+                        OutlinedButton(onClick = { hub.setCover(serverId, d, 100) }, enabled = d.usable, modifier = Modifier.weight(1f), shape = Fz.shapes.button, contentPadding = PaddingValues(horizontal = 8.dp)) {
                             Icon(FzIcons.ChevronUp, null, Modifier.size(18.dp))
-                            Text(stringResource(Res.string.shutter_up))
+                            Text(stringResource(Res.string.shutter_up), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         if (s.stoppable()) {
-                            OutlinedButton(onClick = { hub.stopCover(serverId, d) }, enabled = d.usable, modifier = Modifier.weight(1f), shape = Fz.shapes.button) {
+                            OutlinedButton(onClick = { hub.stopCover(serverId, d) }, enabled = d.usable, modifier = Modifier.weight(1f), shape = Fz.shapes.button, contentPadding = PaddingValues(horizontal = 8.dp)) {
                                 Icon(FzIcons.Square, null, Modifier.size(14.dp))
                                 Spacer(Modifier.width(4.dp))
-                                Text(stringResource(Res.string.shutter_stop))
+                                Text(stringResource(Res.string.shutter_stop), maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                         }
-                        OutlinedButton(onClick = { hub.setCover(serverId, d, 0) }, enabled = d.usable, modifier = Modifier.weight(1f), shape = Fz.shapes.button) {
+                        OutlinedButton(onClick = { hub.setCover(serverId, d, 0) }, enabled = d.usable, modifier = Modifier.weight(1f), shape = Fz.shapes.button, contentPadding = PaddingValues(horizontal = 8.dp)) {
                             Icon(FzIcons.ChevronDown, null, Modifier.size(18.dp))
-                            Text(stringResource(Res.string.shutter_down))
+                            Text(stringResource(Res.string.shutter_down), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }
@@ -282,37 +315,44 @@ fun ShutterScreen(serverId: String, deviceId: Long, onBack: () -> Unit) {
     }
 }
 
-/** The vertical position bar: the shutter's part filled from the top; drag or tap to set it. */
+/** The shutter, large: a drag moves its edge under the finger, a tap sets it there; its state is written on it. */
 @Composable
-private fun PositionBar(open: Int, enabled: Boolean, onDraft: (Int) -> Unit, onSet: (Int) -> Unit) {
-    var last by remember { mutableStateOf<Int?>(null) }
-    fun at(y: Float, height: Int) = ((1f - y / height) * 100).toInt().coerceIn(0, 100)
-    Box(
-        Modifier
-            .width(64.dp)
-            .height(220.dp)
-            .clip(RoundedCornerShape(26.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .pointerInput(enabled) {
-                if (!enabled) return@pointerInput
-                detectTapGestures { onSet(at(it.y, size.height)) }
-            }
-            .pointerInput(enabled) {
-                if (!enabled) return@pointerInput
-                detectDragGestures(
-                    onDragEnd = { last?.let(onSet); last = null },
-                    onDragCancel = { last = null },
-                ) { change, _ ->
-                    val v = at(change.position.y, size.height)
-                    last = v
-                    onDraft(v)
+private fun ShutterControl(open: () -> Float, label: String, moving: Boolean, enabled: Boolean, onDraft: (Int?) -> Unit, onSet: (Int) -> Unit) {
+    val draftTo by rememberUpdatedState(onDraft)
+    val setTo by rememberUpdatedState(onSet)
+    // One gesture: the edge follows the finger from the touch on, the position is sent when it lifts (a
+    // tap included). Every change is consumed, or the list around would scroll.
+    val touch = remember(enabled) {
+        Modifier.pointerInput(enabled) {
+            if (!enabled) return@pointerInput
+            fun at(y: Float) = ((1f - y / size.height) * 100).toInt().coerceIn(0, 100)
+            awaitEachGesture {
+                val down = awaitFirstDown()
+                down.consume()
+                var value = at(down.position.y)
+                draftTo(value)
+                while (true) {
+                    val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                    change.consume()
+                    if (!change.pressed) {
+                        setTo(value)
+                        return@awaitEachGesture
+                    }
+                    value = at(change.position.y)
+                    draftTo(value)
                 }
-            },
-        contentAlignment = Alignment.TopCenter,
-    ) {
-        Box(Modifier.fillMaxWidth().fillMaxHeight((100 - open) / 100f).background(Fz.colors.shutter.copy(alpha = 0.85f)))
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(stringResource(Res.string.common_percent, open), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                draftTo(null)
+            }
         }
+    }
+    Box(Modifier.fillMaxWidth().height(240.dp).semantics { stateDescription = label }.then(touch)) {
+        ShutterWindow(open, Modifier.fillMaxSize())
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = if (moving) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp).clip(RoundedCornerShape(50)).background(Fz.colors.card.copy(alpha = 0.85f)).padding(horizontal = 10.dp, vertical = 4.dp),
+        )
     }
 }

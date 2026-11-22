@@ -1132,7 +1132,6 @@ const es: Record<string, string> = {
   "Tous les objets ont déjà une pièce": "Todos los objetos ya tienen estancia",
   "{placed} objet(s) rangé(s), {created} pièce(s) créée(s)":
     "{placed} objeto(s) colocado(s), {created} estancia(s) creada(s)",
-  "Reprendre les pièces Renson": "Tomar las estancias de Renson",
   Eco: "Eco",
   Health: "Health",
   Intense: "Intense",
@@ -1337,6 +1336,41 @@ const es: Record<string, string> = {
   "Ce que Breezone fait quand les conditions sont fausses.":
     "Lo que hace Breezone cuando las condiciones no se cumplen.",
   Ensuite: "Después",
+  "{max} actions au plus : pour en faire davantage, regroupez-les dans une routine ou une scène et lancez-la d'ici.":
+    "{max} acciones como máximo: para hacer más, agrúpelas en una rutina o una escena y lánzela desde aquí.",
+  "Pas d'« Ensuite » ici : une heure, un lever ou un coucher du soleil est un instant, il ne cesse pas d'être vrai. Pour revenir en arrière, créez une autre règle au moment voulu.":
+    "Sin «Después» aquí: una hora, un amanecer o un atardecer es un instante, no deja de ser cierto. Para deshacerlo, cree otra regla en el momento deseado.",
+  "Le compte que demande le module {name}.":
+    "La cuenta que pide el módulo {name}.",
+  "Désactivé : le module ne s'en sert plus.":
+    "Desactivado: el módulo ya no la usa.",
+  oui: "sí",
+  non: "no",
+  "Programmation enregistrée dans l'appareil":
+    "Programación guardada en el aparato",
+  "Enregistrée dans l'appareil, qui l'exécute lui-même, même sans Breezone.":
+    "Guardada en el aparato, que la ejecuta él mismo, incluso sin Breezone.",
+  "Choisir une action": "Elegir una acción",
+  "Choisissez d'abord les appareils": "Elija primero los aparatos",
+  "Et à une heure de fin": "Y a una hora de fin",
+  "Heure de fin": "Hora de fin",
+  "Envoi à l'appareil…": "Enviando al aparato…",
+  "Programmation supprimée de l'appareil": "Programación eliminada del aparato",
+  "La programmation est supprimée de l'appareil.":
+    "La programación se elimina del aparato.",
+  "Programmations de l'appareil": "Programaciones del aparato",
+  "Gardées et exécutées par l'appareil lui-même : elles continuent même quand Breezone est arrêté.":
+    "Guardadas y ejecutadas por el propio aparato: siguen incluso con Breezone detenido.",
+  "Aucune programmation dans l'appareil.":
+    "Ninguna programación en el aparato.",
+  "{label} : {value}": "{label}: {value}",
+  Moins: "Menos",
+  Plus: "M\u00e1s",
+  "version {version} · livré avec Breezone":
+    "versión {version} · incluido con Breezone",
+  "Rechercher un module ou un appareil": "Buscar un módulo o un aparato",
+  "Aucun module ne correspond à « {query} ».":
+    "Ningún módulo corresponde a «{query}».",
   "Ne rien faire": "No hacer nada",
   "Faire…": "Hacer…",
   "quand ce n'est plus vrai :": "cuando deja de ser cierto:",
@@ -2052,7 +2086,6 @@ const es: Record<string, string> = {
   "{value} demain": "{value} mañana",
   Licences: "Licencias",
   "Données météo : Open-Meteo.com": "Datos meteorológicos: Open-Meteo.com",
-  "Compte Netatmo": "Cuenta Netatmo",
   "La production solaire prévue selon la météo : maintenant, aujourd'hui, ce qui reste à produire et demain. Sans compte : seules la position de la ville et la description des panneaux sont envoyées.":
     "La producción solar prevista según el tiempo: ahora, hoy, lo que queda por producir y mañana. Sin cuenta: solo se envían la posición de la ciudad y la descripción de los paneles.",
   "Donnez la puissance crête des panneaux (en kWc, sur la facture de l'installateur), leur inclinaison et leur orientation.":
@@ -2073,6 +2106,84 @@ const es: Record<string, string> = {
   "Ses panneaux (puissance, inclinaison, orientation) se règlent dans Comptes et services ; la prévision est faite pour la ville de l'installation.":
     "Sus paneles (potencia, inclinación, orientación) se ajustan en Cuentas y servicios; la previsión se hace para la ciudad de la instalación.",
   "Compte ou service": "Cuenta o servicio",
+  "À 20 h, si la production prévue demain dépasse 10 kWh, prévenir pour y décaler lessives et recharges.":
+    "A las 20 h, si la producción prevista mañana supera 10 kWh, avisar para trasladar a ese día coladas y recargas.",
+  "aujourd'hui": "hoy",
+  "Beaucoup de soleil prévu demain : c'est le jour pour les lessives et la recharge.":
+    "Mucho sol previsto mañana: es el día para las coladas y la recarga.",
+  "Belle journée solaire demain : prévenir": "Día soleado mañana: avisar",
+  demain: "mañana",
+  "Prévision solaire": "Previsión solar",
+  Prévue: "Prevista",
+  "Production, prévision et consommation toutes les 15 minutes":
+    "Producción, previsión y consumo cada 15 minutos",
+  "Réglez Forecast.Solar dans Réglages › Comptes et services pour voir la production attendue.":
+    "Configura Forecast.Solar en Ajustes › Cuentas y servicios para ver la producción esperada.",
+  "Reste à produire": "Queda por producir",
+  "Selon la météo, l'orientation et la puissance des panneaux":
+    "Según el tiempo, la orientación y la potencia de los paneles",
+  "Soleil demain": "Sol mañana",
+  "sur {kwh} prévus": "de {kwh} previstos",
+  "Reprendre les pièces de son application":
+    "Recuperar las habitaciones de su aplicación",
+  "demande une autre version de l'interface des modules":
+    "necesita otra versión de la interfaz de módulos",
+  "demande Breezone {version}": "necesita Breezone {version}",
+  "demande {name} (version plus récente)":
+    "necesita {name} (una versión más reciente)",
+  "demande le compte {name}": "necesita la cuenta {name}",
+  "{name} {version} installé": "{name} {version} instalado",
+  "Bibliothèque de modules": "Biblioteca de módulos",
+  "Les modules publiés par Breezone, signés comme ses mises à jour. Seuls ceux qui fonctionnent avec ce serveur s'installent ; ils ne se chargent que lorsqu'un appareil ou un compte s'en sert.":
+    "Los módulos publicados por Breezone, firmados como sus actualizaciones. Solo se instalan los que funcionan con este servidor; solo se cargan cuando un aparato o una cuenta los usa.",
+  "Aucun module publié pour l'instant.": "Aún no hay módulos publicados.",
+  "version {version}": "versión {version}",
+  "Installé ({version})": "Instalado ({version})",
+  "Mettre à jour ({version})": "Actualizar ({version})",
+  Installer: "Instalar",
+  Incompatible: "Incompatible",
+  "Modules installés": "Módulos instalados",
+  "Ceux qui viennent de la bibliothèque, de Breezone ou d'un fichier. Ceux qui font partie de Breezone n'y figurent pas.":
+    "Los que vienen de la biblioteca, de Breezone o de un archivo. Los que forman parte de Breezone no aparecen.",
+  "Aucun pour l'instant.": "Ninguno por ahora.",
+  "Ne fonctionne pas avec cette version de Breezone":
+    "No funciona con esta versión de Breezone",
+  "En service": "En uso",
+  "Chargé seulement quand il sert": "Se carga solo cuando se usa",
+  "Version précédente": "Versión anterior",
+  "Le module est supprimé de ce serveur. Retirez d'abord ses appareils et son compte.":
+    "El módulo se elimina de este servidor. Quite primero sus aparatos y su cuenta.",
+  "Installer depuis un fichier": "Instalar desde un archivo",
+  "Le paquet (.bzm) et sa signature (.bzm.sig) : un module que Breezone n'a pas signé est refusé.":
+    "El paquete (.bzm) y su firma (.bzm.sig): un módulo que Breezone no firmó se rechaza.",
+  Paquet: "Paquete",
+  Signature: "Firma",
+  Bibliothèque: "Biblioteca",
+  "Des modules installés sont concernés":
+    "Algunos módulos instalados se ven afectados",
+  "{id} {version} sera remplacé par la version {replacement}, compatible.":
+    "{id} {version} se sustituirá por la versión {replacement}, compatible.",
+  "{id} {version} ne fonctionnera plus : il sera désactivé, sans être supprimé.":
+    "{id} {version} dejará de funcionar: se desactivará, sin eliminarse.",
+  "non officiel · {name}": "no oficial · {name}",
+  "Source « {name} » illisible : {error}":
+    "Fuente « {name} » ilegible: {error}",
+  "en développement, non signé": "en desarrollo, sin firmar",
+  "Sources de modules": "Fuentes de módulos",
+  "La bibliothèque de Breezone, et celles que vous ajoutez : chacune signe ses modules avec sa propre clé. Un module venu d'une autre source ne remplace jamais un module de Breezone.":
+    "La biblioteca de Breezone y las que añada: cada una firma sus módulos con su propia clave. Un módulo de otra fuente nunca sustituye a un módulo de Breezone.",
+  officielle: "oficial",
+  Activée: "Activada",
+  "Retirer la source « {name} » ?": "¿Quitar la fuente « {name} »?",
+  "Ses modules ne sont plus proposés. Une source dont des modules sont installés ne se retire pas.":
+    "Sus módulos dejan de proponerse. Una fuente con módulos instalados no se puede quitar.",
+  "Ajouter une source": "Añadir una fuente",
+  "L'adresse du dossier de son index.json (HTTPS, ou HTTP sur le réseau local) et sa clé publique Ed25519, en base64.":
+    "La dirección de la carpeta de su index.json (HTTPS, o HTTP en la red local) y su clave pública Ed25519, en base64.",
+  "Clé publique": "Clave pública",
+  "Module {name} installé": "Módulo {name} instalado",
+  "Installer le module": "Instalar el módulo",
+  "Installer (non officiel · {name})": "Instalar (no oficial · {name})",
 }
 
 export default es

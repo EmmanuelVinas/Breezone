@@ -1,0 +1,34 @@
+{
+  "service": "energy.history",
+  "version": 1,
+  "revision": 0,
+  "label": { "fr": "Relevés du compteur du réseau", "en": "Readings of the grid meter", "es": "Lecturas del contador de la red" },
+  "queries": [
+    {
+      "name": "days",
+      "label": { "fr": "Énergie par jour", "en": "Energy per day", "es": "Energía por día" },
+      "params": [
+        { "name": "from", "type": "string", "label": { "fr": "Du (AAAA-MM-JJ)", "en": "From (YYYY-MM-DD)", "es": "Desde (AAAA-MM-DD)" } },
+        { "name": "until", "type": "string", "label": { "fr": "Au (AAAA-MM-JJ, inclus)", "en": "Until (YYYY-MM-DD, included)", "es": "Hasta (AAAA-MM-DD, incluido)" } }
+      ],
+      "list": true,
+      "result": [
+        { "name": "day", "type": "string", "label": { "fr": "Jour", "en": "Day", "es": "Día" } },
+        { "name": "consumption", "type": "number", "unit": "kWh", "optional": true, "label": { "fr": "Consommée", "en": "Consumed", "es": "Consumida" } },
+        { "name": "production", "type": "number", "unit": "kWh", "optional": true, "label": { "fr": "Injectée", "en": "Fed in", "es": "Inyectada" } }
+      ]
+    },
+    {
+      "name": "curve",
+      "label": { "fr": "Puissance moyenne par demi-heure", "en": "Mean power per half hour", "es": "Potencia media por media hora" },
+      "params": [
+        { "name": "day", "type": "string", "label": { "fr": "Jour (AAAA-MM-JJ)", "en": "Day (YYYY-MM-DD)", "es": "Día (AAAA-MM-DD)" } }
+      ],
+      "list": true,
+      "result": [
+        { "name": "ts", "type": "integer", "unit": "s", "label": { "fr": "Début", "en": "Start", "es": "Inicio" } },
+        { "name": "power", "type": "number", "unit": "W", "label": { "fr": "Puissance", "en": "Power", "es": "Potencia" } }
+      ]
+    }
+  ]
+}

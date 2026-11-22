@@ -21,7 +21,7 @@ pub mod tplink;
 pub mod trydan;
 
 use crate::db::{self, Db};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::future::Future;
@@ -72,6 +72,9 @@ pub struct Described {
 /// Values of the traits of one device.
 pub type State = Map<String, Value>;
 
+/// Forecast curves by name (`power`…): (unix time, value), in time order.
+pub type Forecast = std::collections::BTreeMap<String, Vec<(i64, f64)>>;
+
 /// What every driver implements.
 pub trait Driver: Send + Sync {
     /// Identifies the hardware and lists its devices.
@@ -97,6 +100,21 @@ pub trait Driver: Send + Sync {
     fn activate_scene<'a>(&'a self, id: &'a str) -> DriverFuture<'a, ()> {
         Box::pin(async move { Err(DriverError::Unsupported(format!("scene {id}"))) })
     }
+    /// The source is removed: the hardware forgets Breezone (its pairing removed).
+    fn forget(&self) -> DriverFuture<'_, ()> {
+        Box::pin(async { Ok(()) })
+    }
+    /// The schedules the hardware keeps and runs itself (`schedule.hardware`).
+    fn schedules(&self) -> DriverFuture<'_, Vec<Schedule>> {
+        Box::pin(async { Err(DriverError::Unsupported("schedules".into())) })
+    }
+    /// Creates a schedule (empty id) or changes it; its id.
+    fn save_schedule<'a>(&'a self, _schedule: &'a Schedule) -> DriverFuture<'a, String> {
+        Box::pin(async { Err(DriverError::Unsupported("schedules".into())) })
+    }
+    fn delete_schedule<'a>(&'a self, _id: &'a str) -> DriverFuture<'a, ()> {
+        Box::pin(async { Err(DriverError::Unsupported("schedules".into())) })
+    }
     /// Gives the hardware a key of its maker that unlocks more of its data (Renson); true once it
     /// accepts it. The hardware keeps it: Breezone does not.
     fn unlock<'a>(&'a self, _key: &'a str) -> DriverFuture<'a, bool> {
@@ -119,10 +137,52 @@ pub trait Driver: Send + Sync {
     fn picture<'a>(&'a self, _reference: &'a str) -> DriverFuture<'a, (Vec<u8>, &'static str)> {
         Box::pin(async { Err(DriverError::Unsupported("no picture from this module".into())) })
     }
+    /// The curves a device forecasts (its trait's `forecast`), by name: times and values, sorted.
+    fn forecast<'a>(&'a self, _reference: &'a str) -> DriverFuture<'a, Forecast> {
+        Box::pin(async { Err(DriverError::Unsupported("no forecast from this module".into())) })
+    }
     /// What the hardware says about itself, raw, to understand how a model behaves (support).
     fn diagnostic(&self) -> DriverFuture<'_, Value> {
         Box::pin(async { Ok(Value::Null) })
     }
+}
+
+/// What a schedule of the hardware does at its end: the same action with these parameters.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ScheduleEnd {
+    /// "HH:MM"
+    pub time: String,
+    #[serde(default)]
+    pub params: Map<String, Value>,
+}
+
+/// A schedule the hardware keeps and runs itself (`schedule.hardware`): on these days at this
+/// time, an action of a trait applied to devices of its source.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Schedule {
+    /// Its id in the hardware (empty for a new one).
+    #[serde(default)]
+    pub id: String,
+    pub name: String,
+    #[serde(default = "crate::yes")]
+    pub enabled: bool,
+    /// ISO weekdays (1 Monday … 7 Sunday).
+    pub days: Vec<u8>,
+    /// "HH:MM"
+    pub time: String,
+    /// The devices of the source it drives.
+    pub references: Vec<String>,
+    #[serde(rename = "trait")]
+    pub trait_name: String,
+    pub action: String,
+    #[serde(default)]
+    pub params: Map<String, Value>,
+    #[serde(default)]
+    pub end: Option<ScheduleEnd>,
+    #[serde(default = "crate::yes")]
+    pub editable: bool,
+    #[serde(default)]
+    pub note: Option<String>,
 }
 
 /// A press of a button of a remote (`button@1`).
@@ -137,21 +197,34 @@ pub struct Press {
     pub press: &'static str,
 }
 
+/// What a driver tells without being asked.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Heard {
+    Press(Press),
+    /// Something changed on the hardware of this source: it is read again now.
+    Changed(i64),
+}
+
 /// Where a driver sends what it hears, for its source.
 #[derive(Debug, Clone)]
 pub struct Sink {
     source_id: i64,
-    tx: tokio::sync::mpsc::UnboundedSender<Press>,
+    tx: tokio::sync::mpsc::UnboundedSender<Heard>,
 }
 
 impl Sink {
-    pub fn new(source_id: i64, tx: tokio::sync::mpsc::UnboundedSender<Press>) -> Self {
+    pub fn new(source_id: i64, tx: tokio::sync::mpsc::UnboundedSender<Heard>) -> Self {
         Self { source_id, tx }
     }
 
     /// False once nobody listens any more (the server stops).
     pub fn press(&self, reference: &str, button: u32, press: &'static str) -> bool {
-        self.tx.send(Press { source_id: self.source_id, reference: reference.to_string(), button, press }).is_ok()
+        self.tx.send(Heard::Press(Press { source_id: self.source_id, reference: reference.to_string(), button, press })).is_ok()
+    }
+
+    /// Asks for the source to be read again (the hardware said something changed).
+    pub fn changed(&self) -> bool {
+        self.tx.send(Heard::Changed(self.source_id)).is_ok()
     }
 }
 
@@ -175,61 +248,59 @@ pub struct Scene {
 #[derive(Debug, Clone, Serialize)]
 pub struct ConfigField {
     pub name: &'static str,
-    /// "string" | "integer" | "number" | "password" (kept encrypted, in the source's secret: never
-    /// shown again, left as it is when not given)
+    /// "string" | "integer" | "number" | "bool" | "password" (kept encrypted, in the source's
+    /// secret: never shown again, left as it is when not given)
     #[serde(rename = "type")]
     pub kind: &'static str,
     pub optional: bool,
     pub label: crate::i18n::Text,
 }
 
-/// A driver this server has.
+/// A driver this server has (`GET /api/drivers`), from its module's manifest.
 #[derive(Debug, Clone, Serialize)]
 pub struct DriverInfo {
     pub id: &'static str,
     pub label: &'static str,
     /// `trait@version` its devices may have.
-    pub provides: Vec<&'static str>,
+    pub provides: Vec<String>,
     /// Models recognised by name (others of the same family may work generically).
     pub models: Vec<String>,
     pub config: Vec<ConfigField>,
 }
 
+impl DriverInfo {
+    fn of(m: &'static crate::modules::manifest::Manifest) -> Self {
+        DriverInfo {
+            id: &m.id,
+            label: &m.name.fr,
+            provides: m.provides.traits.iter().filter_map(|t| crate::modules::manifest::Needed::parse(t)).map(|t| format!("{}@{}", t.name, t.major)).collect(),
+            models: m.models.clone(),
+            config: m
+                .config
+                .iter()
+                .map(|f| ConfigField {
+                    name: &f.name,
+                    kind: &f.kind,
+                    optional: f.optional,
+                    label: crate::i18n::Text { fr: f.label.fr.clone(), en: f.label.en.clone(), es: f.label.es.clone() },
+                })
+                .collect(),
+        }
+    }
+}
+
+/// The drivers of the modules, in the order of the lists.
 pub fn available() -> Vec<DriverInfo> {
-    vec![
-        shelly::info(),
-        trydan::info(),
-        hoymiles::info(),
-        homekit::info(),
-        hue::info(),
-        renson::info(),
-        netatmo::info(),
-        ezviz::info(),
-        forecast_solar::info(),
-        tasmota::info(),
-        reolink::info(),
-        tplink::info(),
-        esphome::info(),
-    ]
+    crate::modules::with_role(crate::modules::manifest::Role::Driver).map(DriverInfo::of).collect()
 }
 
 /// The driver of a source, from its configuration and its secret (decrypted).
 pub fn create(driver: &str, config: &Value, secret: Option<&str>) -> Result<Arc<dyn Driver>, String> {
-    match driver {
-        "shelly" => Ok(Arc::new(shelly::Shelly::new(config)?)),
-        "trydan" => Ok(Arc::new(trydan::Trydan::new(config)?)),
-        "hoymiles" => Ok(Arc::new(hoymiles::Hoymiles::new(config)?)),
-        "homekit" => Ok(Arc::new(homekit::HomeKit::new(config, secret)?)),
-        "hue" => Ok(Arc::new(hue::Hue::new(config, secret)?)),
-        "renson" => Ok(Arc::new(renson::Renson::new(config)?)),
-        "esphome" => Ok(Arc::new(esphome::EspHome::new(config, secret)?)),
-        "tplink" => Ok(Arc::new(tplink::TpLink::new(config, secret)?)),
-        "reolink" => Ok(Arc::new(reolink::Reolink::new(config, secret)?)),
-        "tasmota" => Ok(Arc::new(tasmota::Tasmota::new(config, secret)?)),
-        "forecast_solar" => Ok(Arc::new(forecast_solar::ForecastSolar::new(config, secret)?)),
+    match crate::modules::native::get(driver).map(|n| &n.create) {
+        Some(crate::modules::native::Create::Config(make)) => make(config, secret),
         // Created by the runtime, which holds what reaches its account (see `Runtime::reload`).
-        "netatmo" => Err("the Netatmo module comes with its linked account".into()),
-        other => Err(format!("unknown driver: {other}")),
+        Some(crate::modules::native::Create::Account(_)) => Err(format!("the {driver} module comes with its linked account")),
+        _ => Err(format!("unknown driver: {driver}")),
     }
 }
 
@@ -513,11 +584,10 @@ pub struct Runtime {
     /// When each lost source was last looked for on the network.
     searched: RwLock<HashMap<i64, Instant>>,
     /// The presses of the remotes, sent by the drivers that listen (`Driver::listen`).
-    presses: tokio::sync::mpsc::UnboundedSender<Press>,
-    heard: std::sync::Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<Press>>>,
-    /// Netatmo's address (the cloud module reaches its linked account).
-    netatmo_url: String,
-    ezviz_url: String,
+    presses: tokio::sync::mpsc::UnboundedSender<Heard>,
+    heard: std::sync::Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<Heard>>>,
+    /// What the modules that come with their linked account are made from.
+    context: crate::modules::native::Context,
     /// When this server started: a source not read since is not lost before `RELOCATE_AFTER`.
     started: i64,
 }
@@ -547,9 +617,11 @@ impl Goal {
 }
 
 impl Runtime {
-    /// `key`: decrypts the secrets of the sources (the server key).
-    pub fn new(db: Db, key: [u8; 32], netatmo_url: String, ezviz_url: String) -> Self {
+    /// `key`: decrypts the secrets of the sources (the server key); `urls`: the address of the
+    /// maker's service of the modules that reach theirs through an account, by module.
+    pub fn new(db: Db, key: [u8; 32], urls: HashMap<String, String>) -> Self {
         let (presses, heard) = tokio::sync::mpsc::unbounded_channel();
+        let context_db = db.clone();
         Self {
             db,
             key,
@@ -558,8 +630,7 @@ impl Runtime {
             searched: RwLock::new(HashMap::new()),
             presses,
             heard: std::sync::Mutex::new(Some(heard)),
-            netatmo_url,
-            ezviz_url,
+            context: crate::modules::native::Context { db: context_db, key, urls },
             started: db::now(),
         }
     }
@@ -570,7 +641,9 @@ impl Runtime {
         let mut sources = self.sources.write().await;
         let mut next = HashMap::new();
         for source in rows {
-            let previous = sources.remove(&source.id).filter(|r| r.source.driver == source.driver && r.source.config == source.config && r.source.secret == source.secret);
+            let previous = sources
+                .remove(&source.id)
+                .filter(|r| r.source.driver == source.driver && r.source.config == source.config && r.source.secret == source.secret && r.source.enabled == source.enabled);
             let running = match previous {
                 Some(mut r) => {
                     r.source = source;
@@ -579,12 +652,14 @@ impl Runtime {
                 None => {
                     let config: Value = serde_json::from_str(&source.config).unwrap_or(Value::Null);
                     let secret = source.secret.as_deref().and_then(|s| crate::crypto::decrypt(&self.key, s));
-                    let created = match source.driver.as_str() {
-                        "netatmo" => Ok(Arc::new(netatmo::Netatmo::new(self.db.clone(), self.key, self.netatmo_url.clone())) as Arc<dyn Driver>),
-                        "ezviz" => Ok(Arc::new(ezviz::Ezviz::new(self.db.clone(), self.key, self.ezviz_url.clone())) as Arc<dyn Driver>),
-                        _ => create(&source.driver, &config, secret.as_deref()),
+                    // A module is loaded only for a source that runs.
+                    let created = match crate::modules::native::get(&source.driver).map(|n| &n.create) {
+                        _ if !source.enabled => Err(String::new()),
+                        Some(crate::modules::native::Create::Account(make)) => Ok(make(&self.context)),
+                        _ => crate::modules::open_source(&source.driver, Some(source.id), &config, secret.as_deref()).await,
                     };
                     let (driver, error) = match created {
+                        Err(e) if e.is_empty() => (None, None),
                         Ok(d) => {
                             d.listen(Sink::new(source.id, self.presses.clone()));
                             (Some(d), None)
@@ -615,9 +690,11 @@ impl Runtime {
 
     /// Reads one source: what it has (once, or after an error), then its state.
     pub async fn poll(&self, id: i64) {
-        let (driver, known) = match self.sources.read().await.get(&id) {
-            Some(r) if r.source.enabled => (r.driver.clone(), !r.described.is_empty() && r.status.state == "online"),
-            Some(_) => {
+        // The read lock is let go before the write one is asked.
+        let seen = self.sources.read().await.get(&id).map(|r| (r.source.enabled, r.driver.clone(), !r.described.is_empty() && r.status.state == "online"));
+        let (driver, known) = match seen {
+            Some((true, driver, known)) => (driver, known),
+            Some((false, ..)) => {
                 if let Some(r) = self.sources.write().await.get_mut(&id) {
                     r.status.state = "disabled";
                 }
@@ -753,8 +830,11 @@ impl Runtime {
     pub fn hear(self: Arc<Self>) {
         let Some(mut heard) = self.heard.lock().unwrap_or_else(|e| e.into_inner()).take() else { return };
         tokio::spawn(async move {
-            while let Some(p) = heard.recv().await {
-                self.pressed(p).await;
+            while let Some(h) = heard.recv().await {
+                match h {
+                    Heard::Press(p) => self.pressed(p).await,
+                    Heard::Changed(id) => self.poll(id).await,
+                }
             }
         });
     }
@@ -843,13 +923,15 @@ impl Runtime {
         }
     }
 
-    /// The addresses of the HomeKit accessories added: a scan finds them through mDNS only.
+    /// The addresses of the sources of modules found by mDNS only (HomeKit accessories): a scan does
+    /// not connect to them, their few connections are kept for their sessions.
     pub async fn quiet_hosts(&self) -> Vec<std::net::Ipv4Addr> {
+        let browsed_only = |id: &str| crate::modules::manifest(id).is_some_and(|m| !m.discovery.mdns.is_empty() && m.discovery.tcp.is_empty());
         self.sources
             .read()
             .await
             .values()
-            .filter(|r| r.source.driver == "homekit")
+            .filter(|r| browsed_only(&r.source.driver))
             .filter_map(|r| {
                 let config: Value = serde_json::from_str(&r.source.config).ok()?;
                 let host = config["host"].as_str()?.trim();
@@ -896,7 +978,7 @@ impl Runtime {
             }
         }
         let Some(subnet) = crate::discovery::global_subnet(&self.db, configured).await else { return };
-        match crate::discovery::scan_products(&subnet, airzone_port, &self.quiet_hosts().await).await {
+        match crate::discovery::scan_products(&subnet, airzone_port, &self.quiet_hosts().await, &[]).await {
             Ok(products) => {
                 self.relocate(&products, &lost).await;
             }
@@ -908,13 +990,14 @@ impl Runtime {
     /// hardware, and whether the source followed it to another address.
     pub async fn locate(&self, id: i64, configured: Option<&str>, airzone_port: u16) -> Result<Located, String> {
         let subnet = crate::discovery::global_subnet(&self.db, configured).await.ok_or_else(|| "no network to scan: set it in Settings".to_string())?;
-        let products = crate::discovery::scan_products(&subnet, airzone_port, &self.quiet_hosts().await).await?;
+        let products = crate::discovery::scan_products(&subnet, airzone_port, &self.quiet_hosts().await, &[]).await?;
         self.searched.write().await.insert(id, Instant::now());
         let identity = self.sources.read().await.get(&id).and_then(|r| Some((config_identity(&r.source)?, r.source.driver.clone())));
         let seen = identity.as_ref().and_then(|(identity, driver)| {
             let p = products.iter().find(|p| p.driver == driver.as_str() && p.device_id.as_deref() == Some(identity.as_str()))?;
-            // A HomeKit accessory that can be added again is no longer paired with anyone.
-            Some(Seen { host: p.host.clone(), paired: (p.driver == "homekit").then_some(!p.supported) })
+            // Hardware paired with a code (HomeKit) that can be added again is no longer paired with anyone.
+            let by_code = crate::modules::manifest(p.driver).is_some_and(|m| m.pairing == crate::modules::manifest::Pairing::Code);
+            Some(Seen { host: p.host.clone(), paired: by_code.then_some(!p.supported) })
         });
         let moved = !self.relocate(&products, &[id]).await.is_empty();
         Ok(Located { identified: identity.is_some(), seen, moved })
@@ -1000,6 +1083,27 @@ impl Runtime {
         r.cloud_view.iter().map(|v| CloudDevice { state: r.states.get(&v.reference).cloned(), ..v.clone() }).collect()
     }
 
+    /// Makes the sources of a module again (it was updated or rolled back) and reads them: whether
+    /// each one that runs answered (`None`: it has no source that runs).
+    pub async fn restart_module(&self, module: &str) -> sqlx::Result<Option<bool>> {
+        let ids: Vec<i64> = {
+            let mut sources = self.sources.write().await;
+            let ids = sources.values().filter(|r| r.source.driver == module && r.source.enabled).map(|r| r.source.id).collect();
+            sources.retain(|_, r| r.source.driver != module);
+            ids
+        };
+        self.reload().await?;
+        if ids.is_empty() {
+            return Ok(None);
+        }
+        let mut all = true;
+        for id in ids {
+            self.poll(id).await;
+            all &= self.status(id).await.is_some_and(|s| s.state == "online");
+        }
+        Ok(Some(all))
+    }
+
     pub async fn status(&self, id: i64) -> Option<SourceStatus> {
         self.sources.read().await.get(&id).map(|r| r.status.clone())
     }
@@ -1022,6 +1126,15 @@ impl Runtime {
 
     /// Applies an action, then reads the source again so that the new state shows at once.
     /// The driver of a configured source.
+    /// The modules that have a driver running for a source now, with how many sources.
+    pub async fn loaded(&self) -> HashMap<String, usize> {
+        let mut out = HashMap::new();
+        for r in self.sources.read().await.values().filter(|r| r.driver.is_some()) {
+            *out.entry(r.source.driver.clone()).or_insert(0) += 1;
+        }
+        out
+    }
+
     pub async fn driver(&self, source_id: i64) -> Option<Arc<dyn Driver>> {
         self.sources.read().await.get(&source_id).and_then(|r| r.driver.clone())
     }
@@ -1038,6 +1151,12 @@ impl Runtime {
     pub async fn picture(&self, source_id: i64, reference: &str) -> Result<(Vec<u8>, &'static str), DriverError> {
         let driver = self.sources.read().await.get(&source_id).and_then(|r| r.driver.clone()).ok_or_else(|| DriverError::Unreachable("source not configured".into()))?;
         driver.picture(reference).await
+    }
+
+    /// The forecast curves of a device of a source.
+    pub async fn forecast(&self, source_id: i64, reference: &str) -> Result<Forecast, DriverError> {
+        let driver = self.sources.read().await.get(&source_id).and_then(|r| r.driver.clone()).ok_or_else(|| DriverError::Unreachable("source not configured".into()))?;
+        driver.forecast(reference).await
     }
 
     pub async fn act(&self, source_id: i64, reference: &str, trait_name: &str, action: &str, params: &State) -> Result<(), DriverError> {
@@ -1226,7 +1345,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let db = db::connect(&dir.join("breezone.db")).await.unwrap();
-        let rt = Runtime::new(db.clone(), [0; 32], String::new(), String::new());
+        let rt = Runtime::new(db.clone(), [0; 32], HashMap::new());
         let local_id = db::insert_source(&db, "homekit", "Passerelle", "{}").await.unwrap();
         let cloud_id = db::insert_source(&db, "netatmo", "Netatmo", "{}").await.unwrap();
         let sources = db::list_sources(&db).await.unwrap();

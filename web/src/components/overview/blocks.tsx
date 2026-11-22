@@ -9,8 +9,11 @@ import type {
   EnergyLive,
   Mode,
   Routine,
+  TraitInfo,
 } from "@/lib/api"
 import { api, isDeviceAction } from "@/lib/api"
+import { primaryText } from "@/lib/generic-device"
+import { GenericControls } from "@/components/generic-controls"
 import { CHARGER_STATUS, chargerStatus } from "@/lib/charger"
 import { coverState, coverText } from "@/lib/covers"
 import { deviceType, DeviceTypeIcon } from "@/lib/device-icons"
@@ -38,7 +41,7 @@ import { LIGHT_BRAND, LightCard, LightPanel, LightScenes } from "@/pages/lights"
 import { ShutterCard } from "@/pages/shutters"
 import { House, isRoom, isUnit, RoomCard } from "@/pages/ventilation"
 import { ChargerCard, PowerCurve } from "@/pages/charging"
-import { DaysCard, TodayCurve } from "@/pages/solar"
+import { DaysCard, ForecastCard, TodayCurve } from "@/pages/solar"
 import { SolarPanels } from "@/components/solar-panels"
 import { ZoneHistory } from "@/components/zone-history"
 import { AirQualityCard } from "@/components/air-quality"
@@ -130,7 +133,10 @@ function ShutterGlyph({ position }: { position: number | null }) {
 }
 
 /** What a device shows on a line: its state in words, its value, how its icon looks. */
-function look(d: DeviceView): {
+function look(
+  d: DeviceView,
+  catalog?: TraitInfo[]
+): {
   text: string | null
   value: string | null
   tone: string | null
@@ -221,8 +227,12 @@ function look(d: DeviceView): {
     case "sensor":
       return { ...none, value: sensorText(s) }
     default: {
+      // A kind this version does not know: what its traits' descriptors say sums it up.
       const p = num(s.power)
-      return { ...none, value: p !== null ? watts(p) : null }
+      return {
+        ...none,
+        value: primaryText(d, catalog) ?? (p !== null ? watts(p) : null),
+      }
     }
   }
 }
@@ -230,7 +240,12 @@ function look(d: DeviceView): {
 /** A device on a line of a card: what it is now, and its curve when the card shows one. Only to
  * look at: a device is driven from its own card. */
 function DeviceLine({ d, curve }: { d: DeviceView; curve?: string }) {
-  const { text, value, tone, shutter } = look(d)
+  const catalog = useQuery({
+    queryKey: ["traits"],
+    queryFn: api.traits,
+    staleTime: Infinity,
+  })
+  const { text, value, tone, shutter } = look(d, catalog.data)
   const history = useQuery({
     queryKey: ["device-history", d.id, 24],
     queryFn: () => api.deviceHistory(d.id, 24, 96),
@@ -578,6 +593,16 @@ function DeviceBlock({ id, curve }: { id: number; curve?: string }) {
     }
   }
   if (curve) return <MeasureTile d={d} curve={curve} />
+  // A kind this version does not know: its controls as its traits describe them.
+  if (deviceType(d).id === "other")
+    return (
+      <Card className="h-full rounded-3xl">
+        <CardContent className="grid gap-3">
+          <DeviceLine d={d} />
+          <GenericControls d={d} />
+        </CardContent>
+      </Card>
+    )
   const on = state(d).on === true
   return (
     <Card className="h-full rounded-3xl" style={glow(tint([d]))}>
@@ -1122,6 +1147,8 @@ export function BlockView({
       return <DaysCard />
     case "solar_panels":
       return <SolarPanelsBlock />
+    case "solar_forecast":
+      return <ForecastCard />
     case "ventilation_house":
       return <VentilationBlock />
     case "ventilation_rooms":

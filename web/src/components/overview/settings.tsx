@@ -192,6 +192,7 @@ function available(home: Home): BlockType[] {
       return home.devices.some((d) => measuresAir(d, home))
     if (b === "light_scenes" || b === "light_panel") return has("light@1")
     if (b === "charger" || b === "charger_curve") return has("ev.charger@1")
+    if (b === "solar_forecast") return has("solar.forecast@1")
     if (b.startsWith("solar_")) return has("solar.inverter@1")
     if (b === "ventilation_house") return has("ventilation.unit@1")
     if (b === "ventilation_rooms") return ventilationFields(home).length > 0

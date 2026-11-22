@@ -42,6 +42,7 @@ import com.breezone.app.resources.zone_history_24h
 import com.breezone.app.resources.zone_history_7d
 import org.jetbrains.compose.resources.stringResource
 import com.breezone.app.data.Room
+import com.breezone.app.ui.screens.cardHeight
 import com.breezone.app.ui.theme.Fz
 import kotlin.math.ln
 import kotlin.math.pow
@@ -91,6 +92,7 @@ fun DeviceGroupCard(title: String, count: String?, trailing: @Composable () -> U
     Column(
         Modifier
             .fillMaxWidth()
+            .cardHeight()
             .clip(RoundedCornerShape(24.dp))
             .background(Fz.colors.card)
             .padding(horizontal = 16.dp, vertical = 10.dp),

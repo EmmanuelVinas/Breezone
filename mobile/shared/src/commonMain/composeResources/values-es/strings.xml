@@ -460,6 +460,12 @@
     <string name="energy_tile_solar">%1$s solar</string>
     <string name="energy_tile_grid">red %1$s</string>
     <string name="energy_empty">Ninguna medida de energía: asigne un papel a las medidas en Ajustes › Módulos, en la web.</string>
+    <string name="energy_flow_hint">Actualizado cada 5 s · los puntos van en el sentido de la energía</string>
+    <string name="energy_covered">%1$d % cubiertos</string>
+    <string name="energy_surplus">Excedente %1$s</string>
+    <string name="energy_grid_drawn">tomados de la red</string>
+    <string name="energy_grid_injected">inyectados</string>
+    <string name="energy_battery_idle">en reposo</string>
     <string name="energy_now">Ahora mismo</string>
     <string name="energy_today">Hoy</string>
     <string name="energy_solar">Solar</string>
@@ -634,6 +640,12 @@
     <string name="block_charger_curve_hint">Lo que consumió en el periodo</string>
     <string name="block_solar_today">Producción solar</string>
     <string name="block_solar_today_hint">Ahora, y la curva del día</string>
+    <string name="block_solar_forecast">Previsión solar</string>
+    <string name="block_solar_forecast_hint">Producción esperada hoy y mañana</string>
+    <string name="solar_forecast_title">Previsión solar</string>
+    <string name="solar_forecast_today">Hoy</string>
+    <string name="solar_forecast_remaining">Queda por producir</string>
+    <string name="solar_forecast_tomorrow">Mañana</string>
     <string name="block_solar_panels">Microinversores y paneles</string>
     <string name="block_solar_panels_hint">Lo que produce cada panel</string>
     <string name="block_ventilation_house">Ventilación de la casa</string>
@@ -707,4 +719,20 @@
     <string name="tempo_unknown">aún no anunciado</string>
     <string name="chart_hours_ago">-%1$s h</string>
     <string name="chart_days_ago">-%1$s d</string>
+    <string name="modules_title">Módulos</string>
+    <string name="modules_title_server">Módulos · %1$s</string>
+    <string name="modules_hint">Los módulos instalados en este servidor. Se instalan y actualizan desde su interfaz web (Módulos › Biblioteca).</string>
+    <string name="modules_none">Ningún módulo instalado.</string>
+    <string name="modules_line">%1$s · %2$s · %3$s</string>
+    <string name="modules_origin_builtin">incluido con Breezone</string>
+    <string name="modules_origin_library">biblioteca</string>
+    <string name="modules_origin_file">archivo</string>
+    <string name="modules_origin_dev">en desarrollo</string>
+    <string name="modules_loaded">en servicio</string>
+    <string name="modules_idle">cargado cuando se usa</string>
+    <string name="modules_incompatible">no funciona con esta versión de Breezone</string>
+    <string name="common_yes">Sí</string>
+    <string name="common_no">No</string>
+    <string name="common_plus">Más</string>
+    <string name="common_minus">Menos</string>
 </resources>

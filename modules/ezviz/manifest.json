@@ -1,0 +1,83 @@
+{
+  "id": "ezviz",
+  "version": "1.0.0",
+  "name": {
+    "en": "EZVIZ (cloud)",
+    "es": "EZVIZ (cloud)",
+    "fr": "EZVIZ (cloud)"
+  },
+  "roles": [
+    "account",
+    "driver"
+  ],
+  "requires": {
+    "api": "^1.0"
+  },
+  "provides": {
+    "traits": [
+      "camera@1.0",
+      "button@1.0"
+    ]
+  },
+  "models": [
+    "EZVIZ DB1C, DB2, EP3x…",
+    "EZVIZ C3, C6, C8…"
+  ],
+  "permissions": {
+    "network": {
+      "lan": false,
+      "hosts": [
+        "*.ezvizlife.com",
+        "*.ezviz.com",
+        "*.ys7.com"
+      ]
+    }
+  },
+  "read_every_s": 8,
+  "cloud": true,
+  "optional_calls": [
+    "listen",
+    "picture",
+    "diagnostic"
+  ],
+  "config": [
+    {
+      "name": "account",
+      "type": "string",
+      "label": {
+        "fr": "Identifiant (e-mail ou téléphone)",
+        "en": "User name (e-mail or phone)",
+        "es": "Usuario (correo o teléfono)"
+      }
+    },
+    {
+      "name": "password",
+      "type": "password",
+      "label": {
+        "fr": "Mot de passe",
+        "en": "Password",
+        "es": "Contraseña"
+      }
+    },
+    {
+      "name": "code",
+      "type": "password",
+      "optional": true,
+      "label": {
+        "fr": "Code reçu",
+        "en": "Code received",
+        "es": "Código recibido"
+      }
+    },
+    {
+      "name": "image_code",
+      "type": "password",
+      "optional": true,
+      "label": {
+        "fr": "Code de vérification des caméras",
+        "en": "Verification code of the cameras",
+        "es": "Código de verificación de las cámaras"
+      }
+    }
+  ]
+}

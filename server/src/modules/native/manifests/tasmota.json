@@ -1,0 +1,17 @@
+{
+  "id": "tasmota",
+  "version": "1.0.0",
+  "name": {"en": "Tasmota", "es": "Tasmota", "fr": "Tasmota"},
+  "roles": ["driver"],
+  "requires": {"api": "^1.0"},
+  "provides": {"traits": ["switch.relay@1.0", "light@1.0", "energy.power@1.0", "energy.meter@1.0", "environment.sensor@1.0"]},
+  "models": ["Sonoff (Tasmota)", "Tasmota"],
+  "config": [
+    {"name": "host", "type": "string", "label": {"en": "IP address or name", "es": "Dirección IP o nombre", "fr": "Adresse IP ou nom"}},
+    {"name": "password", "type": "password", "optional": true, "label": {"en": "Web interface password (if any)", "es": "Contraseña de la interfaz web (si la hay)", "fr": "Mot de passe de l'interface web (s'il y en a un)"}}
+  ],
+  "discovery": {"tcp": [80], "http": [{"port": 80, "path": "/cm?cmnd=Status%200", "contains": "tasmota"}]},
+  "permissions": {"network": {"lan": true}},
+  "read_every_s": 10,
+  "optional_calls": ["probe", "diagnostic"]
+}

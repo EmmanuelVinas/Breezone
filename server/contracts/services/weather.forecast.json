@@ -1,0 +1,44 @@
+{
+  "service": "weather.forecast",
+  "version": 1,
+  "revision": 0,
+  "label": { "fr": "Prévisions météo", "en": "Weather forecast", "es": "Previsión meteorológica" },
+  "queries": [
+    {
+      "name": "now",
+      "label": { "fr": "Temps actuel et du jour", "en": "Weather now and today", "es": "Tiempo actual y del día" },
+      "params": [
+        { "name": "lat", "type": "number", "min": -90, "max": 90, "label": { "fr": "Latitude", "en": "Latitude", "es": "Latitud" } },
+        { "name": "lon", "type": "number", "min": -180, "max": 180, "label": { "fr": "Longitude", "en": "Longitude", "es": "Longitud" } }
+      ],
+      "result": [
+        { "name": "temperature", "type": "number", "unit": "°C", "optional": true, "label": { "fr": "Température", "en": "Temperature", "es": "Temperatura" } },
+        { "name": "apparent", "type": "number", "unit": "°C", "optional": true, "label": { "fr": "Ressentie", "en": "Feels like", "es": "Sensación" } },
+        { "name": "humidity", "type": "number", "unit": "%", "optional": true, "label": { "fr": "Humidité", "en": "Humidity", "es": "Humedad" } },
+        { "name": "code", "type": "integer", "optional": true, "label": { "fr": "Code du temps (OMM)", "en": "Weather code (WMO)", "es": "Código del tiempo (OMM)" } },
+        { "name": "precipitation", "type": "number", "unit": "mm", "optional": true, "label": { "fr": "Précipitations", "en": "Precipitation", "es": "Precipitación" } },
+        { "name": "wind", "type": "number", "unit": "km/h", "optional": true, "label": { "fr": "Vent", "en": "Wind", "es": "Viento" } },
+        { "name": "today_min", "type": "number", "unit": "°C", "optional": true, "label": { "fr": "Minimale du jour", "en": "Today's low", "es": "Mínima del día" } },
+        { "name": "today_max", "type": "number", "unit": "°C", "optional": true, "label": { "fr": "Maximale du jour", "en": "Today's high", "es": "Máxima del día" } },
+        { "name": "tomorrow_min", "type": "number", "unit": "°C", "optional": true, "label": { "fr": "Minimale de demain", "en": "Tomorrow's low", "es": "Mínima de mañana" } },
+        { "name": "tomorrow_max", "type": "number", "unit": "°C", "optional": true, "label": { "fr": "Maximale de demain", "en": "Tomorrow's high", "es": "Máxima de mañana" } },
+        { "name": "tomorrow_code", "type": "integer", "optional": true, "label": { "fr": "Temps de demain (OMM)", "en": "Tomorrow's weather (WMO)", "es": "Tiempo de mañana (OMM)" } }
+      ]
+    },
+    {
+      "name": "hours",
+      "label": { "fr": "Prochaines heures", "en": "Next hours", "es": "Próximas horas" },
+      "params": [
+        { "name": "lat", "type": "number", "min": -90, "max": 90, "label": { "fr": "Latitude", "en": "Latitude", "es": "Latitud" } },
+        { "name": "lon", "type": "number", "min": -180, "max": 180, "label": { "fr": "Longitude", "en": "Longitude", "es": "Longitud" } }
+      ],
+      "list": true,
+      "result": [
+        { "name": "ts", "type": "integer", "unit": "s", "label": { "fr": "Heure", "en": "Hour", "es": "Hora" } },
+        { "name": "temperature", "type": "number", "unit": "°C", "optional": true, "label": { "fr": "Température", "en": "Temperature", "es": "Temperatura" } },
+        { "name": "code", "type": "integer", "optional": true, "label": { "fr": "Code du temps (OMM)", "en": "Weather code (WMO)", "es": "Código del tiempo (OMM)" } },
+        { "name": "precipitation_probability", "type": "number", "unit": "%", "optional": true, "label": { "fr": "Risque de pluie", "en": "Chance of rain", "es": "Probabilidad de lluvia" } }
+      ]
+    }
+  ]
+}

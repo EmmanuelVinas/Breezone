@@ -1,6 +1,7 @@
 {
   "trait": "light",
   "version": 1,
+  "revision": 0,
   "label": { "fr": "Lumière", "en": "Light", "es": "Luz" },
   "state": [
     { "name": "on", "type": "bool", "label": { "fr": "Allumée", "en": "On", "es": "Encendida" } },
@@ -23,5 +24,19 @@
         { "name": "color", "type": "string", "optional": true, "label": { "fr": "Couleur (#rrvvbb)", "en": "Color (#rrggbb)", "es": "Color (#rrvvaa)" } }
       ]
     }
-  ]
+  ],
+  "ui": {
+    "kind": "light",
+    "primary": "on",
+    "card": [
+      {"widget": "toggle", "field": "on", "action": "set", "param": "on"},
+      {"widget": "slider", "field": "brightness", "action": "set", "param": "brightness"}
+    ],
+    "detail": [
+      {"widget": "toggle", "field": "on", "action": "set", "param": "on"},
+      {"widget": "slider", "field": "brightness", "action": "set", "param": "brightness"},
+      {"widget": "slider", "field": "color_temp", "action": "set", "param": "color_temp"},
+      {"widget": "color", "field": "color", "action": "set", "param": "color"}
+    ]
+  }
 }

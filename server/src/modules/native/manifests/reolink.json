@@ -1,0 +1,18 @@
+{
+  "id": "reolink",
+  "version": "1.0.0",
+  "name": {"en": "Reolink", "es": "Reolink", "fr": "Reolink"},
+  "roles": ["driver"],
+  "requires": {"api": "^1.0"},
+  "provides": {"traits": ["camera@1.0", "button@1.0"]},
+  "models": ["Reolink (caméras, sonnettes, enregistreurs)"],
+  "config": [
+    {"name": "host", "type": "string", "label": {"en": "IP address or name", "es": "Dirección IP o nombre", "fr": "Adresse IP ou nom"}},
+    {"name": "username", "type": "string", "optional": true, "label": {"en": "User (admin otherwise)", "es": "Usuario (admin si no)", "fr": "Utilisateur (admin sinon)"}},
+    {"name": "password", "type": "password", "label": {"en": "Password", "es": "Contraseña", "fr": "Mot de passe"}}
+  ],
+  "discovery": {"tcp": [80]},
+  "permissions": {"network": {"lan": true}},
+  "read_every_s": 5,
+  "optional_calls": ["probe", "listen", "picture", "diagnostic"]
+}

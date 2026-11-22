@@ -558,6 +558,7 @@ async fn a_lost_source_is_found_again_at_its_new_address() {
         note: None,
         supported: true,
         flags: 0,
+        install: None,
     };
 
     // Another Shelly on the network is not it.
@@ -672,14 +673,14 @@ async fn a_hue_bridge_is_added_with_its_button_and_drives_its_lights() {
     let host = format!("127.0.0.1:{port}");
 
     // Not without its button.
-    let (s, v) = server.call("POST", "/api/hue/link", t, Some(json!({"host": host, "name": "Philips Hue"}))).await;
+    let (s, v) = server.call("POST", "/api/modules/hue/pairing", t, Some(json!({"step": "link", "input": {"host": host}, "name": "Philips Hue"}))).await;
     assert_eq!(s, StatusCode::CONFLICT, "{v}");
     assert_eq!(v["code"], "button");
     let (s, _) = server.call("POST", "/api/sources", t, Some(json!({"driver":"hue","name":"x","config":{"host": host}}))).await;
     assert_eq!(s, StatusCode::BAD_REQUEST, "no bridge without its key");
 
     *bridge.pressed.lock().unwrap() = true;
-    let (s, source) = server.call("POST", "/api/hue/link", t, Some(json!({"host": host, "name": "Philips Hue"}))).await;
+    let (s, source) = server.call("POST", "/api/modules/hue/pairing", t, Some(json!({"step": "link", "input": {"host": host}, "name": "Philips Hue"}))).await;
     assert_eq!(s, StatusCode::CREATED, "{source}");
     assert_eq!(source["status"]["state"], "online", "{source}");
     assert_eq!(source["status"]["model"], "Philips Hue BSB002 (2 lumières)");
@@ -859,4 +860,57 @@ async fn a_routine_drives_the_devices_of_the_modules() {
     assert_eq!(s, StatusCode::FORBIDDEN);
     let (s, _) = server.call("DELETE", &format!("/api/routines/{id}"), Some(&bob), None).await;
     assert_eq!(s, StatusCode::FORBIDDEN);
+}
+
+/// The modules come from their manifests (docs/roadmap/modules.md, lot L2): listed with their state,
+/// loaded only for a source that runs, announced in the capabilities, and paired by steps.
+#[tokio::test]
+async fn modules_are_listed_and_loaded_only_when_used() {
+    let (server, token) = Server::start().await;
+    let t = Some(token.as_str());
+    let loaded = |v: &Value, id: &str| v.as_array().unwrap().iter().find(|m| m["id"] == id).map(|m| m["loaded"].clone());
+
+    let (code, modules) = server.call("GET", "/api/modules", t, None).await;
+    assert_eq!(code, StatusCode::OK, "{modules}");
+    let ids: Vec<&str> = modules.as_array().unwrap().iter().map(|m| m["id"].as_str().unwrap()).collect();
+    for id in ["shelly", "homekit", "hue", "netatmo", "rte", "weather"] {
+        assert!(ids.contains(&id), "{id} in {ids:?}");
+    }
+    assert_eq!(loaded(&modules, "shelly"), Some(json!(false)), "no source yet");
+    assert_eq!(modules[0]["origin"], "native");
+    assert!(modules[0]["manifest"]["requires"]["api"].is_string());
+
+    // The drivers' forms come from the manifests.
+    let (_, drivers) = server.call("GET", "/api/drivers", t, None).await;
+    let shelly = drivers.as_array().unwrap().iter().find(|d| d["id"] == "shelly").unwrap();
+    assert_eq!(shelly["provides"], json!(["energy.power@1", "energy.meter@1", "switch.relay@1"]));
+    assert_eq!(shelly["config"][0]["name"], "host");
+
+    // A source that runs loads its module; switched off, it no longer does.
+    let port = fake_shelly(Arc::new(Mutex::new(false))).await;
+    let (code, s) = server.call("POST", "/api/sources", t, Some(json!({"driver": "shelly", "name": "Tableau", "config": {"host": format!("127.0.0.1:{port}")}}))).await;
+    assert_eq!(code, StatusCode::CREATED, "{s}");
+    let (_, modules) = server.call("GET", "/api/modules", t, None).await;
+    assert_eq!(loaded(&modules, "shelly"), Some(json!(true)));
+    let id = s["id"].as_i64().unwrap();
+    let (code, _) = server
+        .call("PUT", &format!("/api/sources/{id}"), t, Some(json!({"driver": "shelly", "name": "Tableau", "config": {"host": format!("127.0.0.1:{port}")}, "enabled": false})))
+        .await;
+    assert_eq!(code, StatusCode::OK);
+    let (_, modules) = server.call("GET", "/api/modules", t, None).await;
+    assert_eq!(loaded(&modules, "shelly"), Some(json!(false)));
+
+    // Announced with their own version, and what they give.
+    let (_, caps) = server.call("GET", "/api/capabilities", t, None).await;
+    let announced = caps["modules"].as_array().unwrap().iter().find(|m| m["id"] == "rte").unwrap().clone();
+    assert_eq!(announced["provides"], json!(["tariff.day_color@1"]));
+    assert!(caps["host"]["traits"]["cover.position"]["1"].is_number());
+
+    // Paired by steps: a module added with its form has none, an unknown step is refused.
+    let (code, _) = server.call("POST", "/api/modules/shelly/pairing", t, Some(json!({"step": "link", "input": {}}))).await;
+    assert_eq!(code, StatusCode::BAD_REQUEST);
+    let (code, _) = server.call("POST", "/api/modules/hue/pairing", t, Some(json!({"step": "dance", "input": {"host": "127.0.0.1"}}))).await;
+    assert_eq!(code, StatusCode::BAD_REQUEST);
+    let (code, _) = server.call("POST", "/api/modules/nothing/pairing", t, Some(json!({"step": "link"}))).await;
+    assert_eq!(code, StatusCode::NOT_FOUND);
 }

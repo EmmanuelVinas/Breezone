@@ -19,6 +19,16 @@ pub async fn traits(_user: AuthUser) -> Json<&'static [Trait]> {
     Json(crate::traits::catalog())
 }
 
+/// The words of the presentation of traits: kinds of devices, widgets, icons (`contracts/ui.json`).
+pub async fn ui(_user: AuthUser) -> Json<&'static crate::traits::Vocabulary> {
+    Json(crate::traits::vocabulary())
+}
+
+/// The catalog of service contracts (`contracts/services`).
+pub async fn services(_user: AuthUser) -> Json<&'static [crate::services::Service]> {
+    Json(crate::services::catalog())
+}
+
 /// The devices the user can see, each saying whether they may drive it.
 pub async fn list_devices(State(state): State<AppState>, user: AuthUser) -> ApiResult<Json<Vec<DeviceView>>> {
     let access = Access::of(&state.db, &user).await?;
@@ -188,6 +198,21 @@ pub async fn act(State(state): State<AppState>, user: AuthUser, Path(id): Path<i
     }
     devices::apply(&state, &view, &input, &user.username).await?;
     viewed_by(&state, &access, id).await
+}
+
+/// The curves a device forecasts (`forecast` of its traits): `{series: {power: [[t, W]…]}}`.
+pub async fn forecast(State(state): State<AppState>, user: AuthUser, Path(id): Path<i64>) -> ApiResult<Json<serde_json::Value>> {
+    let access = Access::of(&state.db, &user).await?;
+    let view = devices::get(&state, id).await?.ok_or_else(|| ApiError::not_found("device not found"))?;
+    if view.installation_id.is_some() || !access.can_view_module(&devices::module_device(&view)) {
+        return Err(ApiError::not_found("device not found"));
+    }
+    let (Some(source_id), Some(reference)) = (view.source_id, view.reference.as_str()) else { return Err(ApiError::not_found("device not found")) };
+    match state.drivers.forecast(source_id, reference).await {
+        Ok(series) => Ok(Json(serde_json::json!({ "series": series }))),
+        Err(crate::drivers::DriverError::Unsupported(m)) => Err(ApiError::conflict(m)),
+        Err(e) => Err(ApiError::bad_gateway(e.to_string())),
+    }
 }
 
 /// The last picture of a camera (its last event), for whom sees the camera.

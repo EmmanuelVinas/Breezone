@@ -10,7 +10,7 @@
 //! (`auto_limit`). Starting with a maximum current turns `Dynamic` off. Charging is started and
 //! stopped with `Paused`.
 
-use super::{ConfigField, Described, DeviceInfo, Driver, DriverError, DriverFuture, DriverInfo, State};
+use super::{Described, DeviceInfo, Driver, DriverError, DriverFuture, State};
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use std::time::Duration;
@@ -56,16 +56,6 @@ pub async fn probe(host: &str) -> Option<Identified> {
     let http = reqwest::Client::builder().timeout(Duration::from_secs(2)).build().ok()?;
     let data: Value = http.get(format!("http://{host}/RealTimeData")).send().await.ok()?.json().await.ok()?;
     identify(&data)
-}
-
-pub fn info() -> DriverInfo {
-    DriverInfo {
-        id: "trydan",
-        label: "V2C Trydan",
-        provides: vec!["ev.charger@1", "energy.power@1"],
-        models: vec!["V2C Trydan".into()],
-        config: vec![ConfigField { name: "host", kind: "string", optional: false, label: crate::text!("Adresse IP ou nom", "IP address or name", "Dirección IP o nombre") }],
-    }
 }
 
 pub struct Trydan {

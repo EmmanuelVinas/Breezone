@@ -1,0 +1,21 @@
+{
+  "service": "weather.warnings",
+  "version": 1,
+  "revision": 0,
+  "label": { "fr": "Vigilance météo", "en": "Weather warnings", "es": "Avisos meteorológicos" },
+  "queries": [
+    {
+      "name": "current",
+      "label": { "fr": "Vigilance en cours", "en": "Warnings in force", "es": "Avisos vigentes" },
+      "params": [
+        { "name": "country", "type": "string", "label": { "fr": "Pays (ISO 3166-1)", "en": "Country (ISO 3166-1)", "es": "País (ISO 3166-1)" } },
+        { "name": "area", "type": "string", "label": { "fr": "Département ou région", "en": "Area", "es": "Zona" } }
+      ],
+      "result": [
+        { "name": "level", "type": "integer", "min": 0, "max": 3, "label": { "fr": "Niveau (0 vert à 3 rouge)", "en": "Level (0 green to 3 red)", "es": "Nivel (0 verde a 3 rojo)" } },
+        { "name": "events", "type": "string", "label": { "fr": "Phénomènes (séparés par des virgules)", "en": "Events (comma separated)", "es": "Fenómenos (separados por comas)" } },
+        { "name": "area", "type": "string", "label": { "fr": "Zone", "en": "Area", "es": "Zona" } }
+      ]
+    }
+  ]
+}

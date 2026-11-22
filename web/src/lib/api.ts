@@ -813,21 +813,17 @@ export type SourceInput = {
 
 /** A supported product found on the network. */
 export type FoundProduct = {
-  brand:
-    | "airzone"
-    | "shelly"
-    | "v2c"
-    | "hoymiles"
-    | "homekit"
-    | "hue"
-    | "renson"
-    | "tasmota"
-    | "reolink"
-    | "esphome"
-    | "tplink"
-    /** An Ecometer: its measures come through the Netatmo account. */
-    | "netatmo"
+  /** The maker ("airzone", "v2c"…), most often the id of the module. */
+  brand: string
+  /** What adds it: "airzone" (an installation) or the module of a source. */
   driver: string
+  /** Its module is not installed: the source of modules to install it from. */
+  install?: {
+    repository: number
+    repository_name: string
+    official: boolean
+    version: string
+  }
   model: string
   host: string
   port: number
@@ -932,10 +928,141 @@ export type TraitField = {
 export type TraitInfo = {
   trait: string
   version: number
+  /** Additions since the major version (absent before server 0.13). */
+  revision?: number
+  /** The revision that added a field or an action. */
+  since?: Record<string, number>
   label: TraitLabel
   state: TraitField[]
   actions: { name: string; label: TraitLabel; params: TraitField[] }[]
+  /** The curves the device forecasts, at `/api/devices/{id}/forecast`. */
+  forecast?: TraitField[]
+  /** How to show it without knowing it (words of `GET /api/ui`). */
+  ui?: TraitUi
 }
+
+/** The manifest of a module (`GET /api/modules`): what it is, needs and gives. */
+export type ModuleManifest = {
+  id: string
+  version: string
+  name: TraitLabel
+  description?: TraitLabel
+  /** The hardware it drives, as its makers name it ("Shelly Pro 3EM"). */
+  models?: string[]
+  roles: ("driver" | "account" | "service")[]
+  /** The fields of its form (a source's, or its account's): passwords kept encrypted. */
+  config?: {
+    name: string
+    type: "string" | "integer" | "number" | "bool" | "password"
+    optional?: boolean
+    label: TraitLabel
+  }[]
+  /** How a source is added: its form, then a button to press or a code to type. */
+  pairing?: "form" | "button" | "code" | "oauth"
+  /** Reaches the hardware through its maker's cloud. */
+  cloud?: boolean
+  /** The calls it answers beyond reading and driving: rooms, scenes, unlock… */
+  optional_calls?: string[]
+  discovery?: { mdns?: { service: string }[]; tcp?: number[] }
+}
+
+/** A module of this server, and whether it runs now. */
+export type ModuleView = {
+  id: string
+  version: string
+  origin: "native" | "builtin" | "library" | "file" | "dev"
+  enabled: boolean
+  state: string
+  last_error: string | null
+  sources: number
+  loaded: boolean
+  manifest: ModuleManifest
+}
+
+/** A schedule a piece of hardware keeps and runs itself (`schedule.hardware`). */
+export type HardwareSchedule = {
+  /** Its id in the hardware (empty for a new one). */
+  id: string
+  name: string
+  enabled: boolean
+  /** ISO weekdays (1 Monday … 7 Sunday). */
+  days: number[]
+  /** "HH:MM" */
+  time: string
+  /** The devices of the source it drives. */
+  references: string[]
+  trait: string
+  action: string
+  params: Record<string, unknown>
+  /** The same action at its end, with these parameters. */
+  end: { time: string; params: Record<string, unknown> } | null
+  /** Breezone can change it (else only the hardware's app can: `note` says why). */
+  editable: boolean
+  note: string | null
+}
+
+/** Why a module does not work with a server (`kind` says which need is not met). */
+export type ModuleIncompatibility = {
+  kind: "api" | "breezone" | "trait" | "service" | "account"
+  required?: string
+  name?: string
+  id?: string
+}
+
+/** A source of modules: Breezone's library, or one an administrator added. */
+export type ModuleRepository = {
+  id: number
+  name: string
+  /** The folder of its index (null: Breezone's own). */
+  url: string | null
+  official: boolean
+  enabled: boolean
+  /** The modules installed from it. */
+  modules: string[]
+}
+
+/** A module of the library, sorted for this server. */
+export type LibraryModule = {
+  id: string
+  repository: { id: number; name: string; official: boolean }
+  /** The manifest of its newest version. */
+  manifest: ModuleManifest
+  installed: string | null
+  /** The newest version that works with this server. */
+  fits: string | null
+  /** Why the newest version does not. */
+  reasons: ModuleIncompatibility[]
+}
+
+/** What becomes of a module installed here with another version of Breezone. */
+export type ModuleNext = {
+  id: string
+  version: string
+  fits: boolean
+  reasons: ModuleIncompatibility[]
+  replacement: string | null
+}
+
+/** A piece of a card or a detail of a trait. */
+export type TraitWidget = {
+  widget: string
+  field?: string
+  action?: string
+  param?: string
+  params?: Record<string, unknown>
+  when?: string
+  forecast?: boolean
+}
+
+export type TraitUi = {
+  kind: string
+  primary?: string
+  card?: TraitWidget[]
+  detail?: TraitWidget[]
+}
+
+/** The curves a device forecasts, by name: [time (s), value], in time order. */
+export type DeviceForecast = { series: Record<string, [number, number][]> }
 
 /** A number an automation can read now. */
 export type AutomationMeasure =
@@ -1241,6 +1368,8 @@ export type AccountKind =
   | "ezviz"
   | "weather"
   | "forecast_solar"
+  /** The account of a module installed from a library (its form is in its manifest). */
+  | (string & {})
 export type AccountView = {
   kind: AccountKind
   /** Its credentials are kept (a service without any: always). */
@@ -1303,6 +1432,20 @@ export type TwinsView = {
     kind: string
     source: string
   }[]
+}
+
+/** A step of the pairing of a module: nothing while it goes on, the source added once done. */
+function pairingStep<T = SourceView>(
+  module: string,
+  step: string,
+  input: Record<string, unknown>,
+  name = ""
+) {
+  return request<T>(
+    "POST",
+    `/api/modules/${encodeURIComponent(module)}/pairing`,
+    { step, input, name }
+  )
 }
 
 export const api = {
@@ -1397,6 +1540,8 @@ export const api = {
       "GET",
       `/api/devices/${id}/history?hours=${hours}&bucket=${bucket}`
     ),
+  deviceForecast: (id: number) =>
+    request<DeviceForecast>("GET", `/api/devices/${id}/forecast`),
   deviceHistory: (id: number, hours = 24, points = 96) =>
     request<DeviceHistory>(
       "GET",
@@ -1500,22 +1645,55 @@ export const api = {
   ) => request<Room>("PUT", `/api/rooms/${id}`, input),
   deleteRoom: (id: number) => request<void>("DELETE", `/api/rooms/${id}`),
   drivers: () => request<DriverInfo[]>("GET", "/api/drivers"),
+  modules: () => request<ModuleView[]>("GET", "/api/modules"),
+  moduleLibrary: (refresh: boolean) =>
+    request<{
+      modules: LibraryModule[]
+      unreadable: {
+        repository: LibraryModule["repository"]
+        error: string
+      }[]
+    }>("GET", `/api/modules/library${refresh ? "?refresh=true" : ""}`),
+  installModule: (id: string, repository?: number, version?: string) =>
+    request<ModuleView>("POST", "/api/modules", { id, repository, version }),
+  moduleRepositories: () =>
+    request<ModuleRepository[]>("GET", "/api/modules/repositories"),
+  addModuleRepository: (input: {
+    name: string
+    url: string
+    public_key: string
+  }) => request<ModuleRepository[]>("POST", "/api/modules/repositories", input),
+  setModuleRepository: (id: number, enabled: boolean) =>
+    request<ModuleRepository[]>("PATCH", `/api/modules/repositories/${id}`, {
+      enabled,
+    }),
+  removeModuleRepository: (id: number) =>
+    request<void>("DELETE", `/api/modules/repositories/${id}`),
+  uploadModule: (pkg: string, signature: string) =>
+    request<ModuleView>("POST", "/api/modules/upload", {
+      package: pkg,
+      signature,
+    }),
+  rollbackModule: (id: string) =>
+    request<ModuleView>(
+      "POST",
+      `/api/modules/${encodeURIComponent(id)}/rollback`
+    ),
+  removeModule: (id: string) =>
+    request<void>("DELETE", `/api/modules/${encodeURIComponent(id)}`),
+  /** Whether the modules installed here work with another version of Breezone. */
+  modulesNext: (version: string) =>
+    request<ModuleNext[]>(
+      "GET",
+      `/api/modules/next?version=${encodeURIComponent(version)}`
+    ),
   sources: () => request<SourceView[]>("GET", "/api/sources"),
   createSource: (input: SourceInput) =>
     request<SourceView>("POST", "/api/sources", input),
   updateSource: (id: number, input: SourceInput) =>
     request<SourceView>("PUT", `/api/sources/${id}`, input),
   deleteSource: (id: number) => request<void>("DELETE", `/api/sources/${id}`),
-  /** Adds a Hue bridge: its round button pressed in the last 30 seconds. */
-  linkHue: (input: { host: string; name: string }) =>
-    request<SourceView>("POST", "/api/hue/link", input),
-  /** Pairs Breezone with a HomeKit accessory (its 8-digit code), then adds it as a module. */
-  pairHomekit: (input: {
-    host: string
-    name: string
-    code: string
-    flags: number
-  }) => request<SourceView>("POST", "/api/homekit/pair", input),
+  pairingStep,
   /** The configuration of this server as a file (no secret, no history). */
   exportConfig: () => request<unknown>("GET", "/api/system/config"),
   /** Replaces the configuration with an exported one. */
@@ -1539,6 +1717,33 @@ export const api = {
       local?: string
     }
   ) => request<TwinsView>("PUT", `/api/sources/${sourceId}/twins`, input),
+  /** The schedules the hardware of a source keeps, and their changes (each gives the list). */
+  sourceSchedules: (sourceId: number) =>
+    request<HardwareSchedule[]>("GET", `/api/sources/${sourceId}/schedules`),
+  createSourceSchedule: (
+    sourceId: number,
+    s: Omit<HardwareSchedule, "id" | "editable" | "note">
+  ) =>
+    request<HardwareSchedule[]>(
+      "POST",
+      `/api/sources/${sourceId}/schedules`,
+      s
+    ),
+  updateSourceSchedule: (
+    sourceId: number,
+    id: string,
+    s: Omit<HardwareSchedule, "id" | "editable" | "note">
+  ) =>
+    request<HardwareSchedule[]>(
+      "PUT",
+      `/api/sources/${sourceId}/schedules/${encodeURIComponent(id)}`,
+      s
+    ),
+  deleteSourceSchedule: (sourceId: number, id: string) =>
+    request<HardwareSchedule[]>(
+      "DELETE",
+      `/api/sources/${sourceId}/schedules/${encodeURIComponent(id)}`
+    ),
   /** What a module's hardware says about itself, raw (support). */
   sourceDiagnostic: (sourceId: number) =>
     request<unknown>("GET", `/api/sources/${sourceId}/diagnostic`),
@@ -1551,11 +1756,6 @@ export const api = {
   scenes: () => request<SceneView[]>("GET", "/api/scenes"),
   activateScene: (sourceId: number, id: string) =>
     request<void>("POST", `/api/scenes/${sourceId}/${encodeURIComponent(id)}`),
-  /** Starts pairing: an accessory with a screen shows its code now. */
-  startHomekitPairing: (input: { host: string; flags: number }) =>
-    request<void>("POST", "/api/homekit/pair/start", input),
-  cancelHomekitPairing: (host: string) =>
-    request<void>("POST", "/api/homekit/pair/cancel", { host }),
   /** Looks for the source's hardware on the network, and follows it if its address changed. */
   locateSource: (id: number) =>
     request<

@@ -1,0 +1,13 @@
+{
+  "id": "linky",
+  "version": "1.0.0",
+  "name": {"fr": "Linky (Conso API)", "en": "Linky (Conso API)", "es": "Linky (Conso API)"},
+  "roles": ["account", "service"],
+  "requires": {"api": "^1.0"},
+  "provides": {"services": ["energy.history@1.0"]},
+  "config": [
+    {"name": "prm", "type": "string", "label": {"fr": "Numéro du compteur (PRM)", "en": "Meter number (PRM)", "es": "Número del contador (PRM)"}},
+    {"name": "token", "type": "password", "label": {"fr": "Jeton Conso API", "en": "Conso API token", "es": "Token de Conso API"}}
+  ],
+  "permissions": {"network": {"lan": false, "hosts": ["conso.boris.sh"]}}
+}

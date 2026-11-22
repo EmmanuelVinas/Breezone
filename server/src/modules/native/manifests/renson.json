@@ -1,0 +1,16 @@
+{
+  "id": "renson",
+  "version": "1.0.0",
+  "name": {"en": "Renson Healthbox", "es": "Renson Healthbox", "fr": "Renson Healthbox"},
+  "roles": ["driver"],
+  "requires": {"api": "^1.0"},
+  "provides": {"traits": ["ventilation.unit@1.0", "ventilation.room@1.0"]},
+  "models": ["Renson Healthbox 3.0"],
+  "config": [
+    {"name": "host", "type": "string", "label": {"en": "IP address or name", "es": "Dirección IP o nombre", "fr": "Adresse IP ou nom"}}
+  ],
+  "discovery": {"tcp": [80]},
+  "permissions": {"network": {"lan": true}},
+  "read_every_s": 30,
+  "optional_calls": ["probe", "rooms", "unlock", "diagnostic"]
+}

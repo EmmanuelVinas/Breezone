@@ -1,6 +1,7 @@
 {
   "trait": "environment.sensor",
   "version": 1,
+  "revision": 0,
   "label": { "fr": "Capteur d'ambiance", "en": "Environment sensor", "es": "Sensor ambiental" },
   "state": [
     { "name": "temperature", "type": "number", "unit": "°C", "optional": true, "label": { "fr": "Température", "en": "Temperature", "es": "Temperatura" } },
@@ -10,5 +11,23 @@
     { "name": "illuminance", "type": "number", "unit": "lx", "optional": true, "label": { "fr": "Luminosité", "en": "Illuminance", "es": "Luminosidad" } },
     { "name": "battery", "type": "number", "unit": "%", "history": false, "optional": true, "label": { "fr": "Batterie", "en": "Battery", "es": "Batería" } }
   ],
-  "actions": []
+  "actions": [],
+  "ui": {
+    "kind": "sensor",
+    "primary": "temperature",
+    "card": [
+      {"widget": "value", "field": "temperature"},
+      {"widget": "value", "field": "humidity"},
+      {"widget": "value", "field": "co2"}
+    ],
+    "detail": [
+      {"widget": "value", "field": "temperature"},
+      {"widget": "value", "field": "humidity"},
+      {"widget": "value", "field": "pressure"},
+      {"widget": "value", "field": "co2"},
+      {"widget": "value", "field": "illuminance"},
+      {"widget": "value", "field": "battery"},
+      {"widget": "chart", "field": "temperature"}
+    ]
+  }
 }

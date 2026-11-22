@@ -53,7 +53,7 @@ import {
 } from "@/components/ui/dialog"
 import { t } from "@/lib/i18n"
 
-function daysText(days: number[], time: string | null) {
+export function daysText(days: number[], time: string | null) {
   const d = [...days].sort()
   let text: string
   if (d.length === 7) text = t("Tous les jours")

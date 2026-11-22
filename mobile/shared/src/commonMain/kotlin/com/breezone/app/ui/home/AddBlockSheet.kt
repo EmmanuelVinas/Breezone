@@ -197,6 +197,7 @@ private fun BlockKind.hint() = when (this) {
     BlockKind.ChargerCurve -> Res.string.block_charger_curve_hint
     BlockKind.SolarToday -> Res.string.block_solar_today_hint
     BlockKind.SolarPanels -> Res.string.block_solar_panels_hint
+    BlockKind.SolarForecast -> Res.string.block_solar_forecast_hint
     BlockKind.VentilationHouse -> Res.string.block_ventilation_house_hint
     BlockKind.VentilationRooms -> Res.string.block_ventilation_rooms_hint
     BlockKind.LightPanel -> Res.string.block_light_panel_hint

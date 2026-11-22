@@ -400,3 +400,33 @@ data class EnabledBody(val enabled: Boolean)
 
 @Serializable
 data class PresenceBody(val home: Boolean)
+
+/** A text of a module's manifest, in each language of Breezone. */
+@Serializable
+data class ModuleLabel(val fr: String = "", val en: String = "", val es: String = "") {
+    /** In the phone's language (French when the manifest has none in it). */
+    fun text(): String = when (androidx.compose.ui.text.intl.Locale.current.language) {
+        "en" -> en
+        "es" -> es
+        else -> fr
+    }.ifEmpty { fr }
+}
+
+@Serializable
+data class ModuleManifestInfo(val name: ModuleLabel = ModuleLabel())
+
+/** A module of a server (`GET /api/modules`, administrators): where it comes from and whether it runs. */
+@Serializable
+data class ModuleInfo(
+    val id: String,
+    val version: String = "",
+    /** "native" | "builtin" | "library" | "file" | "dev" */
+    val origin: String = "",
+    val enabled: Boolean = true,
+    /** "ok" | "incompatible" | "error"… */
+    val state: String = "",
+    val lastError: String? = null,
+    val sources: Int = 0,
+    val loaded: Boolean = false,
+    val manifest: ModuleManifestInfo = ModuleManifestInfo(),
+)

@@ -1,0 +1,9 @@
+{
+  "id": "weather",
+  "version": "1.0.0",
+  "name": {"fr": "Météo (Open-Meteo, MeteoAlarm)", "en": "Weather (Open-Meteo, MeteoAlarm)", "es": "Tiempo (Open-Meteo, MeteoAlarm)"},
+  "roles": ["service"],
+  "requires": {"api": "^1.0"},
+  "provides": {"services": ["weather.forecast@1.0", "weather.warnings@1.0"]},
+  "permissions": {"network": {"lan": false, "hosts": ["api.open-meteo.com", "geocoding-api.open-meteo.com", "feeds.meteoalarm.org"]}}
+}

@@ -1,0 +1,316 @@
+// The interface between Breezone and a module (docs/roadmap/modules.md § 4.5): what the host gives
+// a module (`host`) and what a driver module gives the host (`driver`). The host checks every value
+// against the catalog of traits; JSON travels as strings.
+//
+// A module never runs long: each call it exports has a deadline. What the hardware says without
+// being asked (a WebSocket, a TCP stream) comes through subscriptions: the host keeps the
+// connection open and hands each message to `on-message`.
+//
+// Keeping modules and servers of different versions working together:
+// * `driver` and `service` are those of version 1.0, never changed: a call added later goes in
+//   `extras`, which the host looks up function by function, so that a module built before still
+//   loads (the host binds the world `core`, without `extras`);
+// * a function added to `host` raises the minor version of the interface (`INTERFACE` of the
+//   server): a module that uses it requires it (`requires.api` of its manifest, "^1.1"), and an
+//   older server does not offer it.
+// Version 1.1: `host.receive`, `extras.forget`.
+package breezone:module@1.0.0;
+
+interface types {
+    /// A JSON document: a configuration, a state, the parameters of an action.
+    type json = string;
+
+    variant error {
+        /// The hardware does not answer.
+        unreachable(string),
+        /// It answered something the module does not understand.
+        invalid(string),
+        /// It cannot do what was asked.
+        unsupported(string),
+    }
+
+    record device-info {
+        /// Its reference within the source ("power1").
+        reference: string,
+        /// Main trait.
+        kind: string,
+        /// `trait@version` it has.
+        traits: list<string>,
+        name: string,
+    }
+
+    record described {
+        model: string,
+        firmware: option<string>,
+        devices: list<device-info>,
+        /// What tells this hardware apart (serial number, MAC).
+        identity: option<string>,
+    }
+
+    record header {
+        name: string,
+        value: string,
+    }
+
+    record request {
+        method: string,
+        url: string,
+        headers: list<header>,
+        body: option<list<u8>>,
+        timeout-ms: u32,
+        /// Accepts the device's own HTTPS certificate (a camera's): on the local network only.
+        insecure: bool,
+    }
+
+    /// Where the answer of an `exchange` ends.
+    variant read-until {
+        /// The device closes the connection.
+        close,
+        /// This many bytes.
+        bytes(u32),
+        /// This many milliseconds of silence once something came.
+        idle(u32),
+        /// A length written in the answer.
+        length-prefixed(length-prefix),
+    }
+
+    /// A length in the answer: `size` bytes (1, 2 or 4) at `offset`; the answer is that many bytes,
+    /// plus `adds` (the header when the length does not count it).
+    record length-prefix {
+        offset: u32,
+        size: u8,
+        big-endian: bool,
+        adds: s32,
+    }
+
+    record response {
+        status: u16,
+        headers: list<header>,
+        body: list<u8>,
+    }
+
+    /// A room of the hardware's own app, and the references of its devices in it.
+    record hardware-room {
+        name: string,
+        references: list<string>,
+    }
+
+    /// A scene of the hardware's own app.
+    record scene {
+        id: string,
+        name: string,
+        room: option<string>,
+        references: list<string>,
+    }
+
+    /// A picture: its bytes and their media type.
+    record picture {
+        data: list<u8>,
+        media-type: string,
+    }
+
+    /// What a schedule of the hardware does at its end ("off at 22:00"): the same action, with
+    /// these parameters.
+    record schedule-end {
+        /// "HH:MM"
+        time: string,
+        params: json,
+    }
+
+    /// A schedule the hardware keeps and runs itself (`schedule.hardware`): on these days at this
+    /// time, an action of a trait applied to devices of the source.
+    record schedule {
+        /// Its id in the hardware (empty for a new one).
+        id: string,
+        name: string,
+        enabled: bool,
+        /// ISO weekdays (1 Monday … 7 Sunday).
+        days: list<u8>,
+        /// "HH:MM"
+        time: string,
+        /// The devices of the source it drives.
+        references: list<string>,
+        trait-name: string,
+        action: string,
+        params: json,
+        end: option<schedule-end>,
+        /// Breezone can change it (else only the hardware's app can).
+        editable: bool,
+        /// Why it cannot be changed here.
+        note: option<string>,
+    }
+
+    /// A source made by an appairage: its configuration, its secret, a name for it.
+    record paired-source {
+        config: json,
+        secret: string,
+        name: string,
+    }
+
+    /// Where an appairage is.
+    variant paired {
+        /// Waiting for the next step (the code the hardware shows…).
+        next,
+        /// Something to do on the hardware first (press its button), then the same step again:
+        /// what to tell the user.
+        waiting(string),
+        /// Done: the source to add.
+        done(paired-source),
+    }
+
+    /// A curve a device forecasts: (unix time, value), in time order.
+    record curve {
+        name: string,
+        points: list<tuple<s64, f64>>,
+    }
+}
+
+interface host {
+    use types.{request, response, read-until};
+
+    enum level {
+        debug,
+        info,
+        warn,
+        error,
+    }
+
+    /// Written to the module's log (`GET /api/modules/{id}/log`).
+    log: func(level: level, message: string);
+
+    /// Unix time, in seconds.
+    now: func() -> s64;
+
+    /// Waits without computing (a device that wants time between two requests): 10 s at most.
+    wait: func(ms: u32);
+
+    /// An HTTP request, refused unless its address is allowed by the module's permissions.
+    http: func(req: request) -> result<response, string>;
+
+    /// A question and its answer on TCP (`tcp://host:port`): opens, writes `data`, reads until
+    /// `until`, closes. Same permissions as `http`; 1 MB at most.
+    exchange: func(url: string, data: list<u8>, until: read-until, timeout-ms: u32) -> result<list<u8>, string>;
+
+    /// Opens a connection the host keeps: each message it receives is handed to `on-message` with
+    /// the number returned here. A WebSocket (`ws://`, `wss://`) gives its text and binary frames;
+    /// a TCP stream (`tcp://host:port`) gives what it reads, in pieces. Same permissions as `http`.
+    subscribe: func(url: string) -> result<u32, string>;
+
+    /// The next message of a subscription, waited for during a call (a protocol of several
+    /// questions and answers on a connection kept: a handshake, then a listing). What comes between
+    /// calls still goes to `on-message`, in order. 30 s at most.
+    receive: func(subscription: u32, timeout-ms: u32) -> result<list<u8>, string>;
+
+    /// Sends on a subscription (a WebSocket frame, bytes on a TCP stream).
+    send: func(subscription: u32, data: list<u8>) -> result<_, string>;
+
+    /// Closes a subscription.
+    unsubscribe: func(subscription: u32);
+
+    /// The store of this source, kept across restarts (a session, a counter): small values only.
+    store-get: func(key: string) -> option<list<u8>>;
+    store-set: func(key: string, value: option<list<u8>>);
+
+    /// The fields of an account the module requires (`requires.accounts` of its manifest), as a
+    /// JSON object (its secrets and what is not secret); a module that is an account (role
+    /// `account`) gets its own with its id.
+    account: func(kind: string) -> result<string, string>;
+
+    /// An access to the service of the module's own OAuth account (`oauth` of its manifest):
+    /// Breezone renews it when it is about to end, and keeps the new refresh token.
+    access-token: func() -> result<string, string>;
+
+    /// Keeps fields in the module's own account (a session, its region; `null` removes one).
+    /// While the account is checked, it may change what was typed (a password kept as a hash);
+    /// once kept, never the fields of its form.
+    account-update: func(fields: string) -> result<_, string>;
+
+    /// A button of a remote was pressed (`button@1`): "single" | "double" | "long".
+    pressed: func(reference: string, button: u32, press: string);
+
+    /// Asks the host to read this source again soon (the hardware said something changed).
+    changed: func();
+}
+
+interface driver {
+    use types.{json, error, described, hardware-room, scene, picture, curve, paired, schedule};
+
+    /// One configured piece of hardware.
+    resource source {
+        open: static func(config: json, secret: option<string>) -> result<source, error>;
+        describe: func() -> result<described, error>;
+        /// The state of each device, by reference.
+        read: func() -> result<list<tuple<string, json>>, error>;
+        /// Applies an action of a trait to a device (parameters already checked by the host).
+        act: func(reference: string, trait-name: string, action: string, params: json) -> result<_, error>;
+        /// A message of a subscription.
+        on-message: func(subscription: u32, data: list<u8>) -> result<_, error>;
+        /// What the hardware says about itself, raw (support).
+        diagnostic: func() -> result<json, error>;
+        // The calls below are asked only when the manifest lists them in `optional-calls`; the
+        // others answer `unsupported`.
+        rooms: func() -> result<list<hardware-room>, error>;
+        scenes: func() -> result<list<scene>, error>;
+        activate-scene: func(id: string) -> result<_, error>;
+        picture: func(reference: string) -> result<picture, error>;
+        forecast: func(reference: string) -> result<list<curve>, error>;
+        /// Gives the hardware a key of its maker; true once it accepts it.
+        unlock: func(key: string) -> result<bool, error>;
+        /// The schedules the hardware keeps (`schedules` in `optional-calls`), and their changes:
+        /// `save-schedule` creates one (empty id) or changes it, and gives its id. The host checks
+        /// the devices, the action and its parameters against the catalog first.
+        schedules: func() -> result<list<schedule>, error>;
+        save-schedule: func(schedule: schedule) -> result<string, error>;
+        delete-schedule: func(id: string) -> result<_, error>;
+        /// Ends the connections it keeps, before the server stops.
+        close: func();
+    }
+
+    /// Whether this address is hardware of this module, and its name (discovery).
+    probe: func(host: string) -> option<string>;
+
+    /// A step of the appairage (`pairing` of the manifest other than `form`): `button` has one
+    /// step, `link`; `code` has `start`, `finish` (with `code`) and `cancel`. `input` has the
+    /// address (`host`) of the hardware found and the user's language (`lang`: "fr", "en", "es"). Each step runs in an instance of its own: what a
+    /// step keeps for the next goes in the store.
+    pair: func(step: string, input: json) -> result<paired, error>;
+}
+
+interface service {
+    use types.{json, error};
+
+    /// Checks the account of this module (`host.account` with its own id gives the fields of its
+    /// form) before Breezone keeps it: the service must accept it.
+    check: func() -> result<_, error>;
+
+    /// A query of a service contract the module provides (`provides.services` of its manifest,
+    /// `contract` as "tariff.day_color@1"): its parameters and its answer as the contract
+    /// (`server/contracts/services/`) describes them. Breezone checks the answer, and keeps the
+    /// caches and the tables.
+    query: func(contract: string, query: string, params: json) -> result<json, error>;
+}
+
+/// Calls added after 1.0, each one optional: a module may export some of them, or none.
+interface extras {
+    use types.{json, error};
+
+    /// The source is removed: the hardware forgets Breezone (a HomeKit accessory removes
+    /// Breezone's pairing, so that it can be paired again), from the source's configuration and
+    /// secret. `forget` in `optional-calls`.
+    forget: func(config: json, secret: option<string>) -> result<_, error>;
+}
+
+/// What a module is built against.
+world module {
+    import host;
+    export driver;
+    export service;
+    export extras;
+}
+
+/// What the host binds: what every module has; `extras` is looked up apart.
+world core {
+    import host;
+    export driver;
+    export service;
+}

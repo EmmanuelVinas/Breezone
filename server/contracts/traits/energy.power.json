@@ -1,6 +1,7 @@
 {
   "trait": "energy.power",
   "version": 1,
+  "revision": 0,
   "label": { "fr": "Puissance", "en": "Power", "es": "Potencia" },
   "state": [
     { "name": "power", "type": "number", "unit": "W", "label": { "fr": "Puissance", "en": "Power", "es": "Potencia" } },
@@ -10,5 +11,18 @@
     { "name": "voltage", "type": "number", "unit": "V", "optional": true, "label": { "fr": "Tension", "en": "Voltage", "es": "Tensión" } },
     { "name": "current", "type": "number", "unit": "A", "optional": true, "label": { "fr": "Intensité", "en": "Current", "es": "Intensidad" } }
   ],
-  "actions": []
+  "actions": [],
+  "ui": {
+    "kind": "energy",
+    "primary": "power",
+    "card": [
+      {"widget": "gauge", "field": "power"}
+    ],
+    "detail": [
+      {"widget": "gauge", "field": "power"},
+      {"widget": "value", "field": "voltage"},
+      {"widget": "value", "field": "current"},
+      {"widget": "chart", "field": "power"}
+    ]
+  }
 }

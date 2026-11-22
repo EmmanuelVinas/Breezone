@@ -36,7 +36,7 @@ export const MAX_TRIGGERS = 3
 /** Conditions of a rule, those of its groups included. */
 export const MAX_CONDITIONS = 8
 /** Steps of each branch. */
-export const MAX_ACTIONS = 8
+export const MAX_ACTIONS = 12
 
 export const tl = (l: TraitLabel) => l[lang()]
 
@@ -132,6 +132,8 @@ export function isMeasure(trait: string, f: TraitField) {
   if (f.type !== "number" && f.type !== "integer") return false
   if (trait === "climate.zone")
     return ["room_temp", "humidity"].includes(f.name)
+  // A forecast has no history but is worth a rule ("tomorrow's production above 10 kWh").
+  if (trait === "solar.forecast") return true
   return f.history !== false
 }
 

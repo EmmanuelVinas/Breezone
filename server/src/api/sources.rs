@@ -83,21 +83,23 @@ fn split_secrets(driver: &str, config: &Value) -> (Value, serde_json::Map<String
     (config, secrets)
 }
 
-/// A forecast of the sun is for a place: the home's (its city) when none is given, in the time
-/// zone of this server.
+/// The values of the configuration Breezone gives the module itself (`fills` of its manifest): the
+/// home's place when the form leaves it empty, this server's time zone.
 async fn placed(state: &AppState, driver: &str, mut config: Value) -> Value {
-    if driver != "forecast_solar" {
-        return config;
-    }
-    if let Some(o) = config.as_object_mut() {
-        let missing = |k: &str| o.get(k).is_none_or(|v| v.is_null() || v.as_str().is_some_and(|s| s.trim().is_empty()));
-        if missing("latitude") || missing("longitude") {
-            if let Some(p) = state.weather.place(None).await {
-                o.insert("latitude".into(), Value::from(p.lat));
-                o.insert("longitude".into(), Value::from(p.lon));
-            }
+    let Some(fills) = crate::modules::manifest(driver).map(|m| &m.fills).filter(|f| !f.is_empty()) else { return config };
+    let Some(o) = config.as_object_mut() else { return config };
+    let place = if fills.values().any(|f| f.starts_with("home.")) { state.weather.place(None).await } else { None };
+    for (key, from) in fills {
+        let missing = o.get(key).is_none_or(|v| v.is_null() || v.as_str().is_some_and(|s| s.trim().is_empty()));
+        let value = match from.as_str() {
+            "server.timezone" => Some(Value::from(state.cfg.timezone.name())),
+            "home.latitude" if missing => place.as_ref().map(|p| Value::from(p.lat)),
+            "home.longitude" if missing => place.as_ref().map(|p| Value::from(p.lon)),
+            _ => None,
+        };
+        if let Some(v) = value {
+            o.insert(key.clone(), v);
         }
-        o.insert("timezone".into(), Value::from(state.cfg.timezone.name()));
     }
     config
 }
@@ -112,11 +114,11 @@ fn merged_secret(state: &AppState, current: Option<&str>, given: &serde_json::Ma
 
 /// Checks the driver and its configuration (with its secret); returns the trimmed name and the
 /// configuration text.
-fn checked(input: &SourceInput, secret: Option<&str>) -> ApiResult<(String, String)> {
+async fn checked(input: &SourceInput, secret: Option<&str>) -> ApiResult<(String, String)> {
     // The Netatmo and EZVIZ modules come with their account: only their name and whether they run
     // change here.
-    if !crate::accounts::MODULES.contains(&input.driver.as_str()) {
-        crate::drivers::create(&input.driver, &input.config, secret).map_err(ApiError::bad_request)?;
+    if !crate::accounts::comes_with_account(&input.driver) || !crate::accounts::is_cloud(&input.driver) {
+        crate::modules::open_source(&input.driver, None, &input.config, secret).await.map_err(ApiError::bad_request)?;
     }
     let name: String = input.name.trim().chars().take(60).collect();
     if name.is_empty() {
@@ -146,14 +148,14 @@ async fn polled(state: &AppState, id: i64) -> ApiResult<SourceView> {
 }
 
 pub async fn create(State(state): State<AppState>, _admin: AdminUser, Json(input): Json<SourceInput>) -> ApiResult<(StatusCode, Json<SourceView>)> {
-    if crate::accounts::MODULES.contains(&input.driver.as_str()) || crate::accounts::SERVICE_MODULES.contains(&input.driver.as_str()) {
+    if crate::accounts::comes_with_account(&input.driver) {
         return Err(ApiError::bad_request("ce module s'ajoute en connectant son compte (Réglages › Comptes et services)"));
     }
     let input = SourceInput { config: placed(&state, &input.driver, input.config.clone()).await, ..input };
     let (config, given) = split_secrets(&input.driver, &input.config);
     let secret = merged_secret(&state, None, &given);
     let driver = input.driver.clone();
-    let (name, config) = checked(&SourceInput { config, ..input }, secret.as_deref())?;
+    let (name, config) = checked(&SourceInput { config, ..input }, secret.as_deref()).await?;
     let id = db::insert_source(&state.db, &driver, &name, &config).await?;
     if let Some(s) = secret {
         db::set_source_secret(&state.db, id, Some(&crate::crypto::encrypt(&state.data_key, &s))).await?;
@@ -170,7 +172,7 @@ pub async fn update(State(state): State<AppState>, _admin: AdminUser, Path(id): 
     let (config, given) = split_secrets(&input.driver, &input.config);
     let secret = if given.is_empty() { None } else { merged_secret(&state, current.secret.as_deref(), &given) };
     let kept = current.secret.as_deref().and_then(|s| crate::crypto::decrypt(&state.data_key, s));
-    let (name, config) = checked(&SourceInput { config, ..input }, secret.as_deref().or(kept.as_deref()))?;
+    let (name, config) = checked(&SourceInput { config, ..input }, secret.as_deref().or(kept.as_deref())).await?;
     let config = with_choices(&config, &current.config);
     db::update_source(&state.db, id, &name, &config, input.enabled).await?;
     if let Some(s) = secret {
@@ -179,17 +181,27 @@ pub async fn update(State(state): State<AppState>, _admin: AdminUser, Path(id): 
     Ok(Json(polled(&state, id).await?))
 }
 
-/// Removes the source and its devices. For a HomeKit accessory, Breezone first removes its own
-/// pairing from it (and nothing else), so that it can be paired again.
+/// Removes the source and its devices, after what its module does then (a HomeKit accessory is
+/// unpaired from Breezone, so that it can be paired again).
 pub async fn delete(State(state): State<AppState>, _admin: AdminUser, Path(id): Path<i64>) -> ApiResult<StatusCode> {
     if let Some(source) = db::source_by_id(&state.db, id).await? {
-        let pairing = source.secret.as_deref().and_then(|s| crate::crypto::decrypt(&state.data_key, s)).and_then(|s| serde_json::from_str::<crate::homekit::Pairing>(&s).ok());
-        let host: Value = serde_json::from_str(&source.config).unwrap_or(Value::Null);
-        if let (Some(pairing), Some(host)) = (pairing, host["host"].as_str()) {
-            let removed = tokio::time::timeout(std::time::Duration::from_secs(15), crate::homekit::remove_own_pairing(host, &pairing)).await;
-            if !matches!(removed, Ok(Ok(()))) {
-                tracing::warn!("cannot remove Breezone's pairing from {host}: {removed:?}; the accessory may still list it");
+        let module = crate::modules::manifest(&source.driver).filter(|m| m.optional_calls.iter().any(|c| c == "forget"));
+        let by_module = module.is_some()
+            && crate::modules::installed_dir(&source.driver).is_some()
+            && (crate::modules::native::get(&source.driver).is_none() || crate::modules::replaces_native(&source.driver));
+        if by_module {
+            // The module tells its hardware to forget Breezone (its own source, opened for that).
+            if let Some(driver) = state.drivers.driver(id).await {
+                if let Err(e) = tokio::time::timeout(std::time::Duration::from_secs(20), driver.forget())
+                    .await
+                    .unwrap_or_else(|_| Err(crate::drivers::DriverError::Unreachable("no answer".into())))
+                {
+                    tracing::warn!("source {id}: the hardware may still know Breezone: {e}");
+                }
             }
+        } else if let Some(on_delete) = crate::modules::native::get(&source.driver).and_then(|n| n.on_delete) {
+            let secret = source.secret.as_deref().and_then(|s| crate::crypto::decrypt(&state.data_key, s));
+            on_delete(serde_json::from_str(&source.config).unwrap_or(Value::Null), secret).await;
         }
     }
     if !db::delete_source(&state.db, id).await? {
@@ -200,132 +212,42 @@ pub async fn delete(State(state): State<AppState>, _admin: AdminUser, Path(id): 
 }
 
 #[derive(Deserialize)]
-pub struct PairInput {
-    /// "ip:port", as the scanner found it.
-    pub host: String,
+pub struct PairingInput {
+    pub step: String,
+    #[serde(default)]
+    pub input: Value,
+    /// The name of the source, once added.
+    #[serde(default)]
     pub name: String,
-    /// The accessory's HomeKit setup code (8 digits).
-    pub code: String,
-    /// Feature flags it announces (1: Apple authentication).
-    #[serde(default)]
-    pub flags: u32,
 }
 
-#[derive(Deserialize)]
-pub struct StartInput {
-    pub host: String,
-    #[serde(default)]
-    pub flags: u32,
-}
-
-/// Pairings started, by accessory address, until their code is typed.
-static STARTED: std::sync::LazyLock<tokio::sync::Mutex<std::collections::HashMap<String, (std::time::Instant, crate::homekit::PairSetup)>>> =
-    std::sync::LazyLock::new(Default::default);
-const STARTED_FOR: std::time::Duration = std::time::Duration::from_secs(120);
-
-fn accessory_host(host: &str) -> ApiResult<&str> {
-    let host = host.trim();
-    if host.is_empty() || !host.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | ':')) {
-        return Err(ApiError::bad_request("invalid accessory address"));
-    }
-    Ok(host)
-}
-
-/// Starts pairing with a HomeKit accessory: one with a screen shows its code now.
-pub async fn start_homekit_pairing(_admin: AdminUser, Json(input): Json<StartInput>) -> ApiResult<StatusCode> {
-    let host = accessory_host(&input.host)?;
-    // A pairing left half-done keeps the accessory busy: the previous one is dropped first.
-    STARTED.lock().await.retain(|h, (at, _)| h != host && at.elapsed() < STARTED_FOR);
-    let setup = crate::homekit::PairSetup::start(host, input.flags & 1 == 1).await.map_err(|e| ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, e.explain()))?;
-    let at = std::time::Instant::now();
-    STARTED.lock().await.insert(host.to_string(), (at, setup));
-    // Never typed: the accessory is freed, else it refuses any other pairing.
-    let host = host.to_string();
-    tokio::spawn(async move {
-        tokio::time::sleep(STARTED_FOR).await;
-        let mut started = STARTED.lock().await;
-        if started.get(&host).is_some_and(|(t, _)| *t == at) {
-            started.remove(&host);
-        }
-    });
-    Ok(StatusCode::NO_CONTENT)
-}
-
-/// Gives up a started pairing: the accessory is free again.
-pub async fn cancel_homekit_pairing(_admin: AdminUser, Json(input): Json<StartInput>) -> StatusCode {
-    STARTED.lock().await.remove(input.host.trim());
-    StatusCode::NO_CONTENT
-}
-
-/// Pairs Breezone with a HomeKit accessory with its setup code (the pairing started for it, or a
-/// new one), then adds it as a source. Nothing else changes on the accessory: what its own app set
-/// up stays as it is.
-pub async fn pair_homekit(State(state): State<AppState>, _admin: AdminUser, Json(input): Json<PairInput>) -> ApiResult<(StatusCode, Json<SourceView>)> {
-    let code = crate::homekit::setup_code(&input.code).ok_or_else(|| {
-        ApiError::bad_request(crate::text!(
-            "Le code HomeKit a 8 chiffres (par exemple 123-45-678).",
-            "The HomeKit code has 8 digits (for example 123-45-678).",
-            "El código HomeKit tiene 8 cifras (por ejemplo 123-45-678)."
-        ))
-    })?;
-    let host = accessory_host(&input.host)?;
-    let name: String = input.name.trim().chars().take(60).collect();
-    let started = STARTED.lock().await.remove(host).filter(|(at, _)| at.elapsed() < STARTED_FOR);
-    let paired = match started {
-        Some((_, setup)) => setup.finish(&code).await,
-        None => crate::homekit::pair_setup(host, &code, input.flags & 1 == 1).await,
+/// A step of the appairage of a module (its manifest's `pairing`): `204` while it goes on, the
+/// source added (`201`) once done.
+pub async fn pairing(State(state): State<AppState>, _admin: AdminUser, Path(module): Path<String>, Json(input): Json<PairingInput>) -> ApiResult<axum::response::Response> {
+    use axum::response::IntoResponse;
+    let (config, secret, default) = match crate::modules::pair(&module, input.step, input.input).await? {
+        crate::modules::native::Paired::Done { config, secret, name } => (config, secret, name),
+        crate::modules::native::Paired::Waiting(message) => return Err(ApiError::new(StatusCode::CONFLICT, message).with_detail("code", "button")),
+        crate::modules::native::Paired::Next => return Ok(StatusCode::NO_CONTENT.into_response()),
     };
-    let pairing = paired.map_err(|e| ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, e.explain()))?;
-    let config = serde_json::json!({"host": host, "device_id": pairing.accessory_id}).to_string();
-    let secret = crate::crypto::encrypt(&state.data_key, &serde_json::to_string(&pairing).unwrap_or_default());
+    let name: String = input.name.trim().chars().take(60).collect();
+    let encrypted = crate::crypto::encrypt(&state.data_key, &secret);
     let stored = async {
-        let id = db::insert_source(&state.db, "homekit", if name.is_empty() { "HomeKit" } else { &name }, &config).await?;
-        db::set_source_secret(&state.db, id, Some(&secret)).await?;
+        let id = db::insert_source(&state.db, &module, if name.is_empty() { &default } else { &name }, &config.to_string()).await?;
+        db::set_source_secret(&state.db, id, Some(&encrypted)).await?;
         Ok::<i64, sqlx::Error>(id)
     }
     .await;
     match stored {
-        Ok(id) => Ok((StatusCode::CREATED, Json(polled(&state, id).await?))),
+        Ok(id) => Ok((StatusCode::CREATED, Json(polled(&state, id).await?)).into_response()),
         Err(e) => {
-            // Paired but not kept: the accessory forgets Breezone, to be paired again.
-            let _ = crate::homekit::remove_own_pairing(host, &pairing).await;
+            // Paired but not kept: the hardware forgets Breezone, to be paired again.
+            if let Some(on_delete) = crate::modules::native::get(&module).and_then(|n| n.on_delete) {
+                on_delete(config, Some(secret)).await;
+            }
             Err(e.into())
         }
     }
-}
-
-#[derive(Deserialize)]
-pub struct LinkInput {
-    pub host: String,
-    pub name: String,
-}
-
-/// Adds a Hue bridge: it gives Breezone an access key in the 30 seconds after its button is
-/// pressed (as for the Hue app).
-pub async fn link_hue(State(state): State<AppState>, _admin: AdminUser, Json(input): Json<LinkInput>) -> ApiResult<(StatusCode, Json<SourceView>)> {
-    let host = input.host.trim();
-    if host.is_empty() || !host.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | ':')) {
-        return Err(ApiError::bad_request("invalid bridge address"));
-    }
-    let (bridge, key) = crate::drivers::hue::link(host).await.map_err(|e| match e {
-        crate::drivers::hue::LinkError::ButtonNotPressed => ApiError::new(
-            StatusCode::CONFLICT,
-            crate::text!(
-                "Appuyez sur le bouton rond du pont Hue, puis cliquez sur « Ajouter » dans les 30 secondes.",
-                "Press the round button of the Hue bridge, then click « Add » within 30 seconds.",
-                "Pulse el botón redondo del puente Hue y haga clic en «Añadir» en 30 segundos."
-            ),
-        )
-        .with_detail("code", "button"),
-        crate::drivers::hue::LinkError::Other(m) => {
-            ApiError::new(StatusCode::BAD_GATEWAY, crate::text!("Le pont Hue ne répond pas : {0}", "The Hue bridge does not answer: {0}", "El puente Hue no responde: {0}", m))
-        }
-    })?;
-    let name: String = input.name.trim().chars().take(60).collect();
-    let config = serde_json::json!({"host": host, "device_id": bridge.id}).to_string();
-    let id = db::insert_source(&state.db, "hue", if name.is_empty() { "Philips Hue" } else { &name }, &config).await?;
-    db::set_source_secret(&state.db, id, Some(&crate::crypto::encrypt(&state.data_key, &key))).await?;
-    Ok((StatusCode::CREATED, Json(polled(&state, id).await?)))
 }
 
 /// Reads the source now (« Tester » / « Actualiser »).
@@ -364,8 +286,39 @@ pub struct FoundProduct {
     pub added: bool,
 }
 
+/// The modules of the library not installed whose hardware the scan looks for too: those with
+/// devices, HTTP or mDNS hints, and a version that works here (the index kept for the day, not read again).
+async fn candidates(state: &AppState) -> Vec<crate::discovery::Candidate> {
+    let Ok(indexes) = state.library.indexes(&state.db, false).await else { return vec![] };
+    let host = crate::capabilities::Host::local();
+    let fits = |a: &str| crate::modules::manifest(a).is_some();
+    let mut out: Vec<crate::discovery::Candidate> = vec![];
+    for (repo, index) in indexes {
+        let Ok(index) = index else { continue };
+        for entry in &index.modules {
+            if crate::modules::manifest(&entry.id).is_some() || out.iter().any(|c| c.id == entry.id) {
+                continue;
+            }
+            let Some(best) = entry.best(&host, env!("CARGO_PKG_VERSION"), &fits) else { continue };
+            let m = &best.manifest;
+            if !m.has(crate::modules::manifest::Role::Driver) || (m.discovery.http.is_empty() && m.discovery.mdns.is_empty()) {
+                continue;
+            }
+            out.push(crate::discovery::Candidate {
+                id: crate::discovery::interned(&m.id),
+                name: m.name.fr.clone(),
+                hints: m.discovery.http.clone(),
+                mdns: m.discovery.mdns.clone(),
+                install: crate::discovery::Install { repository: repo.id, repository_name: repo.name.clone(), official: repo.official, version: m.version.clone() },
+            });
+        }
+    }
+    out
+}
+
 /// Every supported product on the network (Airzone WebServers, Shelly…), identified down to the
-/// model, and whether each one is already added.
+/// model, and whether each one is already added; the hardware of the modules of the library not
+/// installed is found too, with where to install its module from.
 pub async fn scan(State(state): State<AppState>, _admin: AdminUser, body: Option<Json<ScanInput>>) -> ApiResult<Json<Value>> {
     let req = body.map(|Json(b)| b).unwrap_or_default();
     let subnet = match req.subnet.filter(|s| !s.trim().is_empty()) {
@@ -374,7 +327,8 @@ pub async fn scan(State(state): State<AppState>, _admin: AdminUser, body: Option
     }
     .ok_or_else(|| ApiError::bad_request("indiquez le réseau à analyser, par exemple 192.168.1.0/24"))?;
     let started = std::time::Instant::now();
-    let products = crate::discovery::scan_products(&subnet, state.cfg.scan_port, &state.drivers.quiet_hosts().await).await.map_err(ApiError::bad_request)?;
+    let candidates = candidates(&state).await;
+    let products = crate::discovery::scan_products(&subnet, state.cfg.scan_port, &state.drivers.quiet_hosts().await, &candidates).await.map_err(ApiError::bad_request)?;
     let installations = db::list_installations(&state.db).await?;
     let sources = db::list_sources(&state.db).await?;
     let mac = |m: &Option<String>| m.as_deref().map(crate::cloud::normalize_mac);
@@ -553,7 +507,7 @@ pub struct TwinsView {
 /// last reading, and for a cloud module the local devices it may be linked to.
 pub async fn twins(State(state): State<AppState>, _admin: AdminUser, Path(id): Path<i64>) -> ApiResult<Json<TwinsView>> {
     let source = db::source_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("source not found"))?;
-    if !crate::accounts::MODULES.contains(&source.driver.as_str()) {
+    if !crate::accounts::is_cloud(&source.driver) {
         return Ok(Json(TwinsView { devices: state.drivers.cloud_view(id).await, locals: vec![] }));
     }
     let names: std::collections::HashMap<String, String> = db::list_devices(&state.db).await?.into_iter().filter_map(|d| Some((d.source_ref, d.name?))).collect();
@@ -563,7 +517,7 @@ pub async fn twins(State(state): State<AppState>, _admin: AdminUser, Path(id): P
         .devices()
         .await
         .into_iter()
-        .filter(|d| d.source_id != id && !crate::accounts::MODULES.contains(&d.driver.as_str()))
+        .filter(|d| d.source_id != id && !crate::accounts::is_cloud(&d.driver))
         .map(|d| LocalChoice {
             name: names.get(&format!("{}/{}", d.source_id, d.info.reference)).cloned().unwrap_or_else(|| d.info.name.clone()),
             source: sources.get(&d.source_id).cloned().unwrap_or_default(),
@@ -590,7 +544,7 @@ pub struct TwinInput {
 /// local device, a device of its own, or back to what its name finds.
 pub async fn set_twin(State(state): State<AppState>, _admin: AdminUser, Path(id): Path<i64>, Json(input): Json<TwinInput>) -> ApiResult<Json<TwinsView>> {
     let source = db::source_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("source not found"))?;
-    if !crate::accounts::MODULES.contains(&source.driver.as_str()) && !matches!(input.choice.as_str(), "auto" | "ignore") {
+    if !crate::accounts::is_cloud(&source.driver) && !matches!(input.choice.as_str(), "auto" | "ignore") {
         return Err(ApiError::bad_request("choice: auto or ignore"));
     }
     let mut config: serde_json::Map<String, Value> = serde_json::from_str(&source.config).unwrap_or_default();
@@ -630,5 +584,102 @@ mod tests {
     fn the_form_of_a_module_keeps_the_choices_made_on_its_devices() {
         let kept = super::with_choices(r#"{"host":"10.0.0.2"}"#, r#"{"host":"10.0.0.1","ignored":["gas"]}"#);
         assert_eq!(serde_json::from_str::<serde_json::Value>(&kept).unwrap(), serde_json::json!({"host": "10.0.0.2", "ignored": ["gas"]}));
+    }
+}
+
+// ---------------------------------------------------------------------------------------
+// Schedules of the hardware (`schedule.hardware`)
+// ---------------------------------------------------------------------------------------
+
+/// "HH:MM"
+fn valid_time(t: &str) -> bool {
+    t.split_once(':').is_some_and(|(h, m)| h.len() == 2 && m.len() == 2 && h.parse::<u8>().is_ok_and(|h| h < 24) && m.parse::<u8>().is_ok_and(|m| m < 60))
+}
+
+/// A schedule as the hardware will get it: a name, days, a time, devices of the source that have
+/// the trait, an action of it with its parameters (and those of its end) as the catalog says.
+async fn check_schedule(state: &AppState, source_id: i64, s: &mut crate::drivers::Schedule) -> ApiResult<()> {
+    s.name = s.name.trim().chars().take(40).collect();
+    if s.name.is_empty() {
+        return Err(ApiError::bad_request("le nom est requis"));
+    }
+    s.days.sort_unstable();
+    s.days.dedup();
+    if s.days.is_empty() || s.days.iter().any(|d| !(1..=7).contains(d)) {
+        return Err(ApiError::bad_request("jours de 1 (lundi) à 7 (dimanche)"));
+    }
+    if !valid_time(&s.time) || s.end.as_ref().is_some_and(|e| !valid_time(&e.time)) {
+        return Err(ApiError::bad_request("heure HH:MM attendue"));
+    }
+    if s.references.is_empty() {
+        return Err(ApiError::bad_request("au moins un appareil"));
+    }
+    let devices = crate::devices::list(state).await?;
+    for reference in &s.references {
+        let device = devices
+            .iter()
+            .find(|d| d.source_id == Some(source_id) && d.reference.as_str() == Some(reference.as_str()))
+            .ok_or_else(|| ApiError::bad_request(format!("{reference}: not a device of this source")))?;
+        let action = |params: &serde_json::Map<String, Value>| crate::devices::ActionInput { trait_name: s.trait_name.clone(), action: s.action.clone(), params: params.clone() };
+        crate::devices::check_action(device, &action(&s.params))?;
+        if let Some(end) = &s.end {
+            crate::devices::check_action(device, &action(&end.params))?;
+        }
+    }
+    Ok(())
+}
+
+/// The schedules the hardware of a source keeps.
+pub async fn schedules(State(state): State<AppState>, _admin: AdminUser, Path(id): Path<i64>) -> ApiResult<Json<Vec<crate::drivers::Schedule>>> {
+    let driver = state.drivers.driver(id).await.ok_or_else(|| ApiError::not_found("source not found"))?;
+    Ok(Json(driver.schedules().await.map_err(driver_error)?))
+}
+
+async fn save_schedule(state: &AppState, id: i64, mut schedule: crate::drivers::Schedule) -> ApiResult<Json<Vec<crate::drivers::Schedule>>> {
+    let driver = state.drivers.driver(id).await.ok_or_else(|| ApiError::not_found("source not found"))?;
+    check_schedule(state, id, &mut schedule).await?;
+    driver.save_schedule(&schedule).await.map_err(driver_error)?;
+    Ok(Json(driver.schedules().await.map_err(driver_error)?))
+}
+
+/// Adds a schedule to the hardware; the schedules it keeps then.
+pub async fn create_schedule(
+    State(state): State<AppState>,
+    _admin: AdminUser,
+    Path(id): Path<i64>,
+    Json(mut schedule): Json<crate::drivers::Schedule>,
+) -> ApiResult<Json<Vec<crate::drivers::Schedule>>> {
+    schedule.id.clear();
+    save_schedule(&state, id, schedule).await
+}
+
+/// Changes a schedule of the hardware (one it lets Breezone change).
+pub async fn update_schedule(
+    State(state): State<AppState>,
+    _admin: AdminUser,
+    Path((id, schedule_id)): Path<(i64, String)>,
+    Json(mut schedule): Json<crate::drivers::Schedule>,
+) -> ApiResult<Json<Vec<crate::drivers::Schedule>>> {
+    let driver = state.drivers.driver(id).await.ok_or_else(|| ApiError::not_found("source not found"))?;
+    let current = driver.schedules().await.map_err(driver_error)?.into_iter().find(|s| s.id == schedule_id).ok_or_else(|| ApiError::not_found("schedule not found"))?;
+    if !current.editable {
+        return Err(ApiError::new(StatusCode::CONFLICT, current.note.unwrap_or_else(|| "this schedule is changed in the hardware's app".into())));
+    }
+    schedule.id = schedule_id;
+    save_schedule(&state, id, schedule).await
+}
+
+pub async fn delete_schedule(State(state): State<AppState>, _admin: AdminUser, Path((id, schedule_id)): Path<(i64, String)>) -> ApiResult<Json<Vec<crate::drivers::Schedule>>> {
+    let driver = state.drivers.driver(id).await.ok_or_else(|| ApiError::not_found("source not found"))?;
+    driver.delete_schedule(&schedule_id).await.map_err(driver_error)?;
+    Ok(Json(driver.schedules().await.map_err(driver_error)?))
+}
+
+#[cfg(test)]
+mod schedule_tests {
+    #[test]
+    fn times_are_checked() {
+        assert!(super::valid_time("07:30") && super::valid_time("23:59"));
+        assert!(!super::valid_time("24:00") && !super::valid_time("7:30") && !super::valid_time("07h30"));
     }
 }

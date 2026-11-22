@@ -99,6 +99,12 @@ class Hub(
 
     fun api(serverId: String): BreezoneApi? = apis[serverId]
 
+    private val catalogs = mutableMapOf<String, List<CatalogTrait>>()
+
+    /** The catalog of traits of a server, read once (it changes only with the server's version). */
+    suspend fun catalog(serverId: String): List<CatalogTrait> =
+        catalogs[serverId] ?: runCatching { apis[serverId]?.traits() }.getOrNull().orEmpty().also { if (it.isNotEmpty()) catalogs[serverId] = it }
+
     fun server(serverId: String): ServerState? = _servers.value.firstOrNull { it.account.id == serverId }
 
     private fun persist() {

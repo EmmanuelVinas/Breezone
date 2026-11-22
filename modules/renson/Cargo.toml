@@ -1,0 +1,11 @@
+[package]
+name = "breezone-module-renson"
+version = "1.0.0"
+edition.workspace = true
+description = "Renson Healthbox 3.0 ventilation unit, through its local HTTP API"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+breezone-module-sdk = { path = "../sdk" }

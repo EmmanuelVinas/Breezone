@@ -9,6 +9,7 @@ import {
   Gauge,
   House,
   Loader2,
+  Puzzle,
   RefreshCw,
   Search,
   Snowflake,
@@ -17,10 +18,10 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { toast } from "sonner"
-import type { AccountKind, AccountView } from "@/lib/api"
+import type { AccountKind, AccountView, ModuleView } from "@/lib/api"
 import { api } from "@/lib/api"
 import { errorText, relativeTime } from "@/lib/format"
-import { t } from "@/lib/i18n"
+import { lang, t } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { ConfirmDialog } from "@/components/confirm"
 import { Badge } from "@/components/ui/badge"
@@ -53,7 +54,8 @@ type Kind = {
   icon: LucideIcon
   description: string
   steps: string[]
-  link: { url: string; label: string }
+  /** Where to get what it asks (none for a module's own account). */
+  link?: { url: string; label: string }
   fields: Field[]
   /** Connected from elsewhere (its module). */
   elsewhere?: { to: string; label: string }
@@ -61,7 +63,7 @@ type Kind = {
   off: string
 }
 
-const KINDS: Record<AccountKind, Kind> = {
+const KINDS: Partial<Record<AccountKind, Kind>> = {
   airzone: {
     title: "Airzone Cloud",
     icon: Snowflake,
@@ -245,6 +247,38 @@ const KINDS: Record<AccountKind, Kind> = {
   },
 }
 
+/**
+ * What an account is: the words written for those Breezone knows, else what the manifest of its
+ * module says (a module installed from a library brings its own account and its form).
+ */
+function kindOf(a: AccountView, modules: ModuleView[] | undefined): Kind {
+  const known = KINDS[a.kind]
+  if (known) return known
+  const m = modules?.find((x) => x.id === a.kind)?.manifest
+  const title = m?.name[lang()] ?? a.kind
+  return {
+    title,
+    icon: Puzzle,
+    description:
+      m?.description?.[lang()] ??
+      t("Le compte que demande le module {name}.", { name: title }),
+    steps: [],
+    fields: (m?.config ?? []).map((f) => ({
+      name: f.name,
+      label: f.label[lang()],
+      secret: f.type === "password",
+      optional: f.optional,
+    })),
+    off: t("Désactivé : le module ne s'en sert plus."),
+  }
+}
+
+/** The modules of this server (for the accounts their manifests describe). */
+function useKind(a: AccountView): Kind {
+  const modules = useQuery({ queryKey: ["modules"], queryFn: api.modules })
+  return kindOf(a, modules.data)
+}
+
 function StateBadge({ a }: { a: AccountView }) {
   const [label, tone] = !a.enabled
     ? [t("Désactivé"), "bg-muted-foreground"]
@@ -326,7 +360,7 @@ function useEnable(a: AccountView) {
 
 /** An account or a service in the grid: what it is and its state; its detail opens on a click. */
 function AccountTile({ a }: { a: AccountView }) {
-  const kind = KINDS[a.kind]
+  const kind = useKind(a)
   const [open, setOpen] = useState(false)
   const { enable, enabled } = useEnable(a)
   const what = a.connected && enabled ? summary(a) : null
@@ -420,7 +454,7 @@ function AccountTile({ a }: { a: AccountView }) {
 }
 
 function AccountDetail({ a, enabled }: { a: AccountView; enabled: boolean }) {
-  const kind = KINDS[a.kind]
+  const kind = useKind(a)
   const [editing, setEditing] = useState(!a.connected)
   const [values, setValues] = useState<Record<string, string>>({})
   const [removing, setRemoving] = useState(false)
@@ -482,14 +516,16 @@ function AccountDetail({ a, enabled }: { a: AccountView; enabled: boolean }) {
               <RefreshCw className={test.isPending ? "animate-spin" : ""} />
               {t("Tester")}
             </Button>
-            <a
-              href={kind.link.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-            >
-              {kind.link.label} <ExternalLink className="size-3.5" />
-            </a>
+            {kind.link && (
+              <a
+                href={kind.link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+              >
+                {kind.link.label} <ExternalLink className="size-3.5" />
+              </a>
+            )}
           </div>
         )
       ) : kind.elsewhere ? (
@@ -511,14 +547,16 @@ function AccountDetail({ a, enabled }: { a: AccountView; enabled: boolean }) {
               <li key={s}>{s}</li>
             ))}
           </ol>
-          <a
-            href={kind.link.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-          >
-            {kind.link.label} <ExternalLink className="size-3.5" />
-          </a>
+          {kind.link && (
+            <a
+              href={kind.link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+            >
+              {kind.link.label} <ExternalLink className="size-3.5" />
+            </a>
+          )}
           <div className="grid gap-3 sm:grid-cols-2">
             {kind.fields.map((f) => (
               <div key={f.name} className="grid gap-1.5">
@@ -615,17 +653,18 @@ const plain = (s: string) =>
  */
 export function AccountsTab() {
   const accounts = useQuery({ queryKey: ["accounts"], queryFn: api.accounts })
+  const modules = useQuery({ queryKey: ["modules"], queryFn: api.modules })
   const [query, setQuery] = useState("")
   const shown = useMemo(() => {
     const words = plain(query).split(/\s+/).filter(Boolean)
     const list = (accounts.data ?? []).filter((a) => {
-      const k = KINDS[a.kind]
-      const text = plain(`${k.title} ${k.description} ${k.link.label}`)
+      const k = kindOf(a, modules.data)
+      const text = plain(`${k.title} ${k.description} ${k.link?.label ?? ""}`)
       return words.every((w) => text.includes(w))
     })
     const rank = (a: AccountView) => (a.connected ? 0 : 1)
     return [...list].sort((x, y) => rank(x) - rank(y))
-  }, [accounts.data, query])
+  }, [accounts.data, modules.data, query])
   return (
     <div className="grid gap-4">
       <p className="text-sm text-muted-foreground">

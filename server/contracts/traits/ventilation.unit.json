@@ -1,6 +1,7 @@
 {
   "trait": "ventilation.unit",
   "version": 1,
+  "revision": 0,
   "label": { "fr": "VMC", "en": "Ventilation unit", "es": "Ventilación" },
   "state": [
     { "name": "flow", "type": "number", "unit": "m³/h", "min": 0, "label": { "fr": "Débit d'air", "en": "Air flow", "es": "Caudal de aire" } },
@@ -20,5 +21,21 @@
       ]
     },
     { "name": "stop_boost", "label": { "fr": "Arrêter le boost", "en": "Stop the boost", "es": "Detener el boost" }, "params": [] }
-  ]
+  ],
+  "ui": {
+    "kind": "ventilation",
+    "primary": "flow",
+    "card": [
+      {"widget": "value", "field": "flow"},
+      {"widget": "value", "field": "air_quality_index"},
+      {"widget": "button", "action": "boost", "params": {"minutes": 30}}
+    ],
+    "detail": [
+      {"widget": "value", "field": "flow"},
+      {"widget": "value", "field": "power"},
+      {"widget": "value", "field": "air_quality_index"},
+      {"widget": "button", "action": "boost", "params": {"minutes": 30}},
+      {"widget": "button", "action": "stop_boost", "when": "boost"}
+    ]
+  }
 }

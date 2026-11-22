@@ -22,7 +22,7 @@ pub struct DeviceView {
     pub kind: String,
     /// `trait@version` the device has.
     pub traits: Vec<String>,
-    /// Driver that provides it ("airzone", "shelly").
+    /// Driver that provides it: "airzone", or the id of a module.
     pub source: String,
     /// Configured source (drivers other than Airzone).
     pub source_id: Option<i64>,

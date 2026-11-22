@@ -1,0 +1,13 @@
+[package]
+name = "breezone-module-rte"
+version = "1.0.0"
+edition.workspace = true
+description = "RTE's data portal: the official colour of the Tempo days"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+breezone-module-sdk = { path = "../sdk" }
+base64 = "0.23.1"
+chrono = { version = "0.4", default-features = false, features = ["std"] }

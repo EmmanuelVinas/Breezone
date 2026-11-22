@@ -57,7 +57,7 @@ pub const MAX_TRIGGERS: usize = 3;
 /// Conditions of a rule, those of its groups included.
 pub const MAX_CONDITIONS: usize = 8;
 /// Steps of each branch (then, else).
-pub const MAX_ACTIONS: usize = 8;
+pub const MAX_ACTIONS: usize = 12;
 /// Longest time a measure or a state may have to hold (minutes).
 const MAX_FOR_MINUTES: i64 = 24 * 60;
 /// Longest wait (seconds).

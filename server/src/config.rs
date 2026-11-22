@@ -42,6 +42,13 @@ pub struct Config {
     /// `BREEZONE_WEATHER`, on by default in a release build, off in a development build and the
     /// tests, so that working on the server sends nothing out.
     pub weather: bool,
+    /// `BREEZONE_MATTER`: Breezone answers as a Matter bridge (ADR 0015), off unless asked.
+    pub matter: bool,
+    /// `BREEZONE_MATTER_PORT`: its UDP port (5540, the port of Matter).
+    pub matter_port: u16,
+    /// `BREEZONE_MATTER_INTERFACE`: the network interface Matter is announced on (`eth0`…), when the
+    /// one found by itself is not the right one.
+    pub matter_interface: Option<String>,
     /// Where the colours of the Tempo days are read (`BREEZONE_TEMPO_URL`): the public relay
     /// api-couleur-tempo.fr when the server may look things up on the internet (`weather`), else
     /// none.
@@ -56,6 +63,12 @@ pub struct Config {
     pub conso_api_url: String,
     pub netatmo_url: String,
     pub ezviz_url: String,
+    /// Where the library of modules is read, and the key that signs it: the official repository
+    /// and the key of the releases, always (no variable changes them); the tests point elsewhere.
+    pub modules_library: Option<(String, String)>,
+    /// A folder of modules being developed (`BREEZONE_MODULES_DEV`): its packages are installed at
+    /// start without a signature. Read by the development builds only, never by a release.
+    pub modules_dev: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -109,6 +122,9 @@ impl Config {
             airzone_hosts: var("BREEZONE_AIRZONE_HOSTS").map(|v| parse_bootstrap(&v)).unwrap_or_default(),
             self_update: flag("BREEZONE_SELF_UPDATE").unwrap_or(true),
             weather: flag("BREEZONE_WEATHER").unwrap_or(!cfg!(debug_assertions)),
+            matter: flag("BREEZONE_MATTER").unwrap_or(false),
+            matter_port: num("BREEZONE_MATTER_PORT", 5540),
+            matter_interface: var("BREEZONE_MATTER_INTERFACE"),
             cre_url: var("BREEZONE_CRE_URL")
                 .or_else(|| flag("BREEZONE_WEATHER").unwrap_or(!cfg!(debug_assertions)).then(|| "https://www.cre.fr/fileadmin/Documents/Open_data/Marches_de_detail".into())),
             tempo_url: var("BREEZONE_TEMPO_URL").or_else(|| flag("BREEZONE_WEATHER").unwrap_or(!cfg!(debug_assertions)).then(|| "https://www.api-couleur-tempo.fr".into())),
@@ -116,6 +132,8 @@ impl Config {
             conso_api_url: var("BREEZONE_CONSO_API_URL").unwrap_or_else(|| "https://conso.boris.sh".into()),
             netatmo_url: var("BREEZONE_NETATMO_URL").unwrap_or_else(|| "https://api.netatmo.com".into()),
             ezviz_url: var("BREEZONE_EZVIZ_URL").unwrap_or_else(|| "https://apiieu.ezvizlife.com".into()),
+            modules_library: None,
+            modules_dev: if cfg!(debug_assertions) { var("BREEZONE_MODULES_DEV").map(PathBuf::from) } else { None },
         }
     }
 
@@ -126,6 +144,11 @@ impl Config {
             None if self.airzone_cloud_url.contains("m.airzonecloud.com") => "https://prodctrl.airzonecloud.com".into(),
             None => self.airzone_cloud_url.clone(),
         }
+    }
+
+    /// The address of the maker's service of the modules that reach it through their account.
+    pub fn module_urls(&self) -> std::collections::HashMap<String, String> {
+        [("netatmo", &self.netatmo_url), ("ezviz", &self.ezviz_url)].into_iter().map(|(k, v)| (k.to_string(), v.clone())).collect()
     }
 
     pub fn for_tests(data_dir: PathBuf) -> Self {
@@ -154,12 +177,17 @@ impl Config {
             airzone_hosts: vec![],
             self_update: false,
             weather: false,
+            matter: false,
+            matter_port: 5540,
+            matter_interface: None,
             tempo_url: None,
             cre_url: None,
             rte_url: "http://127.0.0.1:9".into(),
             conso_api_url: "http://127.0.0.1:9".into(),
             netatmo_url: "http://127.0.0.1:9".into(),
             ezviz_url: "http://127.0.0.1:9".into(),
+            modules_library: None,
+            modules_dev: None,
         }
     }
 }

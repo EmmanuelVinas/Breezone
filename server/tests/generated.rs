@@ -59,7 +59,30 @@ fn typescript() -> String {
         }
     }
     out += &format!("/** Traits described by this version (`trait@version`). */\nexport const TRAITS = [{}] as const\n", ids.join(", "));
+    let (revisions, kinds, order) = presentation();
+    out += &format!(
+        "\n/** Highest revision of each trait known to this version. */\nexport const TRAIT_REVISIONS: Record<string, number> = {{ {} }}\n",
+        revisions.iter().map(|(id, r)| format!("\"{id}\": {r}")).collect::<Vec<_>>().join(", ")
+    );
+    out += &format!(
+        "\n/** Kind of device each trait makes (its `ui.kind`). */\nexport const TRAIT_KINDS: Record<string, string> = {{ {} }}\n",
+        kinds.iter().map(|(t, k)| format!("\"{t}\": \"{k}\"")).collect::<Vec<_>>().join(", ")
+    );
+    out += &format!(
+        "\n/** Kinds of devices, in the order of lists (`contracts/ui.json`). */\nexport const KINDS = [{}] as const\nexport type KindId = (typeof KINDS)[number]\n",
+        order.iter().map(|k| format!("\"{k}\"")).collect::<Vec<_>>().join(", ")
+    );
     out
+}
+
+/// What the clients need of the presentation: revisions, kinds of the traits, order of the kinds.
+type Presentation = (Vec<(String, u32)>, Vec<(String, String)>, Vec<String>);
+
+fn presentation() -> Presentation {
+    let revisions = catalog().iter().map(|t| (t.id(), t.revision)).collect();
+    let kinds = catalog().iter().filter_map(|t| Some((t.name.clone(), t.ui.as_ref()?.kind.clone()))).collect();
+    let order = breezone_server::traits::vocabulary().kinds.iter().map(|k| k.id.clone()).collect();
+    (revisions, kinds, order)
 }
 
 fn kotlin_type(t: &Trait, f: &Field) -> String {
@@ -135,6 +158,19 @@ fn kotlin() -> String {
         }
     }
     out += &format!("\n/** Traits described by this version (`trait@version`). */\nval TRAITS = listOf({})\n", ids.join(", "));
+    let (revisions, kinds, order) = presentation();
+    out += &format!(
+        "\n/** Highest revision of each trait known to this version. */\nval TRAIT_REVISIONS = mapOf({})\n",
+        revisions.iter().map(|(id, r)| format!("\"{id}\" to {r}")).collect::<Vec<_>>().join(", ")
+    );
+    out += &format!(
+        "\n/** Kind of device each trait makes (its `ui.kind`). */\nval TRAIT_KINDS = mapOf({})\n",
+        kinds.iter().map(|(t, k)| format!("\"{t}\" to \"{k}\"")).collect::<Vec<_>>().join(", ")
+    );
+    out += &format!(
+        "\n/** Kinds of devices, in the order of lists (`contracts/ui.json`). */\nval KIND_IDS = listOf({})\n",
+        order.iter().map(|k| format!("\"{k}\"")).collect::<Vec<_>>().join(", ")
+    );
     out
 }
 

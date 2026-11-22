@@ -14,7 +14,7 @@
 //!   POST /app/handshake2  sha256(seeds + auth)     → 200
 //!   POST /app/request?seq=N  sha256(sig + N + cipher) + cipher → the same, the answer
 
-use super::{ConfigField, Described, DeviceInfo, Driver, DriverError, DriverFuture, DriverInfo, State};
+use super::{Described, DeviceInfo, Driver, DriverError, DriverFuture, State};
 use aes::cipher::{BlockModeDecrypt, BlockModeEncrypt, KeyIvInit};
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
@@ -24,30 +24,6 @@ use std::collections::HashMap;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::Mutex;
-
-pub fn info() -> DriverInfo {
-    DriverInfo {
-        id: "tplink",
-        label: "TP-Link Kasa · Tapo",
-        provides: vec!["switch.relay@1", "light@1", "energy.power@1"],
-        models: vec!["Tapo P100, P110, P115, L510, L530…".into(), "Kasa HS100, HS110, KP115, HS300, KL130…".into()],
-        config: vec![
-            ConfigField { name: "host", kind: "string", optional: false, label: crate::text!("Adresse IP ou nom", "IP address or name", "Dirección IP o nombre") },
-            ConfigField {
-                name: "username",
-                kind: "string",
-                optional: true,
-                label: crate::text!("E-mail du compte TP-Link (Tapo)", "TP-Link account e-mail (Tapo)", "Correo de la cuenta TP-Link (Tapo)"),
-            },
-            ConfigField {
-                name: "password",
-                kind: "password",
-                optional: true,
-                label: crate::text!("Mot de passe du compte TP-Link (Tapo)", "TP-Link account password (Tapo)", "Contraseña de la cuenta TP-Link (Tapo)"),
-            },
-        ],
-    }
-}
 
 // ---------------------------------------------------------------------------------------
 // Kasa: XOR over TCP 9999

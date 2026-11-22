@@ -89,10 +89,24 @@ pub async fn refresh(state: &AppState) -> anyhow::Result<()> {
     let today = crate::rollup::local_day(db::now(), state.cfg.timezone);
     let start = season_start(today);
     let season = today > start && colors(&state.db, start, start).await?.is_empty();
-    match crate::accounts::rte::refresh(state, season).await {
-        Ok(true) => return Ok(()),
-        Ok(false) => {}
-        Err(e) => tracing::warn!("Tempo colours not read from RTE: {}", e.message.en),
+    // A module that gives the colours (RTE's, when its account is connected) comes first.
+    let from = if season { start } else { today };
+    let asked = serde_json::json!({"from": from.to_string(), "until": (today + chrono::Days::new(1)).to_string()});
+    match crate::modules::ask_service(&state.db, "tariff.day_color@1", "colors", &asked).await {
+        Some(Ok(list)) => {
+            for d in list.as_array().into_iter().flatten() {
+                if let (Some(day), Some(color)) = (d["day"].as_str(), d["color"].as_str()) {
+                    db::set_day_color(&state.db, day, color).await?;
+                }
+            }
+            return Ok(());
+        }
+        Some(Err(e)) => tracing::warn!("Tempo colours not read from a module: {e}"),
+        None => match crate::accounts::rte::refresh(state, season).await {
+            Ok(true) => return Ok(()),
+            Ok(false) => {}
+            Err(e) => tracing::warn!("Tempo colours not read from RTE: {}", e.message.en),
+        },
     }
     let Some(base) = state.cfg.tempo_url.clone() else { return Ok(()) };
     let http = reqwest::Client::builder().timeout(Duration::from_secs(10)).user_agent("Breezone").build()?;

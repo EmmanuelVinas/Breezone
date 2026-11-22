@@ -9,7 +9,7 @@
 //! The free service answers 12 times an hour from one address: the forecast is asked again every
 //! 30 minutes, and what is shown in between is worked out from it.
 
-use super::{ConfigField, Described, DeviceInfo, Driver, DriverError, DriverFuture, DriverInfo, State};
+use super::{Described, DeviceInfo, Driver, DriverError, DriverFuture, State};
 use chrono::{NaiveDateTime, TimeZone};
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
@@ -18,33 +18,6 @@ use tokio::sync::Mutex;
 
 pub const REFERENCE: &str = "forecast";
 const ASK_EVERY: Duration = Duration::from_secs(1800);
-
-pub fn info() -> DriverInfo {
-    let field = |name, kind, optional, label| ConfigField { name, kind, optional, label };
-    DriverInfo {
-        id: "forecast_solar",
-        label: "Forecast.Solar",
-        provides: vec!["solar.forecast@1"],
-        models: vec!["Forecast.Solar".into()],
-        config: vec![
-            field("kwp", "number", false, crate::text!("Puissance crête des panneaux (kWc)", "Peak power of the panels (kWp)", "Potencia pico de los paneles (kWp)")),
-            field("declination", "integer", false, crate::text!("Inclinaison (°, 0 = à plat)", "Tilt (°, 0 = flat)", "Inclinación (°, 0 = plano)")),
-            field(
-                "azimuth",
-                "integer",
-                false,
-                crate::text!(
-                    "Orientation (°, 0 = sud, -90 = est, 90 = ouest)",
-                    "Orientation (°, 0 = south, -90 = east, 90 = west)",
-                    "Orientación (°, 0 = sur, -90 = este, 90 = oeste)"
-                ),
-            ),
-            field("latitude", "number", true, crate::text!("Latitude (celle de la maison sinon)", "Latitude (the home's otherwise)", "Latitud (la de la casa si no)")),
-            field("longitude", "number", true, crate::text!("Longitude (celle de la maison sinon)", "Longitude (the home's otherwise)", "Longitud (la de la casa si no)")),
-            field("api_key", "password", true, crate::text!("Clé d'API (facultative)", "API key (optional)", "Clave de API (opcional)")),
-        ],
-    }
-}
 
 /// A forecast as read: power over the day (W, by time), Wh since the morning, Wh per day.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -191,6 +164,14 @@ impl Driver for ForecastSolar {
 
     fn act<'a>(&'a self, _reference: &'a str, _trait_name: &'a str, _action: &'a str, _params: &'a State) -> DriverFuture<'a, ()> {
         Box::pin(async { Err(DriverError::Unsupported("a forecast is only read".into())) })
+    }
+
+    /// The power expected along today and tomorrow, as Forecast.Solar gives it.
+    fn forecast<'a>(&'a self, _reference: &'a str) -> DriverFuture<'a, super::Forecast> {
+        Box::pin(async move {
+            let f = self.forecast().await?;
+            Ok(super::Forecast::from([("power".to_string(), f.watts)]))
+        })
     }
 
     /// The power expected now moves along the day: worked out every minute from the forecast.

@@ -1,12 +1,32 @@
-Breezone pilote vos climatisations et chauffages Airzone via votre propre serveur Breezone, installé chez vous (Docker, NAS, Raspberry Pi), qui utilise l'API locale de votre WebServer Airzone.
+Breezone pilote votre maison depuis votre téléphone, en local, via votre propre serveur Breezone, installé chez vous (NAS, Raspberry Pi, Docker). Il dialogue avec votre WebServer Airzone et vos appareils par leur API locale.
 
+CLIMATISATION (AIRZONE)
 • Zones : marche/arrêt, consigne, mode, ventilation, veille ; groupes par étage
-• Routines et minuteries : « dans 2 h, éteindre l'étage », scènes en un geste
 • Programmations de l'application Airzone, modifiables depuis Breezone
-• Plusieurs sites et plusieurs serveurs dans la même application
-• Historique et journal d'activité en temps réel
-• Aucune publicité, aucun traceur ; vos données restent sur votre serveur
+• Historique de température, consigne et humidité
 
-L'application nécessite un serveur Breezone (gratuit, voir github.com/EmmanuelVinas/breezone).
+LUMIÈRES, VOLETS ET VENTILATION
+• Lumières : allumage, luminosité, température de blanc et couleurs, pièce par pièce
+• Volets : ouverture et fermeture, par pièce ou par étage
+• Ventilation : mesures de chaque pièce (humidité, CO₂, COV, débit) sur 24 h ou 7 jours
 
-Breezone est un projet indépendant, sans lien avec Airzone. « Airzone » est une marque de son propriétaire, citée uniquement pour indiquer la compatibilité.
+ÉNERGIE ET RECHARGE
+• Prix de l'électricité, et couleurs Tempo du jour et du lendemain
+• Solaire : suivi du surplus, qui peut piloter la climatisation
+• Recharge : suivi et pilotage de votre borne
+
+ROUTINES
+• Scènes lancées en un geste, avec des étapes différées (« éteindre l'étage dans 2 h »)
+• Le bouton d'une télécommande peut lancer une automatisation
+
+COMPTES LIÉS ET CAMÉRAS
+• Linky, RTE Tempo, Netatmo, Legrand et caméras EZVIZ
+• Plusieurs sites et serveurs dans la même application, sans VPN
+• Accès à distance par l'adresse HTTPS de votre serveur
+• Utilisateurs avec droits par installation (lecture seule ou pilotage)
+• Français, anglais et espagnol
+
+VIE PRIVÉE
+L'application ne contacte que les serveurs Breezone que vous ajoutez. Aucune publicité, aucune statistique, aucun suivi. Le mot de passe n'est pas conservé : la session est gardée dans le trousseau sécurisé du téléphone.
+
+Breezone est un projet indépendant, sans lien avec Airzone (Corporación Empresarial Altra S.L.) ni avec les autres marques citées. Les noms de marques servent uniquement à indiquer la compatibilité.

@@ -270,6 +270,14 @@ export function AutomationEditor({
             />
           </Section>
 
+          {!lasting && draft.triggers.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {t(
+                "Pas d'« Ensuite » ici : une heure, un lever ou un coucher du soleil est un instant, il ne cesse pas d'être vrai. Pour revenir en arrière, créez une autre règle au moment voulu."
+              )}
+            </p>
+          )}
+
           {lasting && (
             <Section
               badge={t("Ensuite")}

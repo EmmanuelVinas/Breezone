@@ -1123,7 +1123,6 @@ const en: Record<string, string> = {
   "Tous les objets ont déjà une pièce": "Every object already has a room",
   "{placed} objet(s) rangé(s), {created} pièce(s) créée(s)":
     "{placed} object(s) placed, {created} room(s) created",
-  "Reprendre les pièces Renson": "Take the Renson rooms",
   Eco: "Eco",
   Health: "Health",
   Intense: "Intense",
@@ -1328,6 +1327,38 @@ const en: Record<string, string> = {
   "Ce que Breezone fait quand les conditions sont fausses.":
     "What Breezone does when the conditions are false.",
   Ensuite: "Afterwards",
+  "{max} actions au plus : pour en faire davantage, regroupez-les dans une routine ou une scène et lancez-la d'ici.":
+    "{max} actions at most: to do more, group them in a routine or a scene and start it from here.",
+  "Pas d'« Ensuite » ici : une heure, un lever ou un coucher du soleil est un instant, il ne cesse pas d'être vrai. Pour revenir en arrière, créez une autre règle au moment voulu.":
+    "No “Afterwards” here: a time, a sunrise or a sunset is a moment, it does not stop being true. To undo it, create another rule at the time you want.",
+  "Le compte que demande le module {name}.":
+    "The account the {name} module asks for.",
+  "Désactivé : le module ne s'en sert plus.":
+    "Switched off: the module no longer uses it.",
+  oui: "yes",
+  non: "no",
+  "Programmation enregistrée dans l'appareil": "Schedule saved in the device",
+  "Enregistrée dans l'appareil, qui l'exécute lui-même, même sans Breezone.":
+    "Saved in the device, which runs it itself, even without Breezone.",
+  "Choisir une action": "Choose an action",
+  "Choisissez d'abord les appareils": "Choose the devices first",
+  "Et à une heure de fin": "And at an end time",
+  "Heure de fin": "End time",
+  "Envoi à l'appareil…": "Sending to the device…",
+  "Programmation supprimée de l'appareil": "Schedule deleted from the device",
+  "La programmation est supprimée de l'appareil.":
+    "The schedule is deleted from the device.",
+  "Programmations de l'appareil": "Schedules of the device",
+  "Gardées et exécutées par l'appareil lui-même : elles continuent même quand Breezone est arrêté.":
+    "Kept and run by the device itself: they go on even when Breezone is stopped.",
+  "Aucune programmation dans l'appareil.": "No schedule in the device.",
+  "{label} : {value}": "{label}: {value}",
+  Moins: "Less",
+  Plus: "More",
+  "version {version} · livré avec Breezone":
+    "version {version} · shipped with Breezone",
+  "Rechercher un module ou un appareil": "Search for a module or a device",
+  "Aucun module ne correspond à « {query} ».": "No module matches « {query} ».",
   "Ne rien faire": "Do nothing",
   "Faire…": "Do…",
   "quand ce n'est plus vrai :": "when it is no longer true:",
@@ -2031,7 +2062,6 @@ const en: Record<string, string> = {
   "{value} demain": "{value} tomorrow",
   Licences: "Licenses",
   "Données météo : Open-Meteo.com": "Weather data: Open-Meteo.com",
-  "Compte Netatmo": "Netatmo account",
   "La production solaire prévue selon la météo : maintenant, aujourd'hui, ce qui reste à produire et demain. Sans compte : seules la position de la ville et la description des panneaux sont envoyées.":
     "The solar production expected from the weather: now, today, what is still to come and tomorrow. No account: only the position of the city and the description of the panels are sent.",
   "Donnez la puissance crête des panneaux (en kWc, sur la facture de l'installateur), leur inclinaison et leur orientation.":
@@ -2052,6 +2082,81 @@ const en: Record<string, string> = {
   "Ses panneaux (puissance, inclinaison, orientation) se règlent dans Comptes et services ; la prévision est faite pour la ville de l'installation.":
     "Its panels (power, tilt, orientation) are set in Accounts and services; the forecast is made for the city of the installation.",
   "Compte ou service": "Account or service",
+  "À 20 h, si la production prévue demain dépasse 10 kWh, prévenir pour y décaler lessives et recharges.":
+    "At 8 pm, if tomorrow's expected production is above 10 kWh, notify to move laundry and charging to it.",
+  "aujourd'hui": "today",
+  "Beaucoup de soleil prévu demain : c'est le jour pour les lessives et la recharge.":
+    "Plenty of sun expected tomorrow: the day for laundry and charging.",
+  "Belle journée solaire demain : prévenir": "Sunny day tomorrow: notify",
+  demain: "tomorrow",
+  "Prévision solaire": "Solar forecast",
+  Prévue: "Expected",
+  "Production, prévision et consommation toutes les 15 minutes":
+    "Production, forecast and consumption every 15 minutes",
+  "Réglez Forecast.Solar dans Réglages › Comptes et services pour voir la production attendue.":
+    "Set up Forecast.Solar in Settings › Accounts and services to see the expected production.",
+  "Reste à produire": "Still to produce",
+  "Selon la météo, l'orientation et la puissance des panneaux":
+    "From the weather, the orientation and the power of the panels",
+  "Soleil demain": "Sun tomorrow",
+  "sur {kwh} prévus": "of {kwh} expected",
+  "Reprendre les pièces de son application": "Take the rooms of its app",
+  "demande une autre version de l'interface des modules":
+    "needs another version of the module interface",
+  "demande Breezone {version}": "needs Breezone {version}",
+  "demande {name} (version plus récente)": "needs {name} (a newer version)",
+  "demande le compte {name}": "needs the {name} account",
+  "{name} {version} installé": "{name} {version} installed",
+  "Bibliothèque de modules": "Library of modules",
+  "Les modules publiés par Breezone, signés comme ses mises à jour. Seuls ceux qui fonctionnent avec ce serveur s'installent ; ils ne se chargent que lorsqu'un appareil ou un compte s'en sert.":
+    "The modules published by Breezone, signed like its updates. Only those that work with this server can be installed; they load only when a device or an account uses them.",
+  "Aucun module publié pour l'instant.": "No module published yet.",
+  "version {version}": "version {version}",
+  "Installé ({version})": "Installed ({version})",
+  "Mettre à jour ({version})": "Update ({version})",
+  Installer: "Install",
+  Incompatible: "Incompatible",
+  "Modules installés": "Installed modules",
+  "Ceux qui viennent de la bibliothèque, de Breezone ou d'un fichier. Ceux qui font partie de Breezone n'y figurent pas.":
+    "Those from the library, from Breezone or from a file. Those that are part of Breezone are not listed.",
+  "Aucun pour l'instant.": "None yet.",
+  "Ne fonctionne pas avec cette version de Breezone":
+    "Does not work with this version of Breezone",
+  "En service": "In use",
+  "Chargé seulement quand il sert": "Loaded only when used",
+  "Version précédente": "Previous version",
+  "Le module est supprimé de ce serveur. Retirez d'abord ses appareils et son compte.":
+    "The module is deleted from this server. Remove its devices and its account first.",
+  "Installer depuis un fichier": "Install from a file",
+  "Le paquet (.bzm) et sa signature (.bzm.sig) : un module que Breezone n'a pas signé est refusé.":
+    "The package (.bzm) and its signature (.bzm.sig): a module Breezone did not sign is refused.",
+  Paquet: "Package",
+  Signature: "Signature",
+  Bibliothèque: "Library",
+  "Des modules installés sont concernés": "Some installed modules are affected",
+  "{id} {version} sera remplacé par la version {replacement}, compatible.":
+    "{id} {version} will be replaced by version {replacement}, which works with it.",
+  "{id} {version} ne fonctionnera plus : il sera désactivé, sans être supprimé.":
+    "{id} {version} will no longer work: it will be switched off, not deleted.",
+  "non officiel · {name}": "unofficial · {name}",
+  "Source « {name} » illisible : {error}":
+    "Source « {name} » unreadable: {error}",
+  "en développement, non signé": "in development, not signed",
+  "Sources de modules": "Sources of modules",
+  "La bibliothèque de Breezone, et celles que vous ajoutez : chacune signe ses modules avec sa propre clé. Un module venu d'une autre source ne remplace jamais un module de Breezone.":
+    "Breezone's library, and those you add: each signs its modules with its own key. A module from another source never replaces a module of Breezone.",
+  officielle: "official",
+  Activée: "On",
+  "Retirer la source « {name} » ?": "Remove the source « {name} »?",
+  "Ses modules ne sont plus proposés. Une source dont des modules sont installés ne se retire pas.":
+    "Its modules are no longer offered. A source with installed modules cannot be removed.",
+  "Ajouter une source": "Add a source",
+  "L'adresse du dossier de son index.json (HTTPS, ou HTTP sur le réseau local) et sa clé publique Ed25519, en base64.":
+    "The address of the folder of its index.json (HTTPS, or HTTP on the local network) and its Ed25519 public key, in base64.",
+  "Clé publique": "Public key",
+  "Module {name} installé": "Module {name} installed",
+  "Installer le module": "Install the module",
+  "Installer (non officiel · {name})": "Install (unofficial · {name})",
 }
 
 export default en

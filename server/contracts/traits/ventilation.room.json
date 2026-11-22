@@ -1,6 +1,7 @@
 {
   "trait": "ventilation.room",
   "version": 1,
+  "revision": 0,
   "label": { "fr": "Bouche de VMC", "en": "Ventilation valve", "es": "Boca de ventilación" },
   "state": [
     { "name": "flow", "type": "number", "unit": "m³/h", "min": 0, "label": { "fr": "Débit d'air", "en": "Air flow", "es": "Caudal de aire" } },
@@ -32,5 +33,23 @@
         { "name": "profile", "type": "enum", "values": ["eco", "health", "intense"], "value_labels": { "eco": { "fr": "Éco", "en": "Eco", "es": "Eco" }, "health": { "fr": "Santé", "en": "Health", "es": "Salud" }, "intense": { "fr": "Intense", "en": "Intense", "es": "Intenso" } }, "label": { "fr": "Profil", "en": "Profile", "es": "Perfil" } }
       ]
     }
-  ]
+  ],
+  "ui": {
+    "kind": "room-air",
+    "primary": "flow",
+    "card": [
+      {"widget": "value", "field": "flow"},
+      {"widget": "value", "field": "co2"},
+      {"widget": "button", "action": "boost", "params": {"minutes": 30}}
+    ],
+    "detail": [
+      {"widget": "value", "field": "flow"},
+      {"widget": "enum", "field": "profile", "action": "set_profile", "param": "profile"},
+      {"widget": "button", "action": "boost", "params": {"minutes": 30}},
+      {"widget": "button", "action": "stop_boost", "when": "boost"},
+      {"widget": "value", "field": "humidity"},
+      {"widget": "value", "field": "co2"},
+      {"widget": "chart", "field": "co2"}
+    ]
+  }
 }

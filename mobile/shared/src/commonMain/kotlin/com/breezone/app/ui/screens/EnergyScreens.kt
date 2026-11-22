@@ -52,6 +52,7 @@ import com.breezone.app.data.EvChargerStatus
 import com.breezone.app.data.Hub
 import com.breezone.app.data.Periods
 import com.breezone.app.data.ServerDevices
+import com.breezone.app.data.SolarForecastState
 import com.breezone.app.data.SolarInverterState
 import com.breezone.app.data.SolarPanelState
 import com.breezone.app.data.TraitIds
@@ -69,6 +70,10 @@ import com.breezone.app.ui.components.Sparkline
 import com.breezone.app.ui.icons.FzIcons
 import com.breezone.app.ui.theme.Fz
 import kotlinx.coroutines.delay
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Clock
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -110,39 +115,10 @@ internal fun rememberEnergy(hub: Hub, serverId: String): Pair<EnergyLive?, Energ
 }
 
 @Composable
-internal fun FlowTile(icon: ImageVector, label: String, value: String, sub: String?, color: Color, modifier: Modifier = Modifier) {
-    Column(
-        modifier.clip(RoundedCornerShape(18.dp)).background(color.copy(alpha = 0.12f)).padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, null, Modifier.size(14.dp), tint = color)
-            Spacer(Modifier.width(6.dp))
-            Text(label, fontSize = 12.sp, color = color, maxLines = 1)
-        }
-        Text(value, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-        if (sub != null) Text(sub, fontSize = 12.sp, color = Fz.colors.muted, maxLines = 1)
-    }
-}
-
-@Composable
 internal fun Stat(label: String, value: String, color: Color = MaterialTheme.colorScheme.onSurface, modifier: Modifier = Modifier) {
     Column(modifier) {
         Caption(label)
         Text(value, fontWeight = FontWeight.SemiBold, color = color)
-    }
-}
-
-/** Tiles two by two. */
-@Composable
-private fun TwoByTwo(tiles: List<@Composable (Modifier) -> Unit>) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        tiles.chunked(2).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                row.forEach { it(Modifier.weight(1f)) }
-                if (row.size == 1) Spacer(Modifier.weight(1f))
-            }
-        }
     }
 }
 
@@ -166,30 +142,6 @@ fun EnergyScreen(serverId: String, onBack: (() -> Unit)? = null) {
                 if (live.hasUses()) item(key = "uses", contentType = "uses") { EnergyUsesCard(live) }
             }
         }
-    }
-}
-
-/** What the home draws and makes now: a tile per flow it has a measure of. */
-@Composable
-internal fun EnergyNowCard(live: EnergyLive, titled: Boolean = true) {
-    val roles = live.roles
-    val sun = Fz.colors.warning
-    val solarShare = if ((live.solar ?: 0.0) > 0 && (live.home ?: 0.0) > 0) ((minOf(live.solar!!, live.home!!) / live.home) * 100).roundToInt() else null
-    val tiles = buildList<@Composable (Modifier) -> Unit> {
-        if (roles.solar) add { m -> FlowTile(FzIcons.Sun, stringResource(Res.string.energy_solar), formatPower(live.solar), null, sun, m) }
-        add { m -> FlowTile(FzIcons.House, stringResource(Res.string.energy_home), formatPower(live.home), solarShare?.let { stringResource(Res.string.energy_solar_share, it) }, MaterialTheme.colorScheme.onSurface, m) }
-        if (roles.battery) add { m ->
-            val b = live.battery ?: 0.0
-            FlowTile(FzIcons.BatteryMedium, stringResource(Res.string.energy_battery), formatPower(live.battery), stringResource(if (b >= 0) Res.string.energy_battery_charging else Res.string.energy_battery_discharging), Fz.colors.success, m)
-        }
-        if (roles.grid) add { m ->
-            val g = live.grid ?: 0.0
-            FlowTile(FzIcons.Zap, stringResource(Res.string.energy_grid), formatPower(live.grid), stringResource(if (g >= 0) Res.string.energy_grid_buys else Res.string.energy_grid_sells), Fz.colors.muted, m)
-        }
-    }
-    SectionCard {
-        if (titled) SectionTitle(stringResource(Res.string.energy_now))
-        TwoByTwo(tiles)
     }
 }
 
@@ -247,13 +199,16 @@ fun SolarScreen(serverId: String, onBack: (() -> Unit)? = null) {
     val data = all[serverId] ?: ServerDevices()
     val inverters = data.withTrait(TraitIds.INVERTER)
     val panels = data.withTrait(TraitIds.PANEL)
+    val sun = data.withTrait(TraitIds.FORECAST).firstOrNull()
+    val forecast = rememberSolarForecast(hub, serverId, sun?.id)
     Scaffold(topBar = { FzTopBar(stringResource(Res.string.house_solar), null, onBack) }) { padding ->
         LazyColumn(
             Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item(key = "now", contentType = "now") { SolarNowCard(live, day, inverters) }
+            if (inverters.isNotEmpty() || sun == null) item(key = "now", contentType = "now") { SolarNowCard(live, day, inverters, forecast) }
+            if (sun != null) item(key = "forecast", contentType = "forecast") { SolarForecastCard(sun, forecast, day) }
             inverters.forEach { inv ->
                 item(key = "inv-${inv.id}", contentType = "inverter") { InverterCard(inv, panels) }
             }
@@ -261,22 +216,78 @@ fun SolarScreen(serverId: String, onBack: (() -> Unit)? = null) {
     }
 }
 
-/** What the panels make now, and their curve of the day. */
+/** The power a forecast device expects along today and tomorrow, read again every 10 minutes. */
 @Composable
-internal fun SolarNowCard(live: EnergyLive?, day: EnergyDay?, inverters: List<DeviceView>) {
+internal fun rememberSolarForecast(hub: Hub, serverId: String, deviceId: Long?): List<Pair<Long, Double>> {
+    var points by remember(serverId, deviceId) { mutableStateOf(emptyList<Pair<Long, Double>>()) }
+    LaunchedEffect(serverId, deviceId) {
+        if (deviceId == null) return@LaunchedEffect
+        while (true) {
+            runCatching { hub.api(serverId)?.deviceForecast(deviceId) }.getOrNull()?.let { f ->
+                points = f.series["power"].orEmpty().mapNotNull { p -> if (p.size >= 2) p[0].toLong() to p[1] else null }
+            }
+            delay(600_000)
+        }
+    }
+    return points
+}
+
+/** The points of a curve within the day that starts at [dayStart]. */
+private fun List<Pair<Long, Double>>.within(dayStart: Long) = filter { it.first in dayStart..dayStart + 86_400 }
+
+/** What the panels make now, and their curve of the day, beside the forecast when there is one. */
+@Composable
+internal fun SolarNowCard(live: EnergyLive?, day: EnergyDay?, inverters: List<DeviceView>, forecast: List<Pair<Long, Double>> = emptyList()) {
     val sun = Fz.colors.warning
     SectionCard {
         Caption(stringResource(Res.string.solar_now))
         Text(formatPower(live?.solar ?: inverters.sumOf { it.stateAs(EnergyPowerState.serializer())?.power ?: 0.0 }), fontSize = 40.sp, fontWeight = FontWeight.SemiBold, color = sun)
         day?.totals?.production?.let { Caption(stringResource(Res.string.solar_today, formatEnergy(it))) }
         if (day != null) {
+            val start = day.points.firstOrNull()?.ts ?: 0L
             PowerDayChart(
-                listOf(PowerSeries(day.points.mapNotNull { p -> p.solar?.let { p.ts to it } }, sun, area = true)),
-                day.points.firstOrNull()?.ts ?: 0L,
+                listOf(
+                    PowerSeries(day.points.mapNotNull { p -> p.solar?.let { p.ts to it } }, sun, area = true),
+                    PowerSeries(forecast.within(start), sun, area = false, dashed = true),
+                ),
+                start,
                 Modifier.fillMaxWidth().height(150.dp),
             )
         }
     }
+}
+
+/** What a forecast (Forecast.Solar) expects today and tomorrow, and its curve of the day. */
+@Composable
+internal fun SolarForecastCard(device: DeviceView, forecast: List<Pair<Long, Double>>, day: EnergyDay?) {
+    val sun = Fz.colors.warning
+    val s = device.stateAs(SolarForecastState.serializer())
+    SectionCard {
+        Caption(stringResource(Res.string.solar_forecast_title))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            ForecastFigure(stringResource(Res.string.solar_forecast_today), formatEnergy(s?.energyToday), Modifier.weight(1f))
+            ForecastFigure(stringResource(Res.string.solar_forecast_remaining), formatEnergy(s?.energyRemaining), Modifier.weight(1f))
+            ForecastFigure(stringResource(Res.string.solar_forecast_tomorrow), formatEnergy(s?.energyTomorrow), Modifier.weight(1f))
+        }
+        val start = day?.points?.firstOrNull()?.ts ?: startOfToday()
+        val today = forecast.within(start)
+        if (today.size >= 2) {
+            PowerDayChart(listOf(PowerSeries(today, sun, area = true, dashed = true)), start, Modifier.fillMaxWidth().height(130.dp))
+        }
+    }
+}
+
+@Composable
+private fun ForecastFigure(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        Caption(label)
+        Text(value, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+    }
+}
+
+private fun startOfToday(): Long {
+    val zone = TimeZone.currentSystemDefault()
+    return Clock.System.now().toLocalDateTime(zone).date.atStartOfDayIn(zone).epochSeconds
 }
 
 /** A micro-inverter and its panels, each with what it makes now and today. */

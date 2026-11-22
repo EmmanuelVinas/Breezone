@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, beta]
+    branches: [main, beta, "feat/**"]
   pull_request:
 
 permissions:
@@ -20,12 +20,22 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
+          targets: wasm32-wasip2
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: server
+          workspaces: |
+            server
+            modules
       - run: cargo fmt --check
+      - run: cargo fmt --all --check --manifest-path ../modules/Cargo.toml
       - run: cargo clippy --all-targets --locked -- -D warnings
+      # Without the host of modules in WebAssembly too (the `wasm` feature, on by default).
+      - run: cargo clippy --all-targets --locked --no-default-features -- -D warnings
+      # Includes the modules in WebAssembly and their host (built for wasm32-wasip2 by the test).
       - run: cargo test --locked
+      # The modules (native tests on the bench of the SDK).
+      - run: cargo clippy --all-targets --locked --manifest-path ../modules/Cargo.toml -- -D warnings
+      - run: cargo test --locked --manifest-path ../modules/Cargo.toml
 
   web:
     name: Web UI
@@ -65,6 +75,24 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
+      # The compilation caches of the Dockerfile (Cargo registry, build folders), kept from one run to
+      # the next: only what changed is compiled again. BuildKit does not keep them in the layer cache.
+      - uses: actions/cache@v4
+        id: cargo-cache
+        with:
+          path: cargo-cache
+          key: docker-cargo-amd64-${{ github.sha }}
+          restore-keys: docker-cargo-amd64-
+      - uses: reproducible-containers/buildkit-cache-dance@v3
+        with:
+          cache-map: |
+            {
+              "cargo-cache/registry": {"target": "/usr/local/cargo/registry", "id": "cargo-registry"},
+              "cargo-cache/git": {"target": "/usr/local/cargo/git", "id": "cargo-git"},
+              "cargo-cache/modules-target": {"target": "/src/modules/target", "id": "modules-target"},
+              "cargo-cache/server-target": {"target": "/src/target", "id": "server-target-amd64"}
+            }
+          skip-extraction: ${{ steps.cargo-cache.outputs.cache-hit }}
       - uses: docker/build-push-action@v7
         with:
           context: .

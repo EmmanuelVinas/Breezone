@@ -6,8 +6,109 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.12.0-beta.8] - 2026-11-22
+
+### Fixed
+
+- Forecast.Solar: after the service refuses (12 requests an hour from one address, every server
+  behind it together) or fails, the forecast is no longer asked again at each reading, but at the
+  time the service says (an hour without one, ten minutes after a failure); the last forecast is
+  kept across restarts, so that a restart does not ask again.
+- Memory shown for the container: the backup of the database taken before an update no longer
+  stays in the system's file cache (it is only read to go back).
+- Library of modules: the modules published for an earlier version of Breezone load again (a call
+  added to the interface no longer refuses them), and a module that needs a newer Breezone is no
+  longer offered to an older one. Tasmota 1.0.1 replaces a 1.0.0 that no server could load.
+
+## [0.12.0-beta.7] - 2026-11-22
+
 ### Added
 
+- ESPHome and HomeKit come as modules shipped with Breezone too, in place of their drivers compiled
+  in: ESPHome nodes in clear or encrypted, HomeKit accessories (Legrand, VELUX…) with their shutters,
+  switches and remotes. Paired accessories and existing sources are kept as they are, without
+  pairing them again; removing a HomeKit source still removes Breezone's own pairing from the
+  accessory.
+- Library: it comes first in Settings › Modules, lists the modules shipped with Breezone, and has
+  a search field.
+- Mobile app: the energy flow of the home now, as on the web; a Modules card in the settings of
+  each server (administrators); the controls of the kinds of devices this version does not know,
+  as their module describes them (on the web too).
+
+### Fixed
+
+- Memory: each source of a module took about 2 MB more than needed; a server with a few sources
+  of modules uses about a third less memory.
+- Pairing a module: a wrong code or a refused entry is told as such, no longer as hardware that
+  does not answer.
+
+## [0.12.0-beta.6] - 2026-11-22
+
+The 0.12.0-beta.5 published before was built from the wrong commit (it said 0.12.0-beta.4, so the
+self-update refused it): this is the same content, released properly.
+
+### Added
+
+- Loadable modules: the drivers of the hardware and the online services become modules in
+  WebAssembly, signed like Breezone's updates, loaded only when a source uses them, each in its own
+  sandbox (memory and time limits, only the addresses its manifest allows, local network or named
+  hosts). A module that misbehaves puts only its own source in error.
+- Modules shipped with Breezone, in place of the drivers compiled in (which take over if a module
+  cannot start): Tasmota, Shelly (its WebSocket heard at once), V2C Trydan, Forecast.Solar,
+  Reolink, Hoymiles, TP-Link Kasa and Tapo, Philips Hue, Renson Healthbox, RTE (colour of the Tempo
+  days), the weather (Open-Meteo, MeteoAlarm), Linky (Conso API), Netatmo and EZVIZ. Existing
+  sources and accounts are kept as they are.
+- Library of modules: Settings › Modules › Library lists the modules that work with this server,
+  from Breezone's own source and from sources an administrator adds (each with its own key);
+  installing, updating (confirmed, with a way back) and removing a module.
+- The network search also finds the hardware of modules not installed yet (by HTTP and mDNS) and
+  proposes to install their module.
+- Accounts of modules: Settings › Accounts and services shows the form of a module's account from
+  its manifest; OAuth accounts are renewed by Breezone, which keeps the new refresh token.
+- Schedules kept by the hardware: a source whose module offers them shows them in its detail, and
+  they are added, changed and switched on or off from there (the same model as the Airzone
+  schedules: devices, days, time, action, optional end).
+- Solar forecast curves: the solar page, the home cards and the automations show what the panels
+  should produce.
+- Writing a module: a kit (`modules/sdk`) with a test bench, a guide in `modules/README.md`, and a
+  folder of modules in development (`BREEZONE_MODULES_DEV`, development builds only).
+- Development: `scripts/dev.sh --shipped` runs the shipped modules as the image does; every option
+  of `dev.sh` is described in `CONTRIBUTING.md`. The installation guide moved to
+  `docs/installation`.
+
+### Changed
+
+- Automations: up to 12 actions in each branch (8 before); the editor says when the limit is
+  reached, and why there is no « Afterwards » for a trigger that is a moment (a time, a sunrise).
+- App, a shutter's page: the shutter itself is the control. Drag it, and its edge follows the finger,
+  or tap where it should stop; its state is written on it. The side bar and the line under it are
+  gone, and the Open / Stop / Close buttons keep their label on one line. A shutter moves smoothly
+  to its target.
+- iOS: the bundle identifier is `io.monkeypatch.mobile.breezone`.
+- Build: the Docker image compiles only what changed (the compilation caches are kept, by the CI
+  too), and a full build takes minutes instead of most of an hour. A release whose tag is not the
+  version of the server, or has no section here, now stops before anything is published.
+
+## [0.12.0-beta.4] - 2026-11-20
+
+### Fixed
+
+- Matter bridge: on a host without IPv6 on its network (Matter needs it), the bridge stopped with a
+  bare `StdIoError`; the log now says which interfaces were seen and that IPv6 must be turned on. The
+  bridge is announced on the home network, never on a Docker, bridge or VPN interface, and
+  `BREEZONE_MATTER_INTERFACE` (`eth0`…) chooses the interface when needed.
+- App, home: two half cards side by side take the same height (the solar card, with its line
+  for today, was taller than the home one).
+
+## [0.12.0-beta.3] - 2026-11-20
+
+### Added
+
+- Matter bridge, experimental (ADR 0015), off unless `BREEZONE_MATTER=1`: Breezone answers as a
+  Matter bridge, and the lights it knows (up to 8, on and off) can be added to Google Home (Nest Hub),
+  Apple Home, Alexa or SmartThings and driven from them, in local; a light switched in Breezone is
+  told to them. The codes to add the bridge are written in the log; its fabrics are kept in
+  `<data>/matter`. It uses the test identity of the Matter standard for now.
 - The small curves (overview, energy figures, zones, ventilation) tell, under the mouse, the time
   and the value of the point, as the large charts do.
 - Play Store listing: seven screenshots of the app (French and English) in

@@ -190,10 +190,10 @@ pub async fn remove_own_pairing(addr: &str, pairing: &Pairing) -> Result<(), Hap
     Ok(())
 }
 
-#[cfg(test)]
-pub(crate) mod fake {
+#[doc(hidden)]
+pub mod fake {
     //! An accessory that pairs and serves its database on an encrypted session, enough to test
-    //! the controller end to end.
+    //! the controller end to end (the integration tests of the modules too), not for use.
 
     use super::session::{hkdf, label, open, seal};
     use super::{srp, tlv};

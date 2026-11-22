@@ -109,7 +109,6 @@ impl Client {
 }
 
 /// The accessory's side: only used to test the controller against a fake accessory.
-#[cfg(test)]
 pub struct Server {
     b: BigUint,
     v: BigUint,
@@ -117,7 +116,6 @@ pub struct Server {
     pub public: Vec<u8>,
 }
 
-#[cfg(test)]
 impl Server {
     pub fn new(salt: &[u8], password: &str, secret: &[u8; 32]) -> Self {
         let n = n();

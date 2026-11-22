@@ -187,3 +187,37 @@ mod tests {
         assert_eq!(normalize_fingerprint("abc"), None);
     }
 }
+
+/// Accepts the certificate a device makes for itself (its handshake signatures still checked): for
+/// hardware on the local network only.
+#[cfg(feature = "wasm")]
+#[derive(Debug)]
+struct Device {
+    provider: Arc<CryptoProvider>,
+}
+
+#[cfg(feature = "wasm")]
+impl ServerCertVerifier for Device {
+    fn verify_server_cert(&self, _: &CertificateDer<'_>, _: &[CertificateDer<'_>], _: &ServerName<'_>, _: &[u8], _: UnixTime) -> Result<ServerCertVerified, rustls::Error> {
+        Ok(ServerCertVerified::assertion())
+    }
+    fn verify_tls12_signature(&self, message: &[u8], cert: &CertificateDer<'_>, dss: &DigitallySignedStruct) -> Result<HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls12_signature(message, cert, dss, &self.provider.signature_verification_algorithms)
+    }
+    fn verify_tls13_signature(&self, message: &[u8], cert: &CertificateDer<'_>, dss: &DigitallySignedStruct) -> Result<HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls13_signature(message, cert, dss, &self.provider.signature_verification_algorithms)
+    }
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        self.provider.signature_verification_algorithms.supported_schemes()
+    }
+}
+
+/// TLS towards hardware or a service: the usual checks, or (`device`) the device's own certificate.
+#[cfg(feature = "wasm")]
+pub fn client_config(device: bool) -> Option<rustls::ClientConfig> {
+    if device {
+        return custom_tls(Arc::new(Device { provider: provider() }));
+    }
+    let roots = rustls::RootCertStore { roots: webpki_roots::TLS_SERVER_ROOTS.to_vec() };
+    Some(rustls::ClientConfig::builder_with_provider(provider()).with_safe_default_protocol_versions().ok()?.with_root_certificates(roots).with_no_client_auth())
+}

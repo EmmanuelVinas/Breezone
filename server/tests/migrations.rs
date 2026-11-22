@@ -49,6 +49,9 @@ const APPLIED: &[(&str, &str)] = &[
     ("0042_accounts.sql", "22e8708420ccfe59300af3b127711fe1a6e5bf8bcfdaaa87a8a0cb6e6a1b49c1"),
     ("0043_accounts_enabled.sql", "d9f64f5be5a7b6e3db41499555a747322bc6087bf76c34425af1383e3f491be0"),
     ("0044_surplus_climate.sql", "e210df3e4447333652975a8034b755cbf98c2b01af67eaec9f4e44ab61289436"),
+    ("0045_modules.sql", "4ef1c50473f9cbd86cdb3ca84dddcb2aeb8e354737cd73cb11d1bd5551d885b6"),
+    ("0046_module_store.sql", "8872be63b32ae54e99a0c85ff135491317891039589d8fb9ce323714ff2b5e55"),
+    ("0047_module_repositories.sql", "26d5c8e532e64a904f750d3ca551581d0c863b19ee478e29b900efefefb08bf6"),
 ];
 
 #[test]

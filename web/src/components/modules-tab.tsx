@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react"
 import { coverKind, coverText, coverView, isCover } from "@/lib/covers"
 import { RoomSelect } from "@/components/room-select"
+import { LibraryPanel } from "@/components/library-panel"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   AirVent,
@@ -27,6 +28,7 @@ import {
   Sun,
   Trash2,
   Undo2,
+  Library,
   Zap,
 } from "lucide-react"
 import { Link, useSearchParams } from "react-router"
@@ -35,6 +37,7 @@ import type {
   DeviceView,
   FoundProduct,
   MeasureRole,
+  ModuleManifest,
   Room,
   SourceView,
 } from "@/lib/api"
@@ -44,7 +47,7 @@ import { inverterCounting, isInverter } from "@/lib/solar"
 import { cameraEvent, forecastText, sensorText } from "@/lib/sensors"
 import { errorText, kwh, relativeTime, watts } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import { t } from "@/lib/i18n"
+import { lang, t } from "@/lib/i18n"
 import {
   useChosenInstallation,
   useModulesHere,
@@ -56,6 +59,7 @@ import {
   extraFields,
   useDrivers,
 } from "@/components/module-config"
+import { HardwareSchedulesCard } from "@/components/hardware-schedules"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -99,24 +103,32 @@ const STATE_LABEL: Record<SourceView["status"]["state"], string> = {
   unknown: t("En attente"),
 }
 
-/** Drivers that can be added by their address. */
-const BY_ADDRESS = [
-  { driver: "shelly", label: "Shelly" },
-  { driver: "trydan", label: "V2C Trydan" },
-  { driver: "hoymiles", label: "Hoymiles (DTU)" },
-  { driver: "renson", label: "Renson Healthbox" },
-  { driver: "hue", label: "Philips Hue" },
-  { driver: "homekit", label: "HomeKit (Legrand, VELUX…)" },
-  { driver: "esphome", label: "ESPHome" },
-  { driver: "tasmota", label: "Tasmota" },
-  { driver: "tplink", label: "TP-Link (Kasa, Tapo)" },
-  { driver: "reolink", label: "Reolink" },
-]
+/** The manifests of the modules of this server, by id. */
+function useManifests() {
+  const modules = useQuery({
+    queryKey: ["modules"],
+    queryFn: api.modules,
+    staleTime: 60_000,
+  })
+  return (id: string | undefined): ModuleManifest | undefined =>
+    modules.data?.find((m) => m.id === id)?.manifest
+}
+
+/** A module whose source comes with its linked account (never added by hand). */
+const withAccount = (m: ModuleManifest | undefined) =>
+  !!m && m.roles.includes("driver") && m.roles.includes("account")
+
+/** A module found by mDNS only: its hardware listens on a port of its own (HomeKit). */
+const ownPort = (m: ModuleManifest | undefined) =>
+  !!m?.discovery?.mdns?.length && !m.discovery.tcp?.length
+
+const has = (m: ModuleManifest | undefined, call: string) =>
+  !!m?.optional_calls?.includes(call)
 
 /** A product typed by its address, as if the search had found it (a Hue bridge, a HomeKit accessory). */
 function typed(driver: string, label: string, host: string): FoundProduct {
   return {
-    brand: driver === "hue" ? "hue" : "homekit",
+    brand: driver,
     driver,
     model: label,
     host,
@@ -895,6 +907,7 @@ function SourceDetail({
   rooms: Room[]
   onSearch: () => void
 }) {
+  const manifestOf = useManifests()
   const qc = useQueryClient()
   const refresh = useMutation({
     mutationFn: () => api.refreshSource(source.id),
@@ -988,7 +1001,8 @@ function SourceDetail({
   const host = typeof source.config.host === "string" ? source.config.host : ""
   // Reached through its maker's cloud, by a linked account: no address of its own.
   // Set in Settings › Accounts and services: a linked account, or an online service.
-  const cloud = ["netatmo", "ezviz", "forecast_solar"].includes(source.driver)
+  const manifest = manifestOf(source.driver)
+  const cloud = withAccount(manifest)
   const charger = devices.find((x) => x.traits.includes("ev.charger@1"))
   return (
     <>
@@ -1101,10 +1115,13 @@ function SourceDetail({
         </CardContent>
       </Card>
       {charger && <CurrentOwner charger={charger} />}
-      {source.driver === "netatmo" && <TwinsCard sourceId={source.id} />}
-      {source.driver !== "netatmo" && <IgnoredCard sourceId={source.id} />}
+      {manifest?.cloud && <TwinsCard sourceId={source.id} />}
+      {!manifest?.cloud && <IgnoredCard sourceId={source.id} />}
       {!cloud && <ModuleSettingsCard key={source.id} source={source} />}
-      {source.driver === "renson" && (
+      {has(manifest, "schedules") && (
+        <HardwareSchedulesCard sourceId={source.id} devices={devices} />
+      )}
+      {has(manifest, "unlock") && (
         <RensonKey
           sourceId={source.id}
           unlocked={devices.some((x) => x.state?.sensors === true)}
@@ -1122,24 +1139,21 @@ function SourceDetail({
                 : t("Nommez chaque appareil et choisissez sa pièce.")}
             </CardDescription>
           </div>
-          {(source.driver === "hue" || source.driver === "renson") &&
-            devices.length > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={takeRooms.isPending}
-                onClick={() => takeRooms.mutate()}
-              >
-                {takeRooms.isPending ? (
-                  <Loader2 className="animate-spin" />
-                ) : (
-                  <House />
-                )}
-                {source.driver === "hue"
-                  ? t("Reprendre les pièces Hue")
-                  : t("Reprendre les pièces Renson")}
-              </Button>
-            )}
+          {has(manifest, "rooms") && devices.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={takeRooms.isPending}
+              onClick={() => takeRooms.mutate()}
+            >
+              {takeRooms.isPending ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <House />
+              )}
+              {t("Reprendre les pièces de son application")}
+            </Button>
+          )}
         </CardHeader>
         <CardContent className="grid gap-2">
           {devices.length === 0 ? (
@@ -1217,7 +1231,8 @@ function AddModuleDialog({
   const qc = useQueryClient()
   const [subnet, setSubnet] = useState("")
   const [host, setHost] = useState("")
-  const [driver, setDriver] = useState(BY_ADDRESS[0].driver)
+  const manifestOf = useManifests()
+  const [chosen, setDriver] = useState("")
   const scan = useMutation({
     mutationFn: () => api.scanProducts(subnet.trim() || undefined),
     onError: (e) => toast.error(errorText(e)),
@@ -1258,6 +1273,11 @@ function AddModuleDialog({
   })
   const products = scan.data?.products ?? []
   const drivers = useDrivers()
+  // What can be added by its address: the drivers whose source does not come with an account.
+  const byAddress = (drivers.data ?? []).filter(
+    (d) => !withAccount(manifestOf(d.id))
+  )
+  const driver = chosen || byAddress[0]?.id || ""
   // A module whose driver asks more than its address (credentials, a key, its panels).
   const [configuring, setConfiguring] = useState<{
     driver: string
@@ -1275,17 +1295,20 @@ function AddModuleDialog({
   const [pairing, setPairing] = useState<FoundProduct | null>(null)
   // Closing the dialog gives up the pairing started: the accessory is free again.
   const pairingHost = pairing?.host
+  const pairingDriver = pairing?.driver ?? ""
   useEffect(() => {
     if (!pairingHost) return
     return () => {
-      api.cancelHomekitPairing(pairingHost).catch(() => {})
+      api
+        .pairingStep<void>(pairingDriver, "cancel", { host: pairingHost })
+        .catch(() => {})
     }
-  }, [pairingHost])
+  }, [pairingHost, pairingDriver])
   // A Hue bridge being added (its button to press).
   const [linking, setLinking] = useState<FoundProduct | null>(null)
   const link = useMutation({
     mutationFn: (p: FoundProduct) =>
-      api.linkHue({ host: p.host, name: p.model }),
+      api.pairingStep(p.driver, "link", { host: p.host }, p.model),
     onSuccess: (s) => {
       toast.success(t("« {name} » ajouté", { name: s.name }))
       qc.invalidateQueries({ queryKey: ["sources"] })
@@ -1298,7 +1321,10 @@ function AddModuleDialog({
   const [code, setCode] = useState("")
   const start = useMutation({
     mutationFn: (p: FoundProduct) =>
-      api.startHomekitPairing({ host: p.host, flags: p.flags }),
+      api.pairingStep<void>(p.driver, "start", {
+        host: p.host,
+        flags: p.flags,
+      }),
     onError: (e) => {
       toast.error(errorText(e))
       setPairing(null)
@@ -1311,12 +1337,12 @@ function AddModuleDialog({
   }
   const pair = useMutation({
     mutationFn: (p: FoundProduct) =>
-      api.pairHomekit({
-        host: p.host,
-        name: p.model,
-        code,
-        flags: p.flags,
-      }),
+      api.pairingStep(
+        p.driver,
+        "finish",
+        { host: p.host, code, flags: p.flags },
+        p.model
+      ),
     onSuccess: (s) => {
       toast.success(t("« {name} » appairé", { name: s.name }))
       qc.invalidateQueries({ queryKey: ["sources"] })
@@ -1331,28 +1357,63 @@ function AddModuleDialog({
     },
   })
 
+  // Its module comes from the library: installed first, then the search runs again and offers to
+  // add it as the other products.
+  const installing = useMutation({
+    mutationFn: (p: FoundProduct) =>
+      api.installModule(p.driver, p.install?.repository),
+    onSuccess: (m) => {
+      toast.success(
+        t("Module {name} installé", { name: m.manifest.name[lang()] })
+      )
+      qc.invalidateQueries({ queryKey: ["modules"] })
+      qc.invalidateQueries({ queryKey: ["drivers"] })
+      scan.mutate()
+    },
+    onError: (e) => toast.error(errorText(e)),
+  })
+
   const action = (p: FoundProduct) => {
     if (p.added) return <Badge variant="secondary">{t("Déjà ajouté")}</Badge>
+    if (p.install)
+      return (
+        <Button
+          size="sm"
+          disabled={installing.isPending}
+          onClick={() => installing.mutate(p)}
+        >
+          {installing.isPending ? (
+            <Loader2 className="animate-spin" />
+          ) : (
+            <Download />
+          )}
+          {p.install.official
+            ? t("Installer le module")
+            : t("Installer (non officiel · {name})", {
+                name: p.install.repository_name,
+              })}
+        </Button>
+      )
     if (p.brand === "airzone")
       return (
         <span className="text-xs text-muted-foreground">
           {t("Module Airzone")}
         </span>
       )
-    // An Ecometer: its measures come through the Netatmo account, not HomeKit.
-    if (p.brand === "netatmo")
+    // Hardware read through a linked account (an Ecometer): added with the account.
+    if (withAccount(manifestOf(p.driver)))
       return (
         <Button asChild size="sm" variant="outline">
           <Link to="/settings?tab=accounts" onClick={onClose}>
-            <Cloud /> {t("Compte Netatmo")}
+            <Cloud /> {t("Comptes et services")}
           </Link>
         </Button>
       )
-    if (p.brand === "homekit" && !p.supported)
+    if (manifestOf(p.driver)?.pairing === "code" && !p.supported)
       return <Badge variant="outline">{t("Appairé ailleurs")}</Badge>
     if (!p.supported)
       return <Badge variant="outline">{t("Non pris en charge")}</Badge>
-    if (p.brand === "hue")
+    if (manifestOf(p.driver)?.pairing === "button")
       return (
         <Button
           size="sm"
@@ -1362,7 +1423,7 @@ function AddModuleDialog({
           <Plus /> {t("Ajouter")}
         </Button>
       )
-    if (p.brand === "homekit")
+    if (manifestOf(p.driver)?.pairing === "code")
       return (
         <Button
           size="sm"
@@ -1561,7 +1622,7 @@ function AddModuleDialog({
         </div>
         <div className="grid gap-2 border-t pt-4">
           <Label htmlFor="module-host">{t("Ou par son adresse")}</Label>
-          {driver === "homekit" && (
+          {ownPort(manifestOf(driver)) && (
             <p className="text-xs text-muted-foreground">
               {t(
                 "Avec son port HomeKit : l'adresse IP, deux-points, puis le port (souvent dans l'application du fabricant, ou trouvé par la recherche)."
@@ -1574,8 +1635,8 @@ function AddModuleDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {BY_ADDRESS.map((d) => (
-                  <SelectItem key={d.driver} value={d.driver}>
+                {byAddress.map((d) => (
+                  <SelectItem key={d.id} value={d.id}>
                     {d.label}
                   </SelectItem>
                 ))}
@@ -1585,7 +1646,9 @@ function AddModuleDialog({
               id="module-host"
               value={host}
               placeholder={
-                driver === "homekit" ? "192.168.1.30:5001" : "192.168.1.40"
+                ownPort(manifestOf(driver))
+                  ? "192.168.1.30:5001"
+                  : "192.168.1.40"
               }
               onChange={(e) => setHost(e.target.value)}
             />
@@ -1595,16 +1658,17 @@ function AddModuleDialog({
                 !host.trim() ||
                 add.isPending ||
                 // A HomeKit accessory listens on a port of its own.
-                (driver === "homekit" && !/:\d+$/.test(host.trim()))
+                (ownPort(manifestOf(driver)) && !/:\d+$/.test(host.trim()))
               }
               onClick={() => {
                 const label =
-                  BY_ADDRESS.find((d) => d.driver === driver)?.label ?? driver
+                  byAddress.find((d) => d.id === driver)?.label ?? driver
+                const pairing = manifestOf(driver)?.pairing
                 // The bridge's button, or the accessory's code, as when found by the search.
-                if (driver === "hue")
+                if (pairing === "button")
                   setLinking(typed(driver, label, host.trim()))
-                else if (driver === "homekit")
-                  startPairing(typed(driver, "HomeKit", host.trim()))
+                else if (pairing === "code")
+                  startPairing(typed(driver, label, host.trim()))
                 else if (needsMore(driver))
                   setConfiguring({
                     driver,
@@ -1906,6 +1970,7 @@ export function ModulesTab({
   const list = here ? (sources.data ?? []) : []
   const wanted = params.get("module") ?? initial ?? "airzone"
   const selected = list.find((s) => String(s.id) === wanted)
+  const browsing = here && wanted === "library"
   const choose = (id: string) =>
     setParams((p) => {
       const next = new URLSearchParams(p)
@@ -1954,6 +2019,14 @@ export function ModulesTab({
         aria-label={t("Modules")}
         className="flex gap-1 overflow-x-auto rounded-3xl border bg-card p-2 md:flex-col md:overflow-visible"
       >
+        {here &&
+          item(
+            "library",
+            browsing,
+            <Library className="size-4 text-primary" />,
+            t("Bibliothèque"),
+            null
+          )}
         {item(
           "airzone",
           !selected,
@@ -1993,7 +2066,9 @@ export function ModulesTab({
         )}
       </nav>
       <div className="grid min-w-0 gap-5">
-        {selected ? (
+        {browsing ? (
+          <LibraryPanel />
+        ) : selected ? (
           <SourceDetail
             key={selected.id}
             source={selected}

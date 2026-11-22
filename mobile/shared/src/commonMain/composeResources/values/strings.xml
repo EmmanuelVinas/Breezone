@@ -477,6 +477,12 @@
     <string name="energy_tile_solar">%1$s solaire</string>
     <string name="energy_tile_grid">réseau %1$s</string>
     <string name="energy_empty">Aucune mesure d’énergie : donnez un rôle aux mesures dans Réglages › Modules, sur le web.</string>
+    <string name="energy_flow_hint">Mis à jour toutes les 5 s · les points vont dans le sens de l\'énergie</string>
+    <string name="energy_covered">%1$d % couverts</string>
+    <string name="energy_surplus">Surplus %1$s</string>
+    <string name="energy_grid_drawn">tirés du réseau</string>
+    <string name="energy_grid_injected">injectés</string>
+    <string name="energy_battery_idle">au repos</string>
     <string name="energy_now">En ce moment</string>
     <string name="energy_today">Aujourd’hui</string>
     <string name="energy_solar">Solaire</string>
@@ -653,6 +659,12 @@
     <string name="block_charger_curve_hint">Ce qu’elle a tiré sur la période</string>
     <string name="block_solar_today">Production solaire</string>
     <string name="block_solar_today_hint">Maintenant, et la courbe de la journée</string>
+    <string name="block_solar_forecast">Prévision solaire</string>
+    <string name="block_solar_forecast_hint">Production attendue aujourd’hui et demain</string>
+    <string name="solar_forecast_title">Prévision solaire</string>
+    <string name="solar_forecast_today">Aujourd’hui</string>
+    <string name="solar_forecast_remaining">Reste à produire</string>
+    <string name="solar_forecast_tomorrow">Demain</string>
     <string name="block_solar_panels">Micro-onduleurs et panneaux</string>
     <string name="block_solar_panels_hint">Ce que fait chaque panneau</string>
     <string name="block_ventilation_house">Ventilation de la maison</string>
@@ -726,4 +738,20 @@
     <string name="tempo_unknown">pas encore annoncé</string>
     <string name="chart_hours_ago">-%1$s h</string>
     <string name="chart_days_ago">-%1$s j</string>
+    <string name="modules_title">Modules</string>
+    <string name="modules_title_server">Modules · %1$s</string>
+    <string name="modules_hint">Les modules installés sur ce serveur. Ils s\'installent et se mettent à jour depuis son interface web (Modules › Bibliothèque).</string>
+    <string name="modules_none">Aucun module installé.</string>
+    <string name="modules_line">%1$s · %2$s · %3$s</string>
+    <string name="modules_origin_builtin">livré avec Breezone</string>
+    <string name="modules_origin_library">bibliothèque</string>
+    <string name="modules_origin_file">fichier</string>
+    <string name="modules_origin_dev">en développement</string>
+    <string name="modules_loaded">en service</string>
+    <string name="modules_idle">chargé quand il sert</string>
+    <string name="modules_incompatible">ne fonctionne pas avec cette version de Breezone</string>
+    <string name="common_yes">Oui</string>
+    <string name="common_no">Non</string>
+    <string name="common_plus">Plus</string>
+    <string name="common_minus">Moins</string>
 </resources>

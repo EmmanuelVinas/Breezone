@@ -1,0 +1,76 @@
+{
+  "id": "shelly",
+  "version": "1.0.0",
+  "name": {
+    "en": "Shelly (Plus, Pro, Gen3, Gen4)",
+    "es": "Shelly (Plus, Pro, Gen3, Gen4)",
+    "fr": "Shelly (Plus, Pro, Gen3, Gen4)"
+  },
+  "roles": [
+    "driver"
+  ],
+  "requires": {
+    "api": "^1.0"
+  },
+  "provides": {
+    "traits": [
+      "energy.power@1.0",
+      "energy.meter@1.0",
+      "switch.relay@1.0"
+    ]
+  },
+  "models": [
+    "Shelly Pro 3EM (triphasé)",
+    "Shelly Pro 3EM (monophasé : 3 voies indépendantes)",
+    "Shelly Pro EM",
+    "Shelly EM Gen3",
+    "Shelly Plus Plug S",
+    "Shelly Plug S Gen3",
+    "Shelly Plus 1",
+    "Shelly Plus 1PM",
+    "Shelly Plus 2PM",
+    "Shelly Plus PM Mini",
+    "Shelly Pro 1",
+    "Shelly Pro 1PM",
+    "Shelly Pro 2PM",
+    "Shelly Pro 4PM",
+    "Shelly 1 Gen3",
+    "Shelly 1PM Gen3",
+    "Shelly PM Mini Gen3"
+  ],
+  "config": [
+    {
+      "name": "host",
+      "type": "string",
+      "label": {
+        "en": "IP address or name",
+        "es": "Dirección IP o nombre",
+        "fr": "Adresse IP ou nom"
+      }
+    }
+  ],
+  "discovery": {
+    "tcp": [
+      80
+    ],
+    "http": [
+      {
+        "port": 80,
+        "path": "/shelly",
+        "json_has": [
+          "mac"
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "network": {
+      "lan": true
+    }
+  },
+  "optional_calls": [
+    "probe",
+    "diagnostic"
+  ],
+  "read_every_s": 5
+}
