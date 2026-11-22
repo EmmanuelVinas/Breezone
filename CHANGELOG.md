@@ -6,11 +6,46 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.12.0-beta.5] - 2026-11-22
+
+### Added
+
+- Loadable modules: the drivers of the hardware and the online services become modules in
+  WebAssembly, signed like Breezone's updates, loaded only when a source uses them, each in its own
+  sandbox (memory and time limits, only the addresses its manifest allows, local network or named
+  hosts). A module that misbehaves puts only its own source in error.
+- Modules shipped with Breezone, in place of the drivers compiled in (which take over if a module
+  cannot start): Tasmota, Shelly (its WebSocket heard at once), V2C Trydan, Forecast.Solar,
+  Reolink, Hoymiles, TP-Link Kasa and Tapo, Philips Hue, Renson Healthbox, RTE (colour of the Tempo
+  days), the weather (Open-Meteo, MeteoAlarm), Linky (Conso API), Netatmo and EZVIZ. Existing
+  sources and accounts are kept as they are.
+- Library of modules: Settings › Modules › Library lists the modules that work with this server,
+  from Breezone's own source and from sources an administrator adds (each with its own key);
+  installing, updating (confirmed, with a way back) and removing a module.
+- The network search also finds the hardware of modules not installed yet (by HTTP and mDNS) and
+  proposes to install their module.
+- Accounts of modules: Settings › Accounts and services shows the form of a module's account from
+  its manifest; OAuth accounts are renewed by Breezone, which keeps the new refresh token.
+- Schedules kept by the hardware: a source whose module offers them shows them in its detail, and
+  they are added, changed and switched on or off from there (the same model as the Airzone
+  schedules: devices, days, time, action, optional end).
+- Solar forecast curves: the solar page, the home cards and the automations show what the panels
+  should produce.
+- Writing a module: a kit (`modules/sdk`) with a test bench, a guide in `modules/README.md`, and a
+  folder of modules in development (`BREEZONE_MODULES_DEV`, development builds only).
+- Development: `scripts/dev.sh --shipped` runs the shipped modules as the image does; every option
+  of `dev.sh` is described in `CONTRIBUTING.md`. The installation guide moved to
+  `docs/installation`.
+
 ### Changed
 
+- Automations: up to 12 actions in each branch (8 before); the editor says when the limit is
+  reached, and why there is no « Afterwards » for a trigger that is a moment (a time, a sunrise).
 - App, a shutter's page: the shutter itself is the control. Drag it, and its edge follows the finger,
   or tap where it should stop; its state is written on it. The side bar and the line under it are
-  gone, and the Open / Stop / Close buttons keep their label on one line.
+  gone, and the Open / Stop / Close buttons keep their label on one line. A shutter moves smoothly
+  to its target.
+- iOS: the bundle identifier is `io.monkeypatch.mobile.breezone`.
 
 ## [0.12.0-beta.4] - 2026-11-20
 
