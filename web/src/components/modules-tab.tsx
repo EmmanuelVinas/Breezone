@@ -2019,6 +2019,14 @@ export function ModulesTab({
         aria-label={t("Modules")}
         className="flex gap-1 overflow-x-auto rounded-3xl border bg-card p-2 md:flex-col md:overflow-visible"
       >
+        {here &&
+          item(
+            "library",
+            browsing,
+            <Library className="size-4 text-primary" />,
+            t("Bibliothèque"),
+            null
+          )}
         {item(
           "airzone",
           !selected,
@@ -2040,14 +2048,6 @@ export function ModulesTab({
             dotOf(s)
           )
         })}
-        {here &&
-          item(
-            "library",
-            browsing,
-            <Library className="size-4 text-primary" />,
-            t("Bibliothèque"),
-            null
-          )}
         {here ? (
           <button
             type="button"
