@@ -9,7 +9,7 @@ wit_bindgen::generate!({
 });
 
 use breezone::module::host;
-use breezone::module::types::{Curve, Described, Error, HardwareRoom, Picture, Request, Scene};
+use breezone::module::types::{Curve, Described, Error, HardwareRoom, LengthPrefix, Picture, ReadUntil, Request, Scene};
 use exports::breezone::module::driver::{Guest, GuestSource, Source as SourceHandle};
 
 struct Module;
@@ -68,12 +68,19 @@ impl GuestSource for Source {
                 host::store_set("n", Some(&n.to_le_bytes()));
                 Ok(vec![("store".into(), format!("{{\"n\":{n}}}"))])
             }
+            m if m.starts_with("exchange:") => {
+                // A 4-byte length first, not counting itself (as TP-Link Kasa does).
+                let until = ReadUntil::LengthPrefixed(LengthPrefix { offset: 0, size: 4, big_endian: true, adds: 4 });
+                let answer = host::exchange(&m[9..], b"ping", until, 3000).map_err(Error::Unreachable)?;
+                Ok(vec![("exchange".into(), format!("{{\"length\":{},\"text\":{:?}}}", answer.len(), String::from_utf8_lossy(&answer[4..])))])
+            }
             m if m.starts_with("account:") => {
                 let secret = host::account(&m[8..]).map_err(Error::Unsupported)?;
                 Ok(vec![("account".into(), format!("{{\"length\":{}}}", secret.len()))])
             }
             m if m.starts_with("http:") => {
-                let r = host::http(&Request { method: "GET".into(), url: m[5..].into(), headers: vec![], body: None, timeout_ms: 2000 }).map_err(Error::Unreachable)?;
+                let r = host::http(&Request { method: "GET".into(), url: m[5..].into(), headers: vec![], body: None, timeout_ms: 2000, insecure: false })
+                    .map_err(Error::Unreachable)?;
                 Ok(vec![("http".into(), format!("{{\"status\":{}}}", r.status))])
             }
             _ => Ok(vec![("ok".into(), "{\"on\":true}".into())]),
@@ -130,4 +137,6 @@ impl Guest for Module {
     }
 }
 
+// Only a WebAssembly component has these exports.
+#[cfg(target_arch = "wasm32")]
 export!(Module);

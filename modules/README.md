@@ -41,15 +41,21 @@ module!(Plug);
 `Cargo.toml`: `crate-type = ["cdylib", "rlib"]`, and `breezone-module-sdk` as a dependency.
 
 **Test it natively** with the bench of the SDK (`breezone_module_sdk::testing`): recorded HTTP
-answers (`answer`, `answer_json`), the requests made (`requests`), and `check(&source, manifest)`,
+answers (`answer`, `answer_json`), answers computed from the request (`respond`, for a device
+that proves something, as a handshake), TCP exchanges (`answer_exchange`, `queue_exchanges`), the
+requests made (`requests`), and `check(&source, manifest)`,
 which reads the source and checks it against the catalog of traits and your manifest (traits
 provided, types, bounds, required fields). `modules/tasmota/src/lib.rs` has examples;
 `cargo test -p breezone-module-<id>`.
 
 ## The pieces
 
-- `server/contracts/wit/breezone-module.wit`: the interface. The host gives `log`, `now`, `http`,
-  `subscribe` / `send` / `unsubscribe` (WebSocket or TCP kept open by the host, each message
+- `server/contracts/wit/breezone-module.wit`: the interface. The host gives `log`, `now`, `wait`
+  (time a device wants between two requests, 10 s at most), `http` (with `insecure` to accept a
+  camera's own certificate, on the local network only: `host::request_insecure`), `exchange` (a
+  question and its answer on TCP, read until a length the answer announces, a close, a number of
+  bytes or a silence: binary protocols), `subscribe` / `send` / `unsubscribe` (WebSocket or TCP
+  kept open by the host, each message
   handed to `on-message`), `store-get` / `store-set` (small values of the source), `account`,
   `pressed`, `changed`. The module gives a `source` resource (`open`, `describe`, `read`, `act`,
   `on-message`, `diagnostic`, and the optional calls) and `probe`.

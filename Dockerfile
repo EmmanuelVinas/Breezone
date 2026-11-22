@@ -30,10 +30,13 @@ RUN rustup target add wasm32-wasip2
 WORKDIR /src
 COPY server/contracts/wit server/contracts/wit
 COPY modules/ modules/
+# The modules shipped with Breezone (each replaces the driver compiled in with the same id).
+ARG SHIPPED_MODULES="tasmota shelly trydan forecast_solar reolink hoymiles tplink"
 RUN cd modules \
- && cargo build --release --locked --target wasm32-wasip2 -p breezone-module-tasmota \
- && mkdir -p /out/tasmota \
- && cp target/wasm32-wasip2/release/breezone_module_tasmota.wasm tasmota/manifest.json /out/tasmota/
+ && cargo build --release --locked --target wasm32-wasip2 $(for m in $SHIPPED_MODULES; do printf -- '-p breezone-module-%s ' "$m"; done) \
+ && for m in $SHIPPED_MODULES; do \
+      mkdir -p "/out/$m" && cp "target/wasm32-wasip2/release/breezone_module_$m.wasm" "$m/manifest.json" "/out/$m/"; \
+    done
 
 # --- Server (Rust, static musl binary) -----------------------------------------------------
 FROM rust:1-alpine AS server

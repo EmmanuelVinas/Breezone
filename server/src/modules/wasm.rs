@@ -28,12 +28,14 @@ wasmtime::component::bindgen!({
         "breezone:module/host.store-get": async,
         "breezone:module/host.store-set": async,
         "breezone:module/host.account": async,
+        "breezone:module/host.exchange": async,
+        "breezone:module/host.wait": async,
         default: trappable,
     },
     exports: { default: async },
 });
 
-use breezone::module::types::{Error as WitError, Header, Request, Response};
+use breezone::module::types::{Error as WitError, Header, ReadUntil, Request, Response};
 
 /// Ticks of the engine's epoch: one each `TICK`.
 const TICK: Duration = Duration::from_millis(100);
@@ -170,9 +172,21 @@ impl breezone::module::host::Host for HostState {
         Ok(chrono::Utc::now().timestamp())
     }
 
+    async fn wait(&mut self, ms: u32) {
+        tokio::time::sleep(Duration::from_millis(u64::from(ms.min(10_000)))).await;
+    }
+
     async fn http(&mut self, req: Request) -> Result<Response, String> {
         let url = req.url.clone();
         let r = http(&self.permissions, req).await;
+        if let Err(e) = &r {
+            crate::modules::log(&self.ctx.module, "warn", format!("{url}: {e}"));
+        }
+        r
+    }
+
+    async fn exchange(&mut self, url: String, data: Vec<u8>, until: ReadUntil, timeout_ms: u32) -> Result<Vec<u8>, String> {
+        let r = exchange(&self.permissions, &url, &data, until, timeout_ms).await;
         if let Err(e) = &r {
             crate::modules::log(&self.ctx.module, "warn", format!("{url}: {e}"));
         }
@@ -339,6 +353,67 @@ async fn subscribe(permissions: &Permissions, url: &str, id: u32, messages: toki
     Ok(Subscription { out, task: task.abort_handle() })
 }
 
+/// An address of the local network (or the machine itself).
+fn local(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => v4.is_private() || v4.is_link_local() || v4.is_loopback(),
+        IpAddr::V6(v6) => v6.is_loopback() || (v6.segments()[0] & 0xfe00) == 0xfc00 || (v6.segments()[0] & 0xffc0) == 0xfe80,
+    }
+}
+
+/// Largest answer of an `exchange`.
+const MAX_EXCHANGE: usize = 1 << 20;
+
+/// A question and its answer on TCP (see `host.exchange`).
+async fn exchange(permissions: &Permissions, url: &str, data: &[u8], until: ReadUntil, timeout_ms: u32) -> Result<Vec<u8>, String> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let parsed = reqwest::Url::parse(url).map_err(|e| e.to_string())?;
+    if parsed.scheme() != "tcp" || parsed.port().is_none() {
+        return Err(format!("{url}: tcp://host:port only"));
+    }
+    let addrs = permissions.resolve(&parsed).await?;
+    let io = async {
+        let mut tcp = tokio::net::TcpStream::connect(&addrs[..]).await.map_err(|e| e.to_string())?;
+        tcp.write_all(data).await.map_err(|e| e.to_string())?;
+        let mut out: Vec<u8> = Vec::new();
+        let mut buf = vec![0u8; 16 << 10];
+        loop {
+            let wanted = match &until {
+                ReadUntil::Bytes(n) => Some(*n as usize),
+                ReadUntil::LengthPrefixed(p) => {
+                    let (at, size) = (p.offset as usize, usize::from(p.size));
+                    out.get(at..at + size).map(|b| {
+                        let n = b.iter().fold(0u64, |acc, x| acc << 8 | u64::from(*x));
+                        let n = if p.big_endian { n } else { b.iter().rev().fold(0u64, |acc, x| acc << 8 | u64::from(*x)) };
+                        (n as i64 + i64::from(p.adds)).max(0) as usize
+                    })
+                }
+                _ => None,
+            };
+            if wanted.is_some_and(|w| out.len() >= w) {
+                out.truncate(wanted.unwrap_or(out.len()));
+                return Ok(out);
+            }
+            let read = match &until {
+                ReadUntil::Idle(ms) if !out.is_empty() => match tokio::time::timeout(Duration::from_millis(u64::from(*ms)), tcp.read(&mut buf)).await {
+                    Ok(r) => r,
+                    Err(_) => return Ok(out),
+                },
+                _ => tcp.read(&mut buf).await,
+            };
+            match read.map_err(|e| e.to_string())? {
+                0 if matches!(until, ReadUntil::Close | ReadUntil::Idle(_)) => return Ok(out),
+                0 => return Err("the connection closed before the whole answer".into()),
+                n => out.extend_from_slice(&buf[..n]),
+            }
+            if out.len() > MAX_EXCHANGE {
+                return Err("answer too large".into());
+            }
+        }
+    };
+    tokio::time::timeout(Duration::from_millis(u64::from(timeout_ms.clamp(100, 30_000))), io).await.map_err(|_| "no answer in time".to_string())?
+}
+
 async fn http(permissions: &Permissions, req: Request) -> Result<Response, String> {
     let url = reqwest::Url::parse(&req.url).map_err(|e| e.to_string())?;
     if !matches!(url.scheme(), "http" | "https") {
@@ -351,6 +426,13 @@ async fn http(permissions: &Permissions, req: Request) -> Result<Response, Strin
     let mut builder = reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()).timeout(timeout).no_proxy();
     if host.parse::<IpAddr>().is_err() {
         builder = builder.resolve_to_addrs(&host, &addrs);
+    }
+    // A camera's own certificate: accepted only on the local network, never on the Internet.
+    if req.insecure {
+        if !addrs.iter().all(|a| local(a.ip())) {
+            return Err(format!("{host}: an unchecked certificate only on the local network"));
+        }
+        builder = builder.danger_accept_invalid_certs(true);
     }
     let client = builder.build().map_err(|e| e.to_string())?;
     let method = reqwest::Method::from_bytes(req.method.as_bytes()).map_err(|e| e.to_string())?;

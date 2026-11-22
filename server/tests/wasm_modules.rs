@@ -393,3 +393,174 @@ async fn a_module_that_comes_with_breezone_replaces_the_native_driver() {
     assert_eq!((code, s["status"]["state"].clone()), (200, json!("online")), "{s}");
     assert!(commands.lock().unwrap().iter().any(|c| c == "Status 0"));
 }
+
+/// The Shelly module in WebAssembly (lot L8): it replaces the driver compiled in, drives the relay,
+/// and the WebSocket it keeps with the Shelly makes a change done by hand show at once (Breezone
+/// reads the source again when the Shelly tells it, without waiting for the next reading).
+#[tokio::test]
+async fn the_shelly_module_hears_its_websocket() {
+    use axum::extract::ws::{Message, WebSocketUpgrade};
+    use breezone_server::modules::package;
+    let _serial = SERIAL.lock().await;
+    breezone_server::modules::wasm::allow_loopback(true);
+    let relay = Arc::new(Mutex::new(false));
+    let (tell, _) = tokio::sync::broadcast::channel::<()>(4);
+    let fake = {
+        let (r1, r2, r3) = (relay.clone(), relay.clone(), relay.clone());
+        let tell = tell.clone();
+        Router::new()
+            .route("/rpc/Shelly.GetDeviceInfo", get(|| async { Json(json!({"id": "shellyplus1pm-a1b2", "app": "Plus1PM", "ver": "1.4.4", "gen": 2})) }))
+            .route(
+                "/rpc/Shelly.GetStatus",
+                get(move || {
+                    let r = r1.clone();
+                    async move { Json(json!({"switch:0": {"id": 0, "output": *r.lock().unwrap(), "apower": 12.5}})) }
+                }),
+            )
+            .route(
+                "/rpc/Switch.Set",
+                get(move |Query(q): Query<HashMap<String, String>>| {
+                    let r = r2.clone();
+                    async move {
+                        *r.lock().unwrap() = q.get("on").map(String::as_str) == Some("true");
+                        Json(json!({"was_on": false}))
+                    }
+                }),
+            )
+            .route(
+                "/rpc",
+                get(move |ws: WebSocketUpgrade| {
+                    let mut told = tell.subscribe();
+                    let _ = r3.clone();
+                    async move {
+                        ws.on_upgrade(move |mut socket| async move {
+                            // Answers the first request, then tells each change.
+                            let _ = socket.recv().await;
+                            let _ = socket.send(Message::Text(r#"{"id":1,"result":{}}"#.into())).await;
+                            while told.recv().await.is_ok() {
+                                if socket.send(Message::Text(r#"{"src":"shellyplus1pm","method":"NotifyStatus","params":{}}"#.into())).await.is_err() {
+                                    break;
+                                }
+                            }
+                        })
+                    }
+                }),
+            )
+    };
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let shelly = listener.local_addr().unwrap().to_string();
+    tokio::spawn(async move { axum::serve(listener, fake).await.unwrap() });
+
+    let dir = tempfile_dir("shelly");
+    std::fs::create_dir_all(dir.join("app/modules")).unwrap();
+    let manifest = include_str!("../../modules/shelly/manifest.json");
+    std::fs::write(dir.join("app/modules/shelly-1.0.0.bzm"), package::build(manifest, Some(&wasm("shelly")), &[]).unwrap()).unwrap();
+    let mut cfg = breezone_server::config::Config::for_tests(dir.join("data"));
+    cfg.web_dir = dir.join("app/web");
+    let state = breezone_server::init_state(cfg).await.unwrap();
+    state.drivers.clone().hear();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(listener, breezone_server::app(state)).await.unwrap() });
+    let http = reqwest::Client::new();
+    let v: Value = http.post(format!("{base}/api/setup")).json(&json!({"username":"admin","password":"motdepasse1"})).send().await.unwrap().json().await.unwrap();
+    let token = v["access_token"].as_str().unwrap().to_string();
+    let call = |method: &str, path: &str, body: Option<Value>| {
+        let mut req = http.request(method.parse().unwrap(), format!("{base}{path}")).bearer_auth(&token);
+        if let Some(b) = body {
+            req = req.json(&b);
+        }
+        async move {
+            let resp = req.send().await.unwrap();
+            (resp.status().as_u16(), serde_json::from_str::<Value>(&resp.text().await.unwrap()).unwrap_or(Value::Null))
+        }
+    };
+
+    let (_, modules) = call("GET", "/api/modules", None).await;
+    assert_eq!(modules.as_array().unwrap().iter().find(|m| m["id"] == "shelly").unwrap()["origin"], "builtin");
+    let (code, s) = call("POST", "/api/sources", Some(json!({"driver": "shelly", "name": "Chauffe-eau", "config": {"host": shelly}}))).await;
+    assert_eq!((code, s["status"]["state"].clone()), (201, json!("online")), "{s}");
+    let relay_of = |devices: &Value| devices.as_array().unwrap().iter().find(|d| d["source"] == "shelly").unwrap().clone();
+    let (_, devices) = call("GET", "/api/devices", None).await;
+    let d = relay_of(&devices);
+    assert_eq!((d["name"].clone(), d["state"]["on"].clone()), (json!("Plus 1PM relais"), json!(false)));
+
+    // Driven from Breezone.
+    let (code, r) = call("POST", &format!("/api/devices/{}/actions", d["id"]), Some(json!({"trait": "switch.relay", "action": "set", "params": {"on": true}}))).await;
+    assert_eq!(code, 200, "{r}");
+    assert!(*relay.lock().unwrap());
+
+    // Switched off by hand: the Shelly tells it on its WebSocket, Breezone reads it at once.
+    *relay.lock().unwrap() = false;
+    let _ = tell.send(());
+    let mut off = false;
+    for _ in 0..40 {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        let (_, devices) = call("GET", "/api/devices", None).await;
+        if relay_of(&devices)["state"]["on"] == false {
+            off = true;
+            break;
+        }
+    }
+    assert!(off, "the change told by the Shelly shows within 4 s");
+}
+
+/// Every module shipped with Breezone (lot L8) compiles against the host, fits its manifest, and
+/// opens a source from a configuration like the one its driver compiled in takes.
+#[tokio::test]
+async fn the_shipped_modules_load() {
+    let _serial = SERIAL.lock().await;
+    let configs = [
+        ("tasmota", json!({"host": "192.168.1.30"})),
+        ("shelly", json!({"host": "192.168.1.40"})),
+        ("trydan", json!({"host": "192.168.1.37"})),
+        ("reolink", json!({"host": "192.168.1.50"})),
+        ("hoymiles", json!({"host": "192.168.1.60"})),
+        ("tplink", json!({"host": "192.168.1.31"})),
+        ("forecast_solar", json!({"kwp": 4.5, "declination": 30, "azimuth": 0, "latitude": 43.5, "longitude": 1.5, "timezone": "Europe/Paris"})),
+    ];
+    let host = breezone_server::capabilities::Host::local();
+    for (id, config) in configs {
+        let text = std::fs::read_to_string(modules_dir().join(id).join("manifest.json")).unwrap();
+        let manifest = breezone_server::modules::manifest::Manifest::parse(&text).unwrap_or_else(|e| panic!("{id}: {e:?}"));
+        assert_eq!(manifest.id, id);
+        assert_eq!(breezone_server::modules::compat::check(&manifest, &host, env!("CARGO_PKG_VERSION"), |_| true), Ok(()), "{id}");
+        let native = breezone_server::modules::native::get(id).unwrap_or_else(|| panic!("{id} replaces a driver compiled in"));
+        assert_eq!(manifest.provides.traits, native.manifest.provides.traits, "{id}: the same traits as the driver it replaces");
+        let module = Arc::new(WasmModule::load(id, &wasm(id), local(), None).unwrap_or_else(|e| panic!("{id}: {e}")));
+        module.open(None, &config, None).await.unwrap_or_else(|e| panic!("{id}: {e}"));
+    }
+}
+
+/// A question and its answer on TCP (`host.exchange`, for the binary protocols of Hoymiles and
+/// TP-Link Kasa): the answer is read whole by the length it announces, even in several pieces; an
+/// address the module may not reach is refused.
+#[tokio::test]
+async fn a_tcp_exchange_reads_the_length_announced() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let _serial = SERIAL.lock().await;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        while let Ok((mut tcp, _)) = listener.accept().await {
+            tokio::spawn(async move {
+                let mut asked = [0u8; 4];
+                tcp.read_exact(&mut asked).await.unwrap();
+                assert_eq!(&asked, b"ping");
+                // 11 bytes announced, sent in two pieces, then more that is not part of it.
+                tcp.write_all(&[0, 0, 0, 11, b'h', b'e', b'l']).await.unwrap();
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                tcp.write_all(b"lo world, and more").await.unwrap();
+                let _ = tcp.read(&mut asked).await;
+            });
+        }
+    });
+    let module = Arc::new(WasmModule::load("misbehave", &wasm("misbehave"), local(), None).unwrap());
+    let s = module.open(None, &json!(format!("exchange:tcp://{addr}")), None).await.unwrap();
+    let state = s.read().await.unwrap();
+    assert_eq!((state["exchange"]["length"].clone(), state["exchange"]["text"].clone()), (json!(15), json!("hello world")));
+
+    let strict = Arc::new(WasmModule::load("misbehave", &wasm("misbehave"), Permissions { loopback: false, ..local() }, None).unwrap());
+    let s = strict.open(None, &json!(format!("exchange:tcp://{addr}")), None).await.unwrap();
+    assert!(matches!(s.read().await, Err(DriverError::Unreachable(e)) if e.contains("not allowed")));
+}

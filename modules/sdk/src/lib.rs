@@ -32,7 +32,8 @@ pub mod bindings {
     });
 }
 
-pub use bindings::breezone::module::types::{Curve, Described, DeviceInfo, Error, HardwareRoom, Header, Picture, Scene};
+pub use bindings::breezone::module::types::{Curve, Described, DeviceInfo, Error, HardwareRoom, Header, LengthPrefix, Picture, ReadUntil, Scene};
+pub use serde_json;
 pub use serde_json::{json, Map, Value};
 
 /// The values of the traits of one device.
@@ -196,6 +197,11 @@ pub mod host {
         imp::now()
     }
 
+    /// Waits without computing (a device that wants time between two requests): 10 s at most.
+    pub fn wait(ms: u32) {
+        imp::wait(ms)
+    }
+
     /// An HTTP answer.
     #[derive(Debug, Clone)]
     pub struct Answer {
@@ -213,7 +219,18 @@ pub mod host {
 
     /// An HTTP request (refused by Breezone unless the module's permissions allow its address).
     pub fn request(method: &str, url: &str, headers: &[(&str, &str)], body: Option<&[u8]>, timeout_ms: u32) -> Result<Answer> {
-        imp::request(method, url, headers, body, timeout_ms).map_err(Error::Unreachable)
+        imp::request(method, url, headers, body, timeout_ms, false).map_err(Error::Unreachable)
+    }
+
+    /// The same, accepting the device's own HTTPS certificate (a camera's): Breezone allows it on
+    /// the local network only.
+    pub fn request_insecure(method: &str, url: &str, headers: &[(&str, &str)], body: Option<&[u8]>, timeout_ms: u32) -> Result<Answer> {
+        imp::request(method, url, headers, body, timeout_ms, true).map_err(Error::Unreachable)
+    }
+
+    /// A question and its answer on TCP (`tcp://host:port`): writes `data`, reads until `until`.
+    pub fn exchange(url: &str, data: &[u8], until: super::ReadUntil, timeout_ms: u32) -> Result<Vec<u8>> {
+        imp::exchange(url, data, until, timeout_ms).map_err(Error::Unreachable)
     }
 
     /// `GET url`, its answer as JSON.
@@ -280,10 +297,18 @@ pub mod host {
             h::now()
         }
 
-        pub fn request(method: &str, url: &str, headers: &[(&str, &str)], body: Option<&[u8]>, timeout_ms: u32) -> Result<super::Answer, String> {
+        pub fn wait(ms: u32) {
+            h::wait(ms)
+        }
+
+        pub fn request(method: &str, url: &str, headers: &[(&str, &str)], body: Option<&[u8]>, timeout_ms: u32, insecure: bool) -> Result<super::Answer, String> {
             let headers = headers.iter().map(|(n, v)| super::Header { name: n.to_string(), value: v.to_string() }).collect();
-            let r = h::http(&Request { method: method.into(), url: url.into(), headers, body: body.map(<[u8]>::to_vec), timeout_ms })?;
+            let r = h::http(&Request { method: method.into(), url: url.into(), headers, body: body.map(<[u8]>::to_vec), timeout_ms, insecure })?;
             Ok(super::Answer { status: r.status, headers: r.headers, body: r.body })
+        }
+
+        pub fn exchange(url: &str, data: &[u8], until: crate::ReadUntil, timeout_ms: u32) -> Result<Vec<u8>, String> {
+            h::exchange(url, data, until, timeout_ms)
         }
 
         pub fn subscribe(url: &str) -> Result<u32, String> {
@@ -333,9 +358,15 @@ pub mod testing {
     use std::cell::RefCell;
     use std::collections::HashMap;
 
+    type Responder = std::rc::Rc<dyn Fn(&[(&str, &str)], &[u8]) -> crate::host::Answer>;
+
     #[derive(Default)]
     struct Bench {
         answers: Vec<(String, String, u16, Vec<u8>)>,
+        responders: Vec<(String, String, Responder)>,
+        exchanges: Vec<(String, Vec<u8>)>,
+        queued: std::collections::VecDeque<Vec<u8>>,
+        waited: u64,
         requests: Vec<String>,
         sent: Vec<(u32, Vec<u8>)>,
         presses: Vec<(String, u32, String)>,
@@ -362,6 +393,27 @@ pub mod testing {
     /// Answers the requests `method` whose address contains `url` (the last given wins).
     pub fn answer(method: &str, url: &str, status: u16, body: impl Into<Vec<u8>>) {
         with(|b| b.answers.push((method.to_string(), url.to_string(), status, body.into())));
+    }
+
+    /// Answers the requests `method` whose address contains `url` with what `f` makes of their
+    /// headers and body (a device that computes its answer), before the answers of [`answer`].
+    pub fn respond(method: &str, url: &str, f: impl Fn(&[(&str, &str)], &[u8]) -> crate::host::Answer + 'static) {
+        with(|b| b.responders.push((method.to_string(), url.to_string(), std::rc::Rc::new(f))));
+    }
+
+    /// How long the module asked to wait, in all (milliseconds).
+    pub fn waited_ms() -> u64 {
+        with(|b| b.waited)
+    }
+
+    /// Answers the TCP exchanges whose address contains `url` (the last given wins).
+    pub fn answer_exchange(url: &str, answer: impl Into<Vec<u8>>) {
+        with(|b| b.exchanges.push((url.to_string(), answer.into())));
+    }
+
+    /// Answers the next TCP exchanges with these, in this order (before `answer_exchange`).
+    pub fn queue_exchanges(answers: Vec<Vec<u8>>) {
+        with(|b| b.queued.extend(answers));
     }
 
     /// Answers with JSON.
@@ -488,7 +540,17 @@ pub mod testing {
             std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
         }
 
-        pub fn request(method: &str, url: &str, _headers: &[(&str, &str)], _body: Option<&[u8]>, _timeout_ms: u32) -> Result<crate::host::Answer, String> {
+        /// The bench does not wait: it counts.
+        pub fn wait(ms: u32) {
+            with(|b| b.waited += u64::from(ms));
+        }
+
+        pub fn request(method: &str, url: &str, headers: &[(&str, &str)], body: Option<&[u8]>, _timeout_ms: u32, _insecure: bool) -> Result<crate::host::Answer, String> {
+            let responder = with(|b| b.responders.iter().rev().find(|(m, u, _)| m == method && url.contains(u.as_str())).map(|(.., f)| f.clone()));
+            if let Some(f) = responder {
+                with(|b| b.requests.push(format!("{method} {url}")));
+                return Ok(f(headers, body.unwrap_or_default()));
+            }
             with(|b| {
                 b.requests.push(format!("{method} {url}"));
                 b.answers
@@ -497,6 +559,16 @@ pub mod testing {
                     .find(|(m, u, ..)| m == method && url.contains(u.as_str()))
                     .map(|(_, _, status, body)| crate::host::Answer { status: *status, headers: vec![], body: body.clone() })
                     .ok_or_else(|| format!("no answer for {method} {url} on the bench"))
+            })
+        }
+
+        pub fn exchange(url: &str, data: &[u8], _until: crate::ReadUntil, _timeout_ms: u32) -> Result<Vec<u8>, String> {
+            with(|b| {
+                b.requests.push(format!("EXCHANGE {url} {}", data.len()));
+                if let Some(next) = b.queued.pop_front() {
+                    return Ok(next);
+                }
+                b.exchanges.iter().rev().find(|(u, _)| url.contains(u.as_str())).map(|(_, answer)| answer.clone()).ok_or_else(|| format!("no answer for {url} on the bench"))
             })
         }
 

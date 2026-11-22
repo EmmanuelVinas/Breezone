@@ -49,6 +49,29 @@ interface types {
         headers: list<header>,
         body: option<list<u8>>,
         timeout-ms: u32,
+        /// Accepts the device's own HTTPS certificate (a camera's): on the local network only.
+        insecure: bool,
+    }
+
+    /// Where the answer of an `exchange` ends.
+    variant read-until {
+        /// The device closes the connection.
+        close,
+        /// This many bytes.
+        bytes(u32),
+        /// This many milliseconds of silence once something came.
+        idle(u32),
+        /// A length written in the answer.
+        length-prefixed(length-prefix),
+    }
+
+    /// A length in the answer: `size` bytes (1, 2 or 4) at `offset`; the answer is that many bytes,
+    /// plus `adds` (the header when the length does not count it).
+    record length-prefix {
+        offset: u32,
+        size: u8,
+        big-endian: bool,
+        adds: s32,
     }
 
     record response {
@@ -85,7 +108,7 @@ interface types {
 }
 
 interface host {
-    use types.{request, response};
+    use types.{request, response, read-until};
 
     enum level {
         debug,
@@ -100,8 +123,15 @@ interface host {
     /// Unix time, in seconds.
     now: func() -> s64;
 
+    /// Waits without computing (a device that wants time between two requests): 10 s at most.
+    wait: func(ms: u32);
+
     /// An HTTP request, refused unless its address is allowed by the module's permissions.
     http: func(req: request) -> result<response, string>;
+
+    /// A question and its answer on TCP (`tcp://host:port`): opens, writes `data`, reads until
+    /// `until`, closes. Same permissions as `http`; 1 MB at most.
+    exchange: func(url: string, data: list<u8>, until: read-until, timeout-ms: u32) -> result<list<u8>, string>;
 
     /// Opens a connection the host keeps: each message it receives is handed to `on-message` with
     /// the number returned here. A WebSocket (`ws://`, `wss://`) gives its text and binary frames;
