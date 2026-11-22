@@ -383,7 +383,26 @@ pub async fn backup_database(db: &Db, data_dir: &Path, version: Version) -> anyh
     let path = backups_dir(data_dir).join(format!("breezone-{}-{version}.db", chrono::Utc::now().format("%Y%m%d-%H%M%S")));
     let _ = std::fs::remove_file(&path);
     sqlx::query("VACUUM INTO ?").bind(path.to_string_lossy().into_owned()).execute(db).await?;
+    let written = path.clone();
+    let _ = tokio::task::spawn_blocking(move || out_of_cache(&written)).await;
     Ok(path)
+}
+
+/// Asks the system not to keep in its cache a file written that Breezone will not read again (a
+/// backup, read only to go back): the memory a container shows counts that cache.
+fn out_of_cache(path: &Path) {
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::fd::AsRawFd;
+        let Ok(file) = std::fs::File::open(path) else { return };
+        // Written pages cannot leave the cache before they are on the disk.
+        if file.sync_all().is_ok() {
+            // SAFETY: a valid descriptor, kept open for the call; the advice changes no data.
+            unsafe { libc::posix_fadvise(file.as_raw_fd(), 0, 0, libc::POSIX_FADV_DONTNEED) };
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    let _ = path;
 }
 
 /// Unpacks a release archive into `versions/<version>/`: the server binary and the `web/` folder,

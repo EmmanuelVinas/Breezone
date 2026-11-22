@@ -19,6 +19,10 @@ use std::sync::{Arc, Mutex};
 
 type Files = Arc<Mutex<HashMap<String, Vec<u8>>>>;
 
+/// The tests of this file run one at a time: the modules installed are known to the whole process
+/// (one test would see the versions another installs).
+static SERIAL: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 fn key() -> SigningKey {
     SigningKey::from_bytes(&[3; 32])
 }
@@ -117,6 +121,7 @@ impl Server {
 
 #[tokio::test]
 async fn modules_come_from_the_signed_library() {
+    let _serial = SERIAL.lock().await;
     let files: Files = Arc::default();
     // 2.0 needs an interface no server has: 1.1 is the one that fits.
     publish(&files, 3, &[("2.0.0", "^9.0"), ("1.1.0", "^1.0"), ("1.0.0", "^1.0")]);
@@ -194,6 +199,7 @@ async fn modules_come_from_the_signed_library() {
 /// came from another source.
 #[tokio::test]
 async fn other_sources_of_modules() {
+    let _serial = SERIAL.lock().await;
     let official: Files = Arc::default();
     publish(&official, 1, &[("1.0.0", "^1.0")]);
     let server = Server::start(serve_library(official.clone()).await).await;
@@ -248,6 +254,7 @@ async fn other_sources_of_modules() {
 /// proposed for installation.
 #[tokio::test]
 async fn the_scan_proposes_modules_of_the_library() {
+    let _serial = SERIAL.lock().await;
     // A device of the network that says what it is at /info.
     let device = Router::new().route("/info", get(|| async { r#"{"vendor":"plugscan","mac":"AA"}"# }));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

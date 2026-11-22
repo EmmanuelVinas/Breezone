@@ -14,6 +14,8 @@ All notable changes are documented here. The format follows
   behind it together) or fails, the forecast is no longer asked again at each reading, but at the
   time the service says (an hour without one, ten minutes after a failure); the last forecast is
   kept across restarts, so that a restart does not ask again.
+- Memory shown for the container: the backup of the database taken before an update no longer
+  stays in the system's file cache (it is only read to go back).
 - Library of modules: the modules published for an earlier version of Breezone load again (a call
   added to the interface no longer refuses them), and a module that needs a newer Breezone is no
   longer offered to an older one. Tasmota 1.0.1 replaces a 1.0.0 that no server could load.

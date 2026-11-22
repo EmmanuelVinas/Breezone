@@ -96,6 +96,9 @@ panic = "abort"
 [target.'cfg(target_os = "macos")'.dependencies]
 rs-matter = { version = "=0.4.1", features = ["astro-dnssd"] }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+
 [dev-dependencies]
 tokio-tungstenite = "0.30.0"
 rcgen = "0.14"

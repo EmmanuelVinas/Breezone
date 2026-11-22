@@ -442,6 +442,7 @@ dependencies = [
  "hkdf 0.13.0",
  "if-addrs",
  "jsonwebtoken",
+ "libc",
  "md-5",
  "num-bigint",
  "rand 0.10.3",
