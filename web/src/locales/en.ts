@@ -1331,6 +1331,28 @@ const en: Record<string, string> = {
     "{max} actions at most: to do more, group them in a routine or a scene and start it from here.",
   "Pas d'« Ensuite » ici : une heure, un lever ou un coucher du soleil est un instant, il ne cesse pas d'être vrai. Pour revenir en arrière, créez une autre règle au moment voulu.":
     "No “Afterwards” here: a time, a sunrise or a sunset is a moment, it does not stop being true. To undo it, create another rule at the time you want.",
+  "Le compte que demande le module {name}.":
+    "The account the {name} module asks for.",
+  "Désactivé : le module ne s'en sert plus.":
+    "Switched off: the module no longer uses it.",
+  oui: "yes",
+  non: "no",
+  "Programmation enregistrée dans l'appareil": "Schedule saved in the device",
+  "Enregistrée dans l'appareil, qui l'exécute lui-même, même sans Breezone.":
+    "Saved in the device, which runs it itself, even without Breezone.",
+  "Choisir une action": "Choose an action",
+  "Choisissez d'abord les appareils": "Choose the devices first",
+  "Et à une heure de fin": "And at an end time",
+  "Heure de fin": "End time",
+  "Envoi à l'appareil…": "Sending to the device…",
+  "Programmation supprimée de l'appareil": "Schedule deleted from the device",
+  "La programmation est supprimée de l'appareil.":
+    "The schedule is deleted from the device.",
+  "Programmations de l'appareil": "Schedules of the device",
+  "Gardées et exécutées par l'appareil lui-même : elles continuent même quand Breezone est arrêté.":
+    "Kept and run by the device itself: they go on even when Breezone is stopped.",
+  "Aucune programmation dans l'appareil.": "No schedule in the device.",
+  "{label} : {value}": "{label}: {value}",
   "Ne rien faire": "Do nothing",
   "Faire…": "Do…",
   "quand ce n'est plus vrai :": "when it is no longer true:",

@@ -59,6 +59,7 @@ import {
   extraFields,
   useDrivers,
 } from "@/components/module-config"
+import { HardwareSchedulesCard } from "@/components/hardware-schedules"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -1117,6 +1118,9 @@ function SourceDetail({
       {manifest?.cloud && <TwinsCard sourceId={source.id} />}
       {!manifest?.cloud && <IgnoredCard sourceId={source.id} />}
       {!cloud && <ModuleSettingsCard key={source.id} source={source} />}
+      {has(manifest, "schedules") && (
+        <HardwareSchedulesCard sourceId={source.id} devices={devices} />
+      )}
       {has(manifest, "unlock") && (
         <RensonKey
           sourceId={source.id}

@@ -56,6 +56,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "breezone-module-ezviz"
+version = "1.0.0"
+dependencies = [
+ "aes",
+ "breezone-module-sdk",
+ "cbc",
+ "chrono",
+ "md-5",
+]
+
+[[package]]
 name = "breezone-module-forecast_solar"
 version = "1.0.0"
 dependencies = [
@@ -92,6 +103,13 @@ name = "breezone-module-misbehave"
 version = "0.0.0"
 dependencies = [
  "wit-bindgen",
+]
+
+[[package]]
+name = "breezone-module-netatmo"
+version = "1.0.0"
+dependencies = [
+ "breezone-module-sdk",
 ]
 
 [[package]]

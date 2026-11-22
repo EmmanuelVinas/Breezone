@@ -62,6 +62,17 @@ provided, types, bounds, required fields). `modules/tasmota/src/lib.rs` has exam
   appairage when the manifest's `pairing` is `button` or `code`: `Driver::pair` in the SDK,
   `modules/hue/` as an example). Subscriptions take `ws://`, `wss://` (a device of the local
   network may have its own certificate) and `tcp://`.
+- An account that is an OAuth 2 one declares `"oauth": {"token_url": "https://…"}` in its
+  manifest, with `client_id`, `client_secret` and `refresh_token` in its form: `host::access_token()`
+  gives a valid access, which Breezone renews itself (one renewal at a time) and whose new refresh
+  token it keeps. The module never writes its account. `modules/netatmo/` is an example; a module
+  whose devices come with its account (roles `account` and `driver`) gets its source once the
+  account is connected.
+- An account that is not OAuth but keeps a session (EZVIZ) stores it with
+  `host::account_update(&json!({...}))`: during `check`, it may also change what was typed (a
+  password kept as its MD5, a one-time code removed); once kept, never the fields of its form.
+  `permissions.network.hosts` takes `*.example.com` for a service whose regions and pictures live
+  on subdomains. `modules/ezviz/` is an example.
 - Hardware that keeps schedules of its own lists `schedules` in `optional_calls` and implements
   `Driver::schedules`, `save_schedule` and `delete_schedule` (days, time, devices, an action of a
   trait with its parameters, an optional end; `editable: false` with a `note` for those only its

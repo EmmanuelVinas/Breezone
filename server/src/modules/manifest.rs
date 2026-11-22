@@ -55,6 +55,16 @@ pub struct Manifest {
     /// The calls of the interface it answers beyond the required ones.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub optional_calls: Vec<String>,
+    /// Its account is an OAuth 2 one: Breezone renews its access itself (`host.access-token`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub oauth: Option<OAuth>,
+}
+
+/// How Breezone renews the access of an OAuth 2 account: the refresh token (a field of the form,
+/// `refresh_token`, with `client_id` and `client_secret`) traded at `token_url`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct OAuth {
+    pub token_url: String,
 }
 
 fn one() -> u32 {
@@ -330,7 +340,9 @@ impl Manifest {
             fail("permissions.memory_mb: 1 to 64".into());
         }
         for h in &self.permissions.network.hosts {
-            if !is_host(h) {
+            // `*.example.com`: its subdomains (a service whose regions and pictures move), never `*.com`.
+            let named = h.strip_prefix("*.").map_or(h.as_str(), |d| d);
+            if !is_host(named) || (h.starts_with("*.") && named.matches('.').count() < 1) {
                 fail(format!("permissions.network.hosts: {h:?} is not a host name"));
             }
         }

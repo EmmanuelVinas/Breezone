@@ -6,6 +6,7 @@
 #![cfg(feature = "wasm")]
 
 use axum::extract::Query;
+use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Json, Router};
 use breezone_server::drivers::{Driver, DriverError};
@@ -39,7 +40,7 @@ fn wasm(name: &str) -> Vec<u8> {
 static SERIAL: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 fn local() -> Permissions {
-    Permissions { lan: true, hosts: vec![], loopback: true, memory_mb: 16, accounts: vec![] }
+    Permissions { lan: true, hosts: vec![], loopback: true, memory_mb: 16, accounts: vec![], oauth_token_url: None, account_fields: vec![] }
 }
 
 /// A Tasmota with a dimmer on relay 1, a plug on relay 2, an energy meter and a sensor; it keeps
@@ -412,10 +413,50 @@ async fn a_service_module_answers_its_contract() {
     module.check_account(r#"{"token": "red"}"#).await.unwrap();
     assert!(matches!(module.check_account(r#"{"token": "wrong"}"#).await, Err(DriverError::Invalid(m)) if m == "refused"));
     let colors = module.query("tariff.day_color@1", "colors", &json!({"from": "2026-11-22", "until": "2026-11-22"})).await.unwrap();
-    assert_eq!(colors, json!([{"day": "2026-11-22", "color": "blue"}]));
+    // Its colour depends on the account kept by whichever server another test started last.
+    assert_eq!(colors[0]["day"], "2026-11-22", "{colors}");
     // An answer that is not what the contract says is refused.
     assert!(matches!(module.query("tariff.day_color@1", "colors", &json!({"from": "bad"})).await, Err(DriverError::Invalid(m)) if m.contains("color")));
     assert!(matches!(module.query("weather.forecast@1", "daily", &json!({})).await, Err(DriverError::Unsupported(_))));
+}
+
+/// The access of an OAuth account (`host.access-token`): renewed by Breezone with the refresh
+/// token, the new refresh token kept; one still valid is given as it is.
+#[tokio::test]
+async fn an_oauth_access_is_renewed_by_the_host() {
+    let _serial = SERIAL.lock().await;
+    let asked = Arc::new(Mutex::new(vec![]));
+    let seen = asked.clone();
+    let app = axum::Router::new().route(
+        "/token",
+        axum::routing::post(move |body: String| {
+            let seen = seen.clone();
+            async move {
+                seen.lock().unwrap().push(body.clone());
+                if body.contains("refresh_token=old") {
+                    axum::Json(json!({"access_token": "fresh", "refresh_token": "new", "expires_in": 10800})).into_response()
+                } else {
+                    (axum::http::StatusCode::BAD_REQUEST, axum::Json(json!({"error": "invalid_grant"}))).into_response()
+                }
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let permissions = Permissions { accounts: vec!["misbehave".into()], oauth_token_url: Some(format!("http://{addr}/token")), ..local() };
+    let module = Arc::new(WasmModule::load("misbehave", &wasm("misbehave"), permissions, None).unwrap());
+
+    let kept: Value = serde_json::from_str(&module.check_account(r#"{"client_id": "id", "client_secret": "s", "refresh_token": "old"}"#).await.unwrap()).unwrap();
+    assert_eq!((kept["access_token"].clone(), kept["refresh_token"].clone()), (json!("fresh"), json!("new")), "{kept}");
+    assert!(kept["expires_at"].as_i64().unwrap() > breezone_server::db::now() + 10_000);
+    assert!(asked.lock().unwrap()[0].contains("grant_type=refresh_token") && asked.lock().unwrap()[0].contains("client_id=id"));
+    // Still valid: not renewed.
+    let valid = json!({"refresh_token": "new", "access_token": "fresh", "expires_at": breezone_server::db::now() + 3600}).to_string();
+    module.check_account(&valid).await.unwrap();
+    assert_eq!(asked.lock().unwrap().len(), 1);
+    // A refresh token the service refuses: the check fails.
+    assert!(module.check_account(r#"{"refresh_token": "revoked"}"#).await.is_err());
 }
 
 /// A module that comes with Breezone (lot L6): beside its web UI, unsigned (the image or the signed
@@ -511,6 +552,12 @@ async fn a_service_module_with_an_account_answers_the_core() {
     assert_eq!((view["connected"].clone(), view["state"].clone(), view["config"].clone()), (json!(true), json!("ok"), json!({})), "{view}");
     let answer = breezone_server::modules::ask_service(&db, "tariff.day_color@1", "colors", &asked).await.unwrap().unwrap();
     assert_eq!(answer, json!([{"day": "2026-11-22", "color": "red"}]));
+    // The module keeps a session in its account, never a field of its form.
+    let update = json!({"from": "2026-11-22", "until": "2026-11-22", "update": true});
+    let answer = breezone_server::modules::ask_service(&db, "tariff.day_color@1", "colors", &update).await.unwrap().unwrap();
+    assert_eq!(answer[0]["color"], "white", "session kept, form field refused");
+    let answer = breezone_server::modules::ask_service(&db, "tariff.day_color@1", "colors", &asked).await.unwrap().unwrap();
+    assert_eq!(answer[0]["color"], "red", "the token typed is unchanged");
     let tested = http.post(format!("{base}/api/accounts/misbehave/test")).bearer_auth(&token).send().await.unwrap();
     assert_eq!(tested.json::<Value>().await.unwrap()["state"], "ok");
 }
@@ -717,6 +764,9 @@ async fn the_shipped_modules_load() {
         ("rte", json!(null)),
         ("weather", json!(null)),
         ("linky", json!(null)),
+        // Its devices come with its account: nothing reached before a read.
+        ("netatmo", json!({})),
+        ("ezviz", json!({})),
         ("forecast_solar", json!({"kwp": 4.5, "declination": 30, "azimuth": 0, "latitude": 43.5, "longitude": 1.5, "timezone": "Europe/Paris"})),
     ];
     let host = breezone_server::capabilities::Host::local();

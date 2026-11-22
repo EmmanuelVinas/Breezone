@@ -1340,6 +1340,30 @@ const es: Record<string, string> = {
     "{max} acciones como máximo: para hacer más, agrúpelas en una rutina o una escena y lánzela desde aquí.",
   "Pas d'« Ensuite » ici : une heure, un lever ou un coucher du soleil est un instant, il ne cesse pas d'être vrai. Pour revenir en arrière, créez une autre règle au moment voulu.":
     "Sin «Después» aquí: una hora, un amanecer o un atardecer es un instante, no deja de ser cierto. Para deshacerlo, cree otra regla en el momento deseado.",
+  "Le compte que demande le module {name}.":
+    "La cuenta que pide el módulo {name}.",
+  "Désactivé : le module ne s'en sert plus.":
+    "Desactivado: el módulo ya no la usa.",
+  oui: "sí",
+  non: "no",
+  "Programmation enregistrée dans l'appareil":
+    "Programación guardada en el aparato",
+  "Enregistrée dans l'appareil, qui l'exécute lui-même, même sans Breezone.":
+    "Guardada en el aparato, que la ejecuta él mismo, incluso sin Breezone.",
+  "Choisir une action": "Elegir una acción",
+  "Choisissez d'abord les appareils": "Elija primero los aparatos",
+  "Et à une heure de fin": "Y a una hora de fin",
+  "Heure de fin": "Hora de fin",
+  "Envoi à l'appareil…": "Enviando al aparato…",
+  "Programmation supprimée de l'appareil": "Programación eliminada del aparato",
+  "La programmation est supprimée de l'appareil.":
+    "La programación se elimina del aparato.",
+  "Programmations de l'appareil": "Programaciones del aparato",
+  "Gardées et exécutées par l'appareil lui-même : elles continuent même quand Breezone est arrêté.":
+    "Guardadas y ejecutadas por el propio aparato: siguen incluso con Breezone detenido.",
+  "Aucune programmation dans l'appareil.":
+    "Ninguna programación en el aparato.",
+  "{label} : {value}": "{label}: {value}",
   "Ne rien faire": "No hacer nada",
   "Faire…": "Hacer…",
   "quand ce n'est plus vrai :": "cuando deja de ser cierto:",

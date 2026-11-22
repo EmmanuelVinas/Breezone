@@ -367,6 +367,19 @@ pub mod host {
         serde_json::from_str(&s).map_err(|e| Error::Invalid(e.to_string()))
     }
 
+    /// An access to the service of the module's own OAuth account (`oauth` of its manifest):
+    /// Breezone renews it when it is about to end and keeps the new refresh token.
+    pub fn access_token() -> Result<String> {
+        imp::access_token().map_err(Error::Unreachable)
+    }
+
+    /// Keeps fields in the module's own account (a session; `Null` removes one). While the
+    /// account is checked, it may change what was typed (a password kept as a hash); once kept,
+    /// never the fields of its form.
+    pub fn account_update(fields: &serde_json::Value) -> Result<()> {
+        imp::account_update(&fields.to_string()).map_err(Error::Invalid)
+    }
+
     /// A button of a remote was pressed: "single" | "double" | "long".
     pub fn pressed(reference: &str, button: u32, press: &str) {
         imp::pressed(reference, button, press)
@@ -434,6 +447,14 @@ pub mod host {
             h::account(kind)
         }
 
+        pub fn access_token() -> Result<String, String> {
+            h::access_token()
+        }
+
+        pub fn account_update(fields: &str) -> Result<(), String> {
+            h::account_update(fields)
+        }
+
         pub fn pressed(reference: &str, button: u32, press: &str) {
             h::pressed(reference, button, press)
         }
@@ -472,6 +493,7 @@ pub mod testing {
         changed: u32,
         store: HashMap<String, Vec<u8>>,
         accounts: HashMap<String, String>,
+        access_token: Option<String>,
         logs: Vec<(String, String)>,
         subscriptions: u32,
     }
@@ -543,6 +565,11 @@ pub mod testing {
     /// The secret of an account, as the module will get it.
     pub fn account(kind: &str, secret: &Value) {
         with(|b| b.accounts.insert(kind.to_string(), secret.to_string()));
+    }
+
+    /// The access `host::access_token` gives (none: the account is not connected).
+    pub fn access_token(token: &str) {
+        with(|b| b.access_token = Some(token.to_string()));
     }
 
     /// What the module wrote to its log: (level, message).
@@ -698,6 +725,29 @@ pub mod testing {
 
         pub fn account(kind: &str) -> Result<String, String> {
             with(|b| b.accounts.get(kind).cloned()).ok_or_else(|| format!("{kind}: no account on the bench"))
+        }
+
+        pub fn access_token() -> Result<String, String> {
+            with(|b| b.access_token.clone()).ok_or_else(|| "no OAuth account on the bench".to_string())
+        }
+
+        /// Merges into the accounts of the bench (all of them: the bench does not know whose).
+        pub fn account_update(fields: &str) -> Result<(), String> {
+            let update: serde_json::Map<String, serde_json::Value> = serde_json::from_str(fields).map_err(|e| e.to_string())?;
+            with(|b| {
+                for secret in b.accounts.values_mut() {
+                    let mut current: serde_json::Map<String, serde_json::Value> = serde_json::from_str(secret).unwrap_or_default();
+                    for (k, v) in &update {
+                        if v.is_null() {
+                            current.remove(k);
+                        } else {
+                            current.insert(k.clone(), v.clone());
+                        }
+                    }
+                    *secret = serde_json::Value::Object(current).to_string();
+                }
+            });
+            Ok(())
         }
 
         pub fn pressed(reference: &str, button: u32, press: &str) {

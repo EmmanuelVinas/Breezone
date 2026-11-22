@@ -946,7 +946,15 @@ export type ModuleManifest = {
   id: string
   version: string
   name: TraitLabel
+  description?: TraitLabel
   roles: ("driver" | "account" | "service")[]
+  /** The fields of its form (a source's, or its account's): passwords kept encrypted. */
+  config?: {
+    name: string
+    type: "string" | "integer" | "number" | "bool" | "password"
+    optional?: boolean
+    label: TraitLabel
+  }[]
   /** How a source is added: its form, then a button to press or a code to type. */
   pairing?: "form" | "button" | "code" | "oauth"
   /** Reaches the hardware through its maker's cloud. */
@@ -967,6 +975,28 @@ export type ModuleView = {
   sources: number
   loaded: boolean
   manifest: ModuleManifest
+}
+
+/** A schedule a piece of hardware keeps and runs itself (`schedule.hardware`). */
+export type HardwareSchedule = {
+  /** Its id in the hardware (empty for a new one). */
+  id: string
+  name: string
+  enabled: boolean
+  /** ISO weekdays (1 Monday … 7 Sunday). */
+  days: number[]
+  /** "HH:MM" */
+  time: string
+  /** The devices of the source it drives. */
+  references: string[]
+  trait: string
+  action: string
+  params: Record<string, unknown>
+  /** The same action at its end, with these parameters. */
+  end: { time: string; params: Record<string, unknown> } | null
+  /** Breezone can change it (else only the hardware's app can: `note` says why). */
+  editable: boolean
+  note: string | null
 }
 
 /** Why a module does not work with a server (`kind` says which need is not met). */
@@ -1336,6 +1366,8 @@ export type AccountKind =
   | "ezviz"
   | "weather"
   | "forecast_solar"
+  /** The account of a module installed from a library (its form is in its manifest). */
+  | (string & {})
 export type AccountView = {
   kind: AccountKind
   /** Its credentials are kept (a service without any: always). */
@@ -1683,6 +1715,33 @@ export const api = {
       local?: string
     }
   ) => request<TwinsView>("PUT", `/api/sources/${sourceId}/twins`, input),
+  /** The schedules the hardware of a source keeps, and their changes (each gives the list). */
+  sourceSchedules: (sourceId: number) =>
+    request<HardwareSchedule[]>("GET", `/api/sources/${sourceId}/schedules`),
+  createSourceSchedule: (
+    sourceId: number,
+    s: Omit<HardwareSchedule, "id" | "editable" | "note">
+  ) =>
+    request<HardwareSchedule[]>(
+      "POST",
+      `/api/sources/${sourceId}/schedules`,
+      s
+    ),
+  updateSourceSchedule: (
+    sourceId: number,
+    id: string,
+    s: Omit<HardwareSchedule, "id" | "editable" | "note">
+  ) =>
+    request<HardwareSchedule[]>(
+      "PUT",
+      `/api/sources/${sourceId}/schedules/${encodeURIComponent(id)}`,
+      s
+    ),
+  deleteSourceSchedule: (sourceId: number, id: string) =>
+    request<HardwareSchedule[]>(
+      "DELETE",
+      `/api/sources/${sourceId}/schedules/${encodeURIComponent(id)}`
+    ),
   /** What a module's hardware says about itself, raw (support). */
   sourceDiagnostic: (sourceId: number) =>
     request<unknown>("GET", `/api/sources/${sourceId}/diagnostic`),

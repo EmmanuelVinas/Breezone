@@ -9,8 +9,12 @@ async fn main() -> anyhow::Result<()> {
     use breezone_server::modules::wasm::{Permissions, WasmModule};
     let mut args = std::env::args().skip(1);
     let (path, host) = (args.next().unwrap_or_default(), args.next().unwrap_or_default());
-    let module =
-        std::sync::Arc::new(WasmModule::load("module", &std::fs::read(&path)?, Permissions { lan: true, hosts: vec![], loopback: true, memory_mb: 16, accounts: vec![] }, None)?);
+    let module = std::sync::Arc::new(WasmModule::load(
+        "module",
+        &std::fs::read(&path)?,
+        Permissions { lan: true, hosts: vec![], loopback: true, memory_mb: 16, accounts: vec![], oauth_token_url: None, account_fields: vec![] },
+        None,
+    )?);
     println!("probe: {:?}", module.probe(&host).await);
     let source = module.open(None, &serde_json::json!({ "host": host }), None).await?;
     println!("{:#?}", source.describe().await?);

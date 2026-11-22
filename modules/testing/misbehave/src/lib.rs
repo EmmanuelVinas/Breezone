@@ -198,11 +198,23 @@ impl exports::breezone::module::service::Guest for Module {
         if account.contains("wrong") {
             return Err(Error::Invalid("refused".into()));
         }
+        // An OAuth account: an access is asked (Breezone renews it).
+        if account.contains("refresh_token") {
+            host::access_token().map_err(Error::Unreachable)?;
+        }
         Ok(())
     }
 
     fn query(contract: String, query: String, params: String) -> Result<String, Error> {
         match (contract.as_str(), query.as_str()) {
+            // Keeps a session in its account; a field of the form is refused.
+            ("tariff.day_color@1", "colors") if params.contains("update") => {
+                let kept = host::account_update(r#"{"session": "s1"}"#).is_ok();
+                let refused = host::account_update(r#"{"token": "changed"}"#).is_err();
+                let session = host::account("misbehave").unwrap_or_default().contains("s1");
+                let color = if kept && refused && session { "white" } else { "blue" };
+                Ok(format!(r#"[{{"day": "2026-11-22", "color": "{color}"}}]"#))
+            }
             ("tariff.day_color@1", "colors") if params.contains("bad") => Ok(r#"[{"day": "2026-11-22", "color": "green"}]"#.into()),
             ("tariff.day_color@1", "colors") => {
                 let account = host::account("misbehave").unwrap_or_default();

@@ -202,6 +202,15 @@ interface host {
     /// `account`) gets its own with its id.
     account: func(kind: string) -> result<string, string>;
 
+    /// An access to the service of the module's own OAuth account (`oauth` of its manifest):
+    /// Breezone renews it when it is about to end, and keeps the new refresh token.
+    access-token: func() -> result<string, string>;
+
+    /// Keeps fields in the module's own account (a session, its region; `null` removes one).
+    /// While the account is checked, it may change what was typed (a password kept as a hash);
+    /// once kept, never the fields of its form.
+    account-update: func(fields: string) -> result<_, string>;
+
     /// A button of a remote was pressed (`button@1`): "single" | "double" | "long".
     pressed: func(reference: string, button: u32, press: string);
 

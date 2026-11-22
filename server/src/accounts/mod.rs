@@ -212,8 +212,9 @@ fn account_fields(m: &crate::modules::manifest::Manifest, input: &Value) -> ApiR
     Ok((Value::Object(config), Value::Object(all)))
 }
 
-/// Asks the module to check its account's fields (`fields`, as JSON).
-async fn check_module_account(kind: &str, fields: &str) -> ApiResult<()> {
+/// Asks the module to check its account's fields (`fields`, as JSON): those to keep (with an
+/// OAuth access renewed meanwhile).
+async fn check_module_account(kind: &str, fields: &str) -> ApiResult<String> {
     #[cfg(feature = "wasm")]
     {
         let m = crate::modules::manifest(kind).ok_or_else(|| ApiError::not_found("unknown account"))?;
@@ -224,7 +225,7 @@ async fn check_module_account(kind: &str, fields: &str) -> ApiResult<()> {
     #[cfg(not(feature = "wasm"))]
     {
         let _ = (kind, fields);
-        Err(ApiError::bad_request("this build of Breezone has no module host"))
+        Err::<String, _>(ApiError::bad_request("this build of Breezone has no module host"))
     }
 }
 
@@ -233,17 +234,35 @@ async fn check_module_account(kind: &str, fields: &str) -> ApiResult<()> {
 pub async fn connect_module(state: &AppState, kind: &str, input: &Value) -> ApiResult<()> {
     let m = crate::modules::manifest(kind).ok_or_else(|| ApiError::not_found("unknown account"))?;
     let (config, all) = account_fields(m, input)?;
-    check_module_account(kind, &all.to_string()).await?;
-    save(state, kind, &config, &all, None).await?;
+    let kept: Value = serde_json::from_str(&check_module_account(kind, &all.to_string()).await?).unwrap_or(all);
+    let expires = kept["expires_at"].as_i64();
+    save(state, kind, &config, &kept, expires).await?;
     db::set_account_state(&state.db, kind, "ok", None).await?;
+    ensure_module_source(state, kind).await
+}
+
+/// A module whose devices come with its account (Netatmo): its source, added once the account is
+/// connected.
+pub async fn ensure_module_source(state: &AppState, kind: &str) -> ApiResult<()> {
+    let Some(m) = crate::modules::manifest(kind).filter(|_| comes_with_account(kind)) else { return Ok(()) };
+    if db::account(&state.db, kind).await?.and_then(|a| a.secret).is_none() || db::list_sources(&state.db).await?.iter().any(|s| s.driver == kind) {
+        return Ok(());
+    }
+    db::insert_source(&state.db, kind, &m.name.fr, "{}").await?;
+    state.drivers.reload().await?;
     Ok(())
 }
 
 /// Checks the account of a module again, with what is kept.
 pub async fn test_module(state: &AppState, kind: &str) -> ApiResult<()> {
-    let Some((_, fields)) = load::<Value>(state, kind).await? else { return Err(ApiError::bad_request("not connected")) };
+    let Some((config, fields)) = load::<Value>(state, kind).await? else { return Err(ApiError::bad_request("not connected")) };
     let result = check_module_account(kind, &fields.to_string()).await;
-    record(state, kind, result).await
+    if let Ok(kept) = &result {
+        let kept: Value = serde_json::from_str(kept).unwrap_or(fields);
+        save(state, kind, &config, &kept, kept["expires_at"].as_i64()).await?;
+    }
+    record(state, kind, result.map(|_| ())).await?;
+    ensure_module_source(state, kind).await
 }
 
 #[cfg(test)]

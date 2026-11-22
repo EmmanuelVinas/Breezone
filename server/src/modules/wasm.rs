@@ -30,6 +30,8 @@ wasmtime::component::bindgen!({
         "breezone:module/host.account": async,
         "breezone:module/host.exchange": async,
         "breezone:module/host.wait": async,
+        "breezone:module/host.access-token": async,
+        "breezone:module/host.account-update": async,
         default: trappable,
     },
     exports: { default: async },
@@ -64,6 +66,10 @@ pub struct Permissions {
     pub memory_mb: usize,
     /// The accounts whose secret it may read (`requires.accounts` of its manifest).
     pub accounts: Vec<String>,
+    /// Where the access of its own OAuth account is renewed (`oauth.token_url` of its manifest).
+    pub oauth_token_url: Option<String>,
+    /// The fields of its account's form: once the account is kept, the module may not change them.
+    pub account_fields: Vec<String>,
 }
 
 impl Permissions {
@@ -78,8 +84,16 @@ impl Permissions {
             }
     }
 
+    /// A host of the Internet it declared: by name, or `*.example.com` for its subdomains.
     fn allows_name(&self, host: &str) -> bool {
-        self.hosts.iter().any(|h| h.eq_ignore_ascii_case(host))
+        let host = host.to_ascii_lowercase();
+        self.hosts.iter().any(|h| {
+            let h = h.to_ascii_lowercase();
+            match h.strip_prefix("*.") {
+                Some(domain) => host.ends_with(&format!(".{domain}")),
+                None => h == host,
+            }
+        })
     }
 
     /// Where `url` may be reached: the addresses to connect to, all allowed (a name is resolved here,
@@ -113,8 +127,9 @@ struct SourceCtx {
     sink: std::sync::Mutex<Option<Sink>>,
     messages: tokio::sync::mpsc::UnboundedSender<(u32, Vec<u8>)>,
     memory_store: std::sync::Mutex<HashMap<String, Vec<u8>>>,
-    /// The fields of the module's own account while it is checked, before Breezone keeps them.
-    checked_account: Option<String>,
+    /// The fields of the module's own account while it is checked, before Breezone keeps them
+    /// (with a renewed OAuth access, to keep too).
+    checked_account: std::sync::Mutex<Option<String>>,
 }
 
 /// An open subscription: what is sent on it, and its task (stopped with it).
@@ -256,8 +271,8 @@ impl breezone::module::host::Host for HostState {
         if !self.permissions.accounts.contains(&kind) {
             return Err(format!("{kind}: not an account this module requires"));
         }
-        if let Some(fields) = self.ctx.checked_account.as_ref().filter(|_| *kind == *self.ctx.module) {
-            return Ok(fields.clone());
+        if let Some(fields) = self.ctx.checked_account.lock().unwrap_or_else(|e| e.into_inner()).clone().filter(|_| *kind == *self.ctx.module) {
+            return Ok(fields);
         }
         let (db, key) = context().ok_or("no account here")?;
         let row = crate::db::account(&db, &kind).await.map_err(|e| e.to_string())?.ok_or_else(|| format!("{kind}: not connected"))?;
@@ -272,6 +287,90 @@ impl breezone::module::host::Host for HostState {
             _ => return Ok(secret),
         }
         Ok(serde_json::Value::Object(fields).to_string())
+    }
+
+    async fn access_token(&mut self) -> Result<String, String> {
+        let token_url = self.permissions.oauth_token_url.clone().ok_or("this module has no OAuth account")?;
+        let kind = self.ctx.module.to_string();
+        // One renewal at a time: the service replaces the refresh token at each.
+        let lock = oauth_lock(&kind);
+        let _one = lock.lock().await;
+        let checked = self.ctx.checked_account.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        let stored = match &checked {
+            Some(_) => None,
+            None => {
+                let (db, key) = context().ok_or("no account here")?;
+                let row = crate::db::account(&db, &kind).await.map_err(|e| e.to_string())?.filter(|r| r.enabled).ok_or_else(|| format!("{kind}: not connected"))?;
+                let secret = row.secret.as_deref().and_then(|s| crate::crypto::decrypt(&key, s)).ok_or_else(|| format!("{kind}: not connected"))?;
+                Some((db, key, row.config, secret))
+            }
+        };
+        let text = checked.clone().or_else(|| stored.as_ref().map(|s| s.3.clone())).unwrap_or_default();
+        let mut fields: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+        let now = crate::db::now();
+        if let (Some(token), Some(until)) = (fields.get("access_token").and_then(|v| v.as_str()), fields.get("expires_at").and_then(|v| v.as_i64())) {
+            if until - 60 > now {
+                return Ok(token.to_string());
+            }
+        }
+        let renewed = renew_oauth(&self.permissions, &token_url, &mut fields, now).await;
+        if let Some((db, key, config, _)) = &stored {
+            match &renewed {
+                Ok(()) => {
+                    let config: serde_json::Value = serde_json::from_str(config).unwrap_or_default();
+                    let expires = fields.get("expires_at").and_then(|v| v.as_i64());
+                    crate::accounts::save_in(db, key, &kind, &config, &serde_json::Value::Object(fields.clone()), expires).await.map_err(|e| e.message.en)?;
+                    let _ = crate::db::set_account_state(db, &kind, "ok", None).await;
+                }
+                Err(e) => {
+                    let _ = crate::db::set_account_state(db, &kind, "error", Some(&crate::i18n::Text::plain(e.clone()).store())).await;
+                }
+            }
+        } else if renewed.is_ok() {
+            *self.ctx.checked_account.lock().unwrap_or_else(|e| e.into_inner()) = Some(serde_json::Value::Object(fields.clone()).to_string());
+        }
+        renewed?;
+        fields.get("access_token").and_then(|v| v.as_str()).map(str::to_string).ok_or_else(|| "no access token".to_string())
+    }
+
+    async fn account_update(&mut self, fields: String) -> Result<(), String> {
+        let kind = self.ctx.module.to_string();
+        if !self.permissions.accounts.contains(&kind) {
+            return Err("this module is not an account".into());
+        }
+        let update: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&fields).map_err(|e| e.to_string())?;
+        let merge = |fields: &mut serde_json::Map<String, serde_json::Value>| {
+            for (k, v) in &update {
+                if v.is_null() {
+                    fields.remove(k);
+                } else {
+                    fields.insert(k.clone(), v.clone());
+                }
+            }
+        };
+        // While it is checked: what it keeps of what was typed (a password made a hash…).
+        {
+            let mut checked = self.ctx.checked_account.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(text) = checked.as_ref() {
+                let mut fields: serde_json::Map<String, serde_json::Value> = serde_json::from_str(text).unwrap_or_default();
+                merge(&mut fields);
+                *checked = Some(serde_json::Value::Object(fields).to_string());
+                return Ok(());
+            }
+        }
+        // Kept: only what it adds itself (a session), never the fields of its form.
+        if let Some(k) = update.keys().find(|k| self.permissions.account_fields.contains(k)) {
+            return Err(format!("{k}: a field of the account's form, changed only by the user"));
+        }
+        let lock = oauth_lock(&kind);
+        let _one = lock.lock().await;
+        let (db, key) = context().ok_or("no account here")?;
+        let row = crate::db::account(&db, &kind).await.map_err(|e| e.to_string())?.ok_or_else(|| format!("{kind}: not connected"))?;
+        let secret = row.secret.as_deref().and_then(|s| crate::crypto::decrypt(&key, s)).ok_or_else(|| format!("{kind}: not connected"))?;
+        let mut fields: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&secret).map_err(|e| e.to_string())?;
+        merge(&mut fields);
+        let config: serde_json::Value = serde_json::from_str(&row.config).unwrap_or_default();
+        crate::accounts::save_in(&db, &key, &kind, &config, &serde_json::Value::Object(fields), row.expires_at).await.map_err(|e| e.message.en)
     }
 
     fn pressed(&mut self, reference: String, button: u32, press: String) -> wasmtime::Result<()> {
@@ -392,6 +491,40 @@ where
             }
         }
     })
+}
+
+/// One lock per OAuth account, held while its access is renewed.
+fn oauth_lock(kind: &str) -> Arc<tokio::sync::Mutex<()>> {
+    static LOCKS: std::sync::LazyLock<std::sync::Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>> = std::sync::LazyLock::new(Default::default);
+    LOCKS.lock().unwrap_or_else(|e| e.into_inner()).entry(kind.to_string()).or_default().clone()
+}
+
+/// Trades the refresh token of an account for a new access (and a new refresh token when the
+/// service gives one), at an address the module may reach.
+async fn renew_oauth(permissions: &Permissions, token_url: &str, fields: &mut serde_json::Map<String, serde_json::Value>, now: i64) -> Result<(), String> {
+    let field = |k: &str| fields.get(k).and_then(|v| v.as_str()).map(str::trim).unwrap_or_default().to_string();
+    let (refresh, id, secret) = (field("refresh_token"), field("client_id"), field("client_secret"));
+    if refresh.is_empty() {
+        return Err("no refresh token".into());
+    }
+    let parsed = reqwest::Url::parse(token_url).map_err(|e| e.to_string())?;
+    permissions.resolve(&parsed).await?;
+    let form = [("grant_type", "refresh_token"), ("refresh_token", refresh.as_str()), ("client_id", id.as_str()), ("client_secret", secret.as_str())];
+    let http = reqwest::Client::builder().timeout(Duration::from_secs(20)).build().map_err(|e| e.to_string())?;
+    let resp = http.post(parsed).form(&form).send().await.map_err(|e| e.to_string())?;
+    let status = resp.status();
+    let body: serde_json::Value = resp.json().await.unwrap_or_default();
+    if !status.is_success() {
+        let detail = body["error_description"].as_str().or(body["error"].as_str()).unwrap_or(status.as_str()).to_string();
+        return Err(format!("the service refuses the refresh token ({detail})"));
+    }
+    let access = body["access_token"].as_str().ok_or("no access token")?;
+    fields.insert("access_token".into(), access.into());
+    if let Some(r) = body["refresh_token"].as_str() {
+        fields.insert("refresh_token".into(), r.into());
+    }
+    fields.insert("expires_at".into(), (now + body["expires_in"].as_i64().unwrap_or(3600)).into());
+    Ok(())
 }
 
 /// An address of the local network (or the machine itself).
@@ -593,7 +726,8 @@ impl WasmModule {
 
     fn context(&self, source_id: Option<i64>) -> (Arc<SourceCtx>, tokio::sync::mpsc::UnboundedReceiver<(u32, Vec<u8>)>) {
         let (messages, received) = tokio::sync::mpsc::unbounded_channel();
-        let ctx = SourceCtx { module: self.id.clone(), source_id, sink: std::sync::Mutex::new(None), messages, memory_store: Default::default(), checked_account: None };
+        let ctx =
+            SourceCtx { module: self.id.clone(), source_id, sink: std::sync::Mutex::new(None), messages, memory_store: Default::default(), checked_account: Default::default() };
         (Arc::new(ctx), received)
     }
 
@@ -604,16 +738,19 @@ impl WasmModule {
         tokio::time::timeout(CALL_TIMEOUT, module.breezone_module_driver().call_probe(&mut store, host)).await.ok()?.ok()?
     }
 
-    /// Checks the module's own account (`fields`: those of its form, as JSON) before it is kept.
-    pub async fn check_account(&self, fields: &str) -> Result<(), DriverError> {
+    /// Checks the module's own account (`fields`: those of its form, as JSON) before it is kept;
+    /// the fields to keep (an OAuth access renewed during the check comes with them).
+    pub async fn check_account(&self, fields: &str) -> Result<String, DriverError> {
         let (ctx, _) = self.context(None);
-        let ctx = Arc::new(SourceCtx { checked_account: Some(fields.to_string()), ..Arc::into_inner(ctx).ok_or_else(|| DriverError::Invalid("context".into()))? });
-        let (mut store, module) = self.instantiate(ctx).await?;
+        *ctx.checked_account.lock().unwrap_or_else(|e| e.into_inner()) = Some(fields.to_string());
+        let (mut store, module) = self.instantiate(ctx.clone()).await?;
         tokio::time::timeout(CALL_TIMEOUT, module.breezone_module_service().call_check(&mut store))
             .await
             .map_err(|_| DriverError::Unreachable(format!("{}: no answer", self.id)))?
             .map_err(|e| DriverError::Invalid(format!("{}: {e}", self.id)))?
-            .map_err(from_wit)
+            .map_err(from_wit)?;
+        let kept = ctx.checked_account.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        Ok(kept.unwrap_or_else(|| fields.to_string()))
     }
 
     /// A query of a service contract (`contract`: "tariff.day_color@1"), in an instance of its own;
@@ -972,6 +1109,8 @@ pub async fn loaded(m: &crate::modules::manifest::Manifest, dir: &Path) -> Resul
         memory_mb: m.permissions.memory_mb as usize,
         // A module that is an account reads its own.
         accounts: m.requires.accounts.iter().cloned().chain(m.has(crate::modules::manifest::Role::Account).then(|| m.id.clone())).collect(),
+        oauth_token_url: m.oauth.as_ref().map(|o| o.token_url.clone()),
+        account_fields: m.config.iter().map(|f| f.name.clone()).collect(),
     };
     let cache = dir.parent().and_then(Path::parent).map(|modules| modules.join("cache"));
     let id = m.id.clone();
@@ -1001,4 +1140,17 @@ pub async fn source(
 /// Whether `host` is hardware of an installed module (discovery).
 pub async fn probe(m: &crate::modules::manifest::Manifest, dir: &Path, host: &str) -> Option<String> {
     loaded(m, dir).await.ok()?.probe(host).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_declared_host_is_a_name_or_its_subdomains() {
+        let p = Permissions { hosts: vec!["api.netatmo.com".into(), "*.ezvizlife.com".into()], ..Default::default() };
+        assert!(p.allows_name("api.netatmo.com") && p.allows_name("API.Netatmo.com"));
+        assert!(p.allows_name("apiieu.ezvizlife.com") && p.allows_name("a.b.ezvizlife.com"));
+        assert!(!p.allows_name("ezvizlife.com.evil.net") && !p.allows_name("evilezvizlife.com") && !p.allows_name("netatmo.com"));
+    }
 }

@@ -78,7 +78,7 @@
           "additionalProperties": false,
           "properties": {
             "lan": { "type": "boolean" },
-            "hosts": { "type": "array", "items": { "type": "string" } },
+            "hosts": { "type": "array", "description": "Hosts of the Internet it may reach: a name, or *.example.com for its subdomains.", "items": { "type": "string" } },
             "udp_broadcast": { "type": "boolean" },
             "mdns": { "type": "array", "items": { "$ref": "#/$defs/mdns" } }
           }
@@ -88,6 +88,7 @@
     },
     "read_every_s": { "type": "integer", "minimum": 0 },
     "cloud": { "type": "boolean" },
+    "oauth": { "type": ["object", "null"], "description": "Its account is an OAuth 2 one (null: it is not): Breezone renews its access with the refresh token of its form.", "required": ["token_url"], "additionalProperties": false, "properties": { "token_url": { "type": "string", "pattern": "^https://" } } },
     "optional_calls": { "type": "array", "items": { "enum": ["rooms", "scenes", "picture", "forecast", "listen", "unlock", "diagnostic", "probe", "schedules"] } }
   }
 }
