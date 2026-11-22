@@ -13,6 +13,7 @@ import type {
 } from "@/lib/api"
 import { api, isDeviceAction } from "@/lib/api"
 import { primaryText } from "@/lib/generic-device"
+import { GenericControls } from "@/components/generic-controls"
 import { CHARGER_STATUS, chargerStatus } from "@/lib/charger"
 import { coverState, coverText } from "@/lib/covers"
 import { deviceType, DeviceTypeIcon } from "@/lib/device-icons"
@@ -592,6 +593,16 @@ function DeviceBlock({ id, curve }: { id: number; curve?: string }) {
     }
   }
   if (curve) return <MeasureTile d={d} curve={curve} />
+  // A kind this version does not know: its controls as its traits describe them.
+  if (deviceType(d).id === "other")
+    return (
+      <Card className="h-full rounded-3xl">
+        <CardContent className="grid gap-3">
+          <DeviceLine d={d} />
+          <GenericControls d={d} />
+        </CardContent>
+      </Card>
+    )
   const on = state(d).on === true
   return (
     <Card className="h-full rounded-3xl" style={glow(tint([d]))}>

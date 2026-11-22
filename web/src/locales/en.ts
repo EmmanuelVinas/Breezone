@@ -1353,6 +1353,10 @@ const en: Record<string, string> = {
     "Kept and run by the device itself: they go on even when Breezone is stopped.",
   "Aucune programmation dans l'appareil.": "No schedule in the device.",
   "{label} : {value}": "{label}: {value}",
+  Moins: "Less",
+  Plus: "More",
+  "version {version} · livré avec Breezone":
+    "version {version} · shipped with Breezone",
   "Ne rien faire": "Do nothing",
   "Faire…": "Do…",
   "quand ce n'est plus vrai :": "when it is no longer true:",

@@ -647,6 +647,10 @@ fn engine() -> &'static Engine {
     ENGINE.get_or_init(|| {
         let mut config = Config::new();
         config.wasm_component_model(true).epoch_interruption(true);
+        // Each source keeps an instance, which runs on a stack of its own (its host calls too: an
+        // HTTPS request, a TLS handshake): 2 MiB by default, all of it resident once used. A module
+        // needs far less; Breezone's memory stays small (100 MB for everything).
+        config.max_wasm_stack(256 << 10).async_stack_size(512 << 10);
         let engine = Engine::new(&config).expect("WebAssembly engine");
         let ticking = engine.weak();
         std::thread::Builder::new()
@@ -693,7 +697,10 @@ impl WasmModule {
                         let c = Component::new(engine, wasm).map_err(|e| anyhow::anyhow!("{e}"))?;
                         std::fs::create_dir_all(dir)?;
                         std::fs::write(&path, c.serialize().map_err(|e| anyhow::anyhow!("{e}"))?)?;
-                        c
+                        // Read back from the file: its code is then mapped from the disk (memory the
+                        // system may take back), not held in the process.
+                        // SAFETY: as above, the file was just written by this engine.
+                        unsafe { Component::deserialize_file(engine, &path) }.unwrap_or(c)
                     }
                 }
             }

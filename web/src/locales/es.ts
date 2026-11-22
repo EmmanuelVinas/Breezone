@@ -1364,6 +1364,10 @@ const es: Record<string, string> = {
   "Aucune programmation dans l'appareil.":
     "Ninguna programación en el aparato.",
   "{label} : {value}": "{label}: {value}",
+  Moins: "Menos",
+  Plus: "M\u00e1s",
+  "version {version} · livré avec Breezone":
+    "versión {version} · incluido con Breezone",
   "Ne rien faire": "No hacer nada",
   "Faire…": "Hacer…",
   "quand ce n'est plus vrai :": "cuando deja de ser cierto:",

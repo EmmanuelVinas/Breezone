@@ -116,6 +116,13 @@ export function LibraryPanel() {
     },
     onError: (e) => toast.error(errorText(e)),
   })
+  const published = new Set((library.data?.modules ?? []).map((m) => m.id))
+  // Shipped with Breezone and installed with it, but not (yet) in the library online.
+  const shipped = (modules.data ?? [])
+    .filter((m: ModuleView) => m.origin === "builtin" && !published.has(m.id))
+    .sort((a, b) =>
+      a.manifest.name[lang()].localeCompare(b.manifest.name[lang()])
+    )
   const installed = (modules.data ?? []).filter(
     (m: ModuleView) => m.origin !== "native"
   )
@@ -153,7 +160,8 @@ export function LibraryPanel() {
             <p className="text-sm text-muted-foreground">
               {errorText(library.error)}
             </p>
-          ) : (library.data?.modules ?? []).length === 0 ? (
+          ) : (library.data?.modules ?? []).length === 0 &&
+            shipped.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               {t("Aucun module publié pour l'instant.")}
             </p>
@@ -205,6 +213,28 @@ export function LibraryPanel() {
               )
             })
           )}
+          {!library.isLoading &&
+            !library.isError &&
+            shipped.map((m) => (
+              <div
+                key={m.id}
+                className="flex flex-wrap items-center gap-3 rounded-2xl border p-3"
+              >
+                <div className="grid min-w-0 flex-1 gap-0.5">
+                  <span className="truncate font-medium">
+                    {m.manifest.name[lang()]}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {t("version {version} · livré avec Breezone", {
+                      version: m.version,
+                    })}
+                  </span>
+                </div>
+                <Badge variant="secondary">
+                  {t("Installé ({version})", { version: m.version })}
+                </Badge>
+              </div>
+            ))}
           {(library.data?.unreadable ?? []).map((u) => (
             <p key={u.repository.id} className="text-xs text-destructive">
               {t("Source « {name} » illisible : {error}", {
@@ -215,8 +245,6 @@ export function LibraryPanel() {
           ))}
         </CardContent>
       </Card>
-
-      <RepositoriesCard onChange={changed} />
 
       <Card className="rounded-3xl">
         <CardHeader>
@@ -314,6 +342,8 @@ export function LibraryPanel() {
           </div>
         </CardContent>
       </Card>
+
+      <RepositoriesCard onChange={changed} />
     </>
   )
 }
