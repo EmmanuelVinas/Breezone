@@ -1357,6 +1357,8 @@ const en: Record<string, string> = {
   Plus: "More",
   "version {version} · livré avec Breezone":
     "version {version} · shipped with Breezone",
+  "Rechercher un module ou un appareil": "Search for a module or a device",
+  "Aucun module ne correspond à « {query} ».": "No module matches « {query} ».",
   "Ne rien faire": "Do nothing",
   "Faire…": "Do…",
   "quand ce n'est plus vrai :": "when it is no longer true:",

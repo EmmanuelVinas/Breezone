@@ -199,6 +199,10 @@ class BreezoneApi(
     suspend fun status(): List<Installation> = call(HttpMethod.Get, "/api/status")
     suspend fun devices(): List<DeviceView> = call(HttpMethod.Get, "/api/devices")
     suspend fun rooms(): List<Room> = call(HttpMethod.Get, "/api/rooms")
+    /** The catalog of traits the server knows (their fields, actions and presentation). */
+    suspend fun traits(): List<CatalogTrait> = call(HttpMethod.Get, "/api/traits")
+    /** The modules of the server (administrators). */
+    suspend fun modules(): List<ModuleInfo> = call(HttpMethod.Get, "/api/modules")
     /** The weather of an installation (servers before 0.11.0-beta.19 give that of the home). */
     suspend fun weather(installationId: Long): WeatherView = call(HttpMethod.Get, "/api/weather?installation_id=$installationId")
     suspend fun energyLive(): EnergyLive = call(HttpMethod.Get, "/api/energy/live")

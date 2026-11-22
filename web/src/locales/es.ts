@@ -1368,6 +1368,9 @@ const es: Record<string, string> = {
   Plus: "M\u00e1s",
   "version {version} · livré avec Breezone":
     "versión {version} · incluido con Breezone",
+  "Rechercher un module ou un appareil": "Buscar un módulo o un aparato",
+  "Aucun module ne correspond à « {query} ».":
+    "Ningún módulo corresponde a «{query}».",
   "Ne rien faire": "No hacer nada",
   "Faire…": "Hacer…",
   "quand ce n'est plus vrai :": "cuando deja de ser cierto:",

@@ -947,6 +947,8 @@ export type ModuleManifest = {
   version: string
   name: TraitLabel
   description?: TraitLabel
+  /** The hardware it drives, as its makers name it ("Shelly Pro 3EM"). */
+  models?: string[]
   roles: ("driver" | "account" | "service")[]
   /** The fields of its form (a source's, or its account's): passwords kept encrypted. */
   config?: {

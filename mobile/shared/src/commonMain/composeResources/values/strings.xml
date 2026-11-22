@@ -738,4 +738,20 @@
     <string name="tempo_unknown">pas encore annoncé</string>
     <string name="chart_hours_ago">-%1$s h</string>
     <string name="chart_days_ago">-%1$s j</string>
+    <string name="modules_title">Modules</string>
+    <string name="modules_title_server">Modules · %1$s</string>
+    <string name="modules_hint">Les modules installés sur ce serveur. Ils s\'installent et se mettent à jour depuis son interface web (Modules › Bibliothèque).</string>
+    <string name="modules_none">Aucun module installé.</string>
+    <string name="modules_line">%1$s · %2$s · %3$s</string>
+    <string name="modules_origin_builtin">livré avec Breezone</string>
+    <string name="modules_origin_library">bibliothèque</string>
+    <string name="modules_origin_file">fichier</string>
+    <string name="modules_origin_dev">en développement</string>
+    <string name="modules_loaded">en service</string>
+    <string name="modules_idle">chargé quand il sert</string>
+    <string name="modules_incompatible">ne fonctionne pas avec cette version de Breezone</string>
+    <string name="common_yes">Oui</string>
+    <string name="common_no">Non</string>
+    <string name="common_plus">Plus</string>
+    <string name="common_minus">Moins</string>
 </resources>

@@ -5,12 +5,18 @@ import {
   Loader2,
   Plus,
   RefreshCw,
+  Search,
   Trash2,
   Undo2,
   Upload,
 } from "lucide-react"
 import { toast } from "sonner"
-import type { LibraryModule, ModuleRepository, ModuleView } from "@/lib/api"
+import type {
+  LibraryModule,
+  ModuleManifest,
+  ModuleRepository,
+  ModuleView,
+} from "@/lib/api"
 import { api } from "@/lib/api"
 import { errorText } from "@/lib/format"
 import { lang, t } from "@/lib/i18n"
@@ -57,6 +63,26 @@ async function base64(file: File) {
  * The library of modules: those that work with this server first, installed or not; then the
  * modules installed from a package, with their version, to go back or remove them.
  */
+/** Lower case, without accents: « Météo » is found by « meteo ». */
+const plain = (s: string) =>
+  s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+
+/** Whether a module answers every word searched: its name, what it is, the hardware it drives. */
+function matches(m: ModuleManifest, words: string[]) {
+  const text = plain(
+    [
+      m.id,
+      ...Object.values(m.name),
+      ...Object.values(m.description ?? {}),
+      ...(m.models ?? []),
+    ].join(" ")
+  )
+  return words.every((w) => text.includes(w))
+}
+
 export function LibraryPanel() {
   const qc = useQueryClient()
   const library = useQuery({
@@ -116,10 +142,20 @@ export function LibraryPanel() {
     },
     onError: (e) => toast.error(errorText(e)),
   })
+  const [query, setQuery] = useState("")
+  const words = plain(query).split(/\s+/).filter(Boolean)
+  const found = (library.data?.modules ?? []).filter((m) =>
+    matches(m.manifest, words)
+  )
   const published = new Set((library.data?.modules ?? []).map((m) => m.id))
   // Shipped with Breezone and installed with it, but not (yet) in the library online.
   const shipped = (modules.data ?? [])
-    .filter((m: ModuleView) => m.origin === "builtin" && !published.has(m.id))
+    .filter(
+      (m: ModuleView) =>
+        m.origin === "builtin" &&
+        !published.has(m.id) &&
+        matches(m.manifest, words)
+    )
     .sort((a, b) =>
       a.manifest.name[lang()].localeCompare(b.manifest.name[lang()])
     )
@@ -154,19 +190,33 @@ export function LibraryPanel() {
           </Button>
         </CardHeader>
         <CardContent className="grid gap-2">
+          <div className="relative mb-1 max-w-md">
+            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={t("Rechercher un module ou un appareil")}
+              aria-label={t("Rechercher un module ou un appareil")}
+              className="pl-9"
+            />
+          </div>
           {library.isLoading ? (
             <Skeleton className="h-24 rounded-2xl" />
           ) : library.isError ? (
             <p className="text-sm text-muted-foreground">
               {errorText(library.error)}
             </p>
-          ) : (library.data?.modules ?? []).length === 0 &&
-            shipped.length === 0 ? (
+          ) : found.length === 0 && shipped.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              {t("Aucun module publié pour l'instant.")}
+              {words.length
+                ? t("Aucun module ne correspond à « {query} ».", {
+                    query: query.trim(),
+                  })
+                : t("Aucun module publié pour l'instant.")}
             </p>
           ) : (
-            (library.data?.modules ?? []).map((m) => {
+            found.map((m) => {
               const update =
                 m.installed && m.fits && m.fits !== m.installed ? m.fits : null
               return (

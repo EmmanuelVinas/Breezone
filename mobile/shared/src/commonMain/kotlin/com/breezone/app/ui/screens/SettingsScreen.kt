@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import com.breezone.app.APP_VERSION
 import com.breezone.app.data.CloudStatus
 import com.breezone.app.data.Hub
+import com.breezone.app.data.ModuleInfo
 import com.breezone.app.data.UpdateNeeded
 import com.breezone.app.data.Live
 import com.breezone.app.data.ServerState
@@ -107,6 +108,7 @@ fun SettingsScreen(onAddServer: () -> Unit, onReauth: (String) -> Unit, onLicens
         }
 
         servers.filter { !it.authRequired }.forEach { s -> AirzoneAccount(hub, s, showServer = servers.size > 1) }
+        servers.filter { !it.authRequired && it.user?.isAdmin == true }.forEach { s -> ModulesCard(hub, s, showServer = servers.size > 1) }
 
         SectionCard {
             SectionTitle(stringResource(Res.string.settings_security_title), FzIcons.CircleCheck)
@@ -130,6 +132,51 @@ fun SettingsScreen(onAddServer: () -> Unit, onReauth: (String) -> Unit, onLicens
             },
             onDismiss = { removing = null },
         )
+    }
+}
+
+/** The modules of a server, read only: they are installed and updated from its web UI. */
+@Composable
+private fun ModulesCard(hub: Hub, server: ServerState, showServer: Boolean) {
+    val api = hub.api(server.account.id) ?: return
+    var modules by remember { mutableStateOf<List<ModuleInfo>?>(null) }
+    LaunchedEffect(server.account.id) { modules = runCatching { api.modules() }.getOrNull() }
+    // Those of Breezone itself are not modules to show.
+    val shown = modules?.filter { it.origin != "native" }?.sortedBy { it.manifest.name.text().lowercase() } ?: return
+    SectionCard {
+        SectionTitle(
+            if (showServer) stringResource(Res.string.modules_title_server, server.account.label) else stringResource(Res.string.modules_title),
+            FzIcons.Puzzle,
+        )
+        Muted(stringResource(Res.string.modules_hint))
+        if (shown.isEmpty()) Caption(stringResource(Res.string.modules_none))
+        shown.forEachIndexed { i, m ->
+            if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                StatusDot(online = m.loaded && m.lastError == null, unknown = !m.loaded && m.state != "incompatible")
+                Spacer(Modifier.size(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(m.manifest.name.text().ifEmpty { m.id }, style = MaterialTheme.typography.titleSmall)
+                    val origin = stringResource(
+                        when (m.origin) {
+                            "builtin" -> Res.string.modules_origin_builtin
+                            "library" -> Res.string.modules_origin_library
+                            "dev" -> Res.string.modules_origin_dev
+                            else -> Res.string.modules_origin_file
+                        }
+                    )
+                    val state = stringResource(
+                        when {
+                            m.state == "incompatible" -> Res.string.modules_incompatible
+                            m.loaded -> Res.string.modules_loaded
+                            else -> Res.string.modules_idle
+                        }
+                    )
+                    Caption(stringResource(Res.string.modules_line, m.version, origin, state), maxLines = 2)
+                    m.lastError?.let { Caption(it, color = Fz.colors.warning, maxLines = 2) }
+                }
+            }
+        }
     }
 }
 

@@ -145,6 +145,7 @@ fun DeviceEntry(d: DeviceView, ctx: HomeContext) {
                 })
             }
         }
+        DeviceKind.Other -> GenericEntry(d, ctx)
         else -> InfoLine(d, ctx)
     }
 }
