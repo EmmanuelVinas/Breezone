@@ -99,6 +99,13 @@ pub async fn init_state(cfg: Config) -> anyhow::Result<AppState> {
     }
     if let Some(dev) = &cfg.modules_dev {
         modules::install::install_dev(&db, &cfg.data_dir, dev).await;
+        // In development, the fake devices answer on this machine (`dev.sh --modules --shipped`):
+        // the modules may reach it. Never in a release build.
+        #[cfg(feature = "wasm")]
+        if cfg!(debug_assertions) && std::env::var("BREEZONE_MODULES_LOOPBACK").is_ok_and(|v| v == "1") {
+            tracing::warn!("development: the modules may reach this machine (BREEZONE_MODULES_LOOPBACK)");
+            modules::wasm::allow_loopback(true);
+        }
     }
     let secret = AuthService::load_secret(cfg.jwt_secret.as_deref(), &cfg.data_dir)?;
     let auth = Arc::new(AuthService::new(&secret, cfg.access_token_ttl_secs, cfg.refresh_token_ttl_days));

@@ -17,20 +17,37 @@ Requirements: Rust (stable), Node 24, Docker; for the app, JDK 21 and Android SD
 
 ```bash
 ./scripts/dev.sh                 # fake Airzone + server (cargo) + web UI with hot reload: http://localhost:5173
-./scripts/dev.sh --real          # with your real WebServers (settings from .env)
 ./scripts/run-local.sh --demo    # the Docker image built from the sources, with a fake Airzone
 ```
+
+`scripts/dev.sh` options (they combine):
+
+| Option | What it does |
+|---|---|
+| *(none)* | Fake Airzone WebServer (:3000) and Airzone Cloud (:3900, `demo@breezone.local` / `demo-password`), server on :8427, web UI on :5173; the network scan stays on `127.0.0.0/30` |
+| `--real` | No fake Airzone: the real WebServers and the real network, with the settings of `.env` (`BREEZONE_*`) |
+| `--reset` | Starts from an empty database (deletes the data folder first) |
+| `--modules` | With the fake Airzone: one fake device of each kind (Shelly, Hue, Trydan, Renson, Tasmota, ESPHome, Forecast.Solar on :3100-3106) with 30 days of history, added for the admin; turns the weather on |
+| `--shipped` | The modules shipped with Breezone (WebAssembly, the list `SHIPPED_MODULES` of the `Dockerfile`) in place of the drivers compiled in, as in the image: built, packed into `data/dev-modules` and installed at start (`BREEZONE_MODULES_DEV`) |
+| `-h`, `--help` | These options |
+
+| Variable | What it does |
+|---|---|
+| `BREEZONE_DEV_PORT` | Port of the server (8427 by default), e.g. 8091 for the mobile E2E test |
+| `BREEZONE_DEV_DATA` | Another data folder (`data/dev` by default), e.g. `data/screenshots` for screenshots on a fresh home |
+| `BREEZONE_ADMIN_USER`, `BREEZONE_ADMIN_PASSWORD` | The admin created by `--modules` on a new database (`admin` / `motdepasse1` by default) |
+| `BREEZONE_MODULES_DEV` | A folder of `.bzm` being written, installed at each start without a signature (development builds only: a release ignores it); set by `--shipped` |
+| `BREEZONE_MODULES_LOOPBACK` | `1`: the modules may reach this machine, where the fake devices answer (development builds only); set by `--shipped` with the fake Airzone |
+| `BREEZONE_WEATHER` | `1` to read the weather (off by default in development) |
+
+Examples: `./scripts/dev.sh --real --shipped` tries the shipped modules with your own hardware;
+`BREEZONE_DEV_DATA=data/screenshots ./scripts/dev.sh --reset --modules` gives a fresh
+demonstration home.
 
 The fake WebServer (`cargo run --bin mock-airzone`) implements the Airzone local API
 (`POST/PUT /api/v1/hvac`, `/api/v1/webserver`); `MOCK_CLOUD_PORT=3900` adds a fake Airzone Cloud.
 
-Modules in WebAssembly: see [`modules/README.md`](modules/README.md). To try one without signing
-it, start the development server with `BREEZONE_MODULES_DEV=<folder of .bzm>` (development builds
-only: a release ignores it).
-
-Every kind of device without the hardware: `./scripts/dev.sh --modules` adds a fake module of each
-(Shelly, Hue, Trydan, Renson, Tasmota, ESPHome, Forecast.Solar), with 30 days of history, to the
-development server (admin / motdepasse1 unless `BREEZONE_ADMIN_USER` / `_PASSWORD` say otherwise).
+Modules in WebAssembly: see [`modules/README.md`](modules/README.md).
 
 ## Checks (also run by CI)
 
