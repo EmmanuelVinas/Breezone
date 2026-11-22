@@ -1336,6 +1336,10 @@ const es: Record<string, string> = {
   "Ce que Breezone fait quand les conditions sont fausses.":
     "Lo que hace Breezone cuando las condiciones no se cumplen.",
   Ensuite: "Después",
+  "{max} actions au plus : pour en faire davantage, regroupez-les dans une routine ou une scène et lancez-la d'ici.":
+    "{max} acciones como máximo: para hacer más, agrúpelas en una rutina o una escena y lánzela desde aquí.",
+  "Pas d'« Ensuite » ici : une heure, un lever ou un coucher du soleil est un instant, il ne cesse pas d'être vrai. Pour revenir en arrière, créez une autre règle au moment voulu.":
+    "Sin «Después» aquí: una hora, un amanecer o un atardecer es un instante, no deja de ser cierto. Para deshacerlo, cree otra regla en el momento deseado.",
   "Ne rien faire": "No hacer nada",
   "Faire…": "Hacer…",
   "quand ce n'est plus vrai :": "cuando deja de ser cierto:",

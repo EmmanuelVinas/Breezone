@@ -36,7 +36,7 @@ export const MAX_TRIGGERS = 3
 /** Conditions of a rule, those of its groups included. */
 export const MAX_CONDITIONS = 8
 /** Steps of each branch. */
-export const MAX_ACTIONS = 8
+export const MAX_ACTIONS = 12
 
 export const tl = (l: TraitLabel) => l[lang()]
 

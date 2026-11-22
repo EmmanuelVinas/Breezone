@@ -609,7 +609,7 @@ export function StepList({
           />
         </div>
       ))}
-      {steps.length < MAX_ACTIONS && (
+      {steps.length < MAX_ACTIONS ? (
         <Pick
           value=""
           placeholder={t("Ajouter une action…")}
@@ -617,6 +617,13 @@ export function StepList({
           options={kinds}
           className="w-full lg:w-64"
         />
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          {t(
+            "{max} actions au plus : pour en faire davantage, regroupez-les dans une routine ou une scène et lancez-la d'ici.",
+            { max: MAX_ACTIONS }
+          )}
+        </p>
       )}
     </div>
   )

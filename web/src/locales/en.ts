@@ -1327,6 +1327,10 @@ const en: Record<string, string> = {
   "Ce que Breezone fait quand les conditions sont fausses.":
     "What Breezone does when the conditions are false.",
   Ensuite: "Afterwards",
+  "{max} actions au plus : pour en faire davantage, regroupez-les dans une routine ou une scène et lancez-la d'ici.":
+    "{max} actions at most: to do more, group them in a routine or a scene and start it from here.",
+  "Pas d'« Ensuite » ici : une heure, un lever ou un coucher du soleil est un instant, il ne cesse pas d'être vrai. Pour revenir en arrière, créez une autre règle au moment voulu.":
+    "No “Afterwards” here: a time, a sunrise or a sunset is a moment, it does not stop being true. To undo it, create another rule at the time you want.",
   "Ne rien faire": "Do nothing",
   "Faire…": "Do…",
   "quand ce n'est plus vrai :": "when it is no longer true:",
