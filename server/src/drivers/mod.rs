@@ -21,7 +21,7 @@ pub mod tplink;
 pub mod trydan;
 
 use crate::db::{self, Db};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::future::Future;
@@ -100,6 +100,17 @@ pub trait Driver: Send + Sync {
     fn activate_scene<'a>(&'a self, id: &'a str) -> DriverFuture<'a, ()> {
         Box::pin(async move { Err(DriverError::Unsupported(format!("scene {id}"))) })
     }
+    /// The schedules the hardware keeps and runs itself (`schedule.hardware`).
+    fn schedules(&self) -> DriverFuture<'_, Vec<Schedule>> {
+        Box::pin(async { Err(DriverError::Unsupported("schedules".into())) })
+    }
+    /// Creates a schedule (empty id) or changes it; its id.
+    fn save_schedule<'a>(&'a self, _schedule: &'a Schedule) -> DriverFuture<'a, String> {
+        Box::pin(async { Err(DriverError::Unsupported("schedules".into())) })
+    }
+    fn delete_schedule<'a>(&'a self, _id: &'a str) -> DriverFuture<'a, ()> {
+        Box::pin(async { Err(DriverError::Unsupported("schedules".into())) })
+    }
     /// Gives the hardware a key of its maker that unlocks more of its data (Renson); true once it
     /// accepts it. The hardware keeps it: Breezone does not.
     fn unlock<'a>(&'a self, _key: &'a str) -> DriverFuture<'a, bool> {
@@ -130,6 +141,44 @@ pub trait Driver: Send + Sync {
     fn diagnostic(&self) -> DriverFuture<'_, Value> {
         Box::pin(async { Ok(Value::Null) })
     }
+}
+
+/// What a schedule of the hardware does at its end: the same action with these parameters.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ScheduleEnd {
+    /// "HH:MM"
+    pub time: String,
+    #[serde(default)]
+    pub params: Map<String, Value>,
+}
+
+/// A schedule the hardware keeps and runs itself (`schedule.hardware`): on these days at this
+/// time, an action of a trait applied to devices of its source.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Schedule {
+    /// Its id in the hardware (empty for a new one).
+    #[serde(default)]
+    pub id: String,
+    pub name: String,
+    #[serde(default = "crate::yes")]
+    pub enabled: bool,
+    /// ISO weekdays (1 Monday … 7 Sunday).
+    pub days: Vec<u8>,
+    /// "HH:MM"
+    pub time: String,
+    /// The devices of the source it drives.
+    pub references: Vec<String>,
+    #[serde(rename = "trait")]
+    pub trait_name: String,
+    pub action: String,
+    #[serde(default)]
+    pub params: Map<String, Value>,
+    #[serde(default)]
+    pub end: Option<ScheduleEnd>,
+    #[serde(default = "crate::yes")]
+    pub editable: bool,
+    #[serde(default)]
+    pub note: Option<String>,
 }
 
 /// A press of a button of a remote (`button@1`).

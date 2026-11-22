@@ -9,7 +9,7 @@ wit_bindgen::generate!({
 });
 
 use breezone::module::host;
-use breezone::module::types::{Curve, Described, Error, HardwareRoom, LengthPrefix, Paired, PairedSource, Picture, ReadUntil, Request, Scene};
+use breezone::module::types::{Curve, Described, DeviceInfo, Error, HardwareRoom, LengthPrefix, Paired, PairedSource, Picture, ReadUntil, Request, Scene, Schedule};
 use exports::breezone::module::driver::{Guest, GuestSource, Source as SourceHandle};
 
 struct Module;
@@ -18,6 +18,8 @@ pub struct Source {
     mode: String,
     subscription: Option<u32>,
     last: std::cell::RefCell<Option<String>>,
+    /// `schedules`: a plug whose schedules are kept here, one of them its app's own.
+    schedules: std::cell::RefCell<Vec<Schedule>>,
 }
 
 impl GuestSource for Source {
@@ -27,15 +29,34 @@ impl GuestSource for Source {
             Some(url) => Some(host::subscribe(url).map_err(Error::Unreachable)?),
             None => None,
         };
-        Ok(SourceHandle::new(Source { mode, subscription, last: Default::default() }))
+        let schedules = vec![Schedule {
+            id: "app".into(),
+            name: "App".into(),
+            enabled: true,
+            days: vec![6, 7],
+            time: "09:00".into(),
+            references: vec!["plug".into()],
+            trait_name: "switch.relay".into(),
+            action: "set".into(),
+            params: r#"{"on": true}"#.into(),
+            end: None,
+            editable: false,
+            note: Some("in the app".into()),
+        }];
+        Ok(SourceHandle::new(Source { mode, subscription, last: Default::default(), schedules: std::cell::RefCell::new(schedules) }))
     }
 
     fn describe(&self) -> Result<Described, Error> {
-        Ok(Described { model: "misbehave".into(), firmware: None, devices: vec![], identity: None })
+        let devices = match self.mode.as_str() {
+            "schedules" => vec![DeviceInfo { reference: "plug".into(), kind: "switch.relay".into(), traits: vec!["switch.relay@1".into()], name: "Plug".into() }],
+            _ => vec![],
+        };
+        Ok(Described { model: "misbehave".into(), firmware: None, devices, identity: None })
     }
 
     fn read(&self) -> Result<Vec<(String, String)>, Error> {
         match self.mode.as_str() {
+            "schedules" => Ok(vec![("plug".into(), r#"{"on": false}"#.into())]),
             "panic" => panic!("on purpose"),
             "loop" => {
                 let mut n: u64 = 0;
@@ -124,6 +145,29 @@ impl GuestSource for Source {
 
     fn unlock(&self, _key: String) -> Result<bool, Error> {
         Err(Error::Unsupported("unlock".into()))
+    }
+
+    fn schedules(&self) -> Result<Vec<Schedule>, Error> {
+        Ok(self.schedules.borrow().clone())
+    }
+
+    fn save_schedule(&self, mut schedule: Schedule) -> Result<String, Error> {
+        let mut all = self.schedules.borrow_mut();
+        if schedule.id.is_empty() {
+            schedule.id = format!("s{}", all.len());
+        }
+        schedule.editable = true;
+        let id = schedule.id.clone();
+        match all.iter_mut().find(|s| s.id == id) {
+            Some(s) => *s = schedule,
+            None => all.push(schedule),
+        }
+        Ok(id)
+    }
+
+    fn delete_schedule(&self, id: String) -> Result<(), Error> {
+        self.schedules.borrow_mut().retain(|s| s.id != id);
+        Ok(())
     }
 
     fn close(&self) {}

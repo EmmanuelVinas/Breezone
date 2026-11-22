@@ -264,7 +264,14 @@ impl breezone::module::host::Host for HostState {
         if !row.enabled {
             return Err(format!("{kind}: switched off"));
         }
-        row.secret.as_deref().and_then(|s| crate::crypto::decrypt(&key, s)).ok_or_else(|| format!("{kind}: not connected"))
+        let secret = row.secret.as_deref().and_then(|s| crate::crypto::decrypt(&key, s)).ok_or_else(|| format!("{kind}: not connected"))?;
+        // What is not secret (a meter number) with the secret, the secret's fields first.
+        let mut fields: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&row.config).unwrap_or_default();
+        match serde_json::from_str::<serde_json::Value>(&secret) {
+            Ok(serde_json::Value::Object(s)) => fields.extend(s),
+            _ => return Ok(secret),
+        }
+        Ok(serde_json::Value::Object(fields).to_string())
     }
 
     fn pressed(&mut self, reference: String, button: u32, press: String) -> wasmtime::Result<()> {
@@ -687,6 +694,51 @@ pub struct WasmSource {
     every: Duration,
 }
 
+fn json_map(text: &str) -> Result<serde_json::Map<String, serde_json::Value>, DriverError> {
+    match serde_json::from_str(text) {
+        Ok(serde_json::Value::Object(m)) => Ok(m),
+        _ => Err(DriverError::Invalid("the parameters of a schedule are not an object".into())),
+    }
+}
+
+fn schedule_from_wit(s: breezone::module::types::Schedule) -> Result<crate::drivers::Schedule, DriverError> {
+    let end = match s.end {
+        Some(e) => Some(crate::drivers::ScheduleEnd { time: e.time, params: json_map(&e.params)? }),
+        None => None,
+    };
+    Ok(crate::drivers::Schedule {
+        id: s.id,
+        name: s.name,
+        enabled: s.enabled,
+        days: s.days,
+        time: s.time,
+        references: s.references,
+        trait_name: s.trait_name,
+        action: s.action,
+        params: json_map(&s.params)?,
+        end,
+        editable: s.editable,
+        note: s.note,
+    })
+}
+
+fn schedule_to_wit(s: &crate::drivers::Schedule) -> breezone::module::types::Schedule {
+    breezone::module::types::Schedule {
+        id: s.id.clone(),
+        name: s.name.clone(),
+        enabled: s.enabled,
+        days: s.days.clone(),
+        time: s.time.clone(),
+        references: s.references.clone(),
+        trait_name: s.trait_name.clone(),
+        action: s.action.clone(),
+        params: serde_json::Value::Object(s.params.clone()).to_string(),
+        end: s.end.as_ref().map(|e| breezone::module::types::ScheduleEnd { time: e.time.clone(), params: serde_json::Value::Object(e.params.clone()).to_string() }),
+        editable: s.editable,
+        note: s.note.clone(),
+    }
+}
+
 fn from_wit(e: WitError) -> DriverError {
     match e {
         WitError::Unreachable(m) => DriverError::Unreachable(m),
@@ -829,6 +881,29 @@ impl Driver for WasmSource {
         })
     }
 
+    fn schedules(&self) -> DriverFuture<'_, Vec<crate::drivers::Schedule>> {
+        Box::pin(async move {
+            self.has("schedules")?;
+            guest!(self, call_schedules).await?.into_iter().map(schedule_from_wit).collect()
+        })
+    }
+
+    fn save_schedule<'a>(&'a self, schedule: &'a crate::drivers::Schedule) -> DriverFuture<'a, String> {
+        let s = schedule_to_wit(schedule);
+        Box::pin(async move {
+            self.has("schedules")?;
+            guest!(self, call_save_schedule, &s).await
+        })
+    }
+
+    fn delete_schedule<'a>(&'a self, id: &'a str) -> DriverFuture<'a, ()> {
+        let id = id.to_string();
+        Box::pin(async move {
+            self.has("schedules")?;
+            guest!(self, call_delete_schedule, &id).await
+        })
+    }
+
     fn listen(&self, sink: Sink) {
         *self.ctx.sink.lock().unwrap_or_else(|e| e.into_inner()) = Some(sink);
     }
@@ -874,16 +949,17 @@ pub fn allow_loopback(allowed: bool) {
 }
 
 /// The modules compiled in this process, by id and version.
-type Loaded = HashMap<(String, String), Arc<WasmModule>>;
+type Loaded = HashMap<(String, String, std::path::PathBuf), Arc<WasmModule>>;
 static LOADED: std::sync::LazyLock<Mutex<Loaded>> = std::sync::LazyLock::new(Default::default);
 
 /// An installed module, compiled (the first time one of its sources needs it, kept compiled in
 /// `<modules>/cache`), with the permissions of its manifest.
 pub async fn loaded(m: &crate::modules::manifest::Manifest, dir: &Path) -> Result<Arc<WasmModule>, String> {
-    let key = (m.id.clone(), m.version.clone());
+    // Its folder too: the same version installed again (a module in development) is another one.
+    let key = (m.id.clone(), m.version.clone(), dir.to_path_buf());
     let mut loaded = LOADED.lock().await;
     // Another version than the one loaded: the older is dropped.
-    loaded.retain(|(id, version), _| id != &m.id || version == &m.version);
+    loaded.retain(|(id, version, folder), _| id != &m.id || (version == &m.version && folder == dir));
     if let Some(module) = loaded.get(&key) {
         return Ok(module.clone());
     }

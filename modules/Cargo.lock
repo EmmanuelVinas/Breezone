@@ -80,6 +80,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "breezone-module-linky"
+version = "1.0.0"
+dependencies = [
+ "breezone-module-sdk",
+ "chrono",
+]
+
+[[package]]
 name = "breezone-module-misbehave"
 version = "0.0.0"
 dependencies = [
@@ -150,6 +158,14 @@ name = "breezone-module-trydan"
 version = "1.0.0"
 dependencies = [
  "breezone-module-sdk",
+]
+
+[[package]]
+name = "breezone-module-weather"
+version = "1.0.0"
+dependencies = [
+ "breezone-module-sdk",
+ "chrono",
 ]
 
 [[package]]

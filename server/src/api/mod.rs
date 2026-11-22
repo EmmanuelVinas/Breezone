@@ -157,6 +157,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/sources/{id}/locate", post(sources::locate))
         .route("/api/sources/{id}/rooms", post(sources::take_rooms))
         .route("/api/sources/{id}/key", post(sources::unlock))
+        .route("/api/sources/{id}/schedules", get(sources::schedules).post(sources::create_schedule))
+        .route("/api/sources/{id}/schedules/{schedule_id}", put(sources::update_schedule).delete(sources::delete_schedule))
         .route("/api/sources/{id}/diagnostic", get(sources::diagnostic))
         .route("/api/sources/{id}/twins", get(sources::twins).put(sources::set_twin))
         .route("/api/scenes", get(sources::scenes))

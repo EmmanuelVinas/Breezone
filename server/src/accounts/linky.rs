@@ -96,10 +96,47 @@ pub async fn connect(state: &AppState, token: &str, prm: &str) -> ApiResult<()> 
 
 /// Reads the last days again (Enedis publishes them the next morning, sometimes later).
 pub async fn refresh(state: &AppState) -> ApiResult<bool> {
+    refresh_from(state, 10).await
+}
+
+/// Reads the days of the last `back` days and the half hours of the last week through the module
+/// that gives `energy.history@1` (`Ok(false)`: its account is not connected).
+async fn refresh_module(state: &AppState, back: u64) -> ApiResult<bool> {
+    let Some(prm) = db::account(&state.db, KIND).await?.and_then(|a| serde_json::from_str::<Value>(&a.config).ok()?["prm"].as_str().map(str::to_string)) else {
+        return Ok(false);
+    };
+    let today = crate::rollup::local_day(db::now(), state.cfg.timezone);
+    let asked = json!({"from": (today - Days::new(back)).to_string(), "until": (today - Days::new(1)).to_string()});
+    let days = match crate::modules::ask_service(&state.db, "energy.history@1", "days", &asked).await {
+        None => return Ok(false),
+        Some(Err(e)) => return Err(ApiError::bad_gateway(e)),
+        Some(Ok(list)) => list,
+    };
+    let wh = |v: &Value| v.as_f64().map(|kwh| kwh * 1000.0);
+    for d in days.as_array().into_iter().flatten() {
+        if let Some(day) = d["day"].as_str() {
+            db::set_linky_day(&state.db, &prm, day, wh(&d["consumption"]), wh(&d["production"])).await?;
+        }
+    }
+    for back in 1..=7 {
+        let asked = json!({"day": (today - Days::new(back)).to_string()});
+        if let Some(Ok(curve)) = crate::modules::ask_service(&state.db, "energy.history@1", "curve", &asked).await {
+            let points: Vec<(i64, f64)> = curve.as_array().into_iter().flatten().filter_map(|p| Some((p["ts"].as_i64()?, p["power"].as_f64()?))).collect();
+            db::set_linky_curve(&state.db, &prm, &points).await?;
+        }
+    }
+    Ok(true)
+}
+
+/// Reads the days of the last `back` days again (a year once connected).
+pub async fn refresh_from(state: &AppState, back: u64) -> ApiResult<bool> {
+    if super::is_module_account(KIND) {
+        return refresh_module(state, back).await;
+    }
     let Some((config, s)) = super::load::<Secret>(state, KIND).await? else { return Ok(false) };
     let Some(prm) = config["prm"].as_str().map(str::to_string) else { return Ok(false) };
     let today = crate::rollup::local_day(db::now(), state.cfg.timezone);
-    record(state, KIND, read(state, &s.token, &prm, today - Days::new(10)).await).await?;
+    record(state, KIND, read(state, &s.token, &prm, today - Days::new(back)).await).await?;
     Ok(true)
 }
 

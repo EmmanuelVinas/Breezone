@@ -31,7 +31,7 @@ WORKDIR /src
 COPY server/contracts/wit server/contracts/wit
 COPY modules/ modules/
 # The modules shipped with Breezone (each replaces the driver compiled in with the same id).
-ARG SHIPPED_MODULES="tasmota shelly trydan forecast_solar reolink hoymiles tplink hue renson rte"
+ARG SHIPPED_MODULES="tasmota shelly trydan forecast_solar reolink hoymiles tplink hue renson rte weather linky"
 RUN cd modules \
  && cargo build --release --locked --target wasm32-wasip2 $(for m in $SHIPPED_MODULES; do printf -- '-p breezone-module-%s ' "$m"; done) \
  && for m in $SHIPPED_MODULES; do \

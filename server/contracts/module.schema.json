@@ -88,6 +88,6 @@
     },
     "read_every_s": { "type": "integer", "minimum": 0 },
     "cloud": { "type": "boolean" },
-    "optional_calls": { "type": "array", "items": { "enum": ["rooms", "scenes", "picture", "forecast", "listen", "unlock", "diagnostic", "probe"] } }
+    "optional_calls": { "type": "array", "items": { "enum": ["rooms", "scenes", "picture", "forecast", "listen", "unlock", "diagnostic", "probe", "schedules"] } }
   }
 }

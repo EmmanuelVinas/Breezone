@@ -572,3 +572,100 @@ mod tests {
         assert_eq!(serde_json::from_str::<serde_json::Value>(&kept).unwrap(), serde_json::json!({"host": "10.0.0.2", "ignored": ["gas"]}));
     }
 }
+
+// ---------------------------------------------------------------------------------------
+// Schedules of the hardware (`schedule.hardware`)
+// ---------------------------------------------------------------------------------------
+
+/// "HH:MM"
+fn valid_time(t: &str) -> bool {
+    t.split_once(':').is_some_and(|(h, m)| h.len() == 2 && m.len() == 2 && h.parse::<u8>().is_ok_and(|h| h < 24) && m.parse::<u8>().is_ok_and(|m| m < 60))
+}
+
+/// A schedule as the hardware will get it: a name, days, a time, devices of the source that have
+/// the trait, an action of it with its parameters (and those of its end) as the catalog says.
+async fn check_schedule(state: &AppState, source_id: i64, s: &mut crate::drivers::Schedule) -> ApiResult<()> {
+    s.name = s.name.trim().chars().take(40).collect();
+    if s.name.is_empty() {
+        return Err(ApiError::bad_request("le nom est requis"));
+    }
+    s.days.sort_unstable();
+    s.days.dedup();
+    if s.days.is_empty() || s.days.iter().any(|d| !(1..=7).contains(d)) {
+        return Err(ApiError::bad_request("jours de 1 (lundi) à 7 (dimanche)"));
+    }
+    if !valid_time(&s.time) || s.end.as_ref().is_some_and(|e| !valid_time(&e.time)) {
+        return Err(ApiError::bad_request("heure HH:MM attendue"));
+    }
+    if s.references.is_empty() {
+        return Err(ApiError::bad_request("au moins un appareil"));
+    }
+    let devices = crate::devices::list(state).await?;
+    for reference in &s.references {
+        let device = devices
+            .iter()
+            .find(|d| d.source_id == Some(source_id) && d.reference.as_str() == Some(reference.as_str()))
+            .ok_or_else(|| ApiError::bad_request(format!("{reference}: not a device of this source")))?;
+        let action = |params: &serde_json::Map<String, Value>| crate::devices::ActionInput { trait_name: s.trait_name.clone(), action: s.action.clone(), params: params.clone() };
+        crate::devices::check_action(device, &action(&s.params))?;
+        if let Some(end) = &s.end {
+            crate::devices::check_action(device, &action(&end.params))?;
+        }
+    }
+    Ok(())
+}
+
+/// The schedules the hardware of a source keeps.
+pub async fn schedules(State(state): State<AppState>, _admin: AdminUser, Path(id): Path<i64>) -> ApiResult<Json<Vec<crate::drivers::Schedule>>> {
+    let driver = state.drivers.driver(id).await.ok_or_else(|| ApiError::not_found("source not found"))?;
+    Ok(Json(driver.schedules().await.map_err(driver_error)?))
+}
+
+async fn save_schedule(state: &AppState, id: i64, mut schedule: crate::drivers::Schedule) -> ApiResult<Json<Vec<crate::drivers::Schedule>>> {
+    let driver = state.drivers.driver(id).await.ok_or_else(|| ApiError::not_found("source not found"))?;
+    check_schedule(state, id, &mut schedule).await?;
+    driver.save_schedule(&schedule).await.map_err(driver_error)?;
+    Ok(Json(driver.schedules().await.map_err(driver_error)?))
+}
+
+/// Adds a schedule to the hardware; the schedules it keeps then.
+pub async fn create_schedule(
+    State(state): State<AppState>,
+    _admin: AdminUser,
+    Path(id): Path<i64>,
+    Json(mut schedule): Json<crate::drivers::Schedule>,
+) -> ApiResult<Json<Vec<crate::drivers::Schedule>>> {
+    schedule.id.clear();
+    save_schedule(&state, id, schedule).await
+}
+
+/// Changes a schedule of the hardware (one it lets Breezone change).
+pub async fn update_schedule(
+    State(state): State<AppState>,
+    _admin: AdminUser,
+    Path((id, schedule_id)): Path<(i64, String)>,
+    Json(mut schedule): Json<crate::drivers::Schedule>,
+) -> ApiResult<Json<Vec<crate::drivers::Schedule>>> {
+    let driver = state.drivers.driver(id).await.ok_or_else(|| ApiError::not_found("source not found"))?;
+    let current = driver.schedules().await.map_err(driver_error)?.into_iter().find(|s| s.id == schedule_id).ok_or_else(|| ApiError::not_found("schedule not found"))?;
+    if !current.editable {
+        return Err(ApiError::new(StatusCode::CONFLICT, current.note.unwrap_or_else(|| "this schedule is changed in the hardware's app".into())));
+    }
+    schedule.id = schedule_id;
+    save_schedule(&state, id, schedule).await
+}
+
+pub async fn delete_schedule(State(state): State<AppState>, _admin: AdminUser, Path((id, schedule_id)): Path<(i64, String)>) -> ApiResult<Json<Vec<crate::drivers::Schedule>>> {
+    let driver = state.drivers.driver(id).await.ok_or_else(|| ApiError::not_found("source not found"))?;
+    driver.delete_schedule(&schedule_id).await.map_err(driver_error)?;
+    Ok(Json(driver.schedules().await.map_err(driver_error)?))
+}
+
+#[cfg(test)]
+mod schedule_tests {
+    #[test]
+    fn times_are_checked() {
+        assert!(super::valid_time("07:30") && super::valid_time("23:59"));
+        assert!(!super::valid_time("24:00") && !super::valid_time("7:30") && !super::valid_time("07h30"));
+    }
+}

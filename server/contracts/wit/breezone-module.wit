@@ -100,6 +100,37 @@ interface types {
         media-type: string,
     }
 
+    /// What a schedule of the hardware does at its end ("off at 22:00"): the same action, with
+    /// these parameters.
+    record schedule-end {
+        /// "HH:MM"
+        time: string,
+        params: json,
+    }
+
+    /// A schedule the hardware keeps and runs itself (`schedule.hardware`): on these days at this
+    /// time, an action of a trait applied to devices of the source.
+    record schedule {
+        /// Its id in the hardware (empty for a new one).
+        id: string,
+        name: string,
+        enabled: bool,
+        /// ISO weekdays (1 Monday … 7 Sunday).
+        days: list<u8>,
+        /// "HH:MM"
+        time: string,
+        /// The devices of the source it drives.
+        references: list<string>,
+        trait-name: string,
+        action: string,
+        params: json,
+        end: option<schedule-end>,
+        /// Breezone can change it (else only the hardware's app can).
+        editable: bool,
+        /// Why it cannot be changed here.
+        note: option<string>,
+    }
+
     /// A source made by an appairage: its configuration, its secret, a name for it.
     record paired-source {
         config: json,
@@ -166,8 +197,9 @@ interface host {
     store-get: func(key: string) -> option<list<u8>>;
     store-set: func(key: string, value: option<list<u8>>);
 
-    /// The secret of an account the module requires (`requires.accounts` of its manifest), as JSON;
-    /// a module that is an account (role `account`) gets its own with its id.
+    /// The fields of an account the module requires (`requires.accounts` of its manifest), as a
+    /// JSON object (its secrets and what is not secret); a module that is an account (role
+    /// `account`) gets its own with its id.
     account: func(kind: string) -> result<string, string>;
 
     /// A button of a remote was pressed (`button@1`): "single" | "double" | "long".
@@ -178,7 +210,7 @@ interface host {
 }
 
 interface driver {
-    use types.{json, error, described, hardware-room, scene, picture, curve, paired};
+    use types.{json, error, described, hardware-room, scene, picture, curve, paired, schedule};
 
     /// One configured piece of hardware.
     resource source {
@@ -201,6 +233,12 @@ interface driver {
         forecast: func(reference: string) -> result<list<curve>, error>;
         /// Gives the hardware a key of its maker; true once it accepts it.
         unlock: func(key: string) -> result<bool, error>;
+        /// The schedules the hardware keeps (`schedules` in `optional-calls`), and their changes:
+        /// `save-schedule` creates one (empty id) or changes it, and gives its id. The host checks
+        /// the devices, the action and its parameters against the catalog first.
+        schedules: func() -> result<list<schedule>, error>;
+        save-schedule: func(schedule: schedule) -> result<string, error>;
+        delete-schedule: func(id: string) -> result<_, error>;
         /// Ends the connections it keeps, before the server stops.
         close: func();
     }

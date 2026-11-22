@@ -253,6 +253,29 @@ pub fn report_of(place: &str, data: &Value, now: i64) -> Option<Report> {
     })
 }
 
+/// A report from the answers of a module (`weather.forecast@1`: `now` and `hours`).
+pub fn report_from_service(place: &str, now: &Value, hours: Vec<Hour>, read_at: i64) -> Report {
+    let n = |k: &str| now[k].as_f64();
+    let i = |k: &str| now[k].as_i64();
+    Report {
+        place: place.to_string(),
+        temperature: n("temperature"),
+        apparent: n("apparent"),
+        humidity: n("humidity"),
+        code: i("code"),
+        precipitation: n("precipitation"),
+        wind: n("wind"),
+        today_min: n("today_min"),
+        today_max: n("today_max"),
+        tomorrow_min: n("tomorrow_min"),
+        tomorrow_max: n("tomorrow_max"),
+        tomorrow_code: i("tomorrow_code"),
+        hours,
+        read_at,
+        vigilance: None,
+    }
+}
+
 /// Where an installation is, as found when its city was set.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Place {
@@ -363,16 +386,30 @@ impl Weather {
         installation_id.and_then(|id| places.iter().find(|p| p.installation_id == id).cloned()).or_else(|| places.into_iter().next())
     }
 
-    /// The warnings in force for `area` (`None`: its country has no feed, or it does not answer).
+    /// The warnings in force for `area` (`None`: its country has no feed, or it does not answer):
+    /// from a module that gives them first.
     async fn vigilance(&self, area: &str, country: &str) -> Option<Vigilance> {
+        let asked = serde_json::json!({"country": country, "area": area});
+        if let Some(Ok(v)) = crate::modules::ask_service(&self.db, "weather.warnings@1", "current", &asked).await {
+            let events = v["events"].as_str().unwrap_or_default().split(',').map(str::trim).filter(|e| !e.is_empty()).map(str::to_string).collect();
+            return Some(Vigilance { level: v["level"].as_u64().unwrap_or(0).min(3) as u8, events, area: v["area"].as_str().unwrap_or(area).to_string() });
+        }
         let feed = meteoalarm_feed(country)?;
         let url = format!("https://feeds.meteoalarm.org/feeds/meteoalarm-legacy-atom-{feed}");
         let text = self.http.get(url).timeout(Duration::from_secs(20)).send().await.ok()?.error_for_status().ok()?.text().await.ok()?;
         Some(vigilance_of(&text, area, db::now()))
     }
 
-    /// The forecast at a place.
+    /// The forecast at a place, from a module that gives it (then the core asks Open-Meteo itself).
     async fn forecast(&self, place: &Place) -> Option<Report> {
+        let at = serde_json::json!({"lat": place.lat, "lon": place.lon});
+        if let Some(Ok(now)) = crate::modules::ask_service(&self.db, "weather.forecast@1", "now", &at).await {
+            let hours = match crate::modules::ask_service(&self.db, "weather.forecast@1", "hours", &at).await {
+                Some(Ok(list)) => serde_json::from_value(list).unwrap_or_default(),
+                _ => vec![],
+            };
+            return Some(report_from_service(&place.city, &now, hours, db::now()));
+        }
         let data: Value = self
             .http
             .get("https://api.open-meteo.com/v1/forecast")
@@ -556,6 +593,15 @@ mod tests {
         assert_eq!(vigilance_of(&feed, "cote d'or", noon).level, 3, "names compared without accents or dashes");
         assert_eq!(vigilance_of(&feed, "Ariège", noon).level, 0, "nothing: green");
         assert_eq!(vigilance_of(&feed, "Haute-Garonne", noon + 86_400).level, 0, "over");
+    }
+
+    #[test]
+    fn a_report_from_a_module() {
+        let now = serde_json::json!({"temperature": 3.5, "code": 61, "tomorrow_max": 9.0});
+        let hours: Vec<Hour> = serde_json::from_value(serde_json::json!([{"ts": 10, "temperature": 3.0}, {"ts": 3610, "code": 2}])).unwrap();
+        let r = report_from_service("Annecy", &now, hours, 5);
+        assert_eq!((r.temperature, r.code, r.tomorrow_max, r.humidity), (Some(3.5), Some(61), Some(9.0), None));
+        assert_eq!((r.hours.len(), r.hours[1].code, r.read_at), (2, Some(2), 5));
     }
 
     #[test]

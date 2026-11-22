@@ -32,7 +32,9 @@ pub mod bindings {
     });
 }
 
-pub use bindings::breezone::module::types::{Curve, Described, DeviceInfo, Error, HardwareRoom, Header, LengthPrefix, Paired, PairedSource, Picture, ReadUntil, Scene};
+pub use bindings::breezone::module::types::{
+    Curve, Described, DeviceInfo, Error, HardwareRoom, Header, LengthPrefix, Paired, PairedSource, Picture, ReadUntil, Scene, Schedule, ScheduleEnd,
+};
 pub use serde_json;
 pub use serde_json::{json, Map, Value};
 
@@ -87,6 +89,18 @@ pub trait Driver: Sized + 'static {
     }
     fn unlock(&self, _key: &str) -> Result<bool> {
         unsupported("unlock")
+    }
+    /// The schedules the hardware keeps and runs itself (`schedules` in `optional_calls`):
+    /// Breezone checked the devices, the action and its parameters before `save_schedule`, which
+    /// creates one (empty id) or changes it, and gives its id.
+    fn schedules(&self) -> Result<Vec<Schedule>> {
+        unsupported("schedules")
+    }
+    fn save_schedule(&self, _schedule: Schedule) -> Result<String> {
+        unsupported("schedules")
+    }
+    fn delete_schedule(&self, _id: &str) -> Result<()> {
+        unsupported("schedules")
     }
     /// Ends the connections it keeps, before the server stops.
     fn close(&self) {}
@@ -205,6 +219,18 @@ impl<T: Driver> bindings::exports::breezone::module::driver::GuestSource for Ada
 
     fn unlock(&self, key: String) -> Result<bool> {
         self.0.unlock(&key)
+    }
+
+    fn schedules(&self) -> Result<Vec<Schedule>> {
+        self.0.schedules()
+    }
+
+    fn save_schedule(&self, schedule: Schedule) -> Result<String> {
+        self.0.save_schedule(schedule)
+    }
+
+    fn delete_schedule(&self, id: String) -> Result<()> {
+        self.0.delete_schedule(&id)
     }
 
     fn close(&self) {

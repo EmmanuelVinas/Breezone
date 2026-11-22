@@ -52,7 +52,18 @@ pub async fn connect(State(state): State<AppState>, AdminUser(user): AdminUser, 
     let input: ConnectInput = serde_json::from_value(fields.clone()).map_err(|e| ApiError::bad_request(e.to_string()))?;
     match kind.as_str() {
         // A module run by the host checks its account itself, from the fields of its form.
-        k if accounts::is_module_account(k) => accounts::connect_module(&state, k, &fields).await?,
+        k if accounts::is_module_account(k) => {
+            accounts::connect_module(&state, k, &fields).await?;
+            // A year of the meter at once: the history and its costs are there from the start.
+            if k == accounts::linky::KIND {
+                let state = state.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = accounts::linky::refresh_from(&state, 365).await {
+                        tracing::warn!("Linky not read: {}", e.message.en);
+                    }
+                });
+            }
+        }
         accounts::rte::KIND => accounts::rte::connect(&state, &input.client_id, &input.client_secret).await?,
         accounts::linky::KIND => accounts::linky::connect(&state, &input.token, &input.prm).await?,
         accounts::netatmo::KIND => accounts::netatmo::connect(&state, &input.client_id, &input.client_secret, &input.refresh_token).await?,

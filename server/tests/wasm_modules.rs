@@ -515,6 +515,79 @@ async fn a_service_module_with_an_account_answers_the_core() {
     assert_eq!(tested.json::<Value>().await.unwrap()["state"], "ok");
 }
 
+/// The schedules a piece of hardware keeps (`schedule.hardware`, lot L9): listed, created and
+/// changed through the generic routes of a source, the devices, the action and its parameters
+/// checked against the catalog first; one its own app keeps is not changed here.
+#[tokio::test]
+async fn the_schedules_of_the_hardware() {
+    use breezone_server::modules::package;
+    let _serial = SERIAL.lock().await;
+    let dir = tempfile_dir("schedules");
+    std::fs::create_dir_all(dir.join("app/modules")).unwrap();
+    let manifest = json!({
+        "id": "misbehave", "version": "1.0.0",
+        "name": {"fr": "Prise", "en": "Plug", "es": "Enchufe"},
+        "roles": ["driver"], "requires": {"api": "^1.0"},
+        "provides": {"traits": ["switch.relay@1.0"]},
+        "permissions": {"network": {"lan": false}},
+        "optional_calls": ["schedules"]
+    });
+    std::fs::write(dir.join("app/modules/misbehave-1.0.0.bzm"), package::build(&manifest.to_string(), Some(&wasm("misbehave")), &[]).unwrap()).unwrap();
+    let mut cfg = breezone_server::config::Config::for_tests(dir.join("data"));
+    cfg.web_dir = dir.join("app/web");
+    let state = breezone_server::init_state(cfg).await.unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(listener, breezone_server::app(state)).await.unwrap() });
+    let http = reqwest::Client::new();
+    let v: Value = http.post(format!("{base}/api/setup")).json(&json!({"username":"admin","password":"motdepasse1"})).send().await.unwrap().json().await.unwrap();
+    let token = v["access_token"].as_str().unwrap().to_string();
+    let call = |method: &str, path: &str, body: Option<Value>| {
+        let mut req = http.request(method.parse().unwrap(), format!("{base}{path}")).bearer_auth(&token);
+        if let Some(b) = body {
+            req = req.json(&b);
+        }
+        async move {
+            let resp = req.send().await.unwrap();
+            (resp.status().as_u16(), serde_json::from_str::<Value>(&resp.text().await.unwrap()).unwrap_or(Value::Null))
+        }
+    };
+    let (code, s) = call("POST", "/api/sources", Some(json!({"driver": "misbehave", "name": "Prise", "config": "schedules"}))).await;
+    assert_eq!(code, 201, "{s}");
+    let id = s["id"].as_i64().unwrap();
+    let path = format!("/api/sources/{id}/schedules");
+    let (code, list) = call("GET", &path, None).await;
+    assert_eq!((code, list[0]["editable"].clone(), list[0]["trait"].clone()), (200, json!(false), json!("switch.relay")), "{list}");
+
+    let morning = json!({"name": "Matin", "days": [5, 1, 1], "time": "07:30", "references": ["plug"], "trait": "switch.relay", "action": "set", "params": {"on": true}, "end": {"time": "08:30", "params": {"on": false}}});
+    let (code, list) = call("POST", &path, Some(morning.clone())).await;
+    assert_eq!(code, 200, "{list}");
+    let created = list.as_array().unwrap().iter().find(|s| s["name"] == "Matin").unwrap().clone();
+    assert_eq!((created["days"].clone(), created["end"]["params"].clone()), (json!([1, 5]), json!({"on": false})));
+    // What the catalog does not know, or a device of another source, is refused before the hardware.
+    let mut bad = morning.clone();
+    bad["params"] = json!({"on": "yes"});
+    assert_eq!(call("POST", &path, Some(bad)).await.0, 400);
+    let mut bad = morning.clone();
+    bad["references"] = json!(["other"]);
+    assert_eq!(call("POST", &path, Some(bad)).await.0, 400);
+    let mut bad = morning.clone();
+    bad["time"] = json!("25:00");
+    assert_eq!(call("POST", &path, Some(bad)).await.0, 400);
+    let mut bad = morning.clone();
+    bad["action"] = json!("explode");
+    assert_eq!(call("POST", &path, Some(bad)).await.0, 422);
+
+    let sid = created["id"].as_str().unwrap();
+    let mut later = morning.clone();
+    later["time"] = json!("08:00");
+    let (code, list) = call("PUT", &format!("{path}/{sid}"), Some(later)).await;
+    assert_eq!((code, list.as_array().unwrap().iter().find(|s| s["id"] == sid).unwrap()["time"].clone()), (200, json!("08:00")));
+    assert_eq!(call("PUT", &format!("{path}/app"), Some(morning)).await.0, 409, "kept by its app");
+    let (code, list) = call("DELETE", &format!("{path}/{sid}"), None).await;
+    assert_eq!((code, list.as_array().unwrap().len()), (200, 1));
+}
+
 /// The Shelly module in WebAssembly (lot L8): it replaces the driver compiled in, drives the relay,
 /// and the WebSocket it keeps with the Shelly makes a change done by hand show at once (Breezone
 /// reads the source again when the Shelly tells it, without waiting for the next reading).
@@ -642,6 +715,8 @@ async fn the_shipped_modules_load() {
         ("renson", json!({"host": "192.168.1.70"})),
         // A service: loaded, nothing to open.
         ("rte", json!(null)),
+        ("weather", json!(null)),
+        ("linky", json!(null)),
         ("forecast_solar", json!({"kwp": 4.5, "declination": 30, "azimuth": 0, "latitude": 43.5, "longitude": 1.5, "timezone": "Europe/Paris"})),
     ];
     let host = breezone_server::capabilities::Host::local();

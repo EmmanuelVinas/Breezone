@@ -290,6 +290,16 @@ serveur qui a une ville.
 
 `GET /api/sources/{id}/diagnostic` 👑 : ce que le matériel dit de lui-même, brut (base d'un accessoire HomeKit…), avec ce que Breezone en lit ; sans secret.
 
+**Programmations du matériel** 👑 (modules dont le manifeste liste `schedules` dans `optional_calls`) : le
+matériel les garde et les exécute lui-même ; Breezone les montre et les modifie.
+
+| Méthode | Chemin | Description |
+|---|---|---|
+| GET 👑 | `/api/sources/{id}/schedules` | `[{id, name, enabled, days, time, references, trait, action, params, end:{time, params} \| null, editable, note}]` (`days` : jours ISO, 1 lundi … 7 dimanche ; `time` : `HH:MM` ; `editable` faux : seule l'application du fabricant peut la changer, `note` dit pourquoi) |
+| POST 👑 | `/api/sources/{id}/schedules` | `{name, enabled?, days, time, references, trait, action, params, end?}` → la liste. Les appareils doivent être de la source et avoir le trait ; l'action et ses paramètres (et ceux de la fin) sont vérifiés contre le catalogue (400, 422 inconnue) |
+| PUT 👑 | `/api/sources/{id}/schedules/{schedule_id}` | même corps → la liste ; 409 si elle n'est pas modifiable ici |
+| DELETE 👑 | `/api/sources/{id}/schedules/{schedule_id}` | → la liste |
+
 Une **source** est un matériel lu par un **pilote** (ADR 0013) : par exemple un Shelly à
 192.168.1.40. Ses appareils apparaissent dans `/api/devices`.
 

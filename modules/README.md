@@ -62,6 +62,10 @@ provided, types, bounds, required fields). `modules/tasmota/src/lib.rs` has exam
   appairage when the manifest's `pairing` is `button` or `code`: `Driver::pair` in the SDK,
   `modules/hue/` as an example). Subscriptions take `ws://`, `wss://` (a device of the local
   network may have its own certificate) and `tcp://`.
+- Hardware that keeps schedules of its own lists `schedules` in `optional_calls` and implements
+  `Driver::schedules`, `save_schedule` and `delete_schedule` (days, time, devices, an action of a
+  trait with its parameters, an optional end; `editable: false` with a `note` for those only its
+  app can change). Breezone checks the devices and the action against the catalog first.
 - A module of the `service` role implements `Service` (`check` of its account, `query` of the
   contracts of its `provides.services`, as `server/contracts/services/` describes them) and ends
   with `module!(service: MyService)` (or `module!(driver: MyDriver, service: MyService)`). Its

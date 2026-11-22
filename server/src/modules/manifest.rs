@@ -191,7 +191,7 @@ impl Default for Network {
 pub const FILLS: &[&str] = &["home.latitude", "home.longitude", "server.timezone"];
 
 /// The calls of the driver interface a module may answer beyond `describe`, `read` and `act`.
-pub const OPTIONAL_CALLS: &[&str] = &["rooms", "scenes", "picture", "forecast", "listen", "unlock", "diagnostic", "probe"];
+pub const OPTIONAL_CALLS: &[&str] = &["rooms", "scenes", "picture", "forecast", "listen", "unlock", "diagnostic", "probe", "schedules"];
 
 /// A trait or a contract a module gives: its name, major version and lowest revision used.
 #[derive(Debug, Clone, PartialEq, Eq)]
