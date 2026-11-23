@@ -265,16 +265,29 @@ async fn the_measures_have_a_history_and_make_the_energy_of_the_home() {
 
     // Its counter went up: energy drawn from the grid today, used by the home. It stops counting
     // and a history point records its last value, so the day and the days read the same energy.
-    // Read a few times now (its module reads every 5 s), then it stops counting.
-    for _ in 0..3 {
+    // Read now (its module reads every 5 s) until the day has energy drawn from the grid, then it
+    // stops counting and a history point records its last value: until two readings of the days
+    // agree. Bounded in time, whatever the speed of the machine.
+    let days_now = || async { server.call("GET", "/api/energy/days?days=3", t, None).await.1 };
+    let mut days = Value::Null;
+    for _ in 0..60 {
         server.state.drivers.poll(source).await;
-        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        days = days_now().await;
+        if days[2]["imported"].as_f64().is_some_and(|e| e > 0.0) {
+            break;
+        }
     }
     step.store(0, Ordering::SeqCst);
     server.state.drivers.poll(source).await;
-    // A history point with its last value (one a second; more time when the machine is busy).
-    tokio::time::sleep(std::time::Duration::from_millis(3000)).await;
-    let (_, days) = server.call("GET", "/api/energy/days?days=3", t, None).await;
+    for _ in 0..60 {
+        tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
+        let again = days_now().await;
+        if again == days {
+            break;
+        }
+        days = again;
+    }
     let days = days.as_array().unwrap();
     assert_eq!(days.len(), 3);
     let today = days.last().unwrap();
