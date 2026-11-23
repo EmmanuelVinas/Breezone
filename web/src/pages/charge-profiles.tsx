@@ -678,7 +678,7 @@ function ProfileForm({
             {saved?.automations.map((name) => (
               <Link
                 key={name}
-                to="/routines"
+                to="/programmations"
                 className="flex items-center gap-2 rounded-2xl bg-muted/60 px-3 py-2.5 hover:bg-muted"
               >
                 <Workflow className="size-4 text-muted-foreground" />

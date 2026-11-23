@@ -417,6 +417,24 @@ pub(super) async fn execute(state: &AppState, row: &AutomationRow, steps: &[Step
             Step::ChargerProfile { device_id, profile_id } => {
                 p.out.push(done(what, crate::charging::set_profile(state, *device_id, *profile_id).await));
             }
+            Step::Surplus { device_id, enabled } => {
+                let r = async {
+                    if !db::set_surplus_load_enabled(&state.db, *device_id, *enabled).await? {
+                        return Err(ApiError::not_found(crate::text!(
+                            "cet appareil n'est plus dans la liste du surplus solaire",
+                            "this device is no longer in the list of the solar surplus",
+                            "este dispositivo ya no está en la lista del excedente solar"
+                        )));
+                    }
+                    // Given back to the surplus: it steers it again at once.
+                    if *enabled {
+                        state.surplus.release(*device_id).await;
+                    }
+                    Ok(())
+                }
+                .await;
+                p.out.push(done(what, r));
+            }
             Step::ChargerNow { device_id, kw, until, kwh } => {
                 let r = match ctx.device(*device_id) {
                     Some(d) => {

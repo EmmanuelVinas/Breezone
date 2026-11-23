@@ -62,7 +62,14 @@ pub struct Manifest {
     /// Its account is an OAuth 2 one: Breezone renews its access itself (`host.access-token`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub oauth: Option<OAuth>,
+    /// What the automations may read from it, as the fields of a state (the service contract
+    /// `conditions@1`: `query("conditions@1", "read")` gives their values).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub conditions: Vec<crate::traits::Field>,
 }
+
+/// The service contract of the conditions a module brings to the automations.
+pub const CONDITIONS: &str = "conditions@1";
 
 /// How Breezone renews the access of an OAuth 2 account: the refresh token (a field of the form,
 /// `refresh_token`, with `client_id` and `client_secret`) traded at `token_url`.
@@ -319,6 +326,29 @@ impl Manifest {
         }
         if self.has(Role::Service) && self.provides.services.is_empty() {
             fail("a service provides service contracts".into());
+        }
+        let gives_conditions = self.provides.services.iter().any(|s| s.split_once('@').is_some_and(|(n, v)| n == "conditions" && v.starts_with('1')));
+        if gives_conditions == self.conditions.is_empty() {
+            fail("conditions: listed, with the service contract conditions@1.0, or neither".into());
+        }
+        let mut seen = std::collections::HashSet::new();
+        for f in &self.conditions {
+            if !seen.insert(&f.name) || f.name.is_empty() || !f.name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_') {
+                fail(format!("conditions.{}: a name of its own, in lowercase", f.name));
+            }
+            if !["bool", "enum", "integer", "number"].contains(&f.kind.as_str()) {
+                fail(format!("conditions.{}: bool, enum, integer or number, not {}", f.name, f.kind));
+            }
+            let mut labelled: Vec<&String> = f.value_labels.keys().collect();
+            let mut values: Vec<&String> = f.values.iter().collect();
+            labelled.sort();
+            values.sort();
+            if (f.kind == "enum") == f.values.is_empty() || labelled != values || !f.value_labels.values().all(label_ok) {
+                fail(format!("conditions.{}: an enum lists its values, each with its labels", f.name));
+            }
+            if !label_ok(&f.label) {
+                fail(format!("conditions.{}: a label is missing", f.name));
+            }
         }
         let mut names = std::collections::HashSet::new();
         for f in &self.config {

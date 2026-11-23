@@ -94,6 +94,13 @@ provided, types, bounds, required fields). `modules/tasmota/src/lib.rs` has exam
   with `module!(service: MyService)` (or `module!(driver: MyDriver, service: MyService)`). Its
   account's fields (the `config` of its manifest) come from `host::account("<its id>")`; Breezone
   checks each answer against the contract and keeps the caches. `modules/rte/` is an example.
+- Conditions for the automations: a service module lists in its manifest `conditions`, fields
+  like those of a trait's state (`bool`, `enum` with its `values` and `value_labels`, `integer`,
+  `number` with its `unit`), adds `conditions@1.0` to `provides.services`, and answers
+  `query("conditions@1", "read")` with an object of their values (a field it cannot tell now is
+  left out). Breezone reads it every 5 minutes (`read_every_s` to change it) and offers its fields
+  to the rules: the yes/no and the choices as conditions and triggers, the numbers as measures
+  with a threshold. `modules/rte/` gives today's and tomorrow's Tempo colour and the days left.
 - The network scan: a module lists `identify` in `optional_calls` and implements
   `Driver::identify(host, announced)`, which gives a `Found` (model, note, device id, firmware,
   MAC, flags for its appairage, whether it is supported). It is asked for an address where one of

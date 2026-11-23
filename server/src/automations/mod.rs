@@ -149,6 +149,15 @@ pub enum Measure {
     Tempo {
         day: TempoDay,
     },
+    /// A number a module tells (a field of the `conditions` of its manifest).
+    Module {
+        module: String,
+        field: String,
+    },
+}
+
+fn today() -> TempoDay {
+    TempoDay::Today
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -248,6 +257,23 @@ pub enum Trigger {
     },
     /// The first one arrives home (`home`), or the last one leaves.
     Presence { home: bool },
+    /// A yes/no or a choice a module tells (a field of the `conditions` of its manifest) becomes
+    /// `value`, and stays so `for_minutes`.
+    Module {
+        module: String,
+        field: String,
+        value: Value,
+        #[serde(default)]
+        for_minutes: i64,
+    },
+    /// The tariff of the home comes into a stretch: a kind of day ("Jour bleu"), a slot ("HC"),
+    /// or both (ids and names of the tariff; at least one).
+    Tariff {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        profile: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        slot: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -288,6 +314,22 @@ pub enum Condition {
     /// Someone is at home (`home`), or nobody.
     Presence {
         home: bool,
+    },
+    /// A yes/no or a choice a module tells is `value` ("tomorrow is red", from the module of RTE).
+    Module {
+        module: String,
+        field: String,
+        value: Value,
+    },
+    /// The tariff of the home is in a stretch: today, a kind of day and/or a slot; tomorrow, a
+    /// kind of day (known once its colour is announced, for a calendar that follows them).
+    Tariff {
+        #[serde(default = "today")]
+        day: TempoDay,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        profile: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        slot: Option<String>,
     },
     /// Conditions joined the other way ("A and (B or C)"): one level, no group in a group.
     Group {
@@ -405,6 +447,12 @@ pub enum Step {
         device_id: i64,
         #[serde(default)]
         profile_id: Option<i64>,
+    },
+    /// A device of the list of the solar surplus follows it (`enabled`), or no longer does (it is
+    /// then left as it is).
+    Surplus {
+        device_id: i64,
+        enabled: bool,
     },
     /// A charger charges now, without a break: up to `kw` (its maximum without), until "HH:MM" or
     /// `kwh` more, else until it is unplugged.
@@ -527,7 +575,36 @@ impl Automation {
         triggers.chain(conditions).collect()
     }
 
-    /// The devices the rule drives.
+    /// The modules whose conditions the rule reads (its triggers, conditions and waits).
+    pub fn read_modules(&self) -> Vec<String> {
+        let of_measure = |m: &Measure| match m {
+            Measure::Module { module, .. } => Some(module.clone()),
+            _ => None,
+        };
+        let of_condition = |c: &Condition| match c {
+            Condition::Module { module, .. } => Some(module.clone()),
+            Condition::Measure { measure, .. } => of_measure(measure),
+            _ => None,
+        };
+        let triggers = self.triggers.iter().filter_map(|t| match t {
+            Trigger::Module { module, .. } => Some(module.clone()),
+            Trigger::Measure { measure, .. } => of_measure(measure),
+            _ => None,
+        });
+        let waits = self.steps().filter_map(|s| match s {
+            Step::WaitUntil { condition, .. } => Some(condition.as_ref()),
+            _ => None,
+        });
+        let conditions = self.leaves().into_iter().chain(waits.flat_map(|c| match c {
+            Condition::Group { conditions, .. } => conditions.iter().collect::<Vec<_>>(),
+            other => vec![other],
+        }));
+        let mut out: Vec<String> = triggers.chain(conditions.filter_map(of_condition)).collect();
+        out.sort();
+        out.dedup();
+        out
+    }
+
     /// The devices it drives, those of its groups included (as they are now).
     pub fn expanded_devices(&self, ctx: &Context) -> Vec<i64> {
         let mut ids: Vec<i64> = ctx
@@ -636,6 +713,17 @@ pub struct Context {
     pub tempo: [Option<f64>; 2],
     /// Charging profiles, by id.
     pub charge_profiles: HashMap<i64, String>,
+    /// The tariff of the home now: its kind of day and its slot (ids, slot names).
+    pub tariff_now: Option<(String, String)>,
+    /// The kind of day of the tariff tomorrow.
+    pub tariff_tomorrow: Option<String>,
+    /// The kinds of day of the tariff in force (id, name), and the names of its slots.
+    pub tariff_profiles: Vec<(String, String)>,
+    pub tariff_slots: Vec<String>,
+    /// The devices of the list of the solar surplus.
+    pub surplus_loads: Vec<i64>,
+    /// What the modules tell for the automations (`conditions` of their manifests), by module.
+    pub module_values: HashMap<String, Map<String, Value>>,
 }
 
 impl Context {
@@ -668,6 +756,12 @@ impl Context {
             },
             tempo: [None, None],
             charge_profiles: db::list_charge_profiles(&state.db).await?.into_iter().map(|p| (p.id, p.name)).collect(),
+            tariff_now: None,
+            tariff_tomorrow: None,
+            tariff_profiles: vec![],
+            tariff_slots: vec![],
+            surplus_loads: db::list_surplus_loads(&state.db).await?.into_iter().map(|l| l.device_id).collect(),
+            module_values: crate::modules::conditions::values(),
         }
         .with_prices(state)
         .await?
@@ -681,7 +775,19 @@ impl Context {
         let color = |d: NaiveDate| known.get(&d).copied();
         // The prices of the home (the first installation of this server).
         let tariffs = crate::api::price::tariffs(state, None).await?;
-        self.price = crate::price::price_at(&tariffs, &color, self.tz, self.now).map(|p| p.price);
+        let at = crate::price::price_at(&tariffs, &color, self.tz, self.now);
+        self.price = at.as_ref().map(|p| p.price);
+        if let Some(at) = at {
+            let day = NaiveDate::parse_from_str(&at.day, "%Y-%m-%d").unwrap_or(today);
+            self.tariff_tomorrow = crate::price::profile_on(&tariffs, &color, day + chrono::Days::new(1)).map(|(id, _)| id);
+            self.tariff_now = Some((at.profile, at.slot));
+        }
+        if let Some(t) = crate::price::current(&tariffs) {
+            self.tariff_profiles = t.profiles.iter().map(|p| (p.id.clone(), p.name.clone())).collect();
+            self.tariff_slots = t.profiles.iter().flat_map(|p| p.slots.iter().map(|s| s.name.clone())).filter(|n| !n.is_empty()).collect();
+            self.tariff_slots.sort();
+            self.tariff_slots.dedup();
+        }
         let code = |d: NaiveDate| {
             color(d).map(|c| match c {
                 crate::price::DayColor::Blue => 1.0,
@@ -691,6 +797,25 @@ impl Context {
         };
         self.tempo = [code(today), code(today + chrono::Days::new(1))];
         Ok(self)
+    }
+
+    /// What a module tells now (`None`: not read, or not told).
+    pub(super) fn module_value(&self, module: &str, field: &str) -> Option<&Value> {
+        self.module_values.get(module)?.get(field)
+    }
+
+    /// The tariff is in this stretch (`None`: no tariff, or tomorrow not known yet).
+    fn in_tariff(&self, day: TempoDay, profile: Option<&str>, slot: Option<&str>) -> Option<bool> {
+        match day {
+            TempoDay::Today => {
+                let (p, s) = self.tariff_now.as_ref()?;
+                Some(profile.is_none_or(|x| x == p) && slot.is_none_or(|x| x == s))
+            }
+            TempoDay::Tomorrow => {
+                let tomorrow = self.tariff_tomorrow.as_deref()?;
+                Some(profile.is_none_or(|x| x == tomorrow))
+            }
+        }
     }
 
     /// The home as seen from an installation (its sun, its weather), or from the home.
@@ -776,6 +901,7 @@ impl Context {
             }
             Measure::Price => self.price,
             Measure::Tempo { day } => self.tempo[*day as usize],
+            Measure::Module { module, field } => self.module_value(module, field)?.as_f64(),
         }
     }
 
@@ -796,6 +922,7 @@ impl Context {
             ),
             Measure::Price => Some(format!("{}/kWh", if self.currency == "EUR" { "€" } else { self.currency.as_str() })),
             Measure::Tempo { .. } => None,
+            Measure::Module { module, field } => crate::modules::conditions::field(module, field)?.unit.clone(),
         }
     }
 
@@ -881,7 +1008,7 @@ impl Trigger {
     /// It holds for a while (a measure, a state, the sun on a façade, presence): it can tell when
     /// it is over.
     pub fn lasts(&self) -> bool {
-        matches!(self, Trigger::Measure { .. } | Trigger::State { .. } | Trigger::Facade { .. } | Trigger::Presence { .. })
+        matches!(self, Trigger::Measure { .. } | Trigger::State { .. } | Trigger::Facade { .. } | Trigger::Presence { .. } | Trigger::Tariff { .. } | Trigger::Module { .. })
     }
 
     /// `None`: cannot be told now (a device that does not answer).
@@ -903,6 +1030,14 @@ impl Trigger {
             Trigger::Presence { home } => {
                 let holds = ctx.presence? == *home;
                 Look::Holds { holds, released: !holds, edge: true, for_minutes: 0 }
+            }
+            Trigger::Tariff { profile, slot } => {
+                let holds = ctx.in_tariff(TempoDay::Today, profile.as_deref(), slot.as_deref())?;
+                Look::Holds { holds, released: !holds, edge: true, for_minutes: 0 }
+            }
+            Trigger::Module { module, field, value, for_minutes } => {
+                let holds = ctx.module_value(module, field)? == value;
+                Look::Holds { holds, released: !holds, edge: true, for_minutes: *for_minutes }
             }
             Trigger::Button { device_id, button, press } => {
                 let state = &ctx.device(*device_id)?.state;
@@ -938,6 +1073,8 @@ impl Condition {
             }
             Condition::Facade { facing } => ctx.on_facade(*facing),
             Condition::Presence { home } => ctx.presence.map(|p| p == *home),
+            Condition::Tariff { day, profile, slot } => ctx.in_tariff(*day, profile.as_deref(), slot.as_deref()),
+            Condition::Module { module, field, value } => ctx.module_value(module, field).map(|v| v == value),
             Condition::Group { joined, conditions } => joined.join(conditions.iter().map(|c| c.met(ctx))),
         }
     }
@@ -1006,6 +1143,12 @@ mod tests {
             currency: "EUR".into(),
             tempo: [Some(1.0), Some(3.0)],
             charge_profiles: HashMap::from([(1, "Nuit bleue".to_string())]),
+            tariff_now: Some(("blue".into(), "HC".into())),
+            tariff_tomorrow: Some("red".into()),
+            tariff_profiles: vec![("blue".into(), "Jour bleu".into()), ("red".into(), "Jour rouge".into())],
+            tariff_slots: vec!["HC".into(), "HP".into()],
+            surplus_loads: vec![1],
+            module_values: HashMap::from([("rte".to_string(), json!({"tomorrow": "red", "red_left": 12}).as_object().unwrap().clone())]),
         }
     }
 
@@ -1347,6 +1490,15 @@ mod tests {
         assert!(check(|v| v["actions"] = json!([{"kind": "device", "device_id": 2, "trait": "ev.charger", "action": "start", "params": {"limit": 99}}])).is_err());
         assert!(check(|v| v["actions"] = json!([{"kind": "device", "device_id": 1, "trait": "climate.zone", "action": "set", "params": {}}])).is_err(), "changes nothing");
         assert!(check(|v| v["actions"] = json!([{"kind": "device", "device_id": 1, "trait": "ev.charger", "action": "start"}])).is_err(), "a zone is not a charger");
+        // A device of the surplus list.
+        assert!(check(|v| v["actions"] = json!([{"kind": "surplus", "device_id": 1, "enabled": false}])).is_ok());
+        assert!(check(|v| v["actions"] = json!([{"kind": "surplus", "device_id": 2, "enabled": true}])).is_err(), "not in the list");
+        // A stretch of the tariff it has; tomorrow, a kind of day only.
+        assert!(check(|v| v["conditions"] = json!([{"kind": "tariff", "profile": "blue", "slot": "HC"}])).is_ok());
+        assert!(check(|v| v["triggers"] = json!([{"kind": "tariff", "slot": "HC"}])).is_ok());
+        assert!(check(|v| v["conditions"] = json!([{"kind": "tariff", "day": "tomorrow", "slot": "HC"}])).is_err());
+        assert!(check(|v| v["conditions"] = json!([{"kind": "tariff", "profile": "white"}])).is_err(), "not in the tariff");
+        assert!(check(|v| v["conditions"] = json!([{"kind": "tariff"}])).is_err(), "nothing chosen");
         // The actions of a charger: a profile that exists, sensible powers and times, a charger.
         assert!(check(|v| v["actions"] = json!([{"kind": "charger_profile", "device_id": 2, "profile_id": 1}])).is_ok());
         assert!(check(|v| v["actions"] = json!([{"kind": "charger_profile", "device_id": 2, "profile_id": 7}])).is_err(), "unknown profile");
@@ -1553,6 +1705,37 @@ mod tests {
     }
 
     #[test]
+    fn the_stretches_of_the_tariff() {
+        let c = ctx(0, 0.0, 20.0);
+        let cond = |day, profile: Option<&str>, slot: Option<&str>| Condition::Tariff { day, profile: profile.map(Into::into), slot: slot.map(Into::into) };
+        // Now: a blue day, off-peak hours; tomorrow: red.
+        assert_eq!(cond(TempoDay::Today, Some("blue"), Some("HC")).met(&c), Some(true));
+        assert_eq!(cond(TempoDay::Today, None, Some("HP")).met(&c), Some(false));
+        assert_eq!(cond(TempoDay::Tomorrow, Some("red"), None).met(&c), Some(true));
+        let unknown = Context { tariff_tomorrow: None, ..c.clone() };
+        assert_eq!(cond(TempoDay::Tomorrow, Some("red"), None).met(&unknown), None, "tomorrow not announced yet");
+        assert_eq!(c.describe_condition(&cond(TempoDay::Today, Some("blue"), Some("HC"))).fr, "le tarif est en Jour bleu · HC");
+        assert_eq!(c.describe_condition(&cond(TempoDay::Tomorrow, Some("red"), None)).fr, "le tarif de demain est en Jour rouge");
+        let starts = Trigger::Tariff { profile: None, slot: Some("HC".into()) };
+        assert_eq!(c.describe_trigger(&starts).fr, "quand le tarif passe en HC");
+        assert!(starts.lasts());
+    }
+
+    #[test]
+    fn what_a_module_tells() {
+        let c = ctx(0, 0.0, 20.0);
+        let red = Condition::Module { module: "rte".into(), field: "tomorrow".into(), value: json!("red") };
+        assert_eq!(red.met(&c), Some(true));
+        assert_eq!(Condition::Module { module: "rte".into(), field: "tomorrow".into(), value: json!("blue") }.met(&c), Some(false));
+        assert_eq!(Condition::Module { module: "rte".into(), field: "today".into(), value: json!("blue") }.met(&c), None, "not told: the rule waits");
+        assert_eq!(c.read(&Measure::Module { module: "rte".into(), field: "red_left".into() }), Some(12.0));
+        // Without the module installed, its words are its names.
+        assert_eq!(c.describe_condition(&red).fr, "rte · tomorrow : red");
+        let becomes = Trigger::Module { module: "rte".into(), field: "tomorrow".into(), value: json!("red"), for_minutes: 0 };
+        assert!(becomes.lasts());
+    }
+
+    #[test]
     fn the_actions_of_a_charger_read_like_a_sentence() {
         let c = ctx(0, 0.0, 20.0);
         assert_eq!(c.describe_step(&Step::ChargerProfile { device_id: 2, profile_id: Some(1) }).fr, "Borne : profil « Nuit bleue »");
@@ -1560,6 +1743,7 @@ mod tests {
         let now = Step::ChargerNow { device_id: 2, kw: Some(7.4), until: Some("06:00".into()), kwh: None };
         assert_eq!(c.describe_step(&now).fr, "Borne : charger maintenant jusqu'à 7,4 kW, jusqu'à 06:00");
         assert_eq!(c.describe_step(&now).en, "Borne: charge now up to 7.4 kW, until 06:00");
+        assert_eq!(c.describe_step(&Step::Surplus { device_id: 1, enabled: false }).fr, "Salon : ne plus suivre le surplus solaire");
         let full = Step::ChargerNow { device_id: 2, kw: None, until: None, kwh: Some(10.0) };
         assert_eq!(c.describe_step(&full).fr, "Borne : charger maintenant au maximum, +10 kWh");
     }

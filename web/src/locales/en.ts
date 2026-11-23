@@ -2000,8 +2000,8 @@ const en: Record<string, string> = {
   "Rafraîchir à (°C)": "Cool to (°C)",
   "quand il fait plus de (°C dehors)": "when it is above (°C outside)",
   "Puissance estimée (W)": "Estimated power (W)",
-  "Aucun appareil ne suit le surplus. Ajoutez la borne, un chauffe-eau sur une prise pilotée, ou une zone de climatisation.":
-    "No device follows the surplus. Add the charger, a water heater on a smart plug, or a zone of the air conditioning.",
+  "Aucun appareil ne suit le surplus. Ajoutez un chauffe-eau sur une prise pilotée, ou une zone de climatisation ; la borne le suit par son profil de recharge (« Solaire »).":
+    "No device follows the surplus. Add a water heater on a smart plug, or a zone of the air conditioning; the charger follows it by its charging profile (“Solaire”).",
   "Aussi piloté par {names} : les deux se contrediraient.":
     "Also driven by {names}: the two would contradict each other.",
   "Tourne tout seul, par ordre de priorité. Il se règle dans Automatismes ; un automatisme ne doit pas piloter les mêmes appareils.":
@@ -2258,6 +2258,20 @@ const en: Record<string, string> = {
   "Programmation de son appli": "Schedule of its app",
   "Les heures de charge réglées dans l'appli de la borne : coupez-la pour que seul le profil de Breezone décide.":
     "The charging hours set in the charger's app: turn it off so that only the Breezone profile decides.",
+  "Une plage du tarif d'électricité": "A stretch of the electricity tariff",
+  "Le tarif est en": "The tariff is in",
+  "Le tarif de demain est en": "Tomorrow's tariff is in",
+  "suit le surplus solaire": "follows the solar surplus",
+  "ne suit plus le surplus solaire": "no longer follows the solar surplus",
+  "Surplus solaire : activer ou couper": "Solar surplus: turn on or off",
+  "tout jour": "any day",
+  "Type de jour": "Kind of day",
+  "toute la journée": "all day",
+  "Le tarif change de plage": "The tariff changes stretch",
+  "passe en": "comes into",
+  "Une condition d'un module": "A condition of a module",
+  "Condition indisponible": "Condition unavailable",
+  "Un module change d'état": "A module changes state",
 }
 
 export default en

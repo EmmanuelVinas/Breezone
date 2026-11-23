@@ -238,6 +238,7 @@ pub fn spawn_background(state: &AppState) {
     tokio::spawn(state.updater.clone().run_checks());
     tokio::spawn(state.weather.clone().run());
     tokio::spawn(tempo::run_loop(state.clone()));
+    tokio::spawn(modules::conditions::run_loop(state.clone()));
     tokio::spawn(accounts::linky::run_loop(state.clone()));
     {
         let state = state.clone();

@@ -1,13 +1,134 @@
 {
   "id": "rte",
-  "version": "1.0.0",
-  "name": {"fr": "RTE (couleur des jours Tempo)", "en": "RTE (colour of the Tempo days)", "es": "RTE (color de los días Tempo)"},
-  "roles": ["account", "service"],
-  "requires": {"api": "^1.0"},
-  "provides": {"services": ["tariff.day_color@1.0"]},
-  "config": [
-    {"name": "client_id", "type": "string", "label": {"fr": "Identifiant client", "en": "Client id", "es": "Identificador de cliente"}},
-    {"name": "client_secret", "type": "password", "label": {"fr": "Secret client", "en": "Client secret", "es": "Secreto de cliente"}}
+  "version": "1.1.0",
+  "name": {
+    "fr": "RTE (couleur des jours Tempo)",
+    "en": "RTE (colour of the Tempo days)",
+    "es": "RTE (color de los días Tempo)"
+  },
+  "roles": [
+    "account",
+    "service"
   ],
-  "permissions": {"network": {"lan": false, "hosts": ["digital.iservices.rte-france.com", "www.api-couleur-tempo.fr"]}}
+  "requires": {
+    "api": "^1.0"
+  },
+  "provides": {
+    "services": [
+      "tariff.day_color@1.0",
+      "conditions@1.0"
+    ]
+  },
+  "config": [
+    {
+      "name": "client_id",
+      "type": "string",
+      "label": {
+        "fr": "Identifiant client",
+        "en": "Client id",
+        "es": "Identificador de cliente"
+      }
+    },
+    {
+      "name": "client_secret",
+      "type": "password",
+      "label": {
+        "fr": "Secret client",
+        "en": "Client secret",
+        "es": "Secreto de cliente"
+      }
+    }
+  ],
+  "permissions": {
+    "network": {
+      "lan": false,
+      "hosts": [
+        "digital.iservices.rte-france.com",
+        "www.api-couleur-tempo.fr"
+      ]
+    }
+  },
+  "read_every_s": 1800,
+  "conditions": [
+    {
+      "name": "today",
+      "type": "enum",
+      "values": [
+        "blue",
+        "white",
+        "red"
+      ],
+      "value_labels": {
+        "blue": {
+          "fr": "Bleu",
+          "en": "Blue",
+          "es": "Azul"
+        },
+        "white": {
+          "fr": "Blanc",
+          "en": "White",
+          "es": "Blanco"
+        },
+        "red": {
+          "fr": "Rouge",
+          "en": "Red",
+          "es": "Rojo"
+        }
+      },
+      "label": {
+        "fr": "Couleur Tempo du jour",
+        "en": "Today's Tempo colour",
+        "es": "Color Tempo de hoy"
+      }
+    },
+    {
+      "name": "tomorrow",
+      "type": "enum",
+      "values": [
+        "blue",
+        "white",
+        "red"
+      ],
+      "value_labels": {
+        "blue": {
+          "fr": "Bleu",
+          "en": "Blue",
+          "es": "Azul"
+        },
+        "white": {
+          "fr": "Blanc",
+          "en": "White",
+          "es": "Blanco"
+        },
+        "red": {
+          "fr": "Rouge",
+          "en": "Red",
+          "es": "Rojo"
+        }
+      },
+      "label": {
+        "fr": "Couleur Tempo de demain",
+        "en": "Tomorrow's Tempo colour",
+        "es": "Color Tempo de mañana"
+      }
+    },
+    {
+      "name": "red_left",
+      "type": "integer",
+      "label": {
+        "fr": "Jours rouges restants",
+        "en": "Red days left",
+        "es": "Días rojos restantes"
+      }
+    },
+    {
+      "name": "white_left",
+      "type": "integer",
+      "label": {
+        "fr": "Jours blancs restants",
+        "en": "White days left",
+        "es": "Días blancos restantes"
+      }
+    }
+  ]
 }

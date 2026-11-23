@@ -2024,8 +2024,8 @@ const es: Record<string, string> = {
   "Rafraîchir à (°C)": "Enfriar a (°C)",
   "quand il fait plus de (°C dehors)": "cuando hace más de (°C fuera)",
   "Puissance estimée (W)": "Potencia estimada (W)",
-  "Aucun appareil ne suit le surplus. Ajoutez la borne, un chauffe-eau sur une prise pilotée, ou une zone de climatisation.":
-    "Ningún aparato sigue el excedente. Añada el cargador, un calentador en un enchufe pilotado o una zona de climatización.",
+  "Aucun appareil ne suit le surplus. Ajoutez un chauffe-eau sur une prise pilotée, ou une zone de climatisation ; la borne le suit par son profil de recharge (« Solaire »).":
+    "Ningún aparato sigue el excedente. Añada un calentador en un enchufe pilotado, o una zona de climatización; el cargador lo sigue con su perfil de carga («Solaire»).",
   "Aussi piloté par {names} : les deux se contrediraient.":
     "También pilotado por {names}: ambos se contradirían.",
   "Tourne tout seul, par ordre de priorité. Il se règle dans Automatismes ; un automatisme ne doit pas piloter les mêmes appareils.":
@@ -2285,6 +2285,21 @@ const es: Record<string, string> = {
   "Programmation de son appli": "Programación de su app",
   "Les heures de charge réglées dans l'appli de la borne : coupez-la pour que seul le profil de Breezone décide.":
     "Las horas de carga ajustadas en la app del cargador: desactívela para que solo decida el perfil de Breezone.",
+  "Une plage du tarif d'électricité": "Una franja de la tarifa eléctrica",
+  "Le tarif est en": "La tarifa está en",
+  "Le tarif de demain est en": "La tarifa de mañana está en",
+  "suit le surplus solaire": "sigue el excedente solar",
+  "ne suit plus le surplus solaire": "deja de seguir el excedente solar",
+  "Surplus solaire : activer ou couper":
+    "Excedente solar: activar o desactivar",
+  "tout jour": "cualquier día",
+  "Type de jour": "Tipo de día",
+  "toute la journée": "todo el día",
+  "Le tarif change de plage": "La tarifa cambia de franja",
+  "passe en": "pasa a",
+  "Une condition d'un module": "Una condición de un módulo",
+  "Condition indisponible": "Condición no disponible",
+  "Un module change d'état": "Un módulo cambia de estado",
 }
 
 export default es

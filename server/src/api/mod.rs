@@ -99,6 +99,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/automations/unreadable", get(automations::unreadable))
         .route("/api/automations/settings", get(automations::settings).put(automations::save_settings))
         .route("/api/automations/notify-test", post(automations::notify_test))
+        .route("/api/automations/conditions", get(automations::module_conditions))
         .route("/api/presence", get(automations::presence).put(automations::set_presence))
         // Timers and Airzone routines
         .route("/api/timers", get(timers::list).post(timers::create))

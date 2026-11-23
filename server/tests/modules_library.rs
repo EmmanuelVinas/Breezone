@@ -43,6 +43,10 @@ fn manifest_of(id: &str, version: &str, api: &str) -> breezone_server::modules::
     m.version = version.into();
     m.requires.api = api.into();
     m.requires.breezone = None;
+    // A driver only: the example also shows the conditions of a service.
+    m.roles.retain(|r| *r != breezone_server::modules::manifest::Role::Service);
+    m.provides.services.clear();
+    m.conditions.clear();
     m
 }
 

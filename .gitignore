@@ -45,3 +45,6 @@ docs/roadmap/
 
 # Release guide and signing key (private): kept local, the workflow uses the BREEZONE_RELEASE_SIGNING_KEY secret
 docs/release/
+
+# Tests to carry out on the real installation (local notes)
+docs/tests/

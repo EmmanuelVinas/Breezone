@@ -371,6 +371,11 @@ pub struct PresenceView {
     pub people: Vec<db::Presence>,
 }
 
+/// What the modules bring to the rules (`conditions` of their manifests), with their values now.
+pub async fn module_conditions(State(state): State<AppState>, _user: AuthUser) -> Json<Vec<crate::modules::conditions::ModuleConditions>> {
+    Json(crate::modules::conditions::view(&state.db).await)
+}
+
 pub async fn presence(State(state): State<AppState>, user: AuthUser) -> ApiResult<Json<PresenceView>> {
     let people = db::list_presence(&state.db).await?;
     Ok(Json(PresenceView { me: people.iter().find(|p| p.user_id == user.id).map(|p| p.home), someone_home: (!people.is_empty()).then(|| people.iter().any(|p| p.home)), people }))

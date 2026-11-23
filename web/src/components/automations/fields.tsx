@@ -3,6 +3,7 @@ import type {
   AutomationOp,
   DeviceView,
   Mode,
+  ModuleConditions,
   Routine,
   SunEvent,
   TraitField,
@@ -22,6 +23,7 @@ import {
 } from "@/lib/device-icons"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import {
   Select,
   SelectContent,
@@ -120,6 +122,15 @@ export type Home = {
   prices?: { tariff: boolean; tempo: boolean }
   /** The charging profiles, for the actions of a charger. */
   chargeProfiles?: { id: number; name: string }[]
+  /** The tariff of the home: its kinds of day and the names of its slots. */
+  tariff?: {
+    profiles: { id: string; name: string; color: string | null }[]
+    slots: string[]
+  }
+  /** The devices of the list of the solar surplus. */
+  surplusLoads?: { device_id: number; name: string }[]
+  /** What the modules bring to the rules (`conditions` of their manifests). */
+  moduleConditions?: ModuleConditions[]
 }
 
 export function traitsOf(home: Home, d: DeviceView): TraitInfo[] {
@@ -160,6 +171,7 @@ export function measureKey(m: AutomationMeasure) {
   if (m.kind === "weather") return `weather:${m.field}`
   if (m.kind === "price") return "price"
   if (m.kind === "tempo") return `tempo:${m.day}`
+  if (m.kind === "module") return `module:${m.module}:${m.field}`
   return "outdoor"
 }
 
@@ -227,6 +239,16 @@ export function measureOptions(home: Home, current?: AutomationMeasure) {
         type: HOME_TYPE,
         measure: { kind: "tempo", day },
       })
+  for (const m of home.moduleConditions ?? [])
+    for (const f of m.fields)
+      if (f.type === "number" || f.type === "integer")
+        out.push({
+          key: `module:${m.module}:${f.name}`,
+          label: `${tl(m.name)} · ${tl(f.label)}`,
+          unit: f.unit,
+          type: HOME_TYPE,
+          measure: { kind: "module", module: m.module, field: f.name },
+        })
   for (const { d, type } of byType(home.devices))
     for (const trait of traitsOf(home, d))
       for (const f of trait.state)
@@ -269,6 +291,99 @@ export function stateOptions(home: Home): StateOption[] {
           field: f,
         }))
     )
+  )
+}
+
+/** The yes/no and the choices the modules tell. */
+export function moduleStateOptions(home: Home) {
+  return (home.moduleConditions ?? []).flatMap((m) =>
+    m.fields
+      .filter((f) => f.type === "bool" || f.type === "enum")
+      .map((f) => ({
+        key: `${m.module}:${f.name}`,
+        label: `${tl(m.name)} · ${tl(f.label)}`,
+        module: m.module,
+        field: f,
+      }))
+  )
+}
+
+/** A yes/no or a choice of a module, its value as pills. */
+export function ModuleStatePick({
+  home,
+  module,
+  field,
+  value,
+  onChange,
+}: {
+  home: Home
+  module: string
+  field: string
+  value: boolean | string
+  onChange: (p: {
+    module: string
+    field: string
+    value: boolean | string
+  }) => void
+}) {
+  const options = moduleStateOptions(home)
+  const chosen = options.find((o) => o.key === `${module}:${field}`)
+  const values: [string, string][] =
+    chosen?.field.type === "enum"
+      ? chosen.field.values!.map((v): [string, string] => [
+          v,
+          valueLabel(chosen.field, v),
+        ])
+      : [
+          ["true", t("Oui")],
+          ["false", t("Non")],
+        ]
+  return (
+    <>
+      <Pick
+        value={`${module}:${field}`}
+        onChange={(k) => {
+          const o = options.find((x) => x.key === k)!
+          onChange({
+            module: o.module,
+            field: o.field.name,
+            value: firstValue(o.field),
+          })
+        }}
+        options={[
+          ...(chosen
+            ? []
+            : [[`${module}:${field}`, t("Condition indisponible")] as Option]),
+          ...options.map((o): Option => [o.key, o.label]),
+        ]}
+        className="w-full lg:w-72"
+      />
+      <ToggleGroup
+        type="single"
+        variant="outline"
+        size="sm"
+        value={String(value)}
+        onValueChange={(v) =>
+          v &&
+          onChange({
+            module,
+            field,
+            value: chosen?.field.type === "enum" ? v : v === "true",
+          })
+        }
+        className="flex-wrap justify-start"
+      >
+        {values.map(([v, label]) => (
+          <ToggleGroupItem
+            key={v}
+            value={v}
+            className="data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+          >
+            {label}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+    </>
   )
 }
 

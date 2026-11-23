@@ -222,6 +222,8 @@ impl exports::breezone::module::service::Guest for Module {
                 let color = if account.contains("red") { "red" } else { "blue" };
                 Ok(format!(r#"[{{"day": "2026-11-22", "color": "{color}"}}]"#))
             }
+            // What the automations may read: tomorrow's colour, and a field it does not declare.
+            ("conditions@1", "read") => Ok(r#"{"tomorrow": "red", "days_left": 12, "secret": "x"}"#.into()),
             _ => Err(Error::Unsupported(format!("{contract} {query}"))),
         }
     }

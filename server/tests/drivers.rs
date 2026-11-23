@@ -926,7 +926,7 @@ async fn modules_are_listed_and_loaded_only_when_used() {
     // Announced with their own version, and what they give.
     let (_, caps) = server.call("GET", "/api/capabilities", t, None).await;
     let announced = caps["modules"].as_array().unwrap().iter().find(|m| m["id"] == "rte").unwrap().clone();
-    assert_eq!(announced["provides"], json!(["tariff.day_color@1"]));
+    assert_eq!(announced["provides"], json!(["tariff.day_color@1", "conditions@1"]));
     assert!(caps["host"]["traits"]["cover.position"]["1"].is_number());
 
     // Paired by steps: a module added with its form has none, an unknown step is refused.

@@ -648,9 +648,15 @@ async fn a_service_module_with_an_account_answers_the_core() {
         "id": "misbehave", "version": "1.0.0",
         "name": {"fr": "Couleurs", "en": "Colours", "es": "Colores"},
         "roles": ["account", "service"], "requires": {"api": "^1.0"},
-        "provides": {"services": ["tariff.day_color@1.0"]},
+        "provides": {"services": ["tariff.day_color@1.0", "conditions@1.0"]},
         "config": [{"name": "token", "type": "password", "label": {"fr": "Jeton", "en": "Token", "es": "Token"}}],
-        "permissions": {"network": {"lan": false}}
+        "permissions": {"network": {"lan": false}},
+        "conditions": [
+            {"name": "tomorrow", "type": "enum", "values": ["blue", "red"],
+             "value_labels": {"blue": {"fr": "Bleu", "en": "Blue", "es": "Azul"}, "red": {"fr": "Rouge", "en": "Red", "es": "Rojo"}},
+             "label": {"fr": "Couleur de demain", "en": "Tomorrow's colour", "es": "Color de mañana"}},
+            {"name": "days_left", "type": "integer", "label": {"fr": "Jours restants", "en": "Days left", "es": "Días restantes"}}
+        ]
     });
     std::fs::write(dir.join("app/modules/misbehave-1.0.0.bzm"), package::build(&manifest.to_string(), Some(&wasm("misbehave")), &[]).unwrap()).unwrap();
     let mut cfg = breezone_server::config::Config::for_tests(dir.join("data"));
@@ -684,6 +690,27 @@ async fn a_service_module_with_an_account_answers_the_core() {
     assert_eq!(answer[0]["color"], "red", "the token typed is unchanged");
     let tested = http.post(format!("{base}/api/accounts/misbehave/test")).bearer_auth(&token).send().await.unwrap();
     assert_eq!(tested.json::<Value>().await.unwrap()["state"], "ok");
+
+    // Its conditions: read for the automations (what it does not declare left out), offered to
+    // the rules, and a rule on them checked and read.
+    let conditions: Value = http.get(format!("{base}/api/automations/conditions")).bearer_auth(&token).send().await.unwrap().json().await.unwrap();
+    let mine = conditions.as_array().unwrap().iter().find(|c| c["module"] == "misbehave").expect("its conditions");
+    assert_eq!(mine["values"], json!({"tomorrow": "red", "days_left": 12}), "{mine}");
+    let rule = |conditions: Value| {
+        json!({"name": "Demain rouge", "enabled": true, "triggers": [{"kind": "time", "time": "20:00"}], "match": "all", "conditions": conditions,
+               "actions": [{"kind": "notify", "message": "Demain est rouge"}], "else": [], "mode": "single", "over": []})
+    };
+    let post = |body: Value| http.post(format!("{base}/api/automations")).bearer_auth(&token).header("Accept-Language", "fr").json(&body).send();
+    let resp = post(rule(json!([{"kind": "module", "module": "misbehave", "field": "tomorrow", "value": "red"},
+                                {"kind": "measure", "measure": {"kind": "module", "module": "misbehave", "field": "days_left"}, "op": "above", "value": 5}])))
+    .await
+    .unwrap();
+    assert_eq!(resp.status().as_u16(), 201);
+    let created: Value = resp.json().await.unwrap();
+    assert_eq!(created["summary"]["conditions"][0], "Couleurs · Couleur de demain : Rouge", "{created}");
+    assert_eq!(created["status"]["conditions"], json!([true, true]), "{created}");
+    let refused = post(rule(json!([{"kind": "module", "module": "misbehave", "field": "tomorrow", "value": "green"}]))).await.unwrap();
+    assert_eq!(refused.status().as_u16(), 400, "not one of its values");
 }
 
 /// The schedules a piece of hardware keeps (`schedule.hardware`, lot L9): listed, created and

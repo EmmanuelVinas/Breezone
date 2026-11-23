@@ -582,14 +582,19 @@ marge, aussi longtemps que `for_minutes`. Les étapes de « alors » encore en c
   180 sud) : à plus de 3° de hauteur et à moins de 80° de son orientation ;
 - `{kind:"button", device_id, button?, press?: "single"|"double"|"long"}` : un bouton d'une
   télécommande (`button@1`) ; tout bouton, tout appui quand ils manquent ;
-- `{kind:"presence", home}` : le premier arrive à la maison (`true`) ou le dernier part (`false`).
+- `{kind:"presence", home}` : le premier arrive à la maison (`true`) ou le dernier part (`false`) ;
+- `{kind:"module", module, field, value, for_minutes?}` : un oui/non ou un choix qu'un module dit
+  prend cette valeur (et la garde `for_minutes`) ;
+- `{kind:"tariff", profile?, slot?}` : le tarif de la maison passe dans un type de jour (`profile`,
+  l'id d'un profil du tarif : « Jour bleu ») et/ou une plage (`slot`, son nom : « HC ») ; l'un des
+  deux au moins.
 
 `Measure` : `{kind:"energy", flow:"export"|"import"|"solar"|"home"}` (W ; `export` = puissance
 injectée au réseau) | `{kind:"device", device_id, field}` | `{kind:"outdoor"}` |
 `{kind:"weather", field:"precipitation"|"wind"|"rain_next_hour"|"humidity"|"tomorrow_min"|"tomorrow_max"|"vigilance"}`
 (mm, km/h, %, %, °C ; relevé Open-Meteo de moins de 3 h ; `humidity` : humidité extérieure) |
 `{kind:"price"}` (le prix de l'électricité maintenant, par kWh, d'après le tarif ; aucune valeur sans
-tarif) | `{kind:"tempo", day:"today"|"tomorrow"}` (couleur Tempo : 1 bleu, 2 blanc, 3 rouge ; aucune
+tarif) | `{kind:"module", module, field}` (un nombre qu'un module dit) | `{kind:"tempo", day:"today"|"tomorrow"}` (couleur Tempo : 1 bleu, 2 blanc, 3 rouge ; aucune
 valeur tant qu'elle n'est pas annoncée : « demain rouge » = `tomorrow` `above` 2). La
 météo, la température extérieure et le soleil d'une règle sont ceux de l'installation de la première
 zone qu'elle pilote, sinon qu'elle lit ; à défaut, ceux de la maison. `vigilance` : l'avertissement en cours pour
@@ -601,6 +606,11 @@ Allemagne, Portugal, Luxembourg, Pays-Bas, Autriche).
 `{kind:"months", from, to}` (1 … 12 ; `from` > `to` passe par le nouvel an) | `{kind:"hours",
 from:"HH:MM", to:"HH:MM"}` | `{kind:"days", days}` | `{kind:"daylight", day}` | `{kind:"facade",
 facing}` | `{kind:"presence", home}` (quelqu'un est à la maison, ou personne) |
+`{kind:"module", module, field, value}` (un oui/non ou un choix qu'un module dit : un champ des
+`conditions` de son manifeste, voir `GET /api/automations/conditions`) |
+`{kind:"tariff", day?: "today"|"tomorrow", profile?, slot?}` (le tarif est dans ce type de jour
+et/ou cette plage ; demain : un type de jour seulement, connu une fois sa couleur annoncée pour un
+calendrier qui suit les couleurs) |
 `{kind:"group", match, conditions}` (2 conditions ou plus, un seul niveau). `match` dit
 comment les conditions sont réunies : `all` (et, par défaut) ou `any` (ou) ; une condition qu'on ne
 peut pas lire (appareil injoignable) ne décide que si les autres ne le font pas.
@@ -619,10 +629,16 @@ boost ; vient après une action sur un appareil ; un appareil dont quelqu'un a c
 réglages entre-temps est laissé tel quel, et l'historique le dit) | `{kind:"notify", message}` (1 à 200 caractères : écrit dans
 le journal, `kind: "notification"`, que les applis ouvertes affichent aussitôt ; envoyé aussi au
 sujet ntfy réglé, avec le titre « Breezone · nom de la règle ») |
-`{kind:"charger_profile", device_id, profile_id}` (la borne suit ce profil de recharge, `null` :
+`{kind:"surplus", device_id, enabled}` (un appareil de la liste du surplus solaire le suit, ou plus :
+il est alors laissé tel quel) | `{kind:"charger_profile", device_id, profile_id}` (la borne suit ce profil de recharge, `null` :
 aucun) | `{kind:"charger_now", device_id, kw?, until?, kwh?}` (charger maintenant : jusqu'à `kw`,
 son maximum sans ; jusqu'à `until` « HH:MM », la prochaine fois que cette heure vient, ou `kwh` de
 plus, sinon jusqu'au débranchement ; refusé sans voiture branchée).
+
+`GET /api/automations/conditions` 🔒 : ce que les modules apportent aux règles,
+`[{module, name, fields: [Field], values: {champ: valeur}}]`. Un module de rôle `service` les déclare
+dans les `conditions` de son manifeste (avec le contrat `conditions@1.0`) ; le serveur lit leurs
+valeurs toutes les 5 minutes (`query read`) et écarte ce qui n'est pas déclaré.
 
 `Automation` ajoute `{id, when` (le premier déclencheur)`, summary:{when, triggers, conditions,
 joined, actions, else, over}` (la règle en phrases, dans la langue de la requête ; `joined` = « et » ou

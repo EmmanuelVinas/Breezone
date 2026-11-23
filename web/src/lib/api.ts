@@ -939,6 +939,14 @@ export type TraitField = {
   label: TraitLabel
 }
 
+/** What a module brings to the automations (`GET /api/automations/conditions`). */
+export type ModuleConditions = {
+  module: string
+  name: TraitLabel
+  fields: TraitField[]
+  values: Record<string, unknown>
+}
+
 /** A trait of the catalog (`GET /api/traits`): what a kind of device holds and accepts. */
 export type TraitInfo = {
   trait: string
@@ -1082,6 +1090,8 @@ export type DeviceForecast = { series: Record<string, [number, number][]> }
 /** A number an automation can read now. */
 export type AutomationMeasure =
   | { kind: "energy"; flow: "export" | "import" | "solar" | "home" }
+  /** A number a module tells (the `conditions` of its manifest). */
+  | { kind: "module"; module: string; field: string }
   | { kind: "device"; device_id: number; field: string }
   | { kind: "outdoor" }
   | {
@@ -1135,6 +1145,16 @@ export type AutomationTrigger =
     }
   /** The first one arrives home (`home`), or the last one leaves. */
   | { kind: "presence"; home: boolean }
+  /** A yes/no or a choice a module tells becomes `value`. */
+  | {
+      kind: "module"
+      module: string
+      field: string
+      value: boolean | string
+      for_minutes: number
+    }
+  /** The tariff comes into a stretch: a kind of day, a slot, or both (ids and names of the tariff). */
+  | { kind: "tariff"; profile?: string | null; slot?: string | null }
 
 /** All true ("et") or at least one ("ou"). */
 export type AutomationMatch = "all" | "any"
@@ -1153,6 +1173,15 @@ export type AutomationCondition =
   | { kind: "daylight"; day: boolean }
   | { kind: "facade"; facing: number }
   | { kind: "presence"; home: boolean }
+  /** A yes/no or a choice a module tells is `value`. */
+  | { kind: "module"; module: string; field: string; value: boolean | string }
+  /** The tariff is in a stretch: today a kind of day and/or a slot, tomorrow a kind of day. */
+  | {
+      kind: "tariff"
+      day: "today" | "tomorrow"
+      profile?: string | null
+      slot?: string | null
+    }
   /** One level only: no group in a group. */
   | {
       kind: "group"
@@ -1191,6 +1220,8 @@ export type AutomationStep =
   | { kind: "restore" }
   /** The activity feed, the open apps and, when set, an ntfy topic. */
   | { kind: "notify"; message: string }
+  /** A device of the list of the solar surplus follows it, or no longer does. */
+  | { kind: "surplus"; device_id: number; enabled: boolean }
   /** A charger follows a charging profile (null: none). */
   | { kind: "charger_profile"; device_id: number; profile_id: number | null }
   /** A charger charges now: up to `kw`, until "HH:MM" or `kwh` more, else until unplugged. */
@@ -1552,6 +1583,8 @@ export const api = {
       layout
     ),
   automations: () => request<Automation[]>("GET", "/api/automations"),
+  moduleConditions: () =>
+    request<ModuleConditions[]>("GET", "/api/automations/conditions"),
   /** Rules this server version cannot read (administrators). */
   unreadableAutomations: () =>
     request<UnreadableAutomation[]>("GET", "/api/automations/unreadable"),

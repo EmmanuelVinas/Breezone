@@ -12,6 +12,7 @@ pub const HOST_API: &[&str] = &[INTERFACE];
 pub const HOST_API: &[&str] = &[];
 
 pub mod compat;
+pub mod conditions;
 pub mod install;
 pub mod library;
 pub mod manifest;
@@ -178,35 +179,44 @@ pub async fn ask_internal(contract: &str, query: &str, params: &serde_json::Valu
 /// connected and switched on; how it went is noted on the account. `None`: no module answers
 /// this contract here.
 pub async fn ask_service(db: &crate::db::Db, contract: &str, query: &str, params: &serde_json::Value) -> Option<Result<serde_json::Value, String>> {
-    #[cfg_attr(not(feature = "wasm"), allow(unused_mut))]
     let mut last: Option<Result<serde_json::Value, String>> = None;
     for m in service_providers(contract) {
-        if m.has(Role::Account) && !crate::db::account(db, &m.id).await.ok().flatten().is_some_and(|a| a.enabled && a.secret.is_some()) {
-            continue;
+        match ask(db, m, contract, query, params).await {
+            Some(Ok(v)) => return Some(Ok(v)),
+            Some(Err(e)) => last = Some(Err(e)),
+            None => {}
         }
-        #[cfg(feature = "wasm")]
-        {
-            let Some(dir) = installed_dir(&m.id) else { continue };
-            let answer = match wasm::loaded(m, &dir).await {
-                Ok(module) => module.query(contract, query, params).await.map_err(|e| e.to_string()),
-                Err(e) => Err(e),
-            };
-            if m.has(Role::Account) {
-                let error = answer.as_ref().err().map(|e| crate::i18n::Text::plain(e.clone()).store());
-                let _ = crate::db::set_account_state(db, &m.id, if error.is_none() { "ok" } else { "error" }, error.as_deref()).await;
-            }
-            match answer {
-                Ok(v) => return Some(Ok(v)),
-                Err(e) => {
-                    log(&m.id, "warn", format!("{contract} {query}: {e}"));
-                    last = Some(Err(e));
-                }
-            }
-        }
-        #[cfg(not(feature = "wasm"))]
-        let _ = (query, params);
     }
     last
+}
+
+/// Asks one module a query of a service contract (`None`: its account is not connected, or the
+/// modules cannot run here).
+pub async fn ask(db: &crate::db::Db, m: &Manifest, contract: &str, query: &str, params: &serde_json::Value) -> Option<Result<serde_json::Value, String>> {
+    if m.has(Role::Account) && !crate::db::account(db, &m.id).await.ok().flatten().is_some_and(|a| a.enabled && a.secret.is_some()) {
+        return None;
+    }
+    #[cfg(feature = "wasm")]
+    {
+        let dir = installed_dir(&m.id)?;
+        let answer = match wasm::loaded(m, &dir).await {
+            Ok(module) => module.query(contract, query, params).await.map_err(|e| e.to_string()),
+            Err(e) => Err(e),
+        };
+        if m.has(Role::Account) {
+            let error = answer.as_ref().err().map(|e| crate::i18n::Text::plain(e.clone()).store());
+            let _ = crate::db::set_account_state(db, &m.id, if error.is_none() { "ok" } else { "error" }, error.as_deref()).await;
+        }
+        if let Err(e) = &answer {
+            log(&m.id, "warn", format!("{contract} {query}: {e}"));
+        }
+        Some(answer)
+    }
+    #[cfg(not(feature = "wasm"))]
+    {
+        let _ = (contract, query, params);
+        None
+    }
 }
 
 /// A step of the appairage of a module.

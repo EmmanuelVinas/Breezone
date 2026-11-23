@@ -12,6 +12,7 @@ use std::sync::LazyLock;
 
 const FILES: &[(&str, &str)] = &[
     ("airzone.webserver.json", include_str!("../contracts/services/airzone.webserver.json")),
+    ("conditions.json", include_str!("../contracts/services/conditions.json")),
     ("energy.history.json", include_str!("../contracts/services/energy.history.json")),
     ("tariff.day_color.json", include_str!("../contracts/services/tariff.day_color.json")),
     ("weather.forecast.json", include_str!("../contracts/services/weather.forecast.json")),
@@ -27,6 +28,10 @@ pub struct Query {
     /// The answer is a list of such records (else one record).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub list: bool,
+    /// The answer is a record of the fields the module's manifest declares (`conditions`), not of
+    /// the contract's.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub open: bool,
     pub result: Vec<Field>,
 }
 
@@ -103,6 +108,9 @@ fn check_record(q: &Query, v: &Value) -> Result<(), String> {
 pub fn check_answer(contract: &str, query: &str, answer: &Value) -> Result<(), String> {
     let service = by_id(contract).ok_or_else(|| format!("{contract}: unknown contract"))?;
     let q = service.query(query).ok_or_else(|| format!("{contract}: no query {query}"))?;
+    if q.open {
+        return answer.as_object().map(|_| ()).ok_or_else(|| "a record is expected".into());
+    }
     if q.list {
         answer.as_array().ok_or("a list is expected")?.iter().try_for_each(|r| check_record(q, r))
     } else {
@@ -142,7 +150,7 @@ mod tests {
             let mut queries = HashSet::new();
             for q in &s.queries {
                 assert!(queries.insert(&q.name), "{}.{} twice", s.name, q.name);
-                assert!(!q.result.is_empty(), "{}.{}: no result", s.name, q.name);
+                assert!(q.open || !q.result.is_empty(), "{}.{}: no result", s.name, q.name);
                 for f in q.params.iter().chain(&q.result) {
                     // `json`: a document passed as it is, for services only.
                     if f.kind == "json" {

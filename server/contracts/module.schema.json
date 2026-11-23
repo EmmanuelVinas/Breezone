@@ -90,6 +90,22 @@
     "cloud": { "type": "boolean" },
     "internal": { "type": "boolean", "description": "A service the core uses by itself: never switched off, not listed in Settings › Accounts and services." },
     "oauth": { "type": ["object", "null"], "description": "Its account is an OAuth 2 one (null: it is not): Breezone renews its access with the refresh token of its form.", "required": ["token_url"], "additionalProperties": false, "properties": { "token_url": { "type": "string", "pattern": "^https://" } } },
+    "conditions": {
+      "type": "array",
+      "description": "What the automations may read from it (with the service contract conditions@1, query read): fields like those of a trait state, bool, enum, integer or number.",
+      "items": {
+        "type": "object",
+        "required": ["name", "type", "label"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "type": { "enum": ["bool", "enum", "integer", "number"] },
+          "unit": { "type": "string" },
+          "values": { "type": "array", "items": { "type": "string" } },
+          "value_labels": { "type": "object" },
+          "label": { "type": "object" }
+        }
+      }
+    },
     "optional_calls": { "type": "array", "items": { "enum": ["rooms", "scenes", "picture", "forecast", "listen", "unlock", "diagnostic", "probe", "schedules", "forget", "identify"] } }
   }
 }

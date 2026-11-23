@@ -7,17 +7,20 @@ import {
   Comparison,
   DaysPicker,
   MONTHS,
+  ModuleStatePick,
   Pick,
   StatePick,
   firstValue,
   measureOptions,
+  moduleStateOptions,
   stateOptions,
   suggested,
 } from "./fields"
 import { RemoveButton } from "./steps"
 import { FacadePick, ROW } from "./triggers"
+import { TariffPick, firstStretch } from "./tariff"
 
-export const CONDITION_KINDS = (): Option[] => [
+export const CONDITION_KINDS = (home?: Home): Option[] => [
   ["measure", t("Une mesure")],
   ["state", t("L'état d'un appareil")],
   ["months", t("Une période de l'année")],
@@ -26,6 +29,12 @@ export const CONDITION_KINDS = (): Option[] => [
   ["daylight", t("Le jour ou la nuit")],
   ["facade", t("Le soleil sur une façade")],
   ["presence", t("Quelqu'un à la maison, ou personne")],
+  ...(home?.tariff
+    ? [["tariff", t("Une plage du tarif d'électricité")] as Option]
+    : []),
+  ...(home && moduleStateOptions(home).length
+    ? [["module", t("Une condition d'un module")] as Option]
+    : []),
 ]
 
 export function newCondition(
@@ -67,6 +76,21 @@ export function newCondition(
       return { kind: "facade", facing: 180 }
     case "presence":
       return { kind: "presence", home: false }
+    case "tariff":
+      return home.tariff
+        ? { kind: "tariff", day: "today", ...firstStretch(home) }
+        : null
+    case "module": {
+      const first = moduleStateOptions(home)[0]
+      return first
+        ? {
+            kind: "module",
+            module: first.module,
+            field: first.field.name,
+            value: firstValue(first.field),
+          }
+        : null
+    }
     default:
       return { kind: "daylight", day: true }
   }
@@ -187,6 +211,47 @@ export function ConditionEditor({
           className="w-full lg:w-64"
         />
       )
+    case "module":
+      return (
+        <ModuleStatePick
+          home={home}
+          module={c.module}
+          field={c.field}
+          value={c.value}
+          onChange={(p) => onChange({ kind: "module", ...p })}
+        />
+      )
+    case "tariff":
+      return (
+        <>
+          <Pick
+            value={c.day}
+            onChange={(v) =>
+              onChange({
+                ...c,
+                day: v as "today" | "tomorrow",
+                slot: v === "tomorrow" ? null : c.slot,
+                profile:
+                  v === "tomorrow"
+                    ? (c.profile ?? home.tariff?.profiles[0]?.id ?? null)
+                    : c.profile,
+              })
+            }
+            options={[
+              ["today", t("Le tarif est en")],
+              ["tomorrow", t("Le tarif de demain est en")],
+            ]}
+            className="w-full lg:w-56"
+          />
+          <TariffPick
+            home={home}
+            profile={c.profile}
+            slot={c.slot}
+            withSlot={c.day === "today"}
+            onChange={(p) => onChange({ ...c, ...p })}
+          />
+        </>
+      )
   }
 }
 
@@ -261,7 +326,7 @@ export function ConditionList({
   const set = (i: number, next: AutomationCondition) =>
     onChange(conditions.map((x, j) => (j === i ? next : x)))
   const remove = (i: number) => onChange(conditions.filter((_, j) => j !== i))
-  const kinds = CONDITION_KINDS().filter(
+  const kinds = CONDITION_KINDS(home).filter(
     ([k]) => k !== "state" || stateOptions(home).length > 0
   )
   const add: Option[] = inGroup

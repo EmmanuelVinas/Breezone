@@ -14,11 +14,14 @@ import {
   SUN_OFFSETS,
   StatePick,
   firstValue,
+  moduleStateOptions,
+  ModuleStatePick,
   measureOptions,
   remotes,
   stateOptions,
   suggested,
 } from "./fields"
+import { TariffPick, firstStretch } from "./tariff"
 
 export const ROW =
   "flex flex-col gap-2 rounded-2xl border bg-muted/30 p-3 lg:flex-row lg:flex-wrap lg:items-center"
@@ -45,6 +48,12 @@ export function TriggerEditor({
     ["sun", t("Le soleil (lever, coucher…)")],
     ["facade", t("Le soleil arrive sur une façade")],
     ["presence", t("Quelqu'un arrive ou part")],
+    ...(home.tariff
+      ? [["tariff", t("Le tarif change de plage")] as Option]
+      : []),
+    ...(moduleStateOptions(home).length
+      ? [["module", t("Un module change d'état")] as Option]
+      : []),
     ...(remotes(home).length
       ? [["button", t("Un bouton de télécommande")] as Option]
       : []),
@@ -144,6 +153,34 @@ export function TriggerEditor({
           ]}
           className="w-full lg:w-64"
         />
+      )}
+      {when.kind === "module" && (
+        <>
+          <ModuleStatePick
+            home={home}
+            module={when.module}
+            field={when.field}
+            value={when.value}
+            onChange={(p) => onChange({ ...when, ...p })}
+          />
+          <Pick
+            value={String(when.for_minutes)}
+            onChange={(v) => onChange({ ...when, for_minutes: Number(v) })}
+            options={forOptions()}
+            className="w-full lg:w-44"
+          />
+        </>
+      )}
+      {when.kind === "tariff" && (
+        <>
+          <span className="text-sm">{t("passe en")}</span>
+          <TariffPick
+            home={home}
+            profile={when.profile}
+            slot={when.slot}
+            onChange={(p) => onChange({ ...when, ...p })}
+          />
+        </>
       )}
       {when.kind === "button" && (
         <ButtonPick
@@ -251,6 +288,20 @@ export function newTrigger(kind: string, home: Home): AutomationTrigger | null {
       return { kind: "facade", facing: 180 }
     case "presence":
       return { kind: "presence", home: false }
+    case "tariff":
+      return home.tariff ? { kind: "tariff", ...firstStretch(home) } : null
+    case "module": {
+      const first = moduleStateOptions(home)[0]
+      return first
+        ? {
+            kind: "module",
+            module: first.module,
+            field: first.field.name,
+            value: firstValue(first.field),
+            for_minutes: 0,
+          }
+        : null
+    }
     case "button": {
       const r = remotes(home)[0]
       return r ? { kind: "button", device_id: r.id, button: 1 } : null

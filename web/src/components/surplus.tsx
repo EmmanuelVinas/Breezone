@@ -12,11 +12,7 @@ import {
   Trash2,
 } from "lucide-react"
 import { toast } from "sonner"
-import type {
-  SurplusLoad,
-  SurplusLoadInput,
-  SurplusStatus,
-} from "@/lib/api"
+import type { SurplusLoad, SurplusLoadInput, SurplusStatus } from "@/lib/api"
 import { api, currentUser } from "@/lib/api"
 import { locale, t } from "@/lib/i18n"
 import { Button } from "@/components/ui/button"
@@ -468,7 +464,7 @@ export function SurplusCard() {
         {v.loads.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             {t(
-              "Aucun appareil ne suit le surplus. Ajoutez la borne, un chauffe-eau sur une prise pilotée, ou une zone de climatisation."
+              "Aucun appareil ne suit le surplus. Ajoutez un chauffe-eau sur une prise pilotée, ou une zone de climatisation ; la borne le suit par son profil de recharge (« Solaire »)."
             )}
           </p>
         ) : (
@@ -596,7 +592,7 @@ export function SurplusProgramme() {
           </CardDescription>
         </div>
         <Button asChild variant="outline" size="sm">
-          <Link to="/routines">{t("Régler")}</Link>
+          <Link to="/programmations">{t("Régler")}</Link>
         </Button>
       </CardHeader>
       <CardContent>

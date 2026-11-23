@@ -311,6 +311,18 @@ pub fn price_at(tariffs: &Tariffs, color: &dyn Fn(NaiveDate) -> Option<DayColor>
     })
 }
 
+/// The kind of day of the tariff a day of its calendar follows: its id and its name.
+pub fn profile_on(tariffs: &Tariffs, color: &dyn Fn(NaiveDate) -> Option<DayColor>, day: NaiveDate) -> Option<(String, String)> {
+    let tariff = tariffs.on(day)?;
+    let (id, _) = kind_of_day(&tariff.calendar, color, day);
+    tariff.profiles.iter().find(|p| p.id == id).map(|p| (p.id.clone(), p.name.clone()))
+}
+
+/// The tariff in force now (the last one started), for the names of its profiles and slots.
+pub fn current(tariffs: &Tariffs) -> Option<&Tariff> {
+    tariffs.0.last().map(|(_, t)| t)
+}
+
 /// A stretch of time at one price.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Period {

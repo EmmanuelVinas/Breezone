@@ -6,6 +6,18 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Automations can follow the stretches of the electricity tariff, whatever it is: a condition
+  "the tariff is in" a kind of day and/or a slot (today, or tomorrow's kind of day), and a trigger
+  "the tariff comes into" one, chosen among those of the tariff of the home (a blue day, the
+  off-peak hours…).
+- An automation can turn the solar surplus on or off for a device of its list.
+- Modules bring their own conditions to the automations (the `conditions` of their manifest, a
+  new service contract `conditions@1`): yes/no and choices as conditions and triggers, numbers as
+  measures. The RTE module gives today's and tomorrow's Tempo colour and the red and white days
+  left in the season.
+
 ## [0.12.0-beta.11] - 2026-11-23
 
 ### Added

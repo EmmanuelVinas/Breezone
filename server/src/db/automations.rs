@@ -270,6 +270,11 @@ pub async fn upsert_surplus_load(db: &Db, l: &SurplusLoadRow) -> sqlx::Result<()
     Ok(())
 }
 
+/// A load of the surplus follows it, or no longer does (`false`: not in the list).
+pub async fn set_surplus_load_enabled(db: &Db, device_id: i64, enabled: bool) -> sqlx::Result<bool> {
+    Ok(sqlx::query("UPDATE surplus_loads SET enabled = ? WHERE device_id = ?").bind(enabled).bind(device_id).execute(db).await?.rows_affected() > 0)
+}
+
 pub async fn delete_surplus_load(db: &Db, device_id: i64) -> sqlx::Result<bool> {
     Ok(sqlx::query("DELETE FROM surplus_loads WHERE device_id = ?").bind(device_id).execute(db).await?.rows_affected() > 0)
 }

@@ -167,7 +167,27 @@ impl Context {
                 let (name, field) = (self.device_name(*device_id), self.field_label(*device_id, field));
                 crate::text!("{0} · {1}", "{0} · {1}", "{0} · {1}", name.arg(), field.arg())
             }
+            Measure::Module { module, field } => self.module_label(module, field),
         }
+    }
+
+    /// "RTE · Couleur Tempo de demain": a condition of a module, by the words of its manifest.
+    pub(super) fn module_label(&self, module: &str, field: &str) -> Text {
+        let name = crate::modules::manifest(module).map_or_else(|| Text::plain(module), |m| label(&m.name));
+        let field = crate::modules::conditions::field(module, field).map_or_else(|| Text::plain(field), |f| label(&f.label));
+        crate::text!("{0} · {1}", "{0} · {1}", "{0} · {1}", name.arg(), field.arg())
+    }
+
+    /// "RTE · Couleur Tempo de demain : rouge".
+    pub(super) fn module_state_text(&self, module: &str, field: &str, value: &Value) -> Text {
+        let named = crate::modules::conditions::field(module, field).and_then(|f| f.value_labels.get(value.as_str()?)).map(label);
+        let value = match (named, value) {
+            (Some(named), _) => named,
+            (None, Value::Bool(b)) => yes_no(*b),
+            (None, other) => Text::plain(other.as_str().map_or_else(|| other.to_string(), str::to_string)),
+        };
+        let what = self.module_label(module, field);
+        crate::text!("{0} : {1}", "{0}: {1}", "{0}: {1}", what.arg(), value.arg())
     }
 
     /// A value of a measure, in words: "742 W", "orange".
@@ -264,6 +284,14 @@ impl Context {
             }
             Trigger::Presence { home: true } => crate::text!("quand le premier arrive à la maison", "when the first one gets home", "cuando llega el primero a casa"),
             Trigger::Presence { home: false } => crate::text!("quand le dernier part de la maison", "when the last one leaves home", "cuando se va el último de casa"),
+            Trigger::Module { module, field, value, for_minutes } => {
+                let state = self.module_state_text(module, field, value);
+                lasting(crate::text!("{0} devient vrai", "{0} becomes true", "{0} pasa a ser cierto", state.arg()), *for_minutes)
+            }
+            Trigger::Tariff { profile, slot } => {
+                let what = self.tariff_stretch(profile.as_deref(), slot.as_deref());
+                crate::text!("quand le tarif passe en {0}", "when the tariff comes into {0}", "cuando la tarifa pasa a {0}", what.arg())
+            }
             Trigger::Button { device_id, button, press } => {
                 let name = self.device_name(*device_id);
                 let how = press_name(press.as_deref().unwrap_or("single"));
@@ -306,6 +334,14 @@ impl Context {
             }
             Condition::Presence { home: true } => crate::text!("quelqu'un est à la maison", "someone is home", "hay alguien en casa"),
             Condition::Presence { home: false } => crate::text!("personne n'est à la maison", "nobody is home", "no hay nadie en casa"),
+            Condition::Module { module, field, value } => self.module_state_text(module, field, value),
+            Condition::Tariff { day, profile, slot } => {
+                let what = self.tariff_stretch(profile.as_deref(), slot.as_deref());
+                match day {
+                    TempoDay::Today => crate::text!("le tarif est en {0}", "the tariff is in {0}", "la tarifa está en {0}", what.arg()),
+                    TempoDay::Tomorrow => crate::text!("le tarif de demain est en {0}", "tomorrow's tariff is in {0}", "la tarifa de mañana está en {0}", what.arg()),
+                }
+            }
             Condition::Group { joined, conditions } => {
                 let inner = self.describe_conditions(*joined, conditions);
                 crate::text!("({0})", "({0})", "({0})", inner.arg())
@@ -318,6 +354,17 @@ impl Context {
         let word = joined.word();
         let parts: Vec<Text> = conditions.iter().map(|c| self.describe_condition(c)).collect();
         Text::build(|l| parts.iter().map(|p| p.get(l)).collect::<Vec<_>>().join(&format!(" {} ", word.get(l))))
+    }
+
+    /// "Jour bleu · HC", "HC", "Jour rouge": a kind of day of the tariff by its name.
+    fn tariff_stretch(&self, profile: Option<&str>, slot: Option<&str>) -> Text {
+        let kind = profile.map(|id| self.tariff_profiles.iter().find(|(p, _)| p == id).map_or_else(|| id.to_string(), |(_, n)| n.clone()));
+        Text::plain(match (kind, slot) {
+            (Some(k), Some(s)) => format!("{k} · {s}"),
+            (Some(k), None) => k,
+            (None, Some(s)) => s.to_string(),
+            (None, None) => String::new(),
+        })
     }
 
     pub fn describe_step(&self, s: &Step) -> Text {
@@ -356,6 +403,14 @@ impl Context {
             }
             Step::Restore => crate::text!("remettre comme avant", "put back as before", "dejar como antes"),
             Step::Notify { message } => crate::text!("prévenir : « {0} »", "notify: “{0}”", "avisar: «{0}»", message),
+            Step::Surplus { device_id, enabled } => {
+                let name = self.device_name(*device_id);
+                if *enabled {
+                    crate::text!("{0} : suivre le surplus solaire", "{0}: follow the solar surplus", "{0}: seguir el excedente solar", name.arg())
+                } else {
+                    crate::text!("{0} : ne plus suivre le surplus solaire", "{0}: no longer follow the solar surplus", "{0}: dejar de seguir el excedente solar", name.arg())
+                }
+            }
             Step::ChargerProfile { device_id, profile_id } => {
                 let name = self.device_name(*device_id);
                 match profile_id {
@@ -457,6 +512,7 @@ impl Context {
                 }
             }
             Trigger::State { device_id, field, value, .. } => self.state_text(*device_id, field, value),
+            Trigger::Module { module, field, value, .. } => self.module_state_text(module, field, value),
             other => self.describe_trigger(other),
         }
     }

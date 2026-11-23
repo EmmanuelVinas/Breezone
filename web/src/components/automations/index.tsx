@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { usePrice } from "@/components/electricity/hooks"
+import { usePrice, useTariff } from "@/components/electricity/hooks"
+import { useSurplus } from "@/components/surplus"
 import { BookOpen, Plus } from "lucide-react"
 import type {
   Automation,
@@ -39,6 +40,18 @@ export function AutomationsSection() {
   const rooms = useQuery({ queryKey: ["rooms"], queryFn: api.rooms })
   const live = useQuery({ queryKey: ["energy-live"], queryFn: api.energyLive })
   const price = usePrice()
+  const tariffView = useTariff()
+  const surplus = useSurplus()
+  // The tariff in force: the last one started (the versions come oldest first).
+  const today = new Date().toLocaleDateString("sv")
+  const tariff = (tariffView.data?.versions ?? [])
+    .filter((v) => v.valid_from <= today)
+    .at(-1)?.tariff
+  const moduleConditions = useQuery({
+    queryKey: ["module-conditions"],
+    queryFn: api.moduleConditions,
+    refetchInterval: 60_000,
+  })
   const chargeProfiles = useQuery({
     queryKey: ["charge-profiles"],
     queryFn: api.chargeProfiles,
@@ -98,6 +111,25 @@ export function AutomationsSection() {
       tariff: !!price.data?.now,
       tempo: !!price.data?.tempo || chargeTempo,
     },
+    tariff: tariff && {
+      profiles: tariff.profiles.map((p) => ({
+        id: p.id,
+        name: p.name,
+        color: p.color ?? null,
+      })),
+      slots: [
+        ...new Set(
+          tariff.profiles.flatMap((p) =>
+            p.slots.map((s) => s.name).filter(Boolean)
+          )
+        ),
+      ].sort(),
+    },
+    moduleConditions: moduleConditions.data ?? [],
+    surplusLoads: (surplus.data?.loads ?? []).map((l) => ({
+      device_id: l.device_id,
+      name: l.name,
+    })),
     chargeProfiles: (chargeProfiles.data ?? []).map((p) => ({
       id: p.id,
       name: p.name,

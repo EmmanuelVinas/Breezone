@@ -147,6 +147,28 @@ pub(super) fn check_facing(facing: u32) -> ApiResult<()> {
 }
 
 impl Context {
+    /// A stretch of the tariff: a kind of day and/or a slot it has (tomorrow: a kind of day only).
+    pub(super) fn check_tariff(&self, day: TempoDay, profile: Option<&str>, slot: Option<&str>) -> ApiResult<()> {
+        let bad = |fr: &str, en: &str, es: &str| Err(ApiError::bad_request(Text { fr: fr.into(), en: en.into(), es: es.into() }));
+        if self.tariff_profiles.is_empty() {
+            return bad("la maison n'a pas de tarif d'électricité", "the home has no electricity tariff", "la casa no tiene tarifa eléctrica");
+        }
+        if profile.is_none() && slot.is_none() {
+            return bad("choisissez un type de jour ou une plage du tarif", "choose a kind of day or a slot of the tariff", "elija un tipo de día o una franja de la tarifa");
+        }
+        if day == TempoDay::Tomorrow && slot.is_some() {
+            return bad("demain : un type de jour seulement", "tomorrow: a kind of day only", "mañana: solo un tipo de día");
+        }
+        if profile.is_some_and(|p| !self.tariff_profiles.iter().any(|(id, _)| id == p)) || slot.is_some_and(|s| !self.tariff_slots.iter().any(|n| n == s)) {
+            return bad(
+                "ce type de jour ou cette plage n'est pas dans le tarif",
+                "this kind of day or slot is not in the tariff",
+                "este tipo de día o franja no está en la tarifa",
+            );
+        }
+        Ok(())
+    }
+
     /// A charger of a module (which follows charging profiles).
     pub(super) fn charger(&self, device_id: i64) -> ApiResult<&DeviceView> {
         let d = self.known(device_id)?;
@@ -164,6 +186,16 @@ impl Context {
         if !value.is_finite() {
             return Err(ApiError::bad_request(crate::text!("seuil invalide", "invalid threshold", "umbral no válido")));
         }
+        if let Measure::Module { module, field } = m {
+            if !crate::modules::conditions::field(module, field).is_some_and(|f| matches!(f.kind.as_str(), "number" | "integer")) {
+                return Err(ApiError::bad_request(crate::text!(
+                    "« {0} » n'est pas une mesure de ce module",
+                    "“{0}” is not a measure of this module",
+                    "«{0}» no es una medida de este módulo",
+                    field
+                )));
+            }
+        }
         if let Measure::Device { device_id, field } = m {
             self.known(*device_id)?;
             if !self.field(*device_id, field).is_some_and(|f| matches!(f.kind.as_str(), "number" | "integer")) {
@@ -176,6 +208,25 @@ impl Context {
             }
         }
         Ok(())
+    }
+
+    /// A yes/no or a choice a module tells, with a value it may take.
+    pub(super) fn check_module_state(&self, module: &str, field: &str, value: &Value) -> ApiResult<()> {
+        let ok = crate::modules::conditions::field(module, field).is_some_and(|f| match f.kind.as_str() {
+            "bool" => value.is_boolean(),
+            "enum" => value.as_str().is_some_and(|v| f.values.iter().any(|x| x == v)),
+            _ => false,
+        });
+        if ok {
+            Ok(())
+        } else {
+            Err(ApiError::bad_request(crate::text!(
+                "« {0} » n'est pas une condition de ce module",
+                "“{0}” is not a condition of this module",
+                "«{0}» no es una condición de este módulo",
+                field
+            )))
+        }
     }
 
     pub(super) fn check_state(&self, device_id: i64, field: &str, value: &Value) -> ApiResult<()> {
@@ -219,6 +270,11 @@ impl Context {
             }
             Trigger::Facade { facing } => check_facing(*facing),
             Trigger::Presence { .. } => Ok(()),
+            Trigger::Tariff { profile, slot } => self.check_tariff(TempoDay::Today, profile.as_deref(), slot.as_deref()),
+            Trigger::Module { module, field, value, for_minutes } => {
+                check_lasting(*for_minutes)?;
+                self.check_module_state(module, field, value)
+            }
             Trigger::Button { device_id, button, press } => {
                 let device = self.known(*device_id)?;
                 if !device.traits.iter().any(|t| t.starts_with("button@")) {
@@ -255,6 +311,8 @@ impl Context {
                 check_days(days)
             }
             Condition::Daylight { .. } | Condition::Presence { .. } => Ok(()),
+            Condition::Tariff { day, profile, slot } => self.check_tariff(*day, profile.as_deref(), slot.as_deref()),
+            Condition::Module { module, field, value } => self.check_module_state(module, field, value),
             Condition::Facade { facing } => check_facing(*facing),
             Condition::Group { conditions, .. } => {
                 if conditions.len() < 2 {
@@ -318,6 +376,17 @@ impl Context {
                 self.check_condition(condition)
             }
             Step::Restore => Ok(()),
+            Step::Surplus { device_id, .. } => {
+                self.known(*device_id)?;
+                if !self.surplus_loads.contains(device_id) {
+                    return Err(ApiError::bad_request(crate::text!(
+                        "cet appareil n'est pas dans la liste du surplus solaire",
+                        "this device is not in the list of the solar surplus",
+                        "este dispositivo no está en la lista del excedente solar"
+                    )));
+                }
+                Ok(())
+            }
             Step::ChargerProfile { device_id, profile_id } => {
                 self.charger(*device_id)?;
                 match profile_id {

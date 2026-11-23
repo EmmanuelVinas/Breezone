@@ -1,0 +1,14 @@
+{
+  "service": "conditions",
+  "version": 1,
+  "revision": 0,
+  "label": { "fr": "Conditions des automatismes", "en": "Conditions of the automations", "es": "Condiciones de las automatizaciones" },
+  "queries": [
+    {
+      "name": "read",
+      "label": { "fr": "Valeurs du moment", "en": "Values now", "es": "Valores actuales" },
+      "open": true,
+      "result": []
+    }
+  ]
+}

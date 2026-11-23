@@ -1,5 +1,6 @@
 //! RTE's data portal (data.rte-france.com): the official colour of the Tempo days
-//! (`tariff.day_color@1`), with the "Tempo Like Supply Contract" API. One creates an application on
+//! (`tariff.day_color@1`), with the "Tempo Like Supply Contract" API. It also brings conditions
+//! to the automations (`conditions@1`): today's and tomorrow's colour, the red and white days left. One creates an application on
 //! the portal, subscribes it to that API and gives Breezone its client id and secret (OAuth client
 //! credentials): the module's account.
 //!
@@ -10,7 +11,7 @@
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use breezone_module_sdk::{host, json, module, Error, Result, Service, Value};
-use chrono::{Datelike, Days, NaiveDate, Weekday};
+use chrono::{Datelike, Days, Duration, NaiveDate, Weekday};
 
 const RTE: &str = "https://digital.iservices.rte-france.com";
 
@@ -95,6 +96,38 @@ pub fn calendar(from: NaiveDate, until: NaiveDate) -> Result<Value> {
     Ok(Value::Array(days))
 }
 
+/// Red and white days of a season (1 September to 31 August).
+const RED_DAYS: i64 = 22;
+const WHITE_DAYS: i64 = 43;
+
+/// The day in France at `now` (seconds).
+pub fn today_in_france(now: i64) -> NaiveDate {
+    let utc = chrono::DateTime::from_timestamp(now, 0).unwrap_or_default().naive_utc();
+    let winter = (utc + Duration::hours(1)).date();
+    let summer = winter > last_sunday(winter.year(), 3) && winter <= last_sunday(winter.year(), 10);
+    (utc + Duration::hours(if summer { 2 } else { 1 })).date()
+}
+
+/// What the automations may read: today's and tomorrow's colour (tomorrow's once announced), the
+/// red and white days left in the season.
+pub fn conditions(today: NaiveDate) -> Result<Value> {
+    let year = if today.month() >= 9 { today.year() } else { today.year() - 1 };
+    let season = NaiveDate::from_ymd_opt(year, 9, 1).unwrap_or(today);
+    let days = calendar(season, today + Days::new(1))?;
+    let color = |d: NaiveDate| days.as_array().into_iter().flatten().find(|v| v["day"] == d.to_string()).and_then(|v| v["color"].as_str()).map(str::to_string);
+    let used = |c: &str| days.as_array().into_iter().flatten().filter(|v| v["color"] == c && v["day"].as_str().is_some_and(|d| d <= today.to_string().as_str())).count() as i64;
+    let mut out = breezone_module_sdk::Map::new();
+    if let Some(c) = color(today) {
+        out.insert("today".into(), json!(c));
+    }
+    if let Some(c) = color(today + Days::new(1)) {
+        out.insert("tomorrow".into(), json!(c));
+    }
+    out.insert("red_left".into(), json!((RED_DAYS - used("red")).max(0)));
+    out.insert("white_left".into(), json!((WHITE_DAYS - used("white")).max(0)));
+    Ok(Value::Object(out))
+}
+
 pub struct Rte;
 
 impl Service for Rte {
@@ -107,6 +140,7 @@ impl Service for Rte {
     fn query(contract: &str, query: &str, params: Value) -> Result<Value> {
         match (contract, query) {
             ("tariff.day_color@1", "colors") => calendar(day(&params, "from")?, day(&params, "until")?),
+            ("conditions@1", "read") => conditions(today_in_france(host::now())),
             _ => Err(Error::Unsupported(format!("{contract} {query}"))),
         }
     }
@@ -129,6 +163,36 @@ mod tests {
         assert_eq!(paris(d("2026-03-30")), "2026-03-30T00:00:00+02:00");
         assert_eq!(paris(d("2026-10-25")), "2026-10-25T00:00:00+02:00");
         assert_eq!(paris(d("2026-10-26")), "2026-10-26T00:00:00+01:00");
+    }
+
+    #[test]
+    fn today_in_france_at_midnight() {
+        let at = |s: &str| chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M").unwrap().and_utc().timestamp();
+        assert_eq!(today_in_france(at("2026-11-23 23:30")).to_string(), "2026-11-24", "00:30 in winter");
+        assert_eq!(today_in_france(at("2026-07-01 22:30")).to_string(), "2026-07-02", "00:30 in summer");
+        assert_eq!(today_in_france(at("2026-07-01 21:30")).to_string(), "2026-07-01");
+    }
+
+    #[test]
+    fn the_conditions_of_the_automations() {
+        testing::reset();
+        testing::account("rte", &json!({"client_id": "id", "client_secret": "secret"}));
+        testing::answer_json("POST", "/token/oauth/", &json!({"access_token": "t", "expires_in": 7200}));
+        testing::answer_json(
+            "GET",
+            "/tempo_like_calendars",
+            &json!({"tempo_like_calendars": {"values": [
+                {"start_date": "2026-11-24T00:00:00+01:00", "end_date": "2026-11-25T00:00:00+01:00", "value": "RED"},
+                {"start_date": "2026-11-23T00:00:00+01:00", "end_date": "2026-11-24T00:00:00+01:00", "value": "WHITE"},
+                {"start_date": "2026-11-20T00:00:00+01:00", "end_date": "2026-11-21T00:00:00+01:00", "value": "RED"},
+                {"start_date": "2026-09-02T00:00:00+02:00", "end_date": "2026-09-03T00:00:00+02:00", "value": "BLUE"}
+            ]}}),
+        );
+        let today = NaiveDate::from_ymd_opt(2026, 11, 23).unwrap();
+        let v = conditions(today).unwrap();
+        // Tomorrow's red is not counted yet: only the days that have come.
+        assert_eq!(v, json!({"today": "white", "tomorrow": "red", "red_left": 21, "white_left": 42}));
+        assert!(testing::requests().iter().any(|r| r.contains("start_date=2026-09-01T00:00:00%2B02:00")), "from the start of the season: {:?}", testing::requests());
     }
 
     #[test]

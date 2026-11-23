@@ -83,7 +83,9 @@ export const lasts = (w: AutomationTrigger) =>
   w.kind === "measure" ||
   w.kind === "state" ||
   w.kind === "facade" ||
-  w.kind === "presence"
+  w.kind === "presence" ||
+  w.kind === "tariff" ||
+  w.kind === "module"
 
 export type OverMode = "none" | "restore" | "steps"
 

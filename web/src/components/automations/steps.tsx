@@ -545,6 +545,29 @@ export function StepEditor({
           />
         </>
       )
+    case "surplus":
+      return (
+        <>
+          <Pick
+            value={String(step.device_id)}
+            onChange={(v) => onChange({ ...step, device_id: Number(v) })}
+            options={(home.surplusLoads ?? []).map((l) => [
+              String(l.device_id),
+              l.name,
+            ])}
+            className="w-full lg:w-56"
+          />
+          <Pick
+            value={String(step.enabled)}
+            onChange={(v) => onChange({ ...step, enabled: v === "true" })}
+            options={[
+              ["true", t("suit le surplus solaire")],
+              ["false", t("ne suit plus le surplus solaire")],
+            ]}
+            className="w-full lg:w-64"
+          />
+        </>
+      )
     case "charger_profile":
       return (
         <>
@@ -673,6 +696,9 @@ export function StepList({
       ? [["charger_profile", t("Changer le profil de la borne")] as Option]
       : []),
     ...(charger ? [["charger_now", t("Charger maintenant")] as Option] : []),
+    ...(home.surplusLoads?.length
+      ? [["surplus", t("Surplus solaire : activer ou couper")] as Option]
+      : []),
     ...(drivesDevice ? [["restore", t("Remettre comme avant")] as Option] : []),
   ]
   const add = (k: string) => {
@@ -688,6 +714,12 @@ export function StepList({
         kind: "charger_profile",
         device_id: charger.id,
         profile_id: home.chargeProfiles?.[0]?.id ?? null,
+      }
+    else if (k === "surplus" && home.surplusLoads?.[0])
+      step = {
+        kind: "surplus",
+        device_id: home.surplusLoads[0].device_id,
+        enabled: false,
       }
     else if (k === "charger_now" && charger)
       step = { kind: "charger_now", device_id: charger.id, kw: 7 }
