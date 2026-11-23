@@ -6,8 +6,30 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.12.0-beta.10] - 2026-11-23
+
+### Added
+
+- Charging profiles: the plan of the week of a charger, written like the prices of electricity
+  (kinds of day cut into slots, a calendar by day of the week or by Tempo colour, days from 06:00
+  to 06:00). A slot says what the charger does: nothing, charge up to some kW whatever the sun, or
+  charge on the solar surplus only. Recharge › Manage profiles writes them, from a template
+  (off-peak hours, blue nights, solar) or from the off-peak hours of the contract.
+- Charge now: at some kW, without a break, until the car is unplugged, until a time or until some
+  kWh more; then the charger follows its profile again.
+- The charging page (web and app) tells why the charger charges or not, when it charges next, the
+  next three days of its profile, and lets the profile be chosen; the load shedding of the charger
+  and its lock are among its settings.
+- Automations: two actions for a charger, give it a profile and charge now. The Tempo colour of
+  today or tomorrow can be read in a rule as soon as a charging profile follows it.
+- The recipe "Solar surplus: charge the car" makes the charger follow a "Solar" profile.
+
 ### Changed
 
+- The solar surplus steering is set among the automations; the energy page shows what it runs.
+- A charging profile acts even without a grid meter; only its solar slots wait for one. A charger
+  that sets its own current (its load shedding) keeps doing so when a profile or a charge now
+  starts it.
 - The Airzone WebServers are spoken to by a module shipped with Breezone (`airzone_local`), like
   the other hardware; the installations, zones, history, Airzone Cloud, schedules and the links
   between servers stay as they are.
@@ -24,6 +46,8 @@ All notable changes are documented here. The format follows
   home cards, one with a line more than the other).
 - Mobile app: the kinds of devices a server brings after an update are shown without restarting
   the app; the colour of a device of an unknown kind can be chosen.
+- The charging curve no longer shows a solar surplus at night (the charger and the grid meter are
+  averaged over windows that do not quite match).
 
 ## [0.12.0-beta.9] - 2026-11-22
 
