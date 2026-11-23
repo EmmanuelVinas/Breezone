@@ -1,0 +1,162 @@
+{
+  "breezone": "0.12.0",
+  "caps_rev": "987d3de06c129a22",
+  "channel": "stable",
+  "features": {
+    "air_quality": 1,
+    "automations": 1,
+    "contracts.ui": 1,
+    "demand": 1,
+    "devices.actions": 1,
+    "devices.history": 1,
+    "energy": 1,
+    "federation.control": 1,
+    "federation.hello": 1,
+    "federation.schedules": 1,
+    "federation.watch": 1,
+    "history": 1,
+    "home.devices": 1,
+    "home.sources": 1,
+    "modules": 1,
+    "presence": 1,
+    "scenes": 1,
+    "schedules.airzone": 1,
+    "self_update": 1,
+    "stats.daily": 1,
+    "surplus": 1,
+    "timers": 1,
+    "update.beta": 1
+  },
+  "host": {
+    "api": [
+      "1.1"
+    ],
+    "services": {
+      "airzone.webserver": {
+        "1": 0
+      },
+      "conditions": {
+        "1": 0
+      },
+      "energy.history": {
+        "1": 0
+      },
+      "tariff.day_color": {
+        "1": 0
+      },
+      "weather.forecast": {
+        "1": 0
+      },
+      "weather.warnings": {
+        "1": 0
+      }
+    },
+    "traits": {
+      "button": {
+        "1": 0
+      },
+      "camera": {
+        "1": 0
+      },
+      "climate.zone": {
+        "1": 0
+      },
+      "cover.position": {
+        "1": 0
+      },
+      "energy.meter": {
+        "1": 0
+      },
+      "energy.power": {
+        "1": 0
+      },
+      "environment.sensor": {
+        "1": 0
+      },
+      "ev.charger": {
+        "1": 1
+      },
+      "light": {
+        "1": 0
+      },
+      "solar.forecast": {
+        "1": 0
+      },
+      "solar.inverter": {
+        "1": 0
+      },
+      "solar.panel": {
+        "1": 0
+      },
+      "switch.relay": {
+        "1": 0
+      },
+      "ventilation.room": {
+        "1": 0
+      },
+      "ventilation.unit": {
+        "1": 0
+      }
+    }
+  },
+  "modules": [
+    {
+      "id": "airzone",
+      "provides": [
+        "climate.zone@1"
+      ],
+      "version": "0.12.0"
+    }
+  ],
+  "protocol": {
+    "current": 1,
+    "min": 1
+  },
+  "traits": {
+    "button": [
+      1
+    ],
+    "camera": [
+      1
+    ],
+    "climate.zone": [
+      1
+    ],
+    "cover.position": [
+      1
+    ],
+    "energy.meter": [
+      1
+    ],
+    "energy.power": [
+      1
+    ],
+    "environment.sensor": [
+      1
+    ],
+    "ev.charger": [
+      1
+    ],
+    "light": [
+      1
+    ],
+    "solar.forecast": [
+      1
+    ],
+    "solar.inverter": [
+      1
+    ],
+    "solar.panel": [
+      1
+    ],
+    "switch.relay": [
+      1
+    ],
+    "ventilation.room": [
+      1
+    ],
+    "ventilation.unit": [
+      1
+    ]
+  }
+}
