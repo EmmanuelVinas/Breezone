@@ -21,13 +21,15 @@ COPY modules/ modules/
 # The modules shipped with Breezone (each replaces the driver compiled in with the same id).
 ARG SHIPPED_MODULES="tasmota shelly trydan forecast_solar reolink hoymiles tplink hue renson rte weather linky netatmo ezviz esphome homekit airzone_local"
 # The registry and the build folder are caches kept by BuildKit (and by the CI, see the workflows):
-# only what changed is compiled again. The crates are unpacked by one build at a time (`locked`:
-# the images of both architectures are built at once, and share the registry), then compiled in
-# parallel.
+# only what changed is compiled again. The crates are downloaded by one build at a time (`locked`:
+# the images of both architectures are built at once, and share the registry), then unpacked by
+# each build in a folder of its own (`registry/src`: the modules and the server are compiled at
+# the same time, and unpacking a crate twice at once fails).
 RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git,sharing=locked \
     cd modules && cargo fetch --locked
 RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=cargo-src-modules,target=/usr/local/cargo/registry/src,sharing=locked \
     --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
     --mount=type=cache,id=modules-target,target=/src/modules/target \
     cd modules \
@@ -44,12 +46,13 @@ WORKDIR /src
 COPY server/ ./
 # The registry and the build folder are caches kept by BuildKit (and by the CI): a new version, or
 # a change of the server, compiles only what changed; the dependencies stay compiled. The binaries
-# are copied out of the cache, which is not part of the image. The crates are unpacked by one build
-# at a time (see the modules).
+# are copied out of the cache, which is not part of the image. The crates are downloaded by one
+# build at a time and unpacked in a folder of its own (see the modules).
 RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git,sharing=locked \
     cargo fetch --locked
 RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=cargo-src-server-${TARGETARCH},target=/usr/local/cargo/registry/src,sharing=locked \
     --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
     --mount=type=cache,id=server-target-${TARGETARCH},target=/src/target \
     cargo build --release --locked --bins \
