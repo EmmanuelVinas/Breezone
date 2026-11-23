@@ -271,17 +271,21 @@ export function PowerCurve({ device }: { device: DeviceView }) {
     enabled: withSurplus,
     refetchInterval: 60_000,
   })
-  const grid = new Map(
+  const flows = new Map(
     (day.data?.points ?? [])
       .filter((p) => p.grid !== null)
-      .map((p) => [p.ts, p.grid!])
+      .map((p) => [p.ts, { grid: p.grid!, solar: p.solar ?? 0 }])
   )
   const points = (history.data?.series.power ?? []).map(([ts, w]) => {
-    const g = grid.get(ts)
+    const f = flows.get(ts)
+    // The two curves are averaged over windows that do not quite match: what the charger takes
+    // can seem more than what the grid gives at night. No surplus beyond what the sun gives.
+    const surplus =
+      f === undefined ? null : Math.min(f.solar, Math.max(0, -f.grid + w))
     return {
       ts,
       power: w / 1000,
-      surplus: g === undefined ? null : Math.max(0, -g + w) / 1000,
+      surplus: surplus === null ? null : surplus / 1000,
     }
   })
   return (
