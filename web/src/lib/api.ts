@@ -18,6 +18,7 @@ import type {
   PriceView,
   Room,
   Tariff,
+  TariffCalendar,
   TariffView,
   Zone,
 } from "@/lib/api.generated"
