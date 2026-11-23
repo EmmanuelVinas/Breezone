@@ -463,7 +463,6 @@
     <string name="energy_flow_hint">Actualizado cada 5 s · los puntos van en el sentido de la energía</string>
     <string name="energy_covered">%1$d % cubiertos</string>
     <string name="energy_surplus">Excedente %1$s</string>
-    <string name="energy_grid_drawn">tomados de la red</string>
     <string name="energy_grid_injected">inyectados</string>
     <string name="energy_battery_idle">en reposo</string>
     <string name="energy_now">Ahora mismo</string>

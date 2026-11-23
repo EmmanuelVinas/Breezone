@@ -12,8 +12,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -46,10 +48,10 @@ import com.breezone.app.data.EnergyLive
 import com.breezone.app.resources.*
 import com.breezone.app.ui.icons.FzIcons
 import com.breezone.app.ui.theme.Fz
-import org.jetbrains.compose.resources.stringResource
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
+import org.jetbrains.compose.resources.stringResource
 
 /** A box of the diagram, and the link between it and the home. */
 @Immutable
@@ -89,7 +91,8 @@ internal fun EnergyNowCard(live: EnergyLive, titled: Boolean = true) {
         }
         if (roles.grid) {
             val g = live.grid ?: 0.0
-            val sub = stringResource(if (g < 0) Res.string.energy_grid_injected else Res.string.energy_grid_drawn)
+            // Drawn from the grid is the usual case: only a power returned to it is said.
+            val sub = if (g < 0) stringResource(Res.string.energy_grid_injected) else null
             add(FlowNode("grid", FzIcons.UtilityPole, stringResource(Res.string.energy_grid), formatPower(live.grid), sub, Fz.colors.cool, live.grid, g >= 0))
         }
     }
@@ -151,8 +154,9 @@ private fun SurplusBadge(power: String) {
 /** A row of boxes; `keepColumns`: a lone box keeps the width (and the column) of one of two. */
 @Composable
 private fun NodeRow(nodes: List<FlowNode>, keepColumns: Boolean) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        nodes.forEach { NodeBox(it, Modifier.weight(1f)) }
+    // The boxes of a row take the height of the tallest one.
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        nodes.forEach { NodeBox(it, Modifier.weight(1f).fillMaxHeight()) }
         if (keepColumns && nodes.size == 1) Spacer(Modifier.weight(1f))
     }
 }

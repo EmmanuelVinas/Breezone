@@ -467,7 +467,6 @@
     <string name="energy_flow_hint">Updated every 5 s · the dots go the way the energy goes</string>
     <string name="energy_covered">%1$d % covered</string>
     <string name="energy_surplus">Surplus %1$s</string>
-    <string name="energy_grid_drawn">drawn from the grid</string>
     <string name="energy_grid_injected">fed in</string>
     <string name="energy_battery_idle">idle</string>
     <string name="energy_now">Right now</string>

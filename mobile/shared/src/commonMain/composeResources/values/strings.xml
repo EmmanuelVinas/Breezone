@@ -477,10 +477,9 @@
     <string name="energy_tile_solar">%1$s solaire</string>
     <string name="energy_tile_grid">réseau %1$s</string>
     <string name="energy_empty">Aucune mesure d’énergie : donnez un rôle aux mesures dans Réglages › Modules, sur le web.</string>
-    <string name="energy_flow_hint">Mis à jour toutes les 5 s · les points vont dans le sens de l\'énergie</string>
+    <string name="energy_flow_hint">Mis à jour toutes les 5 s · les points vont dans le sens de l’énergie</string>
     <string name="energy_covered">%1$d % couverts</string>
     <string name="energy_surplus">Surplus %1$s</string>
-    <string name="energy_grid_drawn">tirés du réseau</string>
     <string name="energy_grid_injected">injectés</string>
     <string name="energy_battery_idle">au repos</string>
     <string name="energy_now">En ce moment</string>
@@ -740,7 +739,7 @@
     <string name="chart_days_ago">-%1$s j</string>
     <string name="modules_title">Modules</string>
     <string name="modules_title_server">Modules · %1$s</string>
-    <string name="modules_hint">Les modules installés sur ce serveur. Ils s\'installent et se mettent à jour depuis son interface web (Modules › Bibliothèque).</string>
+    <string name="modules_hint">Les modules installés sur ce serveur. Ils s’installent et se mettent à jour depuis son interface web (Modules › Bibliothèque).</string>
     <string name="modules_none">Aucun module installé.</string>
     <string name="modules_line">%1$s · %2$s · %3$s</string>
     <string name="modules_origin_builtin">livré avec Breezone</string>
