@@ -576,8 +576,8 @@ export function SurplusCard() {
 }
 
 /**
- * The surplus steering as the automations page shows it: what it runs, in order, and what each
- * does now. Changed on the energy page only: one place sets what follows the surplus.
+ * The surplus steering as the energy page shows it: what it runs, in order, and what each does
+ * now. Changed on the automations page only: one place sets what follows the surplus.
  */
 export function SurplusProgramme() {
   const surplus = useSurplus()
@@ -593,12 +593,12 @@ export function SurplusProgramme() {
           </CardTitle>
           <CardDescription>
             {t(
-              "Tourne tout seul, par ordre de priorité. Il se règle dans Énergie ; un automatisme ne doit pas piloter les mêmes appareils."
+              "Tourne tout seul, par ordre de priorité. Il se règle dans Automatismes ; un automatisme ne doit pas piloter les mêmes appareils."
             )}
           </CardDescription>
         </div>
         <Button asChild variant="outline" size="sm">
-          <Link to="/energie">{t("Régler")}</Link>
+          <Link to="/routines">{t("Régler")}</Link>
         </Button>
       </CardHeader>
       <CardContent>
@@ -760,7 +760,7 @@ export function ChargingMode({ device }: { device: DeviceView }) {
         {mode !== "manual" && (
           <p className="text-xs text-muted-foreground">
             {t(
-              "L'ordre de priorité avec les autres appareils et les intensités se règlent dans Énergie › Pilotage sur surplus solaire."
+              "L'ordre de priorité avec les autres appareils et les intensités se règlent dans Automatismes › Pilotage sur surplus solaire."
             )}
           </p>
         )}

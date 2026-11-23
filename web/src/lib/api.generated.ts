@@ -2,6 +2,8 @@
 
 export type AirQualityLevel = "good" | "regular" | "bad"
 
+export type ChargeMode = "off" | "max" | "solar"
+
 export type DayColor = "blue" | "white" | "red"
 
 export type MeasureRole = "grid" | "solar" | "battery" | "consumption"
@@ -20,6 +22,114 @@ export type AirQuality = {
   mode: "off" | "on" | "auto" | null
   threshold_low: number | null
   threshold_high: number | null
+}
+
+/** A local day of a charging profile, midnight to midnight. */
+export type ChargeDay = {
+  /** "YYYY-MM-DD". */
+  day: string
+  color: DayColor | null
+  periods: ChargePeriod[]
+}
+
+/** A kind of day of a charging profile. */
+export type ChargeDayKind = {
+  id: string
+  name: string
+  color: string | null
+  slots: ChargeSlot[]
+}
+
+/** When the profile charges next (now, when it does). */
+export type ChargeNext = {
+  start: number
+  end: number
+  mode: ChargeMode
+  kw: number | null
+  color: DayColor | null
+}
+
+/** A charge asked now. */
+export type ChargeNow = {
+  amps: number
+  kw: number | null
+  /** Until then (null: until unplugged, or its energy). */
+  until: number | null
+  /** Energy to add. */
+  kwh: number | null
+  /** Energy still to add. */
+  left_kwh: number | null
+}
+
+/** A stretch of time with one thing to do. */
+export type ChargePeriod = {
+  start: number
+  end: number
+  mode: ChargeMode
+  /** max: the power (the charger's maximum when the slot gives none). */
+  kw: number | null
+  /** The kind of day. */
+  profile: string
+  color: DayColor | null
+}
+
+/** A profile a charger may follow. */
+export type ChargeProfileRef = {
+  id: number
+  name: string
+}
+
+/** A charging profile (`GET /api/charging/profiles`). */
+export type ChargeProfileView = {
+  id: number
+  name: string
+  profiles: ChargeDayKind[]
+  calendar: TariffCalendar
+  /** The chargers that follow it (those the user sees). */
+  used_by: ChargeUsedBy[]
+  /** The automations that give it to a charger. */
+  automations: string[]
+}
+
+/** A slot of a kind of day of a charging profile, until the next one. */
+export type ChargeSlot = {
+  /** "HH:MM", local time; the first at "00:00". */
+  start: string
+  /** off: no charge; max: up to `kw` whatever the sun; solar: the surplus only. */
+  mode: ChargeMode
+  /** max: up to this power (absent: the charger's maximum). */
+  kw?: number | null
+  /** solar: the current it keeps between (absent: the charger's). */
+  min_amps?: number | null
+  max_amps?: number | null
+}
+
+/** What the charger does now, as the surplus regulator says. */
+export type ChargeStatus = {
+  /** solar | guarantee | waiting | no_car | unavailable | no_meter | manual | no_charge | charging | now. */
+  state: string
+  /** In words, in the language of the request. */
+  reason: string
+}
+
+/** A charger that follows a profile. */
+export type ChargeUsedBy = {
+  device_id: number
+  name: string
+}
+
+/** What a charger follows and does (`GET /api/devices/{id}/charging`). */
+export type ChargingView = {
+  profile_id: number | null
+  /** The profiles it may follow. */
+  profiles: ChargeProfileRef[]
+  now: ChargeNow | null
+  /** null: not looked at yet, or it follows nothing. */
+  status: ChargeStatus | null
+  next: ChargeNext | null
+  /** Its profile over the next 3 days, from today. */
+  days: ChargeDay[]
+  can_control: boolean
 }
 
 /** The profile a day of an announced colour follows (Tempo). */

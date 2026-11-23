@@ -5,6 +5,17 @@ package com.breezone.app.data
 /** A sample of each view of the contract, every field filled: the app's models must read them. */
 object ApiSamples {
     const val AIR_QUALITY = """{"level":"good","mode":"off","threshold_high":1,"threshold_low":1,"value":1}"""
+    const val CHARGE_DAY = """{"color":"blue","day":"x","periods":[{"color":"blue","end":1,"kw":1,"mode":"off","profile":"x","start":1}]}"""
+    const val CHARGE_DAY_KIND = """{"color":"x","id":"x","name":"x","slots":[{"kw":1,"max_amps":1,"min_amps":1,"mode":"off","start":"x"}]}"""
+    const val CHARGE_NEXT = """{"color":"blue","end":1,"kw":1,"mode":"off","start":1}"""
+    const val CHARGE_NOW = """{"amps":1,"kw":1,"kwh":1,"left_kwh":1,"until":1}"""
+    const val CHARGE_PERIOD = """{"color":"blue","end":1,"kw":1,"mode":"off","profile":"x","start":1}"""
+    const val CHARGE_PROFILE_REF = """{"id":1,"name":"x"}"""
+    const val CHARGE_PROFILE_VIEW = """{"automations":["x"],"calendar":{"colors":{"blue":"x","red":"x","white":"x"},"day_start":"x","weekdays":["x"]},"id":1,"name":"x","profiles":[{"color":"x","id":"x","name":"x","slots":[{"kw":1,"max_amps":1,"min_amps":1,"mode":"off","start":"x"}]}],"used_by":[{"device_id":1,"name":"x"}]}"""
+    const val CHARGE_SLOT = """{"kw":1,"max_amps":1,"min_amps":1,"mode":"off","start":"x"}"""
+    const val CHARGE_STATUS = """{"reason":"x","state":"x"}"""
+    const val CHARGE_USED_BY = """{"device_id":1,"name":"x"}"""
+    const val CHARGING_VIEW = """{"can_control":true,"days":[{"color":"blue","day":"x","periods":[{"color":"blue","end":1,"kw":1,"mode":"off","profile":"x","start":1}]}],"next":{"color":"blue","end":1,"kw":1,"mode":"off","start":1},"now":{"amps":1,"kw":1,"kwh":1,"left_kwh":1,"until":1},"profile_id":1,"profiles":[{"id":1,"name":"x"}],"status":{"reason":"x","state":"x"}}"""
     const val COLOR_PROFILES = """{"blue":"x","red":"x","white":"x"}"""
     const val CONNECTION = """{"last_error":"x","last_seen":1,"latency_ms":1,"state":"online"}"""
     const val CONTRACT = """{"country":"x","currency":"x","offer":"x","offpeak":[{"from":"x","to":"x"}],"power_kva":1,"supplier":"x"}"""

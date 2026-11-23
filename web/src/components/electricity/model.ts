@@ -15,8 +15,11 @@ export const clock = (min: number) =>
 export const STEP = 30
 export const DAY = 24 * 60
 
+/** Anything cut into slots of a day, each from its start. */
+type Timed = { start: string }
+
 /** The end of a slot: the start of the next one, or midnight. */
-export const slotEnd = (slots: PriceSlot[], i: number) =>
+export const slotEnd = (slots: Timed[], i: number) =>
   i + 1 < slots.length ? minutes(slots[i + 1].start) : DAY
 
 /** A price per kWh as typed ("0,1609" or "0.1609"); `null` when it is not one. */
@@ -45,7 +48,7 @@ export const PROFILE_COLORS = [
 ]
 
 /** The slot cut in two at its middle (on a half hour), when it is long enough. */
-export function split(slots: PriceSlot[], i: number): PriceSlot[] | null {
+export function split<S extends Timed>(slots: S[], i: number): S[] | null {
   const start = minutes(slots[i].start)
   const end = slotEnd(slots, i)
   if (end - start < 2 * STEP) return null
@@ -55,18 +58,18 @@ export function split(slots: PriceSlot[], i: number): PriceSlot[] | null {
 }
 
 /** The slot given to the one before it (the first one to the next). */
-export function merge(slots: PriceSlot[], i: number): PriceSlot[] {
+export function merge<S extends Timed>(slots: S[], i: number): S[] {
   if (slots.length < 2) return slots
   if (i === 0) return [{ ...slots[1], start: "00:00" }, ...slots.slice(2)]
   return slots.filter((_, j) => j !== i)
 }
 
 /** The start of slot `i` (not the first) moved, between its neighbours. */
-export function moveStart(
-  slots: PriceSlot[],
+export function moveStart<S extends Timed>(
+  slots: S[],
   i: number,
   to: number
-): PriceSlot[] {
+): S[] {
   const low = minutes(slots[i - 1].start) + STEP
   const high = slotEnd(slots, i) - STEP
   const at = Math.min(high, Math.max(low, Math.round(to / STEP) * STEP))
@@ -124,7 +127,7 @@ export function problem(tariff: Tariff): string | null {
 }
 
 /** A new id for a profile, unlike the others. */
-export function newProfileId(profiles: DayProfile[]) {
+export function newProfileId(profiles: { id: string }[]) {
   let i = profiles.length + 1
   while (profiles.some((p) => p.id === `p${i}`)) i++
   return `p${i}`

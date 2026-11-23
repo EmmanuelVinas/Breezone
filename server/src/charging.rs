@@ -399,6 +399,71 @@ pub async fn plans(state: &AppState, devices: &[DeviceView], now: i64) -> HashMa
     out
 }
 
+/// Gives a charger a profile (`None`: none): it takes it at once, even after a stop by hand.
+pub async fn set_profile(state: &AppState, device_id: i64, profile_id: Option<i64>) -> crate::error::ApiResult<()> {
+    use crate::error::ApiError;
+    if let Some(pid) = profile_id {
+        if !db::list_charge_profiles(&state.db).await?.iter().any(|r| r.id == pid) {
+            return Err(ApiError::not_found(crate::text!("profil de recharge introuvable", "charging profile not found", "perfil de carga no encontrado")));
+        }
+    }
+    let row = db::charger_plan(&state.db, device_id).await?.unwrap_or(ChargerPlanRow { device_id, ..Default::default() });
+    db::set_charger_plan(&state.db, &ChargerPlanRow { profile_id, ..row }).await?;
+    state.surplus.release(device_id).await;
+    Ok(())
+}
+
+/// What "charge now" asks.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct NowInput {
+    /// Up to this power (none: the charger's maximum).
+    #[serde(default)]
+    pub kw: Option<f64>,
+    /// Until then (none: until it is unplugged).
+    #[serde(default)]
+    pub until: Option<i64>,
+    /// Until this much more energy (kWh).
+    #[serde(default)]
+    pub kwh: Option<f64>,
+}
+
+/// Charges a charger now, without a break: until it is unplugged, a time or some energy more.
+pub async fn charge_now(state: &AppState, d: &DeviceView, input: &NowInput) -> crate::error::ApiResult<()> {
+    use crate::error::ApiError;
+    let now = db::now();
+    let bad = |fr: &str, en: &str, es: &str| ApiError::bad_request(crate::i18n::Text { fr: fr.into(), en: en.into(), es: es.into() });
+    if input.kw.is_some_and(|k| !k.is_finite() || k <= 0.0 || k > MAX_KW) {
+        return Err(bad("puissance de 0 à 50 kW", "power from 0 to 50 kW", "potencia de 0 a 50 kW"));
+    }
+    if input.until.is_some_and(|u| u <= now || u > now + 7 * 24 * 3600) {
+        return Err(bad("une heure dans les 7 jours qui viennent", "a time within the next 7 days", "una hora en los próximos 7 días"));
+    }
+    if input.kwh.is_some_and(|k| !k.is_finite() || k <= 0.0 || k > 200.0) {
+        return Err(bad("énergie de 0 à 200 kWh", "energy from 0 to 200 kWh", "energía de 0 a 200 kWh"));
+    }
+    let c = Charger::of(d);
+    if !c.plugged {
+        return Err(ApiError::conflict(crate::text!("Branchez d'abord la voiture", "Plug the car in first", "Conecte primero el coche")));
+    }
+    let amps = c.amps(input.kw);
+    let row = db::charger_plan(&state.db, d.id).await?.unwrap_or(ChargerPlanRow { device_id: d.id, ..Default::default() });
+    db::set_charger_plan(
+        &state.db,
+        &ChargerPlanRow {
+            now_amps: Some(amps),
+            now_kw: Some(input.kw.unwrap_or_else(|| kw_of(amps, c.voltage, c.phases))),
+            now_until: input.until,
+            now_kwh: input.kwh,
+            now_base_energy: Some(c.session_energy),
+            ..row
+        },
+    )
+    .await?;
+    // Asked now: what was done by hand before no longer holds.
+    state.surplus.release(d.id).await;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

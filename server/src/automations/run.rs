@@ -295,6 +295,13 @@ async fn drive(state: &AppState, ctx: &Context, p: &mut Progress, device_id: i64
     apply(state, ctx, device_id, &input, who).await
 }
 
+/// When a time of day ("06:00") next comes after `now`.
+fn next_clock(now: i64, at: chrono::NaiveTime, tz: chrono_tz::Tz) -> Option<i64> {
+    use chrono::TimeZone;
+    let day = crate::rollup::local_day(now, tz);
+    (0..2).filter_map(|d| tz.from_local_datetime(&(day + chrono::Days::new(d)).and_time(at)).earliest()).map(|t| t.timestamp()).find(|t| *t > now)
+}
+
 pub(super) fn done(what: Text, r: ApiResult<()>) -> StepDone {
     StepDone { what, ok: r.is_ok(), error: r.err().map(|e| e.message) }
 }
@@ -406,6 +413,19 @@ pub(super) async fn execute(state: &AppState, row: &AutomationRow, steps: &[Step
             }
             Step::Notify { message } => {
                 p.out.push(done(what, notify(state, &row.name, message.trim(), actor).await));
+            }
+            Step::ChargerProfile { device_id, profile_id } => {
+                p.out.push(done(what, crate::charging::set_profile(state, *device_id, *profile_id).await));
+            }
+            Step::ChargerNow { device_id, kw, until, kwh } => {
+                let r = match ctx.device(*device_id) {
+                    Some(d) => {
+                        let until = until.as_deref().and_then(crate::price::clock).and_then(|t| next_clock(ctx.now, t, ctx.tz));
+                        crate::charging::charge_now(state, d, &crate::charging::NowInput { kw: *kw, until, kwh: *kwh }).await
+                    }
+                    None => Err(ApiError::not_found("device not found")),
+                };
+                p.out.push(done(what, r));
             }
             Step::Restore => {
                 p.out.push(done(what, Ok(())));

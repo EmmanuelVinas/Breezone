@@ -450,6 +450,19 @@ export function DeviceActionEditor({
   )
 }
 
+/** The chargers a rule may drive. */
+function chargers(home: Home) {
+  return home.devices.filter(
+    (d) =>
+      home.drivable.has(d.id) &&
+      d.installation_id === null &&
+      d.traits.some((x) => x.startsWith("ev.charger@"))
+  )
+}
+
+const CHARGE_KW = [1.4, 2.3, 3.7, 5, 7, 7.4, 11, 22]
+const CHARGE_KWH = [5, 10, 15, 20, 30, 40, 50]
+
 export function StepEditor({
   home,
   step,
@@ -532,6 +545,93 @@ export function StepEditor({
           />
         </>
       )
+    case "charger_profile":
+      return (
+        <>
+          <Pick
+            value={String(step.device_id)}
+            onChange={(v) => onChange({ ...step, device_id: Number(v) })}
+            options={chargers(home).map((d) => [String(d.id), d.name])}
+            className="w-full lg:w-56"
+          />
+          <span className="text-sm">{t("suit le profil")}</span>
+          <Pick
+            value={String(step.profile_id ?? "none")}
+            onChange={(v) =>
+              onChange({
+                ...step,
+                profile_id: v === "none" ? null : Number(v),
+              })
+            }
+            options={[
+              ...(home.chargeProfiles ?? []).map(
+                (p) => [String(p.id), p.name] as Option
+              ),
+              ["none", t("aucun profil")],
+            ]}
+            className="w-full lg:w-56"
+          />
+        </>
+      )
+    case "charger_now": {
+      const until = step.until ? "time" : step.kwh ? "kwh" : "unplug"
+      return (
+        <>
+          <Pick
+            value={String(step.device_id)}
+            onChange={(v) => onChange({ ...step, device_id: Number(v) })}
+            options={chargers(home).map((d) => [String(d.id), d.name])}
+            className="w-full lg:w-56"
+          />
+          <span className="text-sm">{t("charge maintenant jusqu'à")}</span>
+          <Pick
+            value={String(step.kw ?? "max")}
+            onChange={(v) =>
+              onChange({ ...step, kw: v === "max" ? null : Number(v) })
+            }
+            options={[
+              ...CHARGE_KW.map((k) => [String(k), `${k} kW`] as Option),
+              ["max", t("son maximum")],
+            ]}
+            className="w-full lg:w-36"
+          />
+          <Pick
+            value={until}
+            onChange={(v) =>
+              onChange({
+                ...step,
+                until: v === "time" ? "06:00" : null,
+                kwh: v === "kwh" ? 10 : null,
+              })
+            }
+            options={[
+              ["unplug", t("jusqu'au débranchement")],
+              ["time", t("jusqu'à une heure")],
+              ["kwh", t("jusqu'à une énergie")],
+            ]}
+            className="w-full lg:w-52"
+          />
+          {until === "time" && (
+            <Input
+              type="time"
+              className="w-full lg:w-32"
+              value={step.until ?? "06:00"}
+              onChange={(e) =>
+                e.target.value && onChange({ ...step, until: e.target.value })
+              }
+            />
+          )}
+          {until === "kwh" && (
+            <Pick
+              value={String(step.kwh ?? 10)}
+              onChange={(v) => onChange({ ...step, kwh: Number(v) })}
+              options={CHARGE_KWH.map((k) => [String(k), `+${k} kWh`])}
+              className="w-full lg:w-32"
+            />
+          )}
+        </>
+      )
+    }
     case "restore":
       return (
         <span className="text-sm">
@@ -559,6 +659,7 @@ export function StepList({
   const firstTarget = home.devices.find(
     (d) => home.drivable.has(d.id) && actionsOf(home, d).length > 0
   )
+  const charger = chargers(home)[0]
   const drivesDevice = [...before, ...steps].some(
     (s) => s.kind === "device" || s.kind === "group"
   )
@@ -568,6 +669,10 @@ export function StepList({
     ["wait", t("Attendre")],
     ["wait_until", t("Attendre que…")],
     ["notify", t("Prévenir")],
+    ...(charger && home.chargeProfiles?.length
+      ? [["charger_profile", t("Changer le profil de la borne")] as Option]
+      : []),
+    ...(charger ? [["charger_now", t("Charger maintenant")] as Option] : []),
     ...(drivesDevice ? [["restore", t("Remettre comme avant")] as Option] : []),
   ]
   const add = (k: string) => {
@@ -578,6 +683,14 @@ export function StepList({
     else if (k === "wait") step = { kind: "wait", seconds: 600 }
     else if (k === "restore") step = { kind: "restore" }
     else if (k === "notify") step = { kind: "notify", message: "" }
+    else if (k === "charger_profile" && charger)
+      step = {
+        kind: "charger_profile",
+        device_id: charger.id,
+        profile_id: home.chargeProfiles?.[0]?.id ?? null,
+      }
+    else if (k === "charger_now" && charger)
+      step = { kind: "charger_now", device_id: charger.id, kw: 7 }
     else if (k === "wait_until") {
       const condition = newCondition("measure", home)!
       step = {

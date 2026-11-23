@@ -34,6 +34,11 @@ const EnergyPage = lazy(() =>
 const ChargingPage = lazy(() =>
   import("@/pages/charging").then((m) => ({ default: m.ChargingPage }))
 )
+const ChargeProfilesPage = lazy(() =>
+  import("@/pages/charge-profiles").then((m) => ({
+    default: m.ChargeProfilesPage,
+  }))
+)
 const SolarPage = lazy(() =>
   import("@/pages/solar").then((m) => ({ default: m.SolarPage }))
 )
@@ -93,6 +98,14 @@ function Protected() {
             element={
               <ThisServerOnly>
                 <ChargingPage />
+              </ThisServerOnly>
+            }
+          />
+          <Route
+            path="/recharge/profils"
+            element={
+              <ThisServerOnly>
+                <ChargeProfilesPage />
               </ThisServerOnly>
             }
           />

@@ -118,6 +118,8 @@ export type Home = {
   roles: { grid: boolean; solar: boolean; consumption: boolean }
   /** The home has a tariff of electricity, and one that follows the Tempo colours. */
   prices?: { tariff: boolean; tempo: boolean }
+  /** The charging profiles, for the actions of a charger. */
+  chargeProfiles?: { id: number; name: string }[]
 }
 
 export function traitsOf(home: Home, d: DeviceView): TraitInfo[] {

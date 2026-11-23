@@ -515,7 +515,7 @@ maintenant la reprend.
 
 | Méthode | Chemin | Description |
 |---------|--------|-------------|
-| GET 🔒 | `/api/charging/profiles` | `[{id, name, profiles, calendar, used_by: [{device_id, name}]}]` |
+| GET 🔒 | `/api/charging/profiles` | `[{id, name, profiles, calendar, used_by: [{device_id, name}], automations: [nom]}]` (`automations` : les règles qui le donnent à une borne) |
 | POST 👑 | `/api/charging/profiles` | `{name, profiles: [{id, name, color?, slots: [{start, mode, kw?, min_amps?, max_amps?}]}], calendar}` → 201, le profil |
 | PUT 👑 | `/api/charging/profiles/{id}` | Même corps → le profil |
 | DELETE 👑 | `/api/charging/profiles/{id}` | Les bornes qui le suivaient ne suivent plus rien → 204 |
@@ -616,7 +616,11 @@ appareils pilotés plus haut dans la même exécution comme ils étaient : régl
 boost ; vient après une action sur un appareil ; un appareil dont quelqu'un a changé un de ces
 réglages entre-temps est laissé tel quel, et l'historique le dit) | `{kind:"notify", message}` (1 à 200 caractères : écrit dans
 le journal, `kind: "notification"`, que les applis ouvertes affichent aussitôt ; envoyé aussi au
-sujet ntfy réglé, avec le titre « Breezone · nom de la règle »).
+sujet ntfy réglé, avec le titre « Breezone · nom de la règle ») |
+`{kind:"charger_profile", device_id, profile_id}` (la borne suit ce profil de recharge, `null` :
+aucun) | `{kind:"charger_now", device_id, kw?, until?, kwh?}` (charger maintenant : jusqu'à `kw`,
+son maximum sans ; jusqu'à `until` « HH:MM », la prochaine fois que cette heure vient, ou `kwh` de
+plus, sinon jusqu'au débranchement ; refusé sans voiture branchée).
 
 `Automation` ajoute `{id, when` (le premier déclencheur)`, summary:{when, triggers, conditions,
 joined, actions, else, over}` (la règle en phrases, dans la langue de la requête ; `joined` = « et » ou

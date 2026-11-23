@@ -9,7 +9,7 @@ import type {
 } from "@/lib/api"
 import { api, currentUser, isDeviceAction } from "@/lib/api"
 import { t } from "@/lib/i18n"
-import { SurplusProgramme } from "@/components/surplus"
+import { SurplusCard } from "@/components/surplus"
 import {
   useChosenInstallations,
   useModulesHere,
@@ -39,6 +39,14 @@ export function AutomationsSection() {
   const rooms = useQuery({ queryKey: ["rooms"], queryFn: api.rooms })
   const live = useQuery({ queryKey: ["energy-live"], queryFn: api.energyLive })
   const price = usePrice()
+  const chargeProfiles = useQuery({
+    queryKey: ["charge-profiles"],
+    queryFn: api.chargeProfiles,
+  })
+  // A charging profile that follows the Tempo colours: they can be read in a rule too.
+  const chargeTempo = (chargeProfiles.data ?? []).some((p) =>
+    Object.values(p.calendar.colors).some(Boolean)
+  )
   const { installations, ids } = useChosenInstallations()
   // The modules (and the rules on them alone) are this server's: not those of an installation
   // reached through another server.
@@ -88,8 +96,12 @@ export function AutomationsSection() {
     },
     prices: {
       tariff: !!price.data?.now,
-      tempo: !!price.data?.tempo,
+      tempo: !!price.data?.tempo || chargeTempo,
     },
+    chargeProfiles: (chargeProfiles.data ?? []).map((p) => ({
+      id: p.id,
+      name: p.name,
+    })),
   }
   const installationOf = new Map(
     (devices.data ?? []).map((d) => [d.id, d.installation_id])
@@ -162,7 +174,7 @@ export function AutomationsSection() {
       </div>
       <AutomationsBar admin={admin} />
       {admin && <UnreadableAutomations />}
-      {here && <SurplusProgramme />}
+      {here && <SurplusCard />}
       {automations.isLoading ? (
         <div className="grid gap-4 md:grid-cols-2">
           <Skeleton className="h-40 rounded-3xl" />

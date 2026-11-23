@@ -1555,8 +1555,8 @@ const es: Record<string, string> = {
   "Mode de charge": "Modo de carga",
   "Les modes solaires demandent un compteur au tableau (une voie « réseau »).":
     "Los modos solares necesitan un contador en el cuadro (un canal «red»).",
-  "L'ordre de priorité avec les autres appareils et les intensités se règlent dans Énergie › Pilotage sur surplus solaire.":
-    "La prioridad con los demás aparatos y las intensidades se ajustan en Energía › Pilotaje por excedente solar.",
+  "L'ordre de priorité avec les autres appareils et les intensités se règlent dans Automatismes › Pilotage sur surplus solaire.":
+    "La prioridad con los demás aparatos y las intensidades se ajustan en Automatismos › Pilotaje por excedente solar.",
   "Vue d'ensemble": "Vista general",
   indisponible: "no disponible",
   "{temp} moy.": "{temp} med.",
@@ -2028,8 +2028,8 @@ const es: Record<string, string> = {
     "Ningún aparato sigue el excedente. Añada el cargador, un calentador en un enchufe pilotado o una zona de climatización.",
   "Aussi piloté par {names} : les deux se contrediraient.":
     "También pilotado por {names}: ambos se contradirían.",
-  "Tourne tout seul, par ordre de priorité. Il se règle dans Énergie ; un automatisme ne doit pas piloter les mêmes appareils.":
-    "Funciona solo, por orden de prioridad. Se ajusta en Energía; una automatización no debe pilotar los mismos aparatos.",
+  "Tourne tout seul, par ordre de priorité. Il se règle dans Automatismes ; un automatisme ne doit pas piloter les mêmes appareils.":
+    "Funciona solo, por orden de prioridad. Se ajusta en Automatismos; una automatización no debe pilotar los mismos aparatos.",
   Régler: "Ajustar",
   inchangé: "sin cambios",
   "Réglages enregistrés": "Ajustes guardados",
@@ -2184,6 +2184,104 @@ const es: Record<string, string> = {
   "Module {name} installé": "Módulo {name} instalado",
   "Installer le module": "Instalar el módulo",
   "Installer (non officiel · {name})": "Instalar (no oficial · {name})",
+  "demain {time}": "mañana {time}",
+  "surplus solaire": "excedente solar",
+  "pas de charge": "sin carga",
+  "jusqu'à {kw} kW": "hasta {kw} kW",
+  "jour {color}": "día {color}",
+  "≈ {kwh} possibles": "≈ {kwh} posibles",
+  "En charge selon le profil jusqu'à {end}":
+    "Cargando según el perfil hasta {end}",
+  "Prochaine charge : {start} → {end}": "Próxima carga: {start} → {end}",
+  surplus: "excedente",
+  "Profil de recharge": "Perfil de carga",
+  "Gérer les profils ›": "Gestionar los perfiles ›",
+  "Sans profil, la borne charge quand la voiture est branchée, ou suit le surplus solaire si elle y est inscrite.":
+    "Sin perfil, el cargador carga cuando el coche está conectado, o sigue el excedente solar si está inscrito.",
+  "Le profil décide des heures de charge ; « Charger maintenant » passe avant.":
+    "El perfil decide las horas de carga; «Cargar ahora» tiene prioridad.",
+  "Aucun profil : créez-en un dans « Gérer les profils ».":
+    "Ningún perfil: cree uno en «Gestionar los perfiles».",
+  "Aucun profil pour l'instant.": "Ningún perfil por ahora.",
+  Aucun: "Ninguno",
+  "charge, même sans soleil": "carga, incluso sin sol",
+  "Charger maintenant": "Cargar ahora",
+  "Sans interruption : passe avant le profil et le surplus solaire.":
+    "Sin interrupción: tiene prioridad sobre el perfil y el excedente solar.",
+  "{kw} kW (maximum)": "{kw} kW (máximo)",
+  Maximum: "Máximo",
+  Débranchement: "Desconexión",
+  kWh: "kWh",
+  "La borne garde son délestage : elle baisse seule si la maison consomme trop.":
+    "El cargador mantiene su deslastre: baja solo si la casa consume demasiado.",
+  "Lancer à {kw} kW": "Iniciar a {kw} kW",
+  "jusqu'à {time}": "hasta {time}",
+  "encore {kwh}": "faltan {kwh}",
+  "jusqu'au débranchement": "hasta desconectar",
+  "Charge immédiate à {kw} kW, {end}": "Carga inmediata a {kw} kW, {end}",
+  "Revenir au profil": "Volver al perfil",
+  "Arrêter la charge immédiate": "Detener la carga inmediata",
+  "La borne règle seule son courant": "El cargador regula solo su corriente",
+  "Délestage selon sa pince de mesure (mode dynamique)":
+    "Deslastre según su pinza de medida (modo dinámico)",
+  Suspendre: "Pausar",
+  "Branchez d'abord la voiture": "Conecte primero el coche",
+  "Charger jusqu'à": "Cargar hasta",
+  "Surplus solaire seulement": "Solo excedente solar",
+  "Ne pas charger": "No cargar",
+  "au maximum": "al máximo",
+  "Nuit bleue (Tempo)": "Noche azul (Tempo)",
+  "Nuit bleue": "Noche azul",
+  "Jours blanc et rouge": "Días blancos y rojos",
+  "Donnez un nom au profil.": "Dé un nombre al perfil.",
+  "Ajoutez au moins un type de jour.": "Añada al menos un tipo de día.",
+  "Chaque type de jour a besoin d'un nom.":
+    "Cada tipo de día necesita un nombre.",
+  "« {name} » : une puissance de 0 à 50 kW.":
+    "«{name}»: una potencia de 0 a 50 kW.",
+  "De {from} à {to} : {what}": "De {from} a {to}: {what}",
+  "Début de la plage de {time}": "Inicio de la franja de las {time}",
+  maximum: "máximo",
+  "Nom du type de jour": "Nombre del tipo de día",
+  "Heures creuses du contrat": "Horas valle del contrato",
+  "Ce que fait la borne": "Lo que hace el cargador",
+  "Jusqu'à (kW)": "Hasta (kW)",
+  "Quel que soit le soleil. Une borne qui règle seule son courant (délestage) garde sa propre régulation.":
+    "Haga sol o no. Un cargador que regula solo su corriente (deslastre) mantiene su propia regulación.",
+  "Touchez une plage pour choisir ce que fait la borne, glissez une limite pour la déplacer (par demi-heure).":
+    "Toque una franja para elegir lo que hace el cargador, arrastre un límite para moverlo (por medias horas).",
+  "Profil enregistré": "Perfil guardado",
+  "Les types de jour disent ce que fait la borne heure par heure ; le calendrier, quel type suit chaque jour.":
+    "Los tipos de día dicen lo que hace el cargador hora a hora; el calendario, qué tipo sigue cada día.",
+  "Type {n}": "Tipo {n}",
+  "Ajouter un type de jour": "Añadir un tipo de día",
+  "Le jour du profil commence à": "El día del perfil empieza a las",
+  "Utilisé par": "Usado por",
+  "Sans couleur Tempo connue, un jour suit son jour de la semaine.":
+    "Sin color Tempo conocido, un día sigue su día de la semana.",
+  "Aucune borne : choisissez ce profil sur la page Recharge.":
+    "Ningún cargador: elija este perfil en la página Carga.",
+  Profils: "Perfiles",
+  "Profils de recharge": "Perfiles de carga",
+  "Le plan de la semaine d'une borne : quand charger, jusqu'à quelle puissance, ou sur le surplus solaire.":
+    "El plan semanal de un cargador: cuándo cargar, hasta qué potencia, o con el excedente solar.",
+  "Seuls les administrateurs écrivent les profils de recharge.":
+    "Solo los administradores escriben los perfiles de carga.",
+  actif: "en uso",
+  "Nouveau :": "Nuevo:",
+  "Aucun profil pour l'instant : partez d'un modèle ci-dessus.":
+    "Ningún perfil por ahora: parta de un modelo de arriba.",
+  "La borne suit le profil « Solaire » : elle charge sur le surplus seulement, son intensité suit le soleil. Un autre profil se choisit sur la page Recharge.":
+    "El cargador sigue el perfil «Solar»: carga solo con el excedente, su intensidad sigue al sol. Otro perfil se elige en la página Carga.",
+  "La borne suit le profil « Solaire »": "El cargador sigue el perfil «Solar»",
+  "suit le profil": "sigue el perfil",
+  "aucun profil": "ningún perfil",
+  "charge maintenant jusqu'à": "carga ahora hasta",
+  "son maximum": "su máximo",
+  "jusqu'à une heure": "hasta una hora",
+  "jusqu'à une énergie": "hasta una energía",
+  "Changer le profil de la borne": "Cambiar el perfil del cargador",
+  "Automatisme « {name} »": "Automatización «{name}»",
 }
 
 export default es

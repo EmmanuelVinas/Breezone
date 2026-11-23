@@ -356,6 +356,35 @@ impl Context {
             }
             Step::Restore => crate::text!("remettre comme avant", "put back as before", "dejar como antes"),
             Step::Notify { message } => crate::text!("prévenir : « {0} »", "notify: “{0}”", "avisar: «{0}»", message),
+            Step::ChargerProfile { device_id, profile_id } => {
+                let name = self.device_name(*device_id);
+                match profile_id {
+                    Some(id) => match self.charge_profiles.get(id) {
+                        Some(p) => crate::text!("{0} : profil « {1} »", "{0}: profile “{1}”", "{0}: perfil «{1}»", name.arg(), p),
+                        None => crate::text!("{0} : profil supprimé", "{0}: deleted profile", "{0}: perfil eliminado", name.arg()),
+                    },
+                    None => crate::text!("{0} : aucun profil", "{0}: no profile", "{0}: ningún perfil", name.arg()),
+                }
+            }
+            Step::ChargerNow { device_id, kw, until, kwh } => {
+                let name = self.device_name(*device_id);
+                let power = match kw {
+                    Some(k) => {
+                        let k = Text { fr: format!("{k}").replace('.', ","), en: format!("{k}"), es: format!("{k}").replace('.', ",") };
+                        crate::text!("jusqu'à {0} kW", "up to {0} kW", "hasta {0} kW", k.arg())
+                    }
+                    None => crate::text!("au maximum", "at the maximum", "al máximo"),
+                };
+                let end = match (until, kwh) {
+                    (Some(t), _) => crate::text!("jusqu'à {0}", "until {0}", "hasta las {0}", t),
+                    (None, Some(k)) => {
+                        let k = Text { fr: format!("{k}").replace('.', ","), en: format!("{k}"), es: format!("{k}").replace('.', ",") };
+                        crate::text!("+{0} kWh", "+{0} kWh", "+{0} kWh", k.arg())
+                    }
+                    (None, None) => crate::text!("jusqu'au débranchement", "until unplugged", "hasta desconectar"),
+                };
+                crate::text!("{0} : charger maintenant {1}, {2}", "{0}: charge now {1}, {2}", "{0}: cargar ahora {1}, {2}", name.arg(), power.arg(), end.arg())
+            }
         }
     }
 

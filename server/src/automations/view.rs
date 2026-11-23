@@ -147,6 +147,15 @@ pub(super) fn check_facing(facing: u32) -> ApiResult<()> {
 }
 
 impl Context {
+    /// A charger of a module (which follows charging profiles).
+    pub(super) fn charger(&self, device_id: i64) -> ApiResult<&DeviceView> {
+        let d = self.known(device_id)?;
+        if d.source_id.is_none() || !d.traits.iter().any(|t| t.starts_with("ev.charger@")) {
+            return Err(ApiError::bad_request(crate::text!("ce n'est pas une borne de recharge", "this is not a charger", "no es un cargador")));
+        }
+        Ok(d)
+    }
+
     pub(super) fn known(&self, device_id: i64) -> ApiResult<&DeviceView> {
         self.device(device_id).ok_or_else(|| ApiError::bad_request(crate::text!("appareil introuvable", "unknown device", "dispositivo desconocido")))
     }
@@ -309,6 +318,29 @@ impl Context {
                 self.check_condition(condition)
             }
             Step::Restore => Ok(()),
+            Step::ChargerProfile { device_id, profile_id } => {
+                self.charger(*device_id)?;
+                match profile_id {
+                    Some(id) if !self.charge_profiles.contains_key(id) => {
+                        Err(ApiError::bad_request(crate::text!("profil de recharge introuvable", "unknown charging profile", "perfil de carga desconocido")))
+                    }
+                    _ => Ok(()),
+                }
+            }
+            Step::ChargerNow { device_id, kw, until, kwh } => {
+                self.charger(*device_id)?;
+                let bad = |fr: &str, en: &str, es: &str| Err(ApiError::bad_request(Text { fr: fr.into(), en: en.into(), es: es.into() }));
+                if kw.is_some_and(|k| !k.is_finite() || k <= 0.0 || k > crate::charging::MAX_KW) {
+                    return bad("puissance de 0 à 50 kW", "power from 0 to 50 kW", "potencia de 0 a 50 kW");
+                }
+                if kwh.is_some_and(|k| !k.is_finite() || k <= 0.0 || k > 200.0) {
+                    return bad("énergie de 0 à 200 kWh", "energy from 0 to 200 kWh", "energía de 0 a 200 kWh");
+                }
+                if until.as_deref().is_some_and(|t| crate::price::clock(t).is_none()) {
+                    return bad("heure HH:MM", "time HH:MM", "hora HH:MM");
+                }
+                Ok(())
+            }
             Step::Notify { message } => {
                 let n = message.trim().chars().count();
                 if n == 0 || n > MAX_MESSAGE {

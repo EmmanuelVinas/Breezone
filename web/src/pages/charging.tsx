@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { BRAND } from "@/lib/brands"
 import { Link } from "react-router"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
@@ -8,11 +8,11 @@ import {
   Car,
   Lock,
   LockOpen,
-  Play,
   Plug,
   PlugZap,
   Square,
   Unplug,
+  Zap,
 } from "lucide-react"
 import type { DeviceView } from "@/lib/api"
 import { api, currentUser } from "@/lib/api"
@@ -30,6 +30,13 @@ import { cn } from "@/lib/utils"
 import { t } from "@/lib/i18n"
 import { PageHeader } from "@/components/app-shell"
 import { ChargingMode } from "@/components/surplus"
+import {
+  ChargeNowDialog,
+  NowLine,
+  PlanLines,
+  ProfileCard,
+  useCharging,
+} from "@/components/charging-plan"
 import { PeriodPicker } from "@/components/period-picker"
 import type { HistoryPeriod } from "@/lib/periods"
 import {
@@ -55,21 +62,9 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart"
 import type { ChartConfig } from "@/components/ui/chart"
-import { Checkbox } from "@/components/ui/checkbox"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 
 /** The state of a charger, as `ev.charger@1` and `energy.power@1` describe it. */
 type ChargerState = {
@@ -125,122 +120,6 @@ function useAct(device: DeviceView) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["devices"] }),
     onError: (e) => toast.error(errorText(e)),
   })
-}
-
-function StartDialog({
-  device,
-  open,
-  onClose,
-}: {
-  device: DeviceView
-  open: boolean
-  onClose: () => void
-}) {
-  const s = (device.state ?? {}) as ChargerState
-  const min = s.limit_min ?? 6
-  const max = s.limit_max ?? 32
-  const [byBreezone, setByBreezone] = useState(!s.auto_limit)
-  const [limit, setLimit] = useState(Math.min(max, s.limit ?? max))
-  const [withGoal, setWithGoal] = useState(false)
-  const [goal, setGoal] = useState("10")
-  const act = useAct(device)
-  const energy = Number(goal.replace(",", "."))
-  const goalValid = !withGoal || (energy >= 0.1 && energy <= 200)
-  const start = () =>
-    act.mutate(
-      {
-        action: "start",
-        params: {
-          ...(byBreezone ? { limit } : {}),
-          ...(withGoal ? { energy } : {}),
-        },
-      },
-      { onSuccess: onClose }
-    )
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{t("Lancer la charge")}</DialogTitle>
-          <DialogDescription>
-            {t("La charge démarre dès qu'une voiture est branchée.")}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-5">
-          <div className="grid gap-2">
-            <Label>{t("Intensité")}</Label>
-            <ToggleGroup
-              type="single"
-              variant="outline"
-              size="sm"
-              value={byBreezone ? "breezone" : "charger"}
-              onValueChange={(v) => v && setByBreezone(v === "breezone")}
-              className="justify-start"
-            >
-              <ToggleGroupItem value="breezone">
-                {t("Maximum choisi")}
-              </ToggleGroupItem>
-              <ToggleGroupItem value="charger">
-                {t("Réglée par la borne")}
-              </ToggleGroupItem>
-            </ToggleGroup>
-            {byBreezone ? (
-              <div className="flex items-center gap-3">
-                <Slider
-                  min={min}
-                  max={max}
-                  step={1}
-                  value={[limit]}
-                  onValueChange={([v]) => setLimit(v)}
-                  aria-label={t("Intensité maximale")}
-                />
-                <span className="tabular w-24 shrink-0 text-right text-sm font-medium">
-                  {limit} A · {number((limit * 230) / 1000, 1)} kW
-                </span>
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                {t(
-                  "La borne adapte l'intensité selon sa propre pince (mode dynamique)."
-                )}
-              </p>
-            )}
-          </div>
-          <div className="grid gap-2">
-            <label className="flex items-center gap-2 text-sm font-medium">
-              <Checkbox
-                checked={withGoal}
-                onCheckedChange={(v) => setWithGoal(v === true)}
-              />
-              {t("S'arrêter après")}
-            </label>
-            {withGoal && (
-              <div className="flex items-center gap-2">
-                <Input
-                  value={goal}
-                  inputMode="decimal"
-                  className="w-28"
-                  aria-label={t("Énergie à ajouter")}
-                  onChange={(e) => setGoal(e.target.value)}
-                />
-                <span className="text-sm text-muted-foreground">
-                  {t("kWh ajoutés")}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            {t("Annuler")}
-          </Button>
-          <Button onClick={start} disabled={!goalValid || act.isPending}>
-            <Play /> {t("Lancer la charge")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
 }
 
 const curveConfig = {
@@ -389,7 +268,40 @@ export function PowerCurve({ device }: { device: DeviceView }) {
   )
 }
 
-/** The current Breezone asks for, and a link to the module (who sets the current, address). */
+function SettingSwitch({
+  label,
+  sub,
+  checked,
+  disabled,
+  loading,
+  onChange,
+}: {
+  label: ReactNode
+  sub?: string
+  checked: boolean
+  disabled: boolean
+  loading: boolean
+  onChange: (v: boolean) => void
+}) {
+  return (
+    <label className="flex items-center justify-between gap-3 text-sm">
+      <span>
+        <span className="block">{label}</span>
+        {sub && (
+          <span className="block text-xs text-muted-foreground">{sub}</span>
+        )}
+      </span>
+      <Switch
+        checked={checked}
+        disabled={disabled && !loading}
+        loading={loading}
+        onCheckedChange={onChange}
+      />
+    </label>
+  )
+}
+
+/** The current Breezone asks for, its own regulation, its lock, and a link to the module. */
 function SettingsCard({
   device,
   admin,
@@ -447,6 +359,34 @@ function SettingsCard({
             </div>
           </div>
         )}
+        <SettingSwitch
+          label={t("La borne règle seule son courant")}
+          sub={t("Délestage selon sa pince de mesure (mode dynamique)")}
+          checked={!!s.auto_limit}
+          disabled={disabled}
+          loading={act.isPending && act.variables?.action === "set_auto_limit"}
+          onChange={(v) =>
+            act.mutate({ action: "set_auto_limit", params: { on: v } })
+          }
+        />
+        <SettingSwitch
+          label={
+            <span className="inline-flex items-center gap-2">
+              {s.locked ? (
+                <Lock className="size-4" />
+              ) : (
+                <LockOpen className="size-4" />
+              )}
+              {t("Verrouillée")}
+            </span>
+          }
+          checked={!!s.locked}
+          disabled={disabled}
+          loading={act.isPending && act.variables?.action === "lock"}
+          onChange={(v) =>
+            act.mutate({ action: "lock", params: { locked: v } })
+          }
+        />
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-muted/60 px-3 py-2.5 text-sm">
           <span className="text-muted-foreground">
             {t("Plage de la borne : {min}–{max} A", { min, max })}
@@ -506,13 +446,15 @@ export function ChargerCard({
   const tone = CHARGER_TONE[status] ?? "var(--muted-foreground)"
   const act = useAct(device)
   const [starting, setStarting] = useState(false)
+  const plan = useCharging(device)
   const charging = s.status === "charging" && !s.paused
+  const plugged =
+    s.vehicle === true || s.status === "plugged" || s.status === "charging"
   const progress =
     s.energy_goal && s.session_energy !== undefined
       ? Math.min(1, s.session_energy / s.energy_goal)
       : null
   const disabled = !device.can_control || !device.available || act.isPending
-  const locking = act.isPending && act.variables?.action === "lock"
   // With an energy goal and a car charging: when it is reached at the current power.
   const left = s.energy_goal ? s.energy_goal - (s.session_energy ?? 0) : null
   const finish =
@@ -587,37 +529,28 @@ export function ChargerCard({
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                {s.locked ? (
-                  <Lock className="size-4" />
-                ) : (
-                  <LockOpen className="size-4" />
-                )}
-                {t("Verrouillée")}
-                <Switch
-                  checked={!!s.locked}
-                  disabled={disabled && !locking}
-                  loading={locking}
-                  onCheckedChange={(v) =>
-                    act.mutate({ action: "lock", params: { locked: v } })
-                  }
-                />
-              </label>
-              {charging ? (
+              {charging && (
                 <Button
                   variant="outline"
                   disabled={disabled}
                   onClick={() => act.mutate({ action: "stop", params: {} })}
                 >
-                  <Square /> {t("Arrêter")}
+                  <Square /> {t("Suspendre")}
                 </Button>
-              ) : (
-                <Button disabled={disabled} onClick={() => setStarting(true)}>
-                  <Play /> {t("Lancer la charge")}
+              )}
+              {plan.data?.can_control !== false && !plan.data?.now && (
+                <Button
+                  disabled={disabled || !plugged}
+                  title={plugged ? undefined : t("Branchez d'abord la voiture")}
+                  onClick={() => setStarting(true)}
+                >
+                  <Zap /> {t("Charger maintenant")}
                 </Button>
               )}
             </div>
           </div>
+          <NowLine device={device} view={plan.data} />
+          <PlanLines view={plan.data} at={plan.dataUpdatedAt / 1000} />
           <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
             <Tile
               label={t("Puissance")}
@@ -680,7 +613,12 @@ export function ChargerCard({
           )}
         </CardContent>
       </Card>
-      <ChargingMode device={device} />
+      <ProfileCard
+        device={device}
+        view={plan.data}
+        at={plan.dataUpdatedAt / 1000}
+      />
+      {plan.data?.profile_id === null && <ChargingMode device={device} />}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <PowerCurve device={device} />
         <SettingsCard
@@ -691,7 +629,7 @@ export function ChargerCard({
       </div>
       <StatesCard />
       {starting && (
-        <StartDialog
+        <ChargeNowDialog
           device={device}
           open={starting}
           onClose={() => setStarting(false)}

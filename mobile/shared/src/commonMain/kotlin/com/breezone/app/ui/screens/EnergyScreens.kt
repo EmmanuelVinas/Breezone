@@ -1,5 +1,10 @@
 package com.breezone.app.ui.screens
 
+import com.breezone.app.resources.charging_now
+import com.breezone.app.data.ChargingView
+import com.breezone.app.data.BreezoneApi
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -333,6 +338,12 @@ fun ChargingScreen(serverId: String, onBack: (() -> Unit)? = null) {
     LaunchedEffect(serverId) { hub.followDevices(serverId, everyMs = 5_000) }
     val data = all[serverId] ?: ServerDevices()
     val charger: DeviceView? = data.withTrait(TraitIds.CHARGER).firstOrNull()
+    val plan = charger?.let { rememberCharging(hub, serverId, it.id) }
+    var chargeNow by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val change: (suspend BreezoneApi.() -> ChargingView) -> Unit = { call ->
+        scope.launch { hub.changeCharging(serverId, call)?.let { plan?.value = it } }
+    }
     Scaffold(topBar = {
         FzTopBar(stringResource(Res.string.house_charging), charger?.name, onBack) {
             charger?.let { CommandIndicator(status["$serverId/${it.id}"], Modifier.padding(end = 16.dp)) }
@@ -349,7 +360,19 @@ fun ChargingScreen(serverId: String, onBack: (() -> Unit)? = null) {
             if (charger != null) {
                 val s = charger.stateAs(EvChargerState.serializer()) ?: EvChargerState()
                 val act: (String, JsonObject, JsonObject?) -> Unit = { action, params, optimistic -> hub.act(serverId, charger, "ev.charger", action, params, optimistic) }
-                item(key = "hero", contentType = "hero") { ChargerHero(serverId, charger) }
+                val view = plan?.value
+                item(key = "hero", contentType = "hero") {
+                    ChargerHero(
+                        serverId,
+                        charger,
+                        onChargeNow = { chargeNow = true }.takeIf { view?.canControl == true && view.now == null },
+                        planned = view?.now != null,
+                    )
+                }
+                if (view != null) {
+                    item(key = "plan", contentType = "plan") { PlanCard(view) { change { cancelChargeNow(charger.id) } } }
+                    item(key = "profile", contentType = "profile") { ProfileCard(view) { id -> change { setChargeProfile(charger.id, id) } } }
+                }
                 item(key = "history", contentType = "history") { ChargerPowerCard(serverId, charger) }
                 item(key = "settings", contentType = "settings") {
                     SectionCard {
@@ -389,11 +412,17 @@ fun ChargingScreen(serverId: String, onBack: (() -> Unit)? = null) {
             }
         }
     }
+    if (chargeNow && charger != null) {
+        ChargeNowSheet(charger, onDismiss = { chargeNow = false }) { input ->
+            chargeNow = false
+            change { chargeNow(charger.id, input) }
+        }
+    }
 }
 
 /** A charger now: what it does, the power it draws, its goal, and pause or start. */
 @Composable
-internal fun ChargerHero(serverId: String, charger: DeviceView) {
+internal fun ChargerHero(serverId: String, charger: DeviceView, onChargeNow: (() -> Unit)? = null, planned: Boolean = false) {
     val hub = koinInject<Hub>()
     val s = charger.stateAs(EvChargerState.serializer()) ?: EvChargerState()
     val power = charger.stateAs(EnergyPowerState.serializer())?.power
@@ -430,6 +459,14 @@ internal fun ChargerHero(serverId: String, charger: DeviceView) {
                     shape = Fz.shapes.button,
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text(stringResource(Res.string.charger_pause)) }
+            } else if (planned) {
+                // A charge asked now: its own card says it and calls it off.
+            } else if (onChargeNow != null) {
+                Button(onClick = onChargeNow, enabled = charger.usable, shape = Fz.shapes.button, modifier = Modifier.fillMaxWidth()) {
+                    Icon(FzIcons.Zap, null, Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(stringResource(Res.string.charging_now))
+                }
             } else {
                 Button(
                     onClick = { act("start", JsonObject(emptyMap()), buildJsonObject { put("paused", false) }) },

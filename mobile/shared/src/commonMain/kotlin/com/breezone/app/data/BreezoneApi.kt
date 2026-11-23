@@ -216,6 +216,12 @@ class BreezoneApi(
     suspend fun price(installationId: Long): PriceView = call(HttpMethod.Get, "/api/installations/$installationId/electricity/price?hours=24")
     suspend fun deviceHistoryOver(deviceId: Long, hours: Int): DeviceHistory =
         call(HttpMethod.Get, "/api/devices/$deviceId/history?hours=$hours&bucket=${Periods.bucket(hours)}")
+    suspend fun charging(deviceId: Long): ChargingView = call(HttpMethod.Get, "/api/devices/$deviceId/charging")
+    suspend fun setChargeProfile(deviceId: Long, profileId: Long?): ChargingView =
+        call(HttpMethod.Put, "/api/devices/$deviceId/charging", FzJson.encodeToString(ChargeProfileInput.serializer(), ChargeProfileInput(profileId)))
+    suspend fun chargeNow(deviceId: Long, input: ChargeNowInput): ChargingView =
+        call(HttpMethod.Post, "/api/devices/$deviceId/charging/now", FzJson.encodeToString(ChargeNowInput.serializer(), input))
+    suspend fun cancelChargeNow(deviceId: Long): ChargingView = call(HttpMethod.Delete, "/api/devices/$deviceId/charging/now")
     suspend fun deviceForecast(deviceId: Long): DeviceForecast = call(HttpMethod.Get, "/api/devices/$deviceId/forecast")
     suspend fun deviceHistory(deviceId: Long, hours: Int = 24, points: Int = 96): DeviceHistory =
         call(HttpMethod.Get, "/api/devices/$deviceId/history?hours=$hours&points=$points")

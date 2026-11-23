@@ -234,5 +234,28 @@ async fn the_server_answers_as_the_contract_says() {
     assert!(!price["now"].is_null() && !price["periods"].as_array().unwrap().is_empty(), "{price}");
     errors.extend(check(&c, &tariff, "TariffView", "energy/tariff"));
     errors.extend(check(&c, &price, "PriceView", "energy/price"));
+    // A charger that follows a charging profile, told to charge now.
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let trydan = listener.local_addr().unwrap().port();
+    tokio::spawn(async move { axum::serve(listener, breezone_server::mock_devices::trydan()).await.unwrap() });
+    call(reqwest::Method::POST, "/api/sources", Some(json!({"driver": "trydan", "name": "Borne", "config": {"host": format!("127.0.0.1:{trydan}")}}))).await;
+    let devices = call(reqwest::Method::GET, "/api/devices", None).await;
+    let charger = devices.as_array().unwrap().iter().find(|d| d["reference"] == "charger").expect("the charger")["id"].as_i64().unwrap();
+    let profile = json!({
+        "name": "Nuit bleue",
+        "profiles": [
+            {"id":"blue","name":"Jour bleu","color":"#2563eb","slots":[{"start":"00:00","mode":"max","kw":7},{"start":"06:00","mode":"off"},{"start":"22:00","mode":"max"}]},
+            {"id":"sun","name":"Soleil","slots":[{"start":"00:00","mode":"solar","min_amps":6,"max_amps":16}]}
+        ],
+        "calendar": {"day_start":"06:00","weekdays":["blue","blue","blue","blue","blue","sun","sun"],"colors":{"red":"sun"}}
+    });
+    let created = call(reqwest::Method::POST, "/api/charging/profiles", Some(profile)).await;
+    call(reqwest::Method::PUT, &format!("/api/devices/{charger}/charging"), Some(json!({"profile_id": created["id"]}))).await;
+    call(reqwest::Method::POST, &format!("/api/devices/{charger}/charging/now"), Some(json!({"kw": 3.7, "kwh": 10, "until": breezone_server::db::now() + 3600}))).await;
+    let profiles = call(reqwest::Method::GET, "/api/charging/profiles", None).await;
+    let charging = call(reqwest::Method::GET, &format!("/api/devices/{charger}/charging"), None).await;
+    assert!(!charging["now"].is_null() && !charging["days"].as_array().unwrap().is_empty(), "{charging}");
+    errors.extend(check(&c, &profiles, "ChargeProfileView[]", "charging/profiles"));
+    errors.extend(check(&c, &charging, "ChargingView", "devices/charging"));
     assert!(errors.is_empty(), "the server and contracts/views.json disagree:\n{}", errors.join("\n"));
 }

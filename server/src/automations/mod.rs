@@ -400,6 +400,23 @@ pub enum Step {
     Notify {
         message: String,
     },
+    /// A charger follows a charging profile (`None`: none).
+    ChargerProfile {
+        device_id: i64,
+        #[serde(default)]
+        profile_id: Option<i64>,
+    },
+    /// A charger charges now, without a break: up to `kw` (its maximum without), until "HH:MM" or
+    /// `kwh` more, else until it is unplugged.
+    ChargerNow {
+        device_id: i64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        kw: Option<f64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        until: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        kwh: Option<f64>,
+    },
 }
 
 /// What a rule does when it is started again while it still runs.
@@ -487,7 +504,8 @@ impl Automation {
             .collect()
     }
 
-    fn steps(&self) -> impl Iterator<Item = &Step> {
+    /// Every step of the rule: then, else, and after it is over.
+    pub fn steps(&self) -> impl Iterator<Item = &Step> {
         self.actions.iter().chain(&self.otherwise).chain(&self.over)
     }
 
@@ -616,6 +634,8 @@ pub struct Context {
     pub currency: String,
     /// The colours of today and tomorrow (1 blue, 2 white, 3 red).
     pub tempo: [Option<f64>; 2],
+    /// Charging profiles, by id.
+    pub charge_profiles: HashMap<i64, String>,
 }
 
 impl Context {
@@ -647,6 +667,7 @@ impl Context {
                 None => "EUR".into(),
             },
             tempo: [None, None],
+            charge_profiles: db::list_charge_profiles(&state.db).await?.into_iter().map(|p| (p.id, p.name)).collect(),
         }
         .with_prices(state)
         .await?
@@ -984,6 +1005,7 @@ mod tests {
             price: Some(0.27),
             currency: "EUR".into(),
             tempo: [Some(1.0), Some(3.0)],
+            charge_profiles: HashMap::from([(1, "Nuit bleue".to_string())]),
         }
     }
 
@@ -1325,6 +1347,13 @@ mod tests {
         assert!(check(|v| v["actions"] = json!([{"kind": "device", "device_id": 2, "trait": "ev.charger", "action": "start", "params": {"limit": 99}}])).is_err());
         assert!(check(|v| v["actions"] = json!([{"kind": "device", "device_id": 1, "trait": "climate.zone", "action": "set", "params": {}}])).is_err(), "changes nothing");
         assert!(check(|v| v["actions"] = json!([{"kind": "device", "device_id": 1, "trait": "ev.charger", "action": "start"}])).is_err(), "a zone is not a charger");
+        // The actions of a charger: a profile that exists, sensible powers and times, a charger.
+        assert!(check(|v| v["actions"] = json!([{"kind": "charger_profile", "device_id": 2, "profile_id": 1}])).is_ok());
+        assert!(check(|v| v["actions"] = json!([{"kind": "charger_profile", "device_id": 2, "profile_id": 7}])).is_err(), "unknown profile");
+        assert!(check(|v| v["actions"] = json!([{"kind": "charger_profile", "device_id": 1, "profile_id": null}])).is_err(), "a zone");
+        assert!(check(|v| v["actions"] = json!([{"kind": "charger_now", "device_id": 2, "kw": 7, "until": "06:00"}])).is_ok());
+        assert!(check(|v| v["actions"] = json!([{"kind": "charger_now", "device_id": 2, "kw": 70}])).is_err());
+        assert!(check(|v| v["actions"] = json!([{"kind": "charger_now", "device_id": 2, "until": "6h"}])).is_err());
         // Several triggers, waits and a restore.
         assert!(check(|v| v["triggers"] = json!([{"kind": "time", "time": "08:00"}, {"kind": "time", "time": "09:00"}, {"kind": "time", "time": "10:00"}])).is_err(), "4 triggers");
         assert!(check(|v| v["actions"] = json!([{"kind": "restore"}])).is_err(), "nothing to put back");
@@ -1521,5 +1550,17 @@ mod tests {
         assert_eq!(c.describe_step(&until).fr, "attendre que Soutirage du réseau > 200 W pendant 10 min (au plus 8 h)");
         assert_eq!(c.describe_step(&Step::Wait { seconds: 5400 }).fr, "attendre 1 h 30");
         assert_eq!(c.describe_step(&Step::Restore).fr, "remettre comme avant");
+    }
+
+    #[test]
+    fn the_actions_of_a_charger_read_like_a_sentence() {
+        let c = ctx(0, 0.0, 20.0);
+        assert_eq!(c.describe_step(&Step::ChargerProfile { device_id: 2, profile_id: Some(1) }).fr, "Borne : profil « Nuit bleue »");
+        assert_eq!(c.describe_step(&Step::ChargerProfile { device_id: 2, profile_id: None }).fr, "Borne : aucun profil");
+        let now = Step::ChargerNow { device_id: 2, kw: Some(7.4), until: Some("06:00".into()), kwh: None };
+        assert_eq!(c.describe_step(&now).fr, "Borne : charger maintenant jusqu'à 7,4 kW, jusqu'à 06:00");
+        assert_eq!(c.describe_step(&now).en, "Borne: charge now up to 7.4 kW, until 06:00");
+        let full = Step::ChargerNow { device_id: 2, kw: None, until: None, kwh: Some(10.0) };
+        assert_eq!(c.describe_step(&full).fr, "Borne : charger maintenant au maximum, +10 kWh");
     }
 }

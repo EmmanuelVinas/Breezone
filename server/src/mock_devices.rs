@@ -238,7 +238,8 @@ fn hue() -> Router {
 // V2C Trydan
 // ---------------------------------------------------------------------------------------------
 
-fn trydan() -> Router {
+/// The charger alone (also served by [`spawn`]).
+pub fn trydan() -> Router {
     let data = Arc::new(Mutex::new(json!({
         "ID": "DEMO01", "FirmwareVersion": "2.5.1", "ChargeState": 1, "ChargeMode": 0, "ChargePower": 0.0, "VoltageInstallation": 231,
         "ChargeEnergy": 0.0, "ChargeTime": 0, "Paused": 0, "Locked": 0, "Intensity": 16, "IntensityMeasure_L1": 0.0, "Dynamic": 1,

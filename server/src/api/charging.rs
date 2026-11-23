@@ -33,6 +33,8 @@ pub struct ProfileView {
     pub calendar: Calendar,
     /// The chargers that follow it (those this user sees).
     pub used_by: Vec<UsedBy>,
+    /// The automations that give it to a charger.
+    pub automations: Vec<String>,
 }
 
 fn is_charger(d: &DeviceView) -> bool {
@@ -43,6 +45,19 @@ async fn profile_views(state: &AppState, user: &AuthUser) -> ApiResult<Vec<Profi
     let access = Access::of(&state.db, user).await?;
     let seen = devices::for_user(devices::list(state).await?, &access);
     let plans = db::list_charger_plans(&state.db).await?;
+    // The profiles each automation gives (by id), with its name.
+    let rules: Vec<(String, Vec<i64>)> = db::list_automations(&state.db)
+        .await?
+        .iter()
+        .filter_map(|row| {
+            let rule = crate::automations::Automation::of(row)?;
+            let given = rule.steps().filter_map(|s| match s {
+                crate::automations::Step::ChargerProfile { profile_id: Some(id), .. } => Some(*id),
+                _ => None,
+            });
+            Some((row.name.clone(), given.collect()))
+        })
+        .collect();
     Ok(db::list_charge_profiles(&state.db)
         .await?
         .iter()
@@ -53,7 +68,8 @@ async fn profile_views(state: &AppState, user: &AuthUser) -> ApiResult<Vec<Profi
                 .filter(|c| c.profile_id == Some(row.id))
                 .filter_map(|c| seen.iter().find(|d| d.id == c.device_id).map(|d| UsedBy { device_id: d.id, name: d.name.clone() }))
                 .collect();
-            Some(ProfileView { id: row.id, name: p.name, profiles: p.profiles, calendar: p.calendar, used_by })
+            let automations = rules.iter().filter(|(_, ids)| ids.contains(&row.id)).map(|(name, _)| name.clone()).collect();
+            Some(ProfileView { id: row.id, name: p.name, profiles: p.profiles, calendar: p.calendar, used_by, automations })
         })
         .collect())
 }
@@ -227,62 +243,14 @@ pub struct ProfileInput {
 /// The profile a charger follows (`null`: none).
 pub async fn set_profile(State(state): State<AppState>, user: AuthUser, Path(id): Path<i64>, Json(input): Json<ProfileInput>) -> ApiResult<Json<ChargingView>> {
     let (d, can) = charger(&state, &user, id, true).await?;
-    if let Some(pid) = input.profile_id {
-        if !db::list_charge_profiles(&state.db).await?.iter().any(|r| r.id == pid) {
-            return Err(ApiError::not_found("charging profile not found"));
-        }
-    }
-    let row = db::charger_plan(&state.db, id).await?.unwrap_or(ChargerPlanRow { device_id: id, ..Default::default() });
-    db::set_charger_plan(&state.db, &ChargerPlanRow { profile_id: input.profile_id, ..row }).await?;
-    // Its profile takes it back at once, even after a stop by hand.
-    state.surplus.release(id).await;
+    charging::set_profile(&state, id, input.profile_id).await?;
     Ok(Json(view(&state, &d, can).await?))
 }
 
-#[derive(Deserialize)]
-pub struct NowInput {
-    /// Up to this power (none: the charger's maximum).
-    pub kw: Option<f64>,
-    /// Until then (none: until it is unplugged).
-    pub until: Option<i64>,
-    /// Until this much more energy (kWh).
-    pub kwh: Option<f64>,
-}
-
 /// Charge now, without a break: until it is unplugged, a time or some energy more.
-pub async fn charge_now(State(state): State<AppState>, user: AuthUser, Path(id): Path<i64>, Json(input): Json<NowInput>) -> ApiResult<Json<ChargingView>> {
+pub async fn charge_now(State(state): State<AppState>, user: AuthUser, Path(id): Path<i64>, Json(input): Json<charging::NowInput>) -> ApiResult<Json<ChargingView>> {
     let (d, can) = charger(&state, &user, id, true).await?;
-    let now = db::now();
-    let bad = |fr: &str, en: &str, es: &str| ApiError::bad_request(Text { fr: fr.into(), en: en.into(), es: es.into() });
-    if input.kw.is_some_and(|k| !k.is_finite() || k <= 0.0 || k > charging::MAX_KW) {
-        return Err(bad("puissance de 0 à 50 kW", "power from 0 to 50 kW", "potencia de 0 a 50 kW"));
-    }
-    if input.until.is_some_and(|u| u <= now || u > now + 7 * 24 * 3600) {
-        return Err(bad("une heure dans les 7 jours qui viennent", "a time within the next 7 days", "una hora en los próximos 7 días"));
-    }
-    if input.kwh.is_some_and(|k| !k.is_finite() || k <= 0.0 || k > 200.0) {
-        return Err(bad("énergie de 0 à 200 kWh", "energy from 0 to 200 kWh", "energía de 0 a 200 kWh"));
-    }
-    let c = Charger::of(&d);
-    if !c.plugged {
-        return Err(ApiError::conflict(crate::text!("Branchez d'abord la voiture", "Plug the car in first", "Conecte primero el coche")));
-    }
-    let amps = c.amps(input.kw);
-    let row = db::charger_plan(&state.db, id).await?.unwrap_or(ChargerPlanRow { device_id: id, ..Default::default() });
-    db::set_charger_plan(
-        &state.db,
-        &ChargerPlanRow {
-            now_amps: Some(amps),
-            now_kw: Some(input.kw.unwrap_or_else(|| charging::kw_of(amps, c.voltage, c.phases))),
-            now_until: input.until,
-            now_kwh: input.kwh,
-            now_base_energy: Some(c.session_energy),
-            ..row
-        },
-    )
-    .await?;
-    // Asked now: what was done by hand before no longer holds.
-    state.surplus.release(id).await;
+    charging::charge_now(&state, &d, &input).await?;
     Ok(Json(view(&state, &d, can).await?))
 }
 

@@ -349,6 +349,22 @@ class Hub(
      * Applies an action of a trait to a device of a module: [optimistic] is shown at once, the
      * answer of the server replaces it; on failure the devices are read again.
      */
+    /**
+     * Changes what a charger follows (its profile, a charge asked now): the new view, or null when
+     * the server refused it (said in [messages]).
+     */
+    suspend fun changeCharging(serverId: String, change: suspend BreezoneApi.() -> ChargingView): ChargingView? {
+        val api = apis[serverId] ?: return null
+        return try {
+            api.change().also { refreshDevices(serverId) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _messages.tryEmit(getString(Res.string.hub_command_refused, e.message.orEmpty()))
+            null
+        }
+    }
+
     fun act(serverId: String, device: DeviceView, trait: String, action: String, params: JsonObject, optimistic: JsonObject? = null) {
         val api = apis[serverId] ?: return
         val key = "$serverId/${device.id}"

@@ -1,4 +1,6 @@
 import { useState } from "react"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { toast } from "sonner"
 import type {
   AutomationCondition,
   AutomationInput,
@@ -6,6 +8,8 @@ import type {
   AutomationTrigger,
   DeviceView,
 } from "@/lib/api"
+import { api } from "@/lib/api"
+import { errorText } from "@/lib/format"
 import { t } from "@/lib/i18n"
 import {
   Dialog,
@@ -24,7 +28,9 @@ export type Recipe = {
   description: string
   rule: AutomationInput
   /** Set up in a form of its own before its rules are made (instead of opening the editor). */
-  setup?: "surplus_climate"
+  setup?: "surplus_climate" | "charger_solar"
+  /** The charger of a `charger_solar` recipe. */
+  charger?: DeviceView
 }
 
 export function blank(home: Home): AutomationInput {
@@ -93,30 +99,11 @@ export function recipes(home: Home): Recipe[] {
     out.push({
       title: t("Surplus solaire : charger la voiture"),
       description: t(
-        "Quand plus de 500 W repartent au réseau pendant 5 min, lancer la charge, puis l'arrêter quand la maison tire plus de 200 W du réseau pendant 10 min."
+        "La borne suit le profil « Solaire » : elle charge sur le surplus seulement, son intensité suit le soleil. Un autre profil se choisit sur la page Recharge."
       ),
-      rule: {
-        ...base(t("Surplus solaire : charger la voiture"), [exportAbove(500)]),
-        conditions: [
-          {
-            kind: "state",
-            device_id: charger.id,
-            field: "status",
-            value: "plugged",
-          },
-        ],
-        actions: [
-          step(charger, "ev.charger", "start"),
-          {
-            kind: "wait_until",
-            condition: importAbove(200),
-            for_seconds: 600,
-            timeout_seconds: 12 * 3600,
-            on_timeout: "continue",
-          },
-          step(charger, "ev.charger", "stop"),
-        ],
-      },
+      rule: blank(home),
+      setup: "charger_solar",
+      charger,
     })
   if (home.roles.grid && zones.length)
     out.push({
@@ -490,6 +477,40 @@ export function RecipesDialog({
 }) {
   const list = recipes(home)
   const [setup, setSetup] = useState<Recipe | null>(null)
+  const qc = useQueryClient()
+  // The solar surplus for the car: the profile « Solaire » (made the first time), followed.
+  const solar = useMutation({
+    mutationFn: async (charger: DeviceView) => {
+      const name = t("Solaire")
+      const all = await api.chargeProfiles()
+      const profile =
+        all.find((p) => p.name === name) ??
+        (await api.createChargeProfile({
+          name,
+          profiles: [
+            {
+              id: "d",
+              name: t("Tous les jours"),
+              color: "#f59e0b",
+              slots: [{ start: "00:00", mode: "solar" }],
+            },
+          ],
+          calendar: {
+            day_start: "00:00",
+            weekdays: Array.from({ length: 7 }, () => "d"),
+            colors: {},
+          },
+        }))
+      return api.setChargeProfile(charger.id, profile.id)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["charge-profiles"] })
+      qc.invalidateQueries({ queryKey: ["charging"] })
+      toast.success(t("La borne suit le profil « Solaire »"))
+      onClose()
+    },
+    onError: (e) => toast.error(errorText(e)),
+  })
   const zones = home.devices.filter(
     (d) =>
       home.drivable.has(d.id) &&
@@ -530,7 +551,13 @@ export function RecipesDialog({
                 key={r.title}
                 type="button"
                 className="grid gap-1 rounded-2xl border p-3 text-left transition-colors hover:bg-muted/50"
-                onClick={() => (r.setup ? setSetup(r) : onPick(r.rule))}
+                onClick={() =>
+                  r.setup === "charger_solar"
+                    ? solar.mutate(r.charger!)
+                    : r.setup
+                      ? setSetup(r)
+                      : onPick(r.rule)
+                }
               >
                 <span className="font-medium">{r.title}</span>
                 <span className="text-sm text-muted-foreground">

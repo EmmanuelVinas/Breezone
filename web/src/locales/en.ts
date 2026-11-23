@@ -1538,8 +1538,8 @@ const en: Record<string, string> = {
   "Mode de charge": "Charging mode",
   "Les modes solaires demandent un compteur au tableau (une voie « réseau »).":
     "The solar modes need a meter at the panel (a “grid” channel).",
-  "L'ordre de priorité avec les autres appareils et les intensités se règlent dans Énergie › Pilotage sur surplus solaire.":
-    "The priority among the other devices and the currents are set in Energy › Solar surplus steering.",
+  "L'ordre de priorité avec les autres appareils et les intensités se règlent dans Automatismes › Pilotage sur surplus solaire.":
+    "The priority among the other devices and the currents are set in Automations › Solar surplus steering.",
   "Vue d'ensemble": "Overview",
   indisponible: "unavailable",
   "{temp} moy.": "{temp} avg.",
@@ -2004,8 +2004,8 @@ const en: Record<string, string> = {
     "No device follows the surplus. Add the charger, a water heater on a smart plug, or a zone of the air conditioning.",
   "Aussi piloté par {names} : les deux se contrediraient.":
     "Also driven by {names}: the two would contradict each other.",
-  "Tourne tout seul, par ordre de priorité. Il se règle dans Énergie ; un automatisme ne doit pas piloter les mêmes appareils.":
-    "Runs on its own, in order of priority. It is set in Energy; an automation must not drive the same devices.",
+  "Tourne tout seul, par ordre de priorité. Il se règle dans Automatismes ; un automatisme ne doit pas piloter les mêmes appareils.":
+    "Runs on its own, in order of priority. It is set in Automations; an automation must not drive the same devices.",
   Régler: "Set up",
   inchangé: "unchanged",
   "Réglages enregistrés": "Settings saved",
@@ -2157,6 +2157,104 @@ const en: Record<string, string> = {
   "Module {name} installé": "Module {name} installed",
   "Installer le module": "Install the module",
   "Installer (non officiel · {name})": "Install (unofficial · {name})",
+  "demain {time}": "tomorrow {time}",
+  "surplus solaire": "solar surplus",
+  "pas de charge": "no charging",
+  "jusqu'à {kw} kW": "up to {kw} kW",
+  "jour {color}": "{color} day",
+  "≈ {kwh} possibles": "≈ {kwh} possible",
+  "En charge selon le profil jusqu'à {end}":
+    "Charging by the profile until {end}",
+  "Prochaine charge : {start} → {end}": "Next charge: {start} → {end}",
+  surplus: "surplus",
+  "Profil de recharge": "Charging profile",
+  "Gérer les profils ›": "Manage profiles ›",
+  "Sans profil, la borne charge quand la voiture est branchée, ou suit le surplus solaire si elle y est inscrite.":
+    "Without a profile, the charger charges when the car is plugged in, or follows the solar surplus if it is set to.",
+  "Le profil décide des heures de charge ; « Charger maintenant » passe avant.":
+    "The profile decides when to charge; “Charge now” comes first.",
+  "Aucun profil : créez-en un dans « Gérer les profils ».":
+    "No profile: create one in “Manage profiles”.",
+  "Aucun profil pour l'instant.": "No profile yet.",
+  Aucun: "None",
+  "charge, même sans soleil": "charging, even without sun",
+  "Charger maintenant": "Charge now",
+  "Sans interruption : passe avant le profil et le surplus solaire.":
+    "Without a break: comes before the profile and the solar surplus.",
+  "{kw} kW (maximum)": "{kw} kW (maximum)",
+  Maximum: "Maximum",
+  Débranchement: "Unplugged",
+  kWh: "kWh",
+  "La borne garde son délestage : elle baisse seule si la maison consomme trop.":
+    "The charger keeps its load shedding: it lowers by itself if the home uses too much.",
+  "Lancer à {kw} kW": "Start at {kw} kW",
+  "jusqu'à {time}": "until {time}",
+  "encore {kwh}": "{kwh} to go",
+  "jusqu'au débranchement": "until unplugged",
+  "Charge immédiate à {kw} kW, {end}": "Charging now at {kw} kW, {end}",
+  "Revenir au profil": "Back to the profile",
+  "Arrêter la charge immédiate": "Stop the charge now",
+  "La borne règle seule son courant": "The charger sets its own current",
+  "Délestage selon sa pince de mesure (mode dynamique)":
+    "Load shedding by its current clamp (dynamic mode)",
+  Suspendre: "Pause",
+  "Branchez d'abord la voiture": "Plug the car in first",
+  "Charger jusqu'à": "Charge up to",
+  "Surplus solaire seulement": "Solar surplus only",
+  "Ne pas charger": "Do not charge",
+  "au maximum": "at the maximum",
+  "Nuit bleue (Tempo)": "Blue night (Tempo)",
+  "Nuit bleue": "Blue night",
+  "Jours blanc et rouge": "White and red days",
+  "Donnez un nom au profil.": "Give the profile a name.",
+  "Ajoutez au moins un type de jour.": "Add at least one kind of day.",
+  "Chaque type de jour a besoin d'un nom.": "Each kind of day needs a name.",
+  "« {name} » : une puissance de 0 à 50 kW.":
+    "“{name}”: a power from 0 to 50 kW.",
+  "De {from} à {to} : {what}": "From {from} to {to}: {what}",
+  "Début de la plage de {time}": "Start of the slot at {time}",
+  maximum: "maximum",
+  "Nom du type de jour": "Name of the kind of day",
+  "Heures creuses du contrat": "Off-peak hours of the contract",
+  "Ce que fait la borne": "What the charger does",
+  "Jusqu'à (kW)": "Up to (kW)",
+  "Quel que soit le soleil. Une borne qui règle seule son courant (délestage) garde sa propre régulation.":
+    "Whatever the sun. A charger that sets its own current (load shedding) keeps its own regulation.",
+  "Touchez une plage pour choisir ce que fait la borne, glissez une limite pour la déplacer (par demi-heure).":
+    "Tap a slot to choose what the charger does, drag a limit to move it (by half hours).",
+  "Profil enregistré": "Profile saved",
+  "Les types de jour disent ce que fait la borne heure par heure ; le calendrier, quel type suit chaque jour.":
+    "The kinds of day say what the charger does hour by hour; the calendar, which kind each day follows.",
+  "Type {n}": "Kind {n}",
+  "Ajouter un type de jour": "Add a kind of day",
+  "Le jour du profil commence à": "The day of the profile starts at",
+  "Utilisé par": "Used by",
+  "Sans couleur Tempo connue, un jour suit son jour de la semaine.":
+    "Without a known Tempo colour, a day follows its day of the week.",
+  "Aucune borne : choisissez ce profil sur la page Recharge.":
+    "No charger: choose this profile on the Charging page.",
+  Profils: "Profiles",
+  "Profils de recharge": "Charging profiles",
+  "Le plan de la semaine d'une borne : quand charger, jusqu'à quelle puissance, ou sur le surplus solaire.":
+    "The weekly plan of a charger: when to charge, up to what power, or on the solar surplus.",
+  "Seuls les administrateurs écrivent les profils de recharge.":
+    "Only administrators write charging profiles.",
+  actif: "in use",
+  "Nouveau :": "New:",
+  "Aucun profil pour l'instant : partez d'un modèle ci-dessus.":
+    "No profile yet: start from a template above.",
+  "La borne suit le profil « Solaire » : elle charge sur le surplus seulement, son intensité suit le soleil. Un autre profil se choisit sur la page Recharge.":
+    "The charger follows the “Solar” profile: it charges on the surplus only, its current follows the sun. Another profile is chosen on the Charging page.",
+  "La borne suit le profil « Solaire »":
+    "The charger follows the “Solar” profile",
+  "suit le profil": "follows the profile",
+  "aucun profil": "no profile",
+  "charge maintenant jusqu'à": "charges now up to",
+  "son maximum": "its maximum",
+  "jusqu'à une heure": "until a time",
+  "jusqu'à une énergie": "until some energy",
+  "Changer le profil de la borne": "Change the profile of the charger",
+  "Automatisme « {name} »": "Automation “{name}”",
 }
 
 export default en

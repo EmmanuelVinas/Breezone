@@ -130,6 +130,8 @@ pub struct Reading {
     pub session_energy: f64,
     /// A charger: current asked (A).
     pub amps: Option<i64>,
+    /// A charger: it sets its current itself, from its own clamp (load shedding).
+    pub auto_limit: bool,
     /// A zone: its system heats (or is in auto), cools (or is in auto).
     pub heats: bool,
     pub cools: bool,
@@ -144,6 +146,8 @@ pub struct Reading {
 pub enum Command {
     /// A charger: charge at this current.
     Start(i64),
+    /// A charger: charge, at the current it sets itself.
+    Resume,
     /// A charger: change the current.
     Amps(i64),
     Stop,
@@ -246,42 +250,37 @@ fn until_text(now: i64, until: i64, tz: Tz) -> Text {
 }
 
 /// What a charger does by its plan, in words.
-fn plan_text(plan: Plan, profile: Option<&str>, watts: f64, now: i64, tz: Tz) -> Text {
+fn plan_text(plan: Plan, profile: Option<&str>, watts: Option<f64>, now: i64, tz: Tz) -> Text {
     let p = profile.unwrap_or_default().to_string();
+    // How it charges: at some power, or as the charger sets it (its own load shedding).
+    let how = match watts {
+        Some(w) => {
+            let k = kw_text(w);
+            crate::text!("à {0} kW", "at {0} kW", "a {0} kW", k.arg())
+        }
+        None => crate::text!("au courant réglé par la borne", "at the current set by the charger", "a la corriente regulada por el cargador"),
+    };
     match plan {
         Plan::Off { until: Some(u) } => {
             let t = until_text(now, u, tz);
             crate::text!("Profil {0} : pas de charge jusqu'à {1}", "Profile {0}: no charging until {1}", "Perfil {0}: sin carga hasta {1}", p, t.arg())
         }
         Plan::Off { until: None } => crate::text!("Profil {0} : pas de charge", "Profile {0}: no charging", "Perfil {0}: sin carga", p),
-        Plan::Max { now: false, until, .. } => {
-            let k = kw_text(watts);
-            match until {
-                Some(u) => {
-                    let t = until_text(now, u, tz);
-                    crate::text!(
-                        "Profil {0} : charge à {1} kW jusqu'à {2}",
-                        "Profile {0}: charging at {1} kW until {2}",
-                        "Perfil {0}: carga a {1} kW hasta {2}",
-                        p,
-                        k.arg(),
-                        t.arg()
-                    )
-                }
-                None => crate::text!("Profil {0} : charge à {1} kW", "Profile {0}: charging at {1} kW", "Perfil {0}: carga a {1} kW", p, k.arg()),
+        Plan::Max { now: false, until, .. } => match until {
+            Some(u) => {
+                let t = until_text(now, u, tz);
+                crate::text!("Profil {0} : charge {1} jusqu'à {2}", "Profile {0}: charging {1} until {2}", "Perfil {0}: carga {1} hasta {2}", p, how.arg(), t.arg())
             }
-        }
+            None => crate::text!("Profil {0} : charge {1}", "Profile {0}: charging {1}", "Perfil {0}: carga {1}", p, how.arg()),
+        },
         Plan::Max { now: true, until, left_kwh, .. } => {
-            let k = kw_text(watts);
             let head = match until {
                 Some(u) => {
                     let t = until_text(now, u, tz);
-                    crate::text!("Charge maintenant à {0} kW jusqu'à {1}", "Charging now at {0} kW until {1}", "Carga ahora a {0} kW hasta {1}", k.arg(), t.arg())
+                    crate::text!("Charge maintenant {0} jusqu'à {1}", "Charging now {0} until {1}", "Carga ahora {0} hasta {1}", how.arg(), t.arg())
                 }
-                None if left_kwh.is_some() => crate::text!("Charge maintenant à {0} kW", "Charging now at {0} kW", "Carga ahora a {0} kW", k.arg()),
-                None => {
-                    crate::text!("Charge maintenant à {0} kW jusqu'au débranchement", "Charging now at {0} kW until unplugged", "Carga ahora a {0} kW hasta desconectar", k.arg())
-                }
+                None if left_kwh.is_some() => crate::text!("Charge maintenant {0}", "Charging now {0}", "Carga ahora {0}", how.arg()),
+                None => crate::text!("Charge maintenant {0} jusqu'au débranchement", "Charging now {0} until unplugged", "Carga ahora {0} hasta desconectar", how.arg()),
             };
             match left_kwh {
                 Some(left) => {
@@ -380,31 +379,34 @@ impl Regulator {
                                     *m = Memory { changed_at: Some(now), ..Memory::default() };
                                 }
                             }
-                            statuses.insert(load.device_id, status("no_charge", None, plan_text(plan, load.profile.as_deref(), 0.0, now, tz)));
+                            statuses.insert(load.device_id, status("no_charge", None, plan_text(plan, load.profile.as_deref(), None, now, tz)));
                             continue;
                         }
                         Some(plan @ Plan::Max { amps, now: asked_now, .. }) => {
+                            // A charger that sets its own current (its load shedding) keeps it.
+                            let own = r.auto_limit;
                             if !r.running {
                                 // Started once: a car that is full, or that waits for its own
                                 // schedule, is not asked again (a pause by hand was seen above).
                                 if !m.ours && settled {
-                                    commands.push((load.device_id, Command::Start(amps)));
+                                    commands.push((load.device_id, if own { Command::Resume } else { Command::Start(amps) }));
                                     *m = Memory { changed_at: Some(now), on_since: Some(now), ours: true, ..Memory::default() };
                                 }
                             } else {
                                 // Charging by its plan: a pause now is one by hand.
                                 m.ours = true;
-                                if r.amps != Some(amps) && m.changed_at.is_none_or(|t| now - t >= ADJUST_EVERY) {
+                                if !own && r.amps != Some(amps) && m.changed_at.is_none_or(|t| now - t >= ADJUST_EVERY) {
                                     commands.push((load.device_id, Command::Amps(amps)));
                                     m.changed_at = Some(now);
                                 }
                             }
-                            m.amps = Some(amps);
+                            m.amps = (!own).then_some(amps);
                             m.short_since = None;
                             m.enough_since = None;
-                            budget -= amps as f64 * per_amp;
-                            let text = plan_text(plan, load.profile.as_deref(), amps as f64 * per_amp, now, tz);
-                            statuses.insert(load.device_id, status(if asked_now { "now" } else { "charging" }, Some(amps), text));
+                            let watts = if own { r.power.max(0.0) } else { amps as f64 * per_amp };
+                            budget -= watts;
+                            let text = plan_text(plan, load.profile.as_deref(), (!own).then_some(watts), now, tz);
+                            statuses.insert(load.device_id, status(if asked_now { "now" } else { "charging" }, (!own).then_some(amps), text));
                             continue;
                         }
                         Some(Plan::Solar { min_amps, max_amps }) => {
@@ -733,6 +735,7 @@ fn reading_of(d: &DeviceView, kind: Kind, outdoor: Option<f64>) -> Reading {
                 phases: num(s, "phases").unwrap_or(1.0) as u32,
                 session_energy: num(s, "session_energy").unwrap_or(0.0),
                 amps: num(s, "limit").map(|a| a as i64),
+                auto_limit: flag("auto_limit").unwrap_or(false),
                 ..Reading::default()
             }
         }
@@ -779,6 +782,7 @@ async fn send(state: &AppState, d: &DeviceView, c: Command) -> Result<(), String
     let params = |v: Value| v.as_object().cloned().unwrap_or_else(Map::new);
     let (trait_name, action, p) = match c {
         Command::Start(a) => ("ev.charger", "start", params(json!({ "limit": a }))),
+        Command::Resume => ("ev.charger", "start", Map::new()),
         Command::Amps(a) => ("ev.charger", "set_limit", params(json!({ "limit": a }))),
         Command::Stop => ("ev.charger", "stop", Map::new()),
         Command::On => ("switch.relay", "set", params(json!({ "on": true }))),
@@ -851,6 +855,20 @@ pub async fn tick(state: &AppState, now: i64) {
                 crate::text!("{0} : charge à {1} A selon son profil", "{0}: charging at {1} A by its profile", "{0}: carga a {1} A según su perfil", name, a)
             }
             Command::Start(a) => crate::text!("{0} : charge solaire à {1} A", "{0}: solar charging at {1} A", "{0}: carga solar a {1} A", name, a),
+            Command::Resume if statuses.get(&id).is_some_and(|s| s.state == "now") => {
+                crate::text!(
+                    "{0} : charge maintenant, courant réglé par la borne",
+                    "{0}: charging now, current set by the charger",
+                    "{0}: carga ahora, corriente regulada por el cargador",
+                    name
+                )
+            }
+            Command::Resume => crate::text!(
+                "{0} : charge selon son profil, courant réglé par la borne",
+                "{0}: charging by its profile, current set by the charger",
+                "{0}: carga según su perfil, corriente regulada por el cargador",
+                name
+            ),
             Command::Stop if statuses.get(&id).is_some_and(|s| s.state == "no_charge") => {
                 crate::text!("{0} : charge suspendue selon son profil", "{0}: charging paused by its profile", "{0}: carga suspendida según su perfil", name)
             }
@@ -1073,6 +1091,19 @@ mod tests {
         let full = car(false, 0, 30.0);
         assert!(r.step(at(23, 30), PARIS, -500.0, &[(max.clone(), full)]).0.is_empty());
         assert!(r.step(at(23, 40), PARIS, -500.0, &[(max, full)]).0.is_empty());
+    }
+
+    /// A charger that sets its own current (load shedding by its clamp) keeps it: started without
+    /// a current, never set.
+    #[test]
+    fn a_profile_leaves_its_load_shedding_to_the_charger() {
+        let mut r = Regulator::default();
+        let max = planned(Plan::Max { amps: 30, until: None, now: false, left_kwh: None });
+        let own = |running: bool, amps: i64| Reading { auto_limit: true, paused: !running, ..car(running, amps, 0.0) };
+        let (c, s) = r.step(at(22, 0), PARIS, -500.0, &[(max.clone(), own(false, 0))]);
+        assert_eq!(c, vec![(1, Command::Resume)]);
+        assert_eq!(s[&1].text.fr, "Profil Nuit bleue : charge au courant réglé par la borne");
+        assert!(r.step(at(22, 5), PARIS, -4000.0, &[(max, own(true, 12))]).0.is_empty(), "its current is its own");
     }
 
     /// Paused from its app while its profile charges: left alone until unplugged.

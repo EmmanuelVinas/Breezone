@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react"
+import { TEMPO_COLOR, TEMPO_LABEL } from "@/lib/tempo"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   CalendarPlus,
@@ -110,17 +111,6 @@ function Field({
       {children}
     </div>
   )
-}
-
-const TEMPO_COLOR: Record<DayColor, string> = {
-  blue: "#3b82f6",
-  white: "#e5e7eb",
-  red: "#ef4444",
-}
-const TEMPO_LABEL: Record<DayColor, string> = {
-  blue: t("Bleu"),
-  white: t("Blanc"),
-  red: t("Rouge"),
 }
 
 /** Today's and tomorrow's colours, and the red and white days left. */
@@ -292,12 +282,18 @@ export function PriceNow({
 }
 
 /** Which profile a day follows: by the day of the week, or by the colour announced. */
-function CalendarCard({
+export function CalendarCard({
   tariff,
   onChange,
+  dayStartText = t("Le jour du tarif commence à"),
 }: {
-  tariff: Tariff
+  /** A tariff, or anything made of profiles of day and a calendar (a charging profile). */
+  tariff: {
+    profiles: { id: string; name: string; color: string | null }[]
+    calendar: TariffCalendar
+  }
   onChange: (c: TariffCalendar) => void
+  dayStartText?: string
 }) {
   const cal = tariff.calendar
   const byColor = Object.values(cal.colors).some(Boolean)
@@ -330,9 +326,7 @@ function CalendarCard({
       <CardContent className="grid gap-5">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <Label htmlFor="day-start">
-              {t("Le jour du tarif commence à")}
-            </Label>
+            <Label htmlFor="day-start">{dayStartText}</Label>
             <p className="text-sm text-muted-foreground">
               {t("06:00 pour Tempo : la nuit garde le profil de la veille.")}
             </p>

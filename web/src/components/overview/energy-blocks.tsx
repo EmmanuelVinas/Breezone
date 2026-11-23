@@ -4,7 +4,7 @@ import { api, type DayEnergy, type EnergyDay } from "@/lib/api"
 import { kwh, number, time, watts } from "@/lib/format"
 import { useChosenInstallation } from "@/lib/selected-installation"
 import { tn } from "@/lib/i18n"
-import { SurplusCard } from "@/components/surplus"
+import { SurplusProgramme } from "@/components/surplus"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Breakdown,
@@ -255,5 +255,5 @@ export function EnergyMeasuresBlock({
 }
 
 export function EnergySurplusBlock() {
-  return <SurplusCard />
+  return <SurplusProgramme />
 }

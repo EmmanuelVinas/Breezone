@@ -21,5 +21,9 @@ class ApiSamplesTest {
         val device = FzJson.decodeFromString(DeviceView.serializer(), ApiSamples.DEVICE_VIEW)
         assertEquals(true, device.canControl)
         assertEquals("x", FzJson.decodeFromString(Room.serializer(), ApiSamples.ROOM).name)
+        val charging = FzJson.decodeFromString(ChargingView.serializer(), ApiSamples.CHARGING_VIEW)
+        assertEquals(ChargeMode.Off, charging.days.single().periods.single().mode)
+        assertEquals(DayColor.Blue, charging.next?.color)
+        assertTrue(charging.now != null && charging.status != null)
     }
 }

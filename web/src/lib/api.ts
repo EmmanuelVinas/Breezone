@@ -6,6 +6,9 @@ export const ANDROID_APP_URL =
   "https://play.google.com/store/apps/details?id=com.breezone.app"
 import { lang } from "@/lib/i18n"
 import type {
+  ChargeDayKind,
+  ChargeProfileView,
+  ChargingView,
   Contract,
   DeviceView,
   Installation,
@@ -21,6 +24,17 @@ import type {
 
 /** The main views, generated from the contract of the server (`server/contracts/views.json`). */
 export type {
+  ChargeDay,
+  ChargeDayKind,
+  ChargeMode,
+  ChargeNext,
+  ChargeNow,
+  ChargePeriod,
+  ChargeProfileRef,
+  ChargeProfileView,
+  ChargeSlot,
+  ChargeStatus,
+  ChargingView,
   AirQuality,
   AirQualityLevel,
   ColorProfiles,
@@ -1176,6 +1190,16 @@ export type AutomationStep =
   | { kind: "restore" }
   /** The activity feed, the open apps and, when set, an ntfy topic. */
   | { kind: "notify"; message: string }
+  /** A charger follows a charging profile (null: none). */
+  | { kind: "charger_profile"; device_id: number; profile_id: number | null }
+  /** A charger charges now: up to `kw`, until "HH:MM" or `kwh` more, else until unplugged. */
+  | {
+      kind: "charger_now"
+      device_id: number
+      kw?: number | null
+      until?: string | null
+      kwh?: number | null
+    }
 
 export type AutomationInput = {
   name: string
@@ -1448,7 +1472,39 @@ function pairingStep<T = SourceView>(
   )
 }
 
+/** A charging profile as it is written (`POST`/`PUT /api/charging/profiles`). */
+export type ChargeProfileInput = {
+  name: string
+  profiles: ChargeDayKind[]
+  calendar: TariffCalendar
+}
+
+/** "Charge now": up to `kw` (the charger's maximum without), until a time or `kwh` more. */
+export type ChargeNowInput = { kw?: number; until?: number; kwh?: number }
+
 export const api = {
+  chargeProfiles: () =>
+    request<ChargeProfileView[]>("GET", "/api/charging/profiles"),
+  createChargeProfile: (input: ChargeProfileInput) =>
+    request<ChargeProfileView>("POST", "/api/charging/profiles", input),
+  saveChargeProfile: (id: number, input: ChargeProfileInput) =>
+    request<ChargeProfileView>("PUT", `/api/charging/profiles/${id}`, input),
+  deleteChargeProfile: (id: number) =>
+    request<void>("DELETE", `/api/charging/profiles/${id}`),
+  charging: (deviceId: number) =>
+    request<ChargingView>("GET", `/api/devices/${deviceId}/charging`),
+  setChargeProfile: (deviceId: number, profileId: number | null) =>
+    request<ChargingView>("PUT", `/api/devices/${deviceId}/charging`, {
+      profile_id: profileId,
+    }),
+  chargeNow: (deviceId: number, input: ChargeNowInput) =>
+    request<ChargingView>(
+      "POST",
+      `/api/devices/${deviceId}/charging/now`,
+      input
+    ),
+  cancelChargeNow: (deviceId: number) =>
+    request<ChargingView>("DELETE", `/api/devices/${deviceId}/charging/now`),
   surplus: () => request<SurplusView>("GET", "/api/surplus"),
   saveSurplusLoad: (deviceId: number, input: SurplusLoadInput) =>
     request<SurplusView>("PUT", `/api/surplus/loads/${deviceId}`, input),
