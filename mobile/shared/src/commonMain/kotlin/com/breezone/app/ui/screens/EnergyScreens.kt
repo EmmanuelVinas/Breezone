@@ -422,7 +422,8 @@ internal fun ChargerHero(serverId: String, charger: DeviceView) {
             Caption(stringResource(Res.string.charger_goal, formatEnergy(goal)))
         }
         if (s.vehicle == true) {
-            if (charging || !s.paused) {
+            // What is shown decides: a paused charger may still say « charging » at 0 W.
+            if (s.shown == ChargerShown.Charging) {
                 OutlinedButton(
                     onClick = { act("stop", JsonObject(emptyMap()), buildJsonObject { put("paused", true) }) },
                     enabled = charger.usable,
