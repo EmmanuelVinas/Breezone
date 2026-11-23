@@ -16,6 +16,9 @@
 //!   while it is cold outside and its system heats, cools while it is hot and its system cools; it
 //!   is switched on only if it was off, and put back as it was (off, its setpoint) when the surplus
 //!   runs short. A zone switched on, off or set otherwise by hand is left alone.
+//! * A charger may follow a **plan** (its charging profile, or a charge asked now, see
+//!   `charging`): no charge, charge at some current whatever the sun (taken off the budget first),
+//!   or the surplus between other limits. Without a grid meter, only the surplus waits for one.
 
 use crate::db::{self, SurplusLoadRow};
 use crate::devices::{self, DeviceView};
@@ -73,6 +76,18 @@ impl Default for ClimatePlan {
     }
 }
 
+/// What the plan of a charger says now (see `charging`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Plan {
+    /// No charge (until then, when it is known).
+    Off { until: Option<i64> },
+    /// Charge at this current, from the grid if need be: a slot of its profile, or a charge asked
+    /// now (`now`, with what is `left` to add when it was asked for some kWh).
+    Max { amps: i64, until: Option<i64>, now: bool, left_kwh: Option<f64> },
+    /// The surplus, between these currents.
+    Solar { min_amps: i64, max_amps: i64 },
+}
+
 /// A load and how it is run.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Load {
@@ -90,6 +105,10 @@ pub struct Load {
     pub tolerance: f64,
     /// A zone of the air conditioning.
     pub climate: ClimatePlan,
+    /// A charger: what its plan says now (`None`: the surplus, as configured).
+    pub plan: Option<Plan>,
+    /// The name of the charging profile it follows, for the texts.
+    pub profile: Option<String>,
 }
 
 /// A load now.
@@ -141,7 +160,8 @@ pub enum Command {
 pub struct Status {
     /// "solar" (runs on the surplus) | "guarantee" (runs from the grid to keep the guarantee) |
     /// "waiting" (not enough surplus) | "no_car" | "unavailable" | "no_meter" | "off" (not steered) |
-    /// "idle" (a zone: no need now) | "manual" (a zone: set by hand, left alone)
+    /// "idle" (a zone: no need now) | "manual" (set by hand, left alone) | "no_charge" (its
+    /// profile says no charge now) | "charging" (its profile says charge) | "now" (charge asked now)
     pub state: &'static str,
     /// A charger: the current Breezone asks.
     pub amps: Option<i64>,
@@ -202,11 +222,92 @@ fn kw(w: f64) -> String {
     format!("{k}").replace('.', ",")
 }
 
+/// A power in kW, with the decimal mark of each language.
+fn kw_text(w: f64) -> Text {
+    let k = kw(w);
+    Text { fr: k.clone(), en: k.replace(',', "."), es: k }
+}
+
+/// When a plan ends, in words: "22 h", "demain 6 h", "le 24/11 à 6 h".
+fn until_text(now: i64, until: i64, tz: Tz) -> Text {
+    let (Some(n), Some(u)) = (tz.timestamp_opt(now, 0).single(), tz.timestamp_opt(until, 0).single()) else { return Text::default() };
+    use chrono::Timelike;
+    let fr = if u.minute() == 0 { format!("{} h", u.hour()) } else { format!("{} h {:02}", u.hour(), u.minute()) };
+    let hm = u.format("%H:%M").to_string();
+    let days = (u.date_naive() - n.date_naive()).num_days();
+    match days {
+        0 => Text { fr, en: hm.clone(), es: hm },
+        1 => Text { fr: format!("demain {fr}"), en: format!("tomorrow {hm}"), es: format!("mañana {hm}") },
+        _ => {
+            let d = u.format("%d/%m").to_string();
+            Text { fr: format!("le {d} à {fr}"), en: format!("{} {hm}", u.format("%m/%d")), es: format!("el {d} a las {hm}") }
+        }
+    }
+}
+
+/// What a charger does by its plan, in words.
+fn plan_text(plan: Plan, profile: Option<&str>, watts: f64, now: i64, tz: Tz) -> Text {
+    let p = profile.unwrap_or_default().to_string();
+    match plan {
+        Plan::Off { until: Some(u) } => {
+            let t = until_text(now, u, tz);
+            crate::text!("Profil {0} : pas de charge jusqu'à {1}", "Profile {0}: no charging until {1}", "Perfil {0}: sin carga hasta {1}", p, t.arg())
+        }
+        Plan::Off { until: None } => crate::text!("Profil {0} : pas de charge", "Profile {0}: no charging", "Perfil {0}: sin carga", p),
+        Plan::Max { now: false, until, .. } => {
+            let k = kw_text(watts);
+            match until {
+                Some(u) => {
+                    let t = until_text(now, u, tz);
+                    crate::text!(
+                        "Profil {0} : charge à {1} kW jusqu'à {2}",
+                        "Profile {0}: charging at {1} kW until {2}",
+                        "Perfil {0}: carga a {1} kW hasta {2}",
+                        p,
+                        k.arg(),
+                        t.arg()
+                    )
+                }
+                None => crate::text!("Profil {0} : charge à {1} kW", "Profile {0}: charging at {1} kW", "Perfil {0}: carga a {1} kW", p, k.arg()),
+            }
+        }
+        Plan::Max { now: true, until, left_kwh, .. } => {
+            let k = kw_text(watts);
+            let head = match until {
+                Some(u) => {
+                    let t = until_text(now, u, tz);
+                    crate::text!("Charge maintenant à {0} kW jusqu'à {1}", "Charging now at {0} kW until {1}", "Carga ahora a {0} kW hasta {1}", k.arg(), t.arg())
+                }
+                None if left_kwh.is_some() => crate::text!("Charge maintenant à {0} kW", "Charging now at {0} kW", "Carga ahora a {0} kW", k.arg()),
+                None => {
+                    crate::text!("Charge maintenant à {0} kW jusqu'au débranchement", "Charging now at {0} kW until unplugged", "Carga ahora a {0} kW hasta desconectar", k.arg())
+                }
+            };
+            match left_kwh {
+                Some(left) => {
+                    let l = kw_text(left * 1000.0);
+                    crate::text!("{0}, encore {1} kWh", "{0}, {1} kWh to go", "{0}, faltan {1} kWh", head.arg(), l.arg())
+                }
+                None => head,
+            }
+        }
+        Plan::Solar { .. } => Text::default(),
+    }
+}
+
 impl Regulator {
     /// One look: `export` is what goes back to the grid (W, negative: drawn from it), `loads` in
     /// order of priority. Returns the commands to send and the status of every load.
     pub fn step(&mut self, now: i64, tz: Tz, export: f64, loads: &[(Load, Reading)]) -> (Vec<(i64, Command)>, HashMap<i64, Status>) {
+        self.step_with(now, tz, Some(export), loads)
+    }
+
+    /// [`Regulator::step`], with or without a grid meter (`None`): without one, only a charger
+    /// whose plan says no charge, or charge whatever the sun, is run.
+    pub fn step_with(&mut self, now: i64, tz: Tz, export: Option<f64>, loads: &[(Load, Reading)]) -> (Vec<(i64, Command)>, HashMap<i64, Status>) {
         self.memory.retain(|id, _| loads.iter().any(|(l, _)| l.device_id == *id));
+        let meter = export.is_some();
+        let export = export.unwrap_or(0.0);
         // What the loads Breezone runs use is part of the surplus.
         // A relay that measures nothing counts for its power.
         let used = |l: &Load, r: &Reading| if matches!(l.kind, Kind::Relay | Kind::Climate) && r.power <= 0.0 { l.power } else { r.power.max(0.0) };
@@ -221,6 +322,13 @@ impl Regulator {
             if !r.online {
                 *m = Memory::default();
                 statuses.insert(load.device_id, status("unavailable", None, crate::text!("Injoignable", "Unreachable", "Inaccesible")));
+                continue;
+            }
+            let planned = load.kind == Kind::Charger && matches!(load.plan, Some(Plan::Off { .. } | Plan::Max { .. }));
+            if !meter && !planned {
+                let text =
+                    crate::text!("Pas de compteur réseau : le surplus est inconnu", "No grid meter: the surplus is unknown", "Sin contador de red: el excedente es desconocido");
+                statuses.insert(load.device_id, status("no_meter", None, text));
                 continue;
             }
             let rested = m.changed_at.is_none_or(|t| now - t >= MIN_OFF);
@@ -260,6 +368,51 @@ impl Regulator {
                         m.waiting = true;
                     }
                     let per_amp = (if r.voltage > 0.0 { r.voltage } else { VOLTAGE }) * r.phases.max(1) as f64;
+                    // Its plan: no charge, or a charge whatever the sun; or the surplus within its limits.
+                    let solar_limits;
+                    let load = match load.plan {
+                        Some(plan @ Plan::Off { .. }) => {
+                            if r.running {
+                                // Still drawing until it shows the stop.
+                                budget -= r.power.max(0.0);
+                                if settled {
+                                    commands.push((load.device_id, Command::Stop));
+                                    *m = Memory { changed_at: Some(now), ..Memory::default() };
+                                }
+                            }
+                            statuses.insert(load.device_id, status("no_charge", None, plan_text(plan, load.profile.as_deref(), 0.0, now, tz)));
+                            continue;
+                        }
+                        Some(plan @ Plan::Max { amps, now: asked_now, .. }) => {
+                            if !r.running {
+                                // Started once: a car that is full, or that waits for its own
+                                // schedule, is not asked again (a pause by hand was seen above).
+                                if !m.ours && settled {
+                                    commands.push((load.device_id, Command::Start(amps)));
+                                    *m = Memory { changed_at: Some(now), on_since: Some(now), ours: true, ..Memory::default() };
+                                }
+                            } else {
+                                // Charging by its plan: a pause now is one by hand.
+                                m.ours = true;
+                                if r.amps != Some(amps) && m.changed_at.is_none_or(|t| now - t >= ADJUST_EVERY) {
+                                    commands.push((load.device_id, Command::Amps(amps)));
+                                    m.changed_at = Some(now);
+                                }
+                            }
+                            m.amps = Some(amps);
+                            m.short_since = None;
+                            m.enough_since = None;
+                            budget -= amps as f64 * per_amp;
+                            let text = plan_text(plan, load.profile.as_deref(), amps as f64 * per_amp, now, tz);
+                            statuses.insert(load.device_id, status(if asked_now { "now" } else { "charging" }, Some(amps), text));
+                            continue;
+                        }
+                        Some(Plan::Solar { min_amps, max_amps }) => {
+                            solar_limits = Load { min_amps, max_amps, ..load.clone() };
+                            &solar_limits
+                        }
+                        None => load,
+                    };
                     // The guarantee first: from the grid if the sun can no longer make it.
                     let forced = load.guarantee.and_then(|(kwh, by)| {
                         let left = kwh - r.session_energy;
@@ -553,6 +706,8 @@ pub fn load_of(row: &SurplusLoadRow, d: &DeviceView, kind: Kind) -> Load {
                 cool_above: row.cool_above.unwrap_or(d.cool_above),
             }
         },
+        plan: None,
+        profile: None,
     }
 }
 
@@ -650,18 +805,6 @@ pub async fn tick(state: &AppState, now: i64) {
     let local = local_installations(state).await;
     let steered: Vec<(&SurplusLoadRow, &DeviceView, Kind)> =
         rows.iter().filter(|r| r.enabled).filter_map(|r| devices.iter().find(|d| d.id == r.device_id).and_then(|d| kind_of(d, &local).map(|k| (r, d, k)))).collect();
-    let Some(grid) = grid else {
-        let statuses = steered
-            .iter()
-            .map(|(_, d, _)| {
-                let text =
-                    crate::text!("Pas de compteur réseau : le surplus est inconnu", "No grid meter: the surplus is unknown", "Sin contador de red: el excedente es desconocido");
-                (d.id, Status { state: "no_meter", amps: None, power: num(&d.state, "power").unwrap_or(0.0), text })
-            })
-            .collect();
-        *state.surplus.snapshot.write().await = Snapshot { meter: false, export: None, statuses };
-        return;
-    };
     // The outdoor temperature of each installation of a zone that follows the surplus.
     let mut outdoor: HashMap<i64, Option<f64>> = HashMap::new();
     for (_, d, _) in &steered {
@@ -671,9 +814,29 @@ pub async fn tick(state: &AppState, now: i64) {
             }
         }
     }
-    let loads: Vec<(Load, Reading)> =
+    let mut loads: Vec<(Load, Reading)> =
         steered.iter().map(|(r, d, k)| (load_of(r, d, *k), reading_of(d, *k, d.installation_id.and_then(|i| outdoor.get(&i).copied().flatten())))).collect();
-    let (commands, statuses) = state.surplus.regulator.lock().await.step(now, state.cfg.timezone, -grid, &loads);
+    // The chargers that follow a plan, steered on the surplus or not.
+    for (id, (plan, profile)) in crate::charging::plans(state, &devices, now).await {
+        match loads.iter_mut().find(|(l, _)| l.device_id == id) {
+            Some((l, _)) if l.kind == Kind::Charger => {
+                l.plan = Some(plan);
+                l.profile = profile;
+            }
+            Some(_) => {}
+            None => {
+                let Some(d) = devices.iter().find(|d| d.id == id).filter(|d| kind_of(d, &local) == Some(Kind::Charger)) else { continue };
+                let mut l = load_of(&SurplusLoadRow::charger(id), d, Kind::Charger);
+                l.plan = Some(plan);
+                l.profile = profile;
+                loads.push((l, reading_of(d, Kind::Charger, None)));
+            }
+        }
+    }
+    // What runs whatever the sun first: what is left is the surplus of the others.
+    loads.sort_by_key(|(l, _)| !matches!(l.plan, Some(Plan::Off { .. } | Plan::Max { .. })));
+    let export = grid.map(|g| -g);
+    let (commands, statuses) = state.surplus.regulator.lock().await.step_with(now, state.cfg.timezone, export, &loads);
     for (id, c) in commands {
         let Some(d) = devices.iter().find(|d| d.id == id) else { continue };
         let name = d.name.clone();
@@ -681,7 +844,16 @@ pub async fn tick(state: &AppState, now: i64) {
             Command::Start(a) if statuses.get(&id).is_some_and(|s| s.state == "guarantee") => {
                 crate::text!("{0} : charge à {1} A pour tenir la garantie", "{0}: charging at {1} A to keep the guarantee", "{0}: carga a {1} A para cumplir la garantía", name, a)
             }
+            Command::Start(a) if statuses.get(&id).is_some_and(|s| s.state == "now") => {
+                crate::text!("{0} : charge maintenant à {1} A", "{0}: charging now at {1} A", "{0}: carga ahora a {1} A", name, a)
+            }
+            Command::Start(a) if statuses.get(&id).is_some_and(|s| s.state == "charging") => {
+                crate::text!("{0} : charge à {1} A selon son profil", "{0}: charging at {1} A by its profile", "{0}: carga a {1} A según su perfil", name, a)
+            }
             Command::Start(a) => crate::text!("{0} : charge solaire à {1} A", "{0}: solar charging at {1} A", "{0}: carga solar a {1} A", name, a),
+            Command::Stop if statuses.get(&id).is_some_and(|s| s.state == "no_charge") => {
+                crate::text!("{0} : charge suspendue selon son profil", "{0}: charging paused by its profile", "{0}: carga suspendida según su perfil", name)
+            }
             Command::Stop => {
                 crate::text!("{0} : charge suspendue, plus assez de surplus", "{0}: charging paused, not enough surplus", "{0}: carga suspendida, excedente insuficiente", name)
             }
@@ -714,7 +886,7 @@ pub async fn tick(state: &AppState, now: i64) {
             }
         }
     }
-    *state.surplus.snapshot.write().await = Snapshot { meter: true, export: Some(-grid), statuses };
+    *state.surplus.snapshot.write().await = Snapshot { meter: export.is_some(), export, statuses };
 }
 
 pub async fn run_loop(state: AppState) {
@@ -722,7 +894,9 @@ pub async fn run_loop(state: AppState) {
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         ticker.tick().await;
-        if !db::list_surplus_loads(&state.db).await.is_ok_and(|l| l.iter().any(|l| l.enabled)) {
+        let surplus = db::list_surplus_loads(&state.db).await.is_ok_and(|l| l.iter().any(|l| l.enabled));
+        let planned = db::list_charger_plans(&state.db).await.is_ok_and(|l| l.iter().any(|p| p.profile_id.is_some() || p.now_amps.is_some()));
+        if !surplus && !planned {
             *state.surplus.snapshot.write().await = Snapshot::default();
             continue;
         }
@@ -752,6 +926,8 @@ mod tests {
             min_on: 0,
             tolerance: 0.0,
             climate: ClimatePlan::default(),
+            plan: None,
+            profile: None,
         }
     }
 
@@ -767,6 +943,8 @@ mod tests {
             min_on: 600,
             tolerance: 0.0,
             climate: ClimatePlan::default(),
+            plan: None,
+            profile: None,
         }
     }
 
@@ -863,6 +1041,96 @@ mod tests {
         let plugged = [(charger(None), car(false, 0, 0.0))];
         r.step(at(23, 11), PARIS, 5000.0, &plugged);
         assert_eq!(r.step(at(23, 12), PARIS, 5000.0, &plugged).0, vec![(1, Command::Start(16))], "plugged in again: steered again");
+    }
+
+    fn planned(plan: Plan) -> Load {
+        Load { plan: Some(plan), profile: Some("Nuit bleue".into()), ..charger(None) }
+    }
+
+    /// The blue night: nothing on the peak hours (a charge that starts when the car is plugged in
+    /// is stopped), 7 kW (30 A) on the off-peak hours whatever the sun, from the grid.
+    #[test]
+    fn a_profile_stops_then_charges_whatever_the_sun() {
+        let mut r = Regulator::default();
+        let off = planned(Plan::Off { until: Some(at(22, 0)) });
+        let (c, s) = r.step(at(18, 0), PARIS, 3000.0, &[(off.clone(), car(true, 16, 0.0))]);
+        assert_eq!(c, vec![(1, Command::Stop)], "no charge now, even with sun");
+        assert_eq!((s[&1].state, s[&1].text.fr.as_str()), ("no_charge", "Profil Nuit bleue : pas de charge jusqu'à 22 h"));
+        let paused = Reading { paused: true, ..car(false, 0, 0.0) };
+        assert!(r.step(at(18, 1), PARIS, 3000.0, &[(off, paused)]).0.is_empty());
+        // 22:00: the off-peak hours, at night.
+        let max = planned(Plan::Max { amps: 30, until: Some(at(6, 0) + 86400), now: false, left_kwh: None });
+        let (c, s) = r.step(at(22, 0), PARIS, -500.0, &[(max.clone(), paused)]);
+        assert_eq!(c, vec![(1, Command::Start(30))]);
+        assert_eq!((s[&1].state, s[&1].text.fr.as_str()), ("charging", "Profil Nuit bleue : charge à 6,9 kW jusqu'à demain 6 h"));
+        // Charging: nothing more, nothing stops it at night.
+        for minutes in [1, 5, 30] {
+            assert!(r.step(at(22, minutes), PARIS, -7400.0, &[(max.clone(), car(true, 30, 1.0))]).0.is_empty());
+        }
+        // The current shown differs (set from its app): put back, at most every 20 s.
+        assert_eq!(r.step(at(22, 40), PARIS, -4000.0, &[(max.clone(), car(true, 16, 2.0))]).0, vec![(1, Command::Amps(30))]);
+        // Full: not started again.
+        let full = car(false, 0, 30.0);
+        assert!(r.step(at(23, 30), PARIS, -500.0, &[(max.clone(), full)]).0.is_empty());
+        assert!(r.step(at(23, 40), PARIS, -500.0, &[(max, full)]).0.is_empty());
+    }
+
+    /// Paused from its app while its profile charges: left alone until unplugged.
+    #[test]
+    fn a_pause_by_hand_during_a_profile_holds() {
+        let mut r = Regulator::default();
+        let max = planned(Plan::Max { amps: 30, until: None, now: false, left_kwh: None });
+        r.step(at(23, 0), PARIS, -500.0, &[(max.clone(), car(true, 30, 1.0))]);
+        let paused = Reading { paused: true, ..car(false, 0, 1.2) };
+        let (c, s) = r.step(at(23, 5), PARIS, -500.0, &[(max.clone(), paused)]);
+        assert!(c.is_empty());
+        assert_eq!(s[&1].state, "manual");
+        assert!(r.step(at(23, 30), PARIS, -500.0, &[(max.clone(), paused)]).0.is_empty(), "not started again");
+        // Started from its app during a slot without charge: left alone too.
+        let mut r = Regulator::default();
+        let off = planned(Plan::Off { until: None });
+        r.step(at(12, 0), PARIS, 0.0, &[(off.clone(), Reading { paused: true, ..car(false, 0, 0.0) })]);
+        let (c, s) = r.step(at(12, 5), PARIS, 0.0, &[(off, car(true, 16, 0.1))]);
+        assert!(c.is_empty(), "{c:?}");
+        assert_eq!(s[&1].state, "manual");
+    }
+
+    /// Without a grid meter: a profile still stops and charges, only the surplus waits for one.
+    #[test]
+    fn a_profile_acts_without_a_grid_meter() {
+        let mut r = Regulator::default();
+        let off = planned(Plan::Off { until: None });
+        assert_eq!(r.step_with(at(18, 0), PARIS, None, &[(off, car(true, 16, 0.0))]).0, vec![(1, Command::Stop)]);
+        let now = Load { profile: None, ..planned(Plan::Max { amps: 16, until: None, now: true, left_kwh: Some(4.25) }) };
+        let paused = Reading { paused: true, ..car(false, 0, 0.0) };
+        let (c, s) = r.step_with(at(19, 0), PARIS, None, &[(now, paused), (heater(), relay(false))]);
+        assert_eq!(c, vec![(1, Command::Start(16))]);
+        assert_eq!((s[&1].state, s[&1].text.fr.as_str()), ("now", "Charge maintenant à 3,7 kW, encore 4,3 kWh"));
+        assert_eq!(s[&1].text.en, "Charging now at 3.7 kW, 4.3 kWh to go");
+        assert_eq!(s[&2].state, "no_meter");
+        let solar = planned(Plan::Solar { min_amps: 6, max_amps: 16 });
+        assert_eq!(r.step_with(at(19, 1), PARIS, None, &[(solar, car(false, 0, 0.0))]).1[&1].state, "no_meter");
+    }
+
+    /// The surplus slot of a profile: the surplus within its own limits.
+    #[test]
+    fn a_solar_slot_has_its_own_limits() {
+        let mut r = Regulator::default();
+        let solar = planned(Plan::Solar { min_amps: 6, max_amps: 10 });
+        let idle = [(solar, car(false, 0, 0.0))];
+        r.step(at(12, 0), PARIS, 5000.0, &idle);
+        assert_eq!(r.step(at(12, 1), PARIS, 5000.0, &idle).0, vec![(1, Command::Start(10))]);
+    }
+
+    /// Charging whatever the sun is taken off the surplus first.
+    #[test]
+    fn a_charge_whatever_the_sun_leaves_the_surplus_to_others() {
+        let mut r = Regulator::default();
+        let max = planned(Plan::Max { amps: 16, until: None, now: true, left_kwh: None });
+        // 3 kW go back with the charger at 16 A: the heater (2 kW) fits, the charger is not counted twice.
+        let loads = [(max, car(true, 16, 0.0)), (heater(), relay(false))];
+        r.step(at(12, 0), PARIS, 3000.0, &loads);
+        assert_eq!(r.step(at(12, 1), PARIS, 3000.0, &loads).0, vec![(2, Command::On)]);
     }
 
     #[test]

@@ -200,6 +200,10 @@ pub async fn act(State(state): State<AppState>, user: AuthUser, Path(id): Path<i
     // A charger driven by hand: the solar surplus no longer undoes it (until it is unplugged).
     if input.trait_name == "ev.charger" && matches!(input.action.as_str(), "start" | "stop" | "set_limit") {
         state.surplus.by_hand(id).await;
+        // Stopped by hand: a charge asked now is over too.
+        if input.action == "stop" {
+            db::clear_charge_now(&state.db, id).await?;
+        }
     }
     viewed_by(&state, &access, id).await
 }

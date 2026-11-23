@@ -42,6 +42,9 @@ const TABLES: &[Table] = &[
     Table { name: "timers", filter: "1", without: &[] },
     Table { name: "automations", filter: "1", without: &["last_run_at", "last_reason"] },
     Table { name: "surplus_loads", filter: "1", without: &[] },
+    Table { name: "charge_profiles", filter: "1", without: &[] },
+    // A charge asked now does not outlive the car plugged in: not part of the configuration.
+    Table { name: "charger_plans", filter: "1", without: &["now_amps", "now_kw", "now_until", "now_kwh", "now_base_energy"] },
     Table { name: "electricity_contracts", filter: LOCAL, without: &[] },
     Table { name: "electricity_prices", filter: LOCAL, without: &[] },
     // The overviews the administrators set (those of each user go with users matched by name).

@@ -496,8 +496,39 @@ enabled, min_amps, max_amps, power, guarantee_kwh, guarantee_by, min_on_minutes,
 heat_setpoint, cool_setpoint, heat_below, cool_above, limit_min, limit_max, automations: [nom],
 status: {state, amps, power, text} | null}` ; `state` ∈ `solar` (tourne sur le surplus),
 `guarantee` (tourne sur le réseau pour tenir la garantie), `waiting`, `no_car`, `unavailable`,
-`no_meter`, `idle` (une zone : pas besoin, ou mode du système contraire), `manual` (une zone
-réglée à la main, laissée).
+`no_meter`, `idle` (une zone : pas besoin, ou mode du système contraire), `manual` (réglée à la
+main, laissée ; une borne jusqu'au débranchement), `no_charge`, `charging`, `now` (une borne qui
+suit un profil de recharge, voir ci-dessous).
+
+## Profils de recharge
+
+Le plan de la semaine d'une borne. Un profil a la forme d'un tarif : des **types de jour** découpés
+en **créneaux** (`start` « HH:MM », le premier à « 00:00 ») et un **calendrier** (`day_start`, les
+7 `weekdays`, et `colors` bleu/blanc/rouge pour suivre les jours Tempo, de 6 h à 6 h avec
+`day_start: "06:00"`). Le `mode` d'un créneau : `off` (pas de charge), `max` (charge jusqu'à `kw`,
+le maximum de la borne sans `kw`, quel que soit le soleil), `solar` (le surplus seulement, entre
+`min_amps` et `max_amps`). Une borne suit un profil, sauf pendant une **charge immédiate** : à `kw`,
+jusqu'au débranchement, jusqu'à `until` ou jusqu'à `kwh` de plus. Le pilotage sur surplus applique
+le tout ; sans compteur réseau, `off` et `max` agissent quand même. Une action à la main (Breezone,
+appli de la borne, bouton) l'emporte jusqu'au débranchement ; choisir un profil ou charger
+maintenant la reprend.
+
+| Méthode | Chemin | Description |
+|---------|--------|-------------|
+| GET 🔒 | `/api/charging/profiles` | `[{id, name, profiles, calendar, used_by: [{device_id, name}]}]` |
+| POST 👑 | `/api/charging/profiles` | `{name, profiles: [{id, name, color?, slots: [{start, mode, kw?, min_amps?, max_amps?}]}], calendar}` → 201, le profil |
+| PUT 👑 | `/api/charging/profiles/{id}` | Même corps → le profil |
+| DELETE 👑 | `/api/charging/profiles/{id}` | Les bornes qui le suivaient ne suivent plus rien → 204 |
+| GET 🔒 | `/api/devices/{id}/charging` | La vue de la borne (ci-dessous) |
+| PUT 🔒 | `/api/devices/{id}/charging` | `{profile_id \| null}` → la vue |
+| POST 🔒 | `/api/devices/{id}/charging/now` | `{kw?, until?, kwh?}` : charger maintenant (409 sans voiture branchée) → la vue |
+| DELETE 🔒 | `/api/devices/{id}/charging/now` | Fin de la charge immédiate, retour au profil → la vue |
+
+Les droits sont ceux de l'appareil : le voir pour lire, le piloter pour changer. La vue :
+`{profile_id, profiles: [{id, name}], now: {amps, kw, until, kwh, left_kwh} | null, status: {state,
+reason} | null, next: {start, end, mode, kw, color} | null, days: [{day, color, periods: [{start,
+end, mode, kw, profile, color}]}], can_control}` ; `next` est la prochaine période de charge des
+48 h (celle en cours si elle charge), `days` les 3 jours locaux à partir d'aujourd'hui.
 
 Régulation :
 - budget = ce qui part au réseau + ce que tirent déjà les appareils pilotés (une prise qui ne mesure

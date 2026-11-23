@@ -209,6 +209,29 @@ pub struct SurplusLoadRow {
     pub cool_above: Option<f64>,
 }
 
+impl SurplusLoadRow {
+    /// A charger as the surplus takes it by default (its own limits), for one that follows a
+    /// charging profile without being in the list of the surplus.
+    pub fn charger(device_id: i64) -> SurplusLoadRow {
+        SurplusLoadRow {
+            device_id,
+            position: i64::MAX,
+            enabled: true,
+            min_amps: None,
+            max_amps: None,
+            power: None,
+            guarantee_kwh: None,
+            guarantee_by: None,
+            min_on_minutes: 0,
+            tolerance: 0,
+            heat_setpoint: None,
+            cool_setpoint: None,
+            heat_below: None,
+            cool_above: None,
+        }
+    }
+}
+
 pub async fn list_surplus_loads(db: &Db) -> sqlx::Result<Vec<SurplusLoadRow>> {
     sqlx::query_as(
         "SELECT device_id, position, enabled, min_amps, max_amps, power, guarantee_kwh, guarantee_by, min_on_minutes, tolerance, heat_setpoint, cool_setpoint, heat_below, cool_above \

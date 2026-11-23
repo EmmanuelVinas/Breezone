@@ -2,6 +2,7 @@
 
 mod account;
 mod automations;
+mod charging;
 mod cloud;
 mod dashboard;
 pub(crate) mod energy;
@@ -127,6 +128,10 @@ pub fn router() -> Router<AppState> {
         .route("/api/accounts/{kind}/enabled", put(linked::set_enabled))
         .route("/api/energy/linky", get(linked::linky))
         .route("/api/energy/live", get(energy::live))
+        .route("/api/charging/profiles", get(charging::list_profiles).post(charging::create_profile))
+        .route("/api/charging/profiles/{id}", put(charging::update_profile).delete(charging::delete_profile))
+        .route("/api/devices/{id}/charging", get(charging::get).put(charging::set_profile))
+        .route("/api/devices/{id}/charging/now", post(charging::charge_now).delete(charging::cancel_now))
         .route("/api/surplus", get(surplus::get))
         .route("/api/surplus/order", axum::routing::put(surplus::order))
         .route("/api/surplus/loads/{device_id}", axum::routing::put(surplus::save).delete(surplus::remove))

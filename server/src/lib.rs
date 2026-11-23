@@ -14,6 +14,7 @@ pub mod auth;
 pub mod automations;
 pub mod backup;
 pub mod capabilities;
+pub mod charging;
 pub mod cloud;
 pub mod config;
 pub mod cre;

@@ -188,3 +188,128 @@ async fn a_charger_and_a_heater_follow_the_surplus() {
     let (_, view) = call("GET", "/api/surplus", None).await;
     assert_eq!(view["loads"].as_array().unwrap().len(), 1);
 }
+
+/// A charger that follows a charging profile and is told to charge now, without a grid meter: a
+/// profile and a charge asked now act all the same.
+#[tokio::test]
+async fn a_charger_follows_its_profile_and_charges_now() {
+    // A car plugged in, charging as soon as it was.
+    let charger = Arc::new(Mutex::new(json!({"ID":"PLAN1","FirmwareVersion":"2.5.1","ChargeState":2,"ChargeMode":0,"ChargePower":0.0,"VoltageInstallation":230,
+        "ChargeEnergy":0.0,"ChargeTime":0,"Paused":0,"Locked":0,"Intensity":10,"IntensityMeasure_L1":0.0,"Dynamic":0,"MinIntensity":6,"MaxIntensity":32})));
+    let trydan = fake_trydan(charger.clone()).await;
+    let dir = std::env::temp_dir().join(format!("breezone-charging-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let mut cfg = support::config(&dir);
+    cfg.scan_port = 9;
+    let state = breezone_server::init_state(cfg).await.unwrap();
+    let base = format!("http://127.0.0.1:{}", serve(breezone_server::app(state.clone())).await);
+    let http = reqwest::Client::new();
+    let login = |path: &'static str, body: Value| {
+        let (http, base) = (http.clone(), base.clone());
+        async move {
+            let v: Value = http.post(format!("{base}{path}")).json(&body).send().await.unwrap().json().await.unwrap();
+            v["access_token"].as_str().unwrap().to_string()
+        }
+    };
+    let admin = login("/api/setup", json!({"username":"admin","password":"motdepasse1"})).await;
+    let call = |token: &str, m: &str, path: &str, body: Option<Value>| {
+        let mut r = http.request(m.parse().unwrap(), format!("{base}{path}")).bearer_auth(token).header("Accept-Language", "fr");
+        if let Some(b) = body {
+            r = r.json(&b);
+        }
+        async move {
+            let resp = r.send().await.unwrap();
+            let s = resp.status();
+            (s, serde_json::from_str::<Value>(&resp.text().await.unwrap()).unwrap_or(Value::Null))
+        }
+    };
+    let (s, src) = call(&admin, "POST", "/api/sources", Some(json!({"driver": "trydan", "name": "Trydan", "config": {"host": format!("127.0.0.1:{trydan}")}}))).await;
+    assert_eq!(s, StatusCode::CREATED, "{src}");
+    let (_, devices) = call(&admin, "GET", "/api/devices", None).await;
+    let id = devices.as_array().unwrap().iter().find(|d| d["reference"] == "charger").unwrap()["id"].as_i64().unwrap();
+    let look = |t: i64| {
+        let state = state.clone();
+        async move {
+            state.drivers.poll(1).await;
+            breezone_server::surplus::tick(&state, t).await;
+            state.drivers.poll(1).await;
+        }
+    };
+
+    // A profile that never charges.
+    let nothing =
+        |slots: Value| json!({"name": "Rien", "profiles": [{"id": "d", "name": "Tous les jours", "slots": slots}], "calendar": {"weekdays": ["d", "d", "d", "d", "d", "d", "d"]}});
+    let (s, _) = call(&admin, "POST", "/api/charging/profiles", Some(nothing(json!([{"start": "01:00", "mode": "off"}])))).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST, "the first slot starts at midnight");
+    let (s, p) = call(&admin, "POST", "/api/charging/profiles", Some(nothing(json!([{"start": "00:00", "mode": "off"}])))).await;
+    assert_eq!(s, StatusCode::CREATED, "{p}");
+    let profile = p["id"].as_i64().unwrap();
+    let path = format!("/api/devices/{id}/charging");
+    let (s, _) = call(&admin, "PUT", &path, Some(json!({"profile_id": profile + 100}))).await;
+    assert_eq!(s, StatusCode::NOT_FOUND);
+    let (s, v) = call(&admin, "PUT", &path, Some(json!({"profile_id": profile}))).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    assert_eq!((v["profile_id"].as_i64(), v["days"].as_array().unwrap().len(), &v["next"]), (Some(profile), 3, &Value::Null), "{v}");
+    assert_eq!(v["days"][0]["periods"][0]["mode"], "off");
+    let (_, list) = call(&admin, "GET", "/api/charging/profiles", None).await;
+    assert_eq!(list[0]["used_by"][0]["device_id"], id, "{list}");
+
+    // No charge: the charge that started when the car was plugged in is stopped.
+    let t0 = breezone_server::db::now();
+    look(t0).await;
+    assert_eq!(charger.lock().unwrap()["Paused"], 1);
+    let (_, v) = call(&admin, "GET", &path, None).await;
+    assert_eq!((v["status"]["state"].as_str(), v["status"]["reason"].as_str()), (Some("no_charge"), Some("Profil Rien : pas de charge")), "{v}");
+
+    // Charge now, 3.7 kW (16 A), 2 kWh more.
+    let (s, v) = call(&admin, "POST", &format!("{path}/now"), Some(json!({"kw": 3.7, "kwh": 2.0}))).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    assert_eq!(v["now"]["amps"], 16);
+    look(t0 + 10).await;
+    {
+        let c = charger.lock().unwrap();
+        assert_eq!((c["Paused"].as_i64(), c["Intensity"].as_i64()), (Some(0), Some(16)), "{c}");
+    }
+    let (_, v) = call(&admin, "GET", &path, None).await;
+    assert_eq!(v["status"]["reason"], "Charge maintenant à 3,7 kW, encore 2 kWh", "{v}");
+    // The 2 kWh are in: back to the profile, which stops it once the charger has settled.
+    charger.lock().unwrap()["ChargeEnergy"] = json!(2.1);
+    look(t0 + 20).await;
+    let (_, v) = call(&admin, "GET", &path, None).await;
+    assert_eq!(v["now"], Value::Null, "{v}");
+    look(t0 + 200).await;
+    assert_eq!(charger.lock().unwrap()["Paused"], 1);
+    let (_, events) = call(&admin, "GET", "/api/events", None).await;
+    let said: Vec<&str> = events.as_array().unwrap().iter().filter_map(|e| e["message"].as_str()).collect();
+    assert!(said.contains(&"Trydan : énergie ajoutée, fin de la charge immédiate"), "{said:?}");
+    assert!(said.contains(&"Trydan : charge maintenant à 16 A"), "{said:?}");
+
+    // Charge now until unplugged: unplugged, it is over.
+    call(&admin, "POST", &format!("{path}/now"), Some(json!({}))).await;
+    look(t0 + 210).await;
+    {
+        let c = charger.lock().unwrap();
+        assert_eq!((c["Paused"].as_i64(), c["Intensity"].as_i64()), (Some(0), Some(32)), "the charger's maximum");
+    }
+    charger.lock().unwrap()["ChargeState"] = json!(0);
+    look(t0 + 220).await;
+    let (_, v) = call(&admin, "GET", &path, None).await;
+    assert_eq!((&v["now"], v["status"]["state"].as_str()), (&Value::Null, Some("no_car")), "{v}");
+    let (s, _) = call(&admin, "POST", &format!("{path}/now"), Some(json!({"kw": 7}))).await;
+    assert_eq!(s, StatusCode::CONFLICT, "no car to charge");
+
+    // Seen read-only: read, not changed; the profiles are the administrators'.
+    let (s, _) =
+        call(&admin, "POST", "/api/users", Some(json!({"username": "ana", "password": "motdepasse1", "role": "user", "devices": [{"scope": "all", "permission": "read"}]}))).await;
+    assert_eq!(s, StatusCode::CREATED);
+    let ana = login("/api/auth/login", json!({"username": "ana", "password": "motdepasse1"})).await;
+    let (s, v) = call(&ana, "GET", &path, None).await;
+    assert_eq!((s, v["can_control"].as_bool()), (StatusCode::OK, Some(false)));
+    assert_eq!(call(&ana, "PUT", &path, Some(json!({"profile_id": null}))).await.0, StatusCode::FORBIDDEN);
+    assert_eq!(call(&ana, "POST", "/api/charging/profiles", Some(nothing(json!([{"start": "00:00", "mode": "max"}])))).await.0, StatusCode::FORBIDDEN);
+
+    // Deleted: the charger follows nothing.
+    assert_eq!(call(&admin, "DELETE", &format!("/api/charging/profiles/{profile}"), None).await.0, StatusCode::NO_CONTENT);
+    let (_, v) = call(&admin, "GET", &path, None).await;
+    assert_eq!((&v["profile_id"], v["days"].as_array().unwrap().len()), (&Value::Null, 0));
+}

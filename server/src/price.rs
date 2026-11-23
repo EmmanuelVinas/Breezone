@@ -125,7 +125,8 @@ pub enum DayColor {
     Red,
 }
 
-fn clock(text: &str) -> Option<NaiveTime> {
+/// "HH:MM" → a time of day.
+pub fn clock(text: &str) -> Option<NaiveTime> {
     NaiveTime::parse_from_str(text, "%H:%M").ok().filter(|_| text.len() == 5)
 }
 
@@ -241,27 +242,65 @@ pub struct PriceAt {
     pub day: String,
 }
 
-fn local(ts: i64, tz: Tz) -> NaiveDateTime {
+pub fn local(ts: i64, tz: Tz) -> NaiveDateTime {
     chrono::DateTime::from_timestamp(ts, 0).unwrap_or_default().with_timezone(&tz).naive_local()
+}
+
+/// The day of a calendar a local moment belongs to: the day before until `day_start` ("06:00").
+pub fn calendar_day(day_start: &str, at: NaiveDateTime) -> NaiveDate {
+    let start = clock(day_start).unwrap_or(NaiveTime::MIN);
+    (at - Duration::seconds(i64::from(start.num_seconds_from_midnight()))).date()
+}
+
+/// The kind of day a calendar gives a day, and the colour it follows (when it has one for it).
+pub fn kind_of_day<'a>(cal: &'a Calendar, color: &dyn Fn(NaiveDate) -> Option<DayColor>, day: NaiveDate) -> (&'a str, Option<DayColor>) {
+    let colored = |c: DayColor| match c {
+        DayColor::Blue => cal.colors.blue.as_deref(),
+        DayColor::White => cal.colors.white.as_deref(),
+        DayColor::Red => cal.colors.red.as_deref(),
+    };
+    let day_color = color(day).filter(|c| colored(*c).is_some());
+    let weekday = cal.weekdays.get(day.weekday().num_days_from_monday() as usize).map_or("", String::as_str);
+    (day_color.and_then(colored).unwrap_or(weekday), day_color)
+}
+
+/// The slot of a day that holds `t`: the last one started (slots in the order of the day).
+pub fn slot_at<S>(slots: &[S], start: impl Fn(&S) -> &str, t: NaiveTime) -> Option<&S> {
+    slots.iter().rev().find(|s| clock(start(s)).is_some_and(|c| c <= t)).or(slots.first())
+}
+
+/// The moments from `from` to `until` where a day of slots may change (`times`: the starts of
+/// every slot and of the day), `from` first.
+pub fn cuts(times: &[&str], tz: Tz, from: i64, until: i64) -> Vec<i64> {
+    let mut times: Vec<NaiveTime> = times.iter().copied().filter_map(clock).collect();
+    times.sort();
+    times.dedup();
+    let mut cuts = vec![from];
+    let mut day = local(from, tz).date() - Duration::days(1);
+    let last = local(until, tz).date() + Duration::days(1);
+    while day <= last {
+        for t in &times {
+            // A time the clocks skip (spring) happens at the first one after.
+            let at = tz.from_local_datetime(&day.and_time(*t)).earliest().or_else(|| tz.from_local_datetime(&(day.and_time(*t) + Duration::hours(1))).earliest());
+            if let Some(at) = at.map(|a| a.timestamp()).filter(|a| *a > from && *a < until) {
+                cuts.push(at);
+            }
+        }
+        day += Duration::days(1);
+    }
+    cuts.sort();
+    cuts.dedup();
+    cuts
 }
 
 /// The price at `ts` (`None`: no tariff yet). `color` gives the colour announced for a day.
 pub fn price_at(tariffs: &Tariffs, color: &dyn Fn(NaiveDate) -> Option<DayColor>, tz: Tz, ts: i64) -> Option<PriceAt> {
     let at = local(ts, tz);
-    let start = clock(&tariffs.on(at.date())?.calendar.day_start).unwrap_or(NaiveTime::MIN);
-    let day = (at - Duration::seconds(i64::from(start.num_seconds_from_midnight()))).date();
+    let day = calendar_day(&tariffs.on(at.date())?.calendar.day_start, at);
     let tariff = tariffs.on(day).or_else(|| tariffs.on(at.date()))?;
-    let cal = &tariff.calendar;
-    let colored = |c: DayColor| match c {
-        DayColor::Blue => cal.colors.blue.as_ref(),
-        DayColor::White => cal.colors.white.as_ref(),
-        DayColor::Red => cal.colors.red.as_ref(),
-    };
-    let day_color = color(day).filter(|c| colored(*c).is_some());
-    let id = day_color.and_then(colored).unwrap_or(&cal.weekdays[day.weekday().num_days_from_monday() as usize]);
-    let profile = tariff.profiles.iter().find(|p| &p.id == id)?;
-    let now = at.time();
-    let slot = profile.slots.iter().rev().find(|s| clock(&s.start).is_some_and(|t| t <= now)).or(profile.slots.first())?;
+    let (id, day_color) = kind_of_day(&tariff.calendar, color, day);
+    let profile = tariff.profiles.iter().find(|p| p.id == id)?;
+    let slot = slot_at(&profile.slots, |s| s.start.as_str(), at.time())?;
     Some(PriceAt {
         price: slot.price,
         slot: slot.name.clone(),
@@ -290,29 +329,9 @@ pub fn periods(tariffs: &Tariffs, color: &dyn Fn(NaiveDate) -> Option<DayColor>,
         return vec![];
     }
     // Where the price may change: each start of a slot or of a day of every tariff, each day.
-    let mut times: Vec<NaiveTime> = tariffs
-        .0
-        .iter()
-        .flat_map(|(_, t)| t.profiles.iter().flat_map(|p| p.slots.iter().map(|s| s.start.as_str())).chain([t.calendar.day_start.as_str()]))
-        .filter_map(clock)
-        .collect();
-    times.sort();
-    times.dedup();
-    let mut cuts = vec![from];
-    let mut day = local(from, tz).date() - Duration::days(1);
-    let last = local(until, tz).date() + Duration::days(1);
-    while day <= last {
-        for t in &times {
-            // A time the clocks skip (spring) happens at the first one after.
-            let at = tz.from_local_datetime(&day.and_time(*t)).earliest().or_else(|| tz.from_local_datetime(&(day.and_time(*t) + Duration::hours(1))).earliest());
-            if let Some(at) = at.map(|a| a.timestamp()).filter(|a| *a > from && *a < until) {
-                cuts.push(at);
-            }
-        }
-        day += Duration::days(1);
-    }
-    cuts.sort();
-    cuts.dedup();
+    let times: Vec<&str> =
+        tariffs.0.iter().flat_map(|(_, t)| t.profiles.iter().flat_map(|p| p.slots.iter().map(|s| s.start.as_str())).chain([t.calendar.day_start.as_str()])).collect();
+    let cuts = cuts(&times, tz, from, until);
     let mut out: Vec<Period> = vec![];
     for (i, start) in cuts.iter().enumerate() {
         let end = cuts.get(i + 1).copied().unwrap_or(until);

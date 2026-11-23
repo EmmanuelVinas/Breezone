@@ -2,10 +2,11 @@
 //!
 //! Read from the public relay api-couleur-tempo.fr (RTE's data, no account): today and tomorrow
 //! every half hour (tomorrow's is announced in the morning), and the days of the season once, so
-//! that the costs of the past days are right. Nothing is asked while no tariff follows colours.
+//! that the costs of the past days are right. Nothing is asked while no tariff, and no charging
+//! profile, follows colours.
 
 use crate::db;
-use crate::price::{DayColor, Tariff};
+use crate::price::{Calendar, DayColor, Tariff};
 use crate::AppState;
 use chrono::{Datelike, NaiveDate};
 use serde::Deserialize;
@@ -56,9 +57,14 @@ pub fn season_start(day: NaiveDate) -> NaiveDate {
     NaiveDate::from_ymd_opt(year, 9, 1).unwrap_or(day)
 }
 
+/// Whether a calendar follows the colour of the days.
+pub fn colored(c: &Calendar) -> bool {
+    [&c.colors.blue, &c.colors.white, &c.colors.red].into_iter().any(Option::is_some)
+}
+
 /// Whether a tariff of the home follows the colour of the days.
 pub fn followed(tariffs: &[Tariff]) -> bool {
-    tariffs.iter().any(|t| [&t.calendar.colors.blue, &t.calendar.colors.white, &t.calendar.colors.red].into_iter().any(Option::is_some))
+    tariffs.iter().any(|t| colored(&t.calendar))
 }
 
 /// The colours known from `from` to `until` (both included).
@@ -81,7 +87,8 @@ async fn store(db: &db::Db, days: &[Day]) -> sqlx::Result<usize> {
 /// Reads today's and tomorrow's colours, and the season's when it is missing.
 pub async fn refresh(state: &AppState) -> anyhow::Result<()> {
     let tariffs: Vec<Tariff> = db::all_tariffs(&state.db).await?.into_iter().filter_map(|json| serde_json::from_str(&json).ok()).collect();
-    if !followed(&tariffs) {
+    let charging = crate::charging::profiles(state).await?.values().any(|p| colored(&p.calendar));
+    if !followed(&tariffs) && !charging {
         return Ok(());
     }
     // RTE itself when an account is linked (the season once, then today and tomorrow); the public
