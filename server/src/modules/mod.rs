@@ -107,6 +107,7 @@ pub fn set_timezone(tz: &str) {
 
 /// The configuration of a source with what Breezone fills itself at each start (`server.timezone`
 /// of its manifest's `fills`): a source added before the module asked for it gets it too.
+#[cfg_attr(not(feature = "wasm"), allow(dead_code))]
 fn filled(m: &Manifest, config: &serde_json::Value) -> serde_json::Value {
     let mut config = config.clone();
     if let (Some(o), Some(tz)) = (config.as_object_mut(), TIMEZONE.get()) {

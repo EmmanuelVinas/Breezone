@@ -197,6 +197,10 @@ pub async fn act(State(state): State<AppState>, user: AuthUser, Path(id): Path<i
         None => access.control_module(&devices::module_device(&view))?,
     }
     devices::apply(&state, &view, &input, &user.username).await?;
+    // A charger driven by hand: the solar surplus no longer undoes it (until it is unplugged).
+    if input.trait_name == "ev.charger" && matches!(input.action.as_str(), "start" | "stop" | "set_limit") {
+        state.surplus.by_hand(id).await;
+    }
     viewed_by(&state, &access, id).await
 }
 

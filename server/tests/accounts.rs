@@ -1,5 +1,6 @@
 //! Linked accounts against fake services: RTE (Tempo), Conso API (Linky), Netatmo, through the
 //! modules shipped with Breezone (their requests sent to the fakes).
+#![cfg(feature = "wasm")]
 
 mod support;
 

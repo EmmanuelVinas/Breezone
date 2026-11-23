@@ -192,6 +192,8 @@ pub async fn save(State(state): State<AppState>, _admin: AdminUser, Path(device_
         },
     )
     .await?;
+    // Given (back) to the surplus: it steers it again at once, even after a stop by hand.
+    state.surplus.release(device_id).await;
     Ok(Json(view(&state).await?))
 }
 

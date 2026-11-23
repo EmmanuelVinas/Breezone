@@ -1,5 +1,6 @@
 //! The EZVIZ account and module against a fake EZVIZ (its requests sent there): two-step
 //! verification, the session renewed, a doorbell whose ring is a press, and its encrypted picture.
+#![cfg(feature = "wasm")]
 
 mod support;
 

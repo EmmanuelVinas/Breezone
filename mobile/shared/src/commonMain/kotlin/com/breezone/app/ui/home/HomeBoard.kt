@@ -5,12 +5,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -39,6 +37,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.breezone.app.data.BlockSize
@@ -244,14 +245,35 @@ fun HomeBoard(serverId: String, installationId: Long, nav: HomeNav, onInstallati
                     if (row.size == 1) {
                         BlockContent(row.first(), ctx, editing = false)
                     } else {
-                        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            CompositionLocalProvider(LocalCardFillsHeight provides true) {
-                                row.forEach { b -> Column(Modifier.weight(1f).fillMaxHeight()) { BlockContent(b, ctx, editing = false) } }
-                            }
+                        CompositionLocalProvider(LocalCardFillsHeight provides true) {
+                            EqualPair(12.dp, { BlockContent(row[0], ctx, editing = false) }, { BlockContent(row[1], ctx, editing = false) })
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Two cards side by side, as tall as the taller one: each is measured, then both are laid out at
+ * that height (their cards fill it, see [LocalCardFillsHeight]). Intrinsic heights are not asked:
+ * not every content answers them (a chart).
+ */
+@Composable
+private fun EqualPair(gap: Dp, first: @Composable () -> Unit, second: @Composable () -> Unit) {
+    SubcomposeLayout(Modifier.fillMaxWidth()) { constraints ->
+        val gapPx = gap.roundToPx()
+        val width = ((constraints.maxWidth - gapPx) / 2).coerceAtLeast(0)
+        val loose = Constraints(minWidth = width, maxWidth = width)
+        val height = listOf(subcompose("first-probe", first), subcompose("second-probe", second))
+            .maxOf { parts -> parts.maxOfOrNull { it.measure(loose).height } ?: 0 }
+        val fixed = Constraints.fixed(width, height)
+        val left = subcompose("first", first).map { it.measure(fixed) }
+        val right = subcompose("second", second).map { it.measure(fixed) }
+        layout(constraints.maxWidth, height) {
+            left.forEach { it.place(0, 0) }
+            right.forEach { it.place(width + gapPx, 0) }
         }
     }
 }

@@ -15,7 +15,13 @@ All notable changes are documented here. The format follows
 ### Fixed
 
 - A module sent again in the same version runs its new code at once, without a restart.
+- A charger stopped, started or resumed by hand (from Breezone, from its own app or its button) is
+  no longer paused or started again by the solar surplus or its guarantee: the surplus takes it
+  back once the car is unplugged, or when it is given back to it. A charge that starts by itself
+  when the car is plugged in still waits for the sun.
 - EZVIZ: the rings just after midnight are no longer missed (the day of the server, not UTC).
+- Mobile app: two half cards side by side on the home really take the same height (the solar and
+  home cards, one with a line more than the other).
 - Mobile app: the kinds of devices a server brings after an update are shown without restarting
   the app; the colour of a device of an unknown kind can be chosen.
 

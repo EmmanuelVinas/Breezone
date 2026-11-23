@@ -37,6 +37,9 @@ pub const STOP_DELAY: i64 = 180;
 pub const ADJUST_EVERY: i64 = 20;
 /// A load stopped by Breezone does not start again before this.
 pub const MIN_OFF: i64 = 120;
+/// Time a charger takes to show what it was asked (a start, a stop): until then, what it shows is
+/// not taken as done by hand.
+const SETTLE: i64 = 120;
 /// A guarantee starts this much earlier than needed.
 const GUARANTEE_MARGIN: i64 = 15 * 60;
 /// How often the surplus is looked at.
@@ -98,6 +101,8 @@ pub struct Reading {
     pub plugged: bool,
     /// It runs (a charger charges, unpaused; a relay is on).
     pub running: bool,
+    /// A charger: paused (its own flag, kept by the charger: it does not start by itself then).
+    pub paused: bool,
     /// What it draws now (W).
     pub power: f64,
     pub voltage: f64,
@@ -165,12 +170,25 @@ struct Memory {
     before: Option<f64>,
     /// A zone: the setpoint Breezone gave it.
     asked: Option<f64>,
+    /// A charger stopped, started or set by hand: left alone until its car is unplugged.
+    by_hand: bool,
+    /// A charger: seen paused since the surplus last started it (a charge going again then was
+    /// resumed by someone else, its own app or its button).
+    waiting: bool,
 }
 
 /// Decides, look after look, what each load does.
 #[derive(Debug, Default)]
 pub struct Regulator {
     memory: HashMap<i64, Memory>,
+}
+
+impl Regulator {
+    /// A charger was stopped, started or set by hand: the surplus leaves it until its car is
+    /// unplugged (else it would start again what was just stopped).
+    pub fn by_hand(&mut self, device_id: i64) {
+        self.memory.insert(device_id, Memory { by_hand: true, ..Memory::default() });
+    }
 }
 
 /// When `at` ("07:00") next comes after `now`, in `tz`.
@@ -213,6 +231,34 @@ impl Regulator {
                         statuses.insert(load.device_id, status("no_car", None, crate::text!("Pas de voiture branchée", "No car plugged in", "Ningún coche conectado")));
                         continue;
                     }
+                    // Stopped (or started, or set) by hand: what was asked holds, the guarantee too.
+                    if m.by_hand {
+                        let text = crate::text!(
+                            "Réglée à la main : le surplus la reprend au prochain branchement",
+                            "Set by hand: the surplus takes it back at the next plugging in",
+                            "Ajustada a mano: el excedente la retoma en la próxima conexión"
+                        );
+                        statuses.insert(load.device_id, status("manual", None, text));
+                        continue;
+                    }
+                    // Resumed (seen paused, then charging) or paused (after the surplus started it)
+                    // by someone else, its own app or its button: left alone until unplugged. A
+                    // charge that starts by itself when the car is plugged in (the charger was not
+                    // paused) stays the surplus's, and so does a car that is full.
+                    let settled = m.changed_at.is_none_or(|t| now - t >= SETTLE);
+                    if settled && ((r.running && m.waiting && !m.ours) || (r.paused && m.ours)) {
+                        *m = Memory { by_hand: true, ..Memory::default() };
+                        let text = crate::text!(
+                            "Réglée à la main : le surplus la reprend au prochain branchement",
+                            "Set by hand: the surplus takes it back at the next plugging in",
+                            "Ajustada a mano: el excedente la retoma en la próxima conexión"
+                        );
+                        statuses.insert(load.device_id, status("manual", None, text));
+                        continue;
+                    }
+                    if r.paused {
+                        m.waiting = true;
+                    }
                     let per_amp = (if r.voltage > 0.0 { r.voltage } else { VOLTAGE }) * r.phases.max(1) as f64;
                     // The guarantee first: from the grid if the sun can no longer make it.
                     let forced = load.guarantee.and_then(|(kwh, by)| {
@@ -226,6 +272,8 @@ impl Regulator {
                         if !r.running {
                             commands.push((load.device_id, Command::Start(amps)));
                             m.changed_at = Some(now);
+                            m.ours = true;
+                            m.waiting = false;
                         } else if r.amps != Some(amps) && m.changed_at.is_none_or(|t| now - t >= ADJUST_EVERY) {
                             commands.push((load.device_id, Command::Amps(amps)));
                             m.changed_at = Some(now);
@@ -276,7 +324,7 @@ impl Regulator {
                             let since = *m.enough_since.get_or_insert(now);
                             if now - since >= START_DELAY && rested {
                                 commands.push((load.device_id, Command::Start(fits)));
-                                *m = Memory { changed_at: Some(now), on_since: Some(now), amps: Some(fits), ..Memory::default() };
+                                *m = Memory { changed_at: Some(now), on_since: Some(now), amps: Some(fits), ours: true, ..Memory::default() };
                                 budget -= fits as f64 * per_amp;
                                 statuses.insert(
                                     load.device_id,
@@ -447,6 +495,16 @@ impl Surplus {
     pub async fn snapshot(&self) -> Snapshot {
         self.snapshot.read().await.clone()
     }
+
+    /// See [`Regulator::by_hand`].
+    pub async fn by_hand(&self, device_id: i64) {
+        self.regulator.lock().await.by_hand(device_id);
+    }
+
+    /// A load given (back) to the surplus: what it remembered of it goes (a stop by hand above all).
+    pub async fn release(&self, device_id: i64) {
+        self.regulator.lock().await.memory.remove(&device_id);
+    }
 }
 
 /// The kind of a device that can be steered on the surplus: a charger, a relay of this server, or
@@ -514,6 +572,7 @@ fn reading_of(d: &DeviceView, kind: Kind, outdoor: Option<f64>) -> Reading {
                 online: d.available,
                 plugged: matches!(status, Some("plugged" | "charging")),
                 running: status == Some("charging") && !flag("paused").unwrap_or(false),
+                paused: flag("paused").unwrap_or(false),
                 power: num(s, "power").unwrap_or(0.0),
                 voltage: num(s, "voltage").unwrap_or(0.0),
                 phases: num(s, "phases").unwrap_or(1.0) as u32,
@@ -737,6 +796,73 @@ mod tests {
 
     fn relay(on: bool) -> Reading {
         Reading { online: true, plugged: true, running: on, power: if on { 2000.0 } else { 0.0 }, ..Reading::default() }
+    }
+
+    /// What happened on the night of 2026-11-22: the surplus paused the charge, the charge was
+    /// resumed from the charger's own app, and the surplus paused it again a few minutes later,
+    /// over and over. Resumed by someone else, it is left alone until the car is unplugged.
+    #[test]
+    fn a_charge_resumed_outside_breezone_is_left_alone() {
+        let mut r = Regulator::default();
+        let paused = Reading { paused: true, ..car(false, 0, 0.0) };
+        // Paused (by the surplus, the day before): seen so.
+        let (c, _) = r.step(at(22, 0), PARIS, -500.0, &[(charger(None), paused)]);
+        assert!(c.is_empty());
+        // Resumed from the charger's app at night: no stop, ever.
+        for minutes in [1, 4, 10, 30] {
+            let (c, s) = r.step(at(22, minutes), PARIS, -4000.0, &[(charger(None), car(true, 16, 1.0))]);
+            assert!(c.is_empty(), "left alone: {c:?}");
+            assert_eq!(s[&1].state, "manual");
+        }
+        // Unplugged: the surplus takes it back.
+        r.step(at(23, 0), PARIS, -500.0, &[(charger(None), Reading { plugged: false, ..car(false, 0, 0.0) })]);
+        let (_, s) = r.step(at(23, 1), PARIS, -500.0, &[(charger(None), paused)]);
+        assert_ne!(s[&1].state, "manual");
+    }
+
+    /// A charge that starts by itself when the car is plugged in (the charger was not paused):
+    /// the surplus pauses it at night, as before, to wait for the sun.
+    #[test]
+    fn a_charge_that_starts_when_plugged_in_waits_for_the_sun() {
+        let mut r = Regulator::default();
+        let charging = [(charger(None), car(true, 16, 0.0))];
+        r.step(at(22, 0), PARIS, -3700.0, &charging);
+        assert_eq!(r.step(at(22, 4), PARIS, -3700.0, &charging).0, vec![(1, Command::Stop)]);
+    }
+
+    /// Paused from its app while the surplus charged it: not started again on the next sun.
+    #[test]
+    fn a_solar_charge_paused_by_hand_is_not_started_again() {
+        let mut r = Regulator::default();
+        let idle = [(charger(None), car(false, 0, 0.0))];
+        r.step(at(12, 0), PARIS, 3000.0, &idle);
+        assert!(matches!(r.step(at(12, 1), PARIS, 3000.0, &idle).0[..], [(1, Command::Start(_))]));
+        r.step(at(12, 2), PARIS, 1000.0, &[(charger(None), car(true, 13, 0.1))]);
+        // Paused from its app, past the time the charger takes to show what it was asked.
+        let paused = [(charger(None), Reading { paused: true, ..car(false, 0, 0.2) })];
+        let (c, s) = r.step(at(12, 10), PARIS, 3000.0, &paused);
+        assert!(c.is_empty());
+        assert_eq!(s[&1].state, "manual");
+        assert!(r.step(at(12, 20), PARIS, 5000.0, &paused).0.is_empty(), "not started again");
+    }
+
+    /// Stopped by hand (the button of the page Recharge): the surplus does not start it again, nor
+    /// the guarantee, until its car is unplugged; then it steers it again.
+    #[test]
+    fn a_charger_stopped_by_hand_is_left_alone_until_unplugged() {
+        let mut r = Regulator::default();
+        let paused = [(charger(Some((20.0, "07:00"))), car(false, 0, 0.0))];
+        r.by_hand(1);
+        for minutes in [0, 1, 5] {
+            let (c, s) = r.step(at(23, minutes), PARIS, 5000.0, &paused);
+            assert!(c.is_empty(), "never started again: {c:?}");
+            assert_eq!(s[&1].state, "manual");
+        }
+        let unplugged = Reading { plugged: false, ..car(false, 0, 0.0) };
+        r.step(at(23, 10), PARIS, 5000.0, &[(charger(None), unplugged)]);
+        let plugged = [(charger(None), car(false, 0, 0.0))];
+        r.step(at(23, 11), PARIS, 5000.0, &plugged);
+        assert_eq!(r.step(at(23, 12), PARIS, 5000.0, &plugged).0, vec![(1, Command::Start(16))], "plugged in again: steered again");
     }
 
     #[test]

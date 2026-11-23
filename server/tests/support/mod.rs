@@ -62,6 +62,7 @@ pub fn app_web() -> PathBuf {
 
 /// The configuration of a test server with the shipped modules.
 pub fn config(data_dir: &Path) -> breezone_server::config::Config {
+    #[cfg(feature = "wasm")]
     breezone_server::modules::wasm::allow_loopback(true);
     let mut cfg = breezone_server::config::Config::for_tests(data_dir.to_path_buf());
     cfg.web_dir = app_web();
