@@ -1,6 +1,6 @@
 {
   "id": "trydan",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "name": {
     "en": "V2C Trydan",
     "es": "V2C Trydan",
@@ -14,7 +14,7 @@
   },
   "provides": {
     "traits": [
-      "ev.charger@1.0",
+      "ev.charger@1.1",
       "energy.power@1.0"
     ]
   },

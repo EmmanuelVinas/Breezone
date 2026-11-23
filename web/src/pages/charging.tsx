@@ -29,7 +29,6 @@ import {
 import { cn } from "@/lib/utils"
 import { t } from "@/lib/i18n"
 import { PageHeader } from "@/components/app-shell"
-import { ChargingMode } from "@/components/surplus"
 import {
   ChargeNowDialog,
   NowLine,
@@ -78,6 +77,8 @@ type ChargerState = {
   limit_min?: number
   limit_max?: number
   auto_limit?: boolean
+  /** The schedule set in the charger's own app (`ev.charger@1.1`). */
+  timer?: boolean
   energy_goal?: number
   power?: number
   current?: number
@@ -369,6 +370,20 @@ function SettingsCard({
             act.mutate({ action: "set_auto_limit", params: { on: v } })
           }
         />
+        {s.timer !== undefined && (
+          <SettingSwitch
+            label={t("Programmation de son appli")}
+            sub={t(
+              "Les heures de charge réglées dans l'appli de la borne : coupez-la pour que seul le profil de Breezone décide."
+            )}
+            checked={s.timer}
+            disabled={disabled}
+            loading={act.isPending && act.variables?.action === "set_timer"}
+            onChange={(v) =>
+              act.mutate({ action: "set_timer", params: { on: v } })
+            }
+          />
+        )}
         <SettingSwitch
           label={
             <span className="inline-flex items-center gap-2">
@@ -618,7 +633,6 @@ export function ChargerCard({
         view={plan.data}
         at={plan.dataUpdatedAt / 1000}
       />
-      {plan.data?.profile_id === null && <ChargingMode device={device} />}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <PowerCurve device={device} />
         <SettingsCard

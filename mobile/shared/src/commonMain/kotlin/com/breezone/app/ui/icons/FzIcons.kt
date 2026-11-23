@@ -791,4 +791,24 @@ object FzIcons {
             "M19 6a7.7 7.7 0 0 0-5.2-2A7.9 7.9 0 0 0 6 12c0 4.4 3.5 8 7.8 8 2 0 3.8-.8 5.2-2",
         )
     }
+
+    val Scissors: ImageVector by lazy {
+        lucide(
+            "Scissors",
+            "M3 6a3 3 0 1 0 6 0a3 3 0 1 0 -6 0",
+            "M8.12 8.12 12 12",
+            "M20 4 8.12 15.88",
+            "M3 18a3 3 0 1 0 6 0a3 3 0 1 0 -6 0",
+            "M14.8 14.8 20 20",
+        )
+    }
+
+    val Merge: ImageVector by lazy {
+        lucide(
+            "Merge",
+            "m8 6 4-4 4 4",
+            "M12 2v10.3a4 4 0 0 1-1.172 2.872L4 22",
+            "m20 22-5-5",
+        )
+    }
 }

@@ -1,7 +1,8 @@
 {
   "trait": "ev.charger",
   "version": 1,
-  "revision": 0,
+  "revision": 1,
+  "since": { "timer": 1, "set_timer": 1 },
   "label": { "fr": "Borne de recharge", "en": "EV charger", "es": "Cargador de vehículo eléctrico" },
   "state": [
     { "name": "status", "type": "enum", "values": ["available", "plugged", "charging", "fault"], "value_labels": { "available": { "fr": "Libre", "en": "Available", "es": "Libre" }, "plugged": { "fr": "Véhicule branché", "en": "Vehicle plugged in", "es": "Vehículo conectado" }, "charging": { "fr": "En charge", "en": "Charging", "es": "Cargando" }, "fault": { "fr": "En défaut", "en": "Fault", "es": "Avería" } }, "label": { "fr": "État", "en": "Status", "es": "Estado" } },
@@ -15,7 +16,8 @@
     { "name": "limit_max", "type": "integer", "history": false, "unit": "A", "optional": true, "label": { "fr": "Intensité maximale", "en": "Maximum current", "es": "Intensidad máxima" } },
     { "name": "phases", "type": "integer", "history": false, "optional": true, "label": { "fr": "Phases", "en": "Phases", "es": "Fases" } },
     { "name": "auto_limit", "type": "bool", "history": false, "optional": true, "label": { "fr": "Intensité réglée par la borne", "en": "Current set by the charger", "es": "Intensidad regulada por el cargador" } },
-    { "name": "energy_goal", "type": "number", "history": false, "unit": "kWh", "optional": true, "label": { "fr": "Arrêt à", "en": "Stops at", "es": "Se detiene a los" } }
+    { "name": "energy_goal", "type": "number", "history": false, "unit": "kWh", "optional": true, "label": { "fr": "Arrêt à", "en": "Stops at", "es": "Se detiene a los" } },
+    { "name": "timer", "type": "bool", "history": false, "optional": true, "label": { "fr": "Programmation de son appli", "en": "Schedule of its app", "es": "Programación de su app" } }
   ],
   "actions": [
     {
@@ -43,6 +45,13 @@
       "label": { "fr": "Verrouiller ou déverrouiller", "en": "Lock or unlock", "es": "Bloquear o desbloquear" },
       "params": [
         { "name": "locked", "type": "bool", "label": { "fr": "Verrouillée", "en": "Locked", "es": "Bloqueado" } }
+      ]
+    },
+    {
+      "name": "set_timer",
+      "label": { "fr": "Programmation de son appli", "en": "Schedule of its app", "es": "Programación de su app" },
+      "params": [
+        { "name": "on", "type": "bool", "label": { "fr": "Active", "en": "On", "es": "Activa" } }
       ]
     },
     {

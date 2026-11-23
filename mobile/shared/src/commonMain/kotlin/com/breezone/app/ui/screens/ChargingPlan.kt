@@ -31,6 +31,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -72,7 +73,9 @@ import com.breezone.app.resources.charging_legend_off
 import com.breezone.app.resources.charging_legend_solar
 import com.breezone.app.resources.charging_maximum
 import com.breezone.app.resources.charging_next
+import com.breezone.app.resources.charge_profiles_manage
 import com.breezone.app.resources.charging_no_profile
+import com.breezone.app.resources.charging_no_profile_admin
 import com.breezone.app.resources.charging_none
 import com.breezone.app.resources.charging_now
 import com.breezone.app.resources.charging_now_hint
@@ -275,12 +278,15 @@ private fun DayStrip(day: ChargeDay, label: String) {
 /** The profiles the charger may follow, and the next days of the one it follows. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun ProfileCard(view: ChargingView, onChoose: (Long?) -> Unit) {
+internal fun ProfileCard(view: ChargingView, onManage: (() -> Unit)?, onChoose: (Long?) -> Unit) {
     val names = stringArrayResource(Res.array.days_names)
     SectionCard {
-        SectionTitle(stringResource(Res.string.charging_profile))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) { SectionTitle(stringResource(Res.string.charging_profile)) }
+            onManage?.let { TextButton(onClick = it) { Text(stringResource(Res.string.charge_profiles_manage)) } }
+        }
         if (view.profiles.isEmpty()) {
-            Muted(stringResource(Res.string.charging_no_profile))
+            Muted(stringResource(if (onManage != null) Res.string.charging_no_profile_admin else Res.string.charging_no_profile))
             return@SectionCard
         }
         Caption(stringResource(if (view.profileId == null) Res.string.charging_any_profile else Res.string.charging_profile_hint))

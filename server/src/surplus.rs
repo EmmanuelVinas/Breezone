@@ -833,7 +833,8 @@ pub async fn tick(state: &AppState, now: i64) {
                 let mut l = load_of(&SurplusLoadRow::charger(id), d, Kind::Charger);
                 l.plan = Some(plan);
                 l.profile = profile;
-                loads.push((l, reading_of(d, Kind::Charger, None)));
+                // A charger on its profile takes the surplus before the loads of the list.
+                loads.insert(0, (l, reading_of(d, Kind::Charger, None)));
             }
         }
     }

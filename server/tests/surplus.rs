@@ -120,18 +120,41 @@ async fn a_charger_and_a_heater_follow_the_surplus() {
     let (grid_id, relay_id, charger_id) = (id("em:0"), id("switch:0"), id("charger"));
     call("PUT", &format!("/api/devices/{grid_id}"), Some(json!({"role": "grid"}))).await;
 
-    // Nothing steered yet: the charger and the relay can be added.
+    // The relay can be added to the list of the surplus; a charger follows it by its profile.
     let (_, view) = call("GET", "/api/surplus", None).await;
     let candidates: Vec<i64> = view["candidates"].as_array().unwrap().iter().map(|c| c["device_id"].as_i64().unwrap()).collect();
-    assert!(candidates.contains(&charger_id) && candidates.contains(&relay_id), "{view}");
+    assert_eq!(candidates, vec![relay_id], "{view}");
     let (s, _) = call("PUT", &format!("/api/surplus/loads/{relay_id}"), Some(json!({}))).await;
     assert_eq!(s, StatusCode::BAD_REQUEST, "a relay needs its power");
-    let (s, _) = call("PUT", &format!("/api/surplus/loads/{charger_id}"), Some(json!({"max_amps": 40}))).await;
-    assert_eq!(s, StatusCode::BAD_REQUEST, "above the charger's maximum");
-    call("PUT", &format!("/api/surplus/loads/{charger_id}"), Some(json!({"max_amps": 16}))).await;
-    let (_, view) = call("PUT", &format!("/api/surplus/loads/{relay_id}"), Some(json!({"power": 2000}))).await;
+    let (s, _) = call("PUT", &format!("/api/surplus/loads/{charger_id}"), Some(json!({"max_amps": 16}))).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST, "a charger has a charging profile");
+    call("PUT", &format!("/api/surplus/loads/{relay_id}"), Some(json!({"power": 2000}))).await;
+
+    // A charger in the list from before the charging profiles (16 A at most, a guarantee): it
+    // follows a "Solaire" profile with its currents, leaves the list, and its guarantee is told.
+    let legacy = breezone_server::db::SurplusLoadRow {
+        max_amps: Some(16),
+        guarantee_kwh: Some(20.0),
+        guarantee_by: Some("07:00".into()),
+        position: -1,
+        ..breezone_server::db::SurplusLoadRow::charger(charger_id)
+    };
+    breezone_server::db::upsert_surplus_load(&state.db, &legacy).await.unwrap();
+    breezone_server::charging::adopt_surplus_chargers(&state).await.unwrap();
+    let (_, view) = call("GET", "/api/surplus", None).await;
     let order: Vec<i64> = view["loads"].as_array().unwrap().iter().map(|l| l["device_id"].as_i64().unwrap()).collect();
-    assert_eq!(order, vec![charger_id, relay_id], "added last in priority");
+    assert_eq!(order, vec![relay_id]);
+    let (_, plan) = call("GET", &format!("/api/devices/{charger_id}/charging"), None).await;
+    assert_eq!(plan["profiles"][0]["name"], "Solaire", "{plan}");
+    assert_eq!(plan["profile_id"], plan["profiles"][0]["id"]);
+    let (_, profiles) = call("GET", "/api/charging/profiles", None).await;
+    assert_eq!(profiles[0]["profiles"][0]["slots"], json!([{"start": "00:00", "mode": "solar", "max_amps": 16}]));
+    let (_, events) = call("GET", "/api/events", None).await;
+    let said: Vec<&str> = events.as_array().unwrap().iter().filter_map(|e| e["message"].as_str()).collect();
+    assert!(said.iter().any(|m| m.contains("garantie (+20 kWh avant 07:00) est à refaire")), "{said:?}");
+    // Once: nothing more to move.
+    breezone_server::charging::adopt_surplus_chargers(&state).await.unwrap();
+    assert_eq!(call("GET", "/api/charging/profiles", None).await.1.as_array().unwrap().len(), 1);
 
     let look = |grid: f64, t: i64| {
         let (state, meter) = (state.clone(), meter.clone());
@@ -158,8 +181,10 @@ async fn a_charger_and_a_heater_follow_the_surplus() {
     }
     let (_, view) = call("GET", "/api/surplus", None).await;
     assert_eq!(view["export"], 2300.0);
-    assert_eq!(view["loads"][0]["status"]["text"], "Charge solaire à 10 A", "{view}");
-    assert_eq!(view["loads"][1]["status"]["text"], "Attend 2 kW de surplus");
+    // The charger on its profile first, then the list.
+    let (_, plan) = call("GET", &format!("/api/devices/{charger_id}/charging"), None).await;
+    assert_eq!(plan["status"]["reason"], "Charge solaire à 10 A", "{plan}");
+    assert_eq!(view["loads"][0]["status"]["text"], "Attend 2 kW de surplus", "{view}");
 
     // More sun: 4,5 kW still go back with the car at 10 A (6,8 kW in all): 16 A, then the heater.
     look(-4500.0, t0 + 90).await;
@@ -179,14 +204,11 @@ async fn a_charger_and_a_heater_follow_the_surplus() {
     assert!(said.contains(&"Trydan : charge solaire à 10 A"), "{said:?}");
     assert!(said.contains(&"Trydan : charge suspendue, plus assez de surplus"), "{said:?}");
 
-    // Priorities: the heater first.
-    let (_, view) = call("PUT", "/api/surplus/order", Some(json!({"device_ids": [relay_id, charger_id]}))).await;
-    assert_eq!(view["loads"][0]["device_id"], relay_id);
     // No longer steered: left as it is.
-    let (s, _) = call("DELETE", &format!("/api/surplus/loads/{charger_id}"), None).await;
+    let (s, _) = call("DELETE", &format!("/api/surplus/loads/{relay_id}"), None).await;
     assert_eq!(s, StatusCode::NO_CONTENT);
     let (_, view) = call("GET", "/api/surplus", None).await;
-    assert_eq!(view["loads"].as_array().unwrap().len(), 1);
+    assert!(view["loads"].as_array().unwrap().is_empty());
 }
 
 /// A charger that follows a charging profile and is told to charge now, without a grid meter: a

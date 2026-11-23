@@ -13,7 +13,6 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import type {
-  DeviceView,
   SurplusLoad,
   SurplusLoadInput,
   SurplusStatus,
@@ -46,7 +45,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 
 const kw = (w: number) =>
   `${(Math.round(w / 100) / 10).toLocaleString(locale(), { maximumFractionDigits: 1 })} kW`
@@ -630,140 +628,6 @@ export function SurplusProgramme() {
             )
           })}
         </ol>
-      </CardContent>
-    </Card>
-  )
-}
-
-type Mode = "manual" | "solar" | "guarantee"
-
-/** How a charger charges: by hand, on the surplus, on the surplus with a guarantee (charging page). */
-export function ChargingMode({ device }: { device: DeviceView }) {
-  const surplus = useSurplus()
-  const qc = useQueryClient()
-  const save = useSave()
-  const admin = currentUser()?.role === "admin"
-  const load = surplus.data?.loads.find((l) => l.device_id === device.id)
-  const mode: Mode = !load?.enabled
-    ? "manual"
-    : load.guarantee_kwh && load.guarantee_by
-      ? "guarantee"
-      : "solar"
-  const [goal, setGoal] = useState<{ kwh: string; by: string }>({
-    kwh: String(load?.guarantee_kwh ?? 20),
-    by: load?.guarantee_by ?? "07:00",
-  })
-  const remove = useMutation({
-    mutationFn: () => api.removeSurplusLoad(device.id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["surplus"] }),
-    onError: (e) => toast.error(e instanceof Error ? e.message : String(e)),
-  })
-  const apply = (next: Mode, g = goal) => {
-    if (next === "manual") {
-      if (load) remove.mutate()
-      return
-    }
-    const base = load ? inputOf(load) : { enabled: true }
-    const guarantee = next === "guarantee" && Number(g.kwh) > 0 && g.by
-    save.mutate({
-      id: device.id,
-      input: {
-        ...base,
-        enabled: true,
-        guarantee_kwh: guarantee ? Number(g.kwh) : null,
-        guarantee_by: guarantee ? g.by : null,
-      },
-    })
-  }
-  if (!surplus.data) return null
-  const modes: [Mode, string, string][] = [
-    [
-      "manual",
-      t("Manuel"),
-      t("Vous lancez et arrêtez la charge ; Breezone ne la règle pas."),
-    ],
-    [
-      "solar",
-      t("Solaire"),
-      t(
-        "Uniquement le surplus : l'intensité suit le soleil. Peut ne pas charger."
-      ),
-    ],
-    [
-      "guarantee",
-      t("Solaire + garantie"),
-      t(
-        "Le surplus, puis le réseau si besoin pour atteindre l'objectif à l'heure."
-      ),
-    ],
-  ]
-  return (
-    <Card className="rounded-3xl">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Sun className="size-5 text-warning" />
-          {t("Mode de charge")}
-        </CardTitle>
-        <CardDescription>
-          {surplus.data.meter === false
-            ? t(
-                "Les modes solaires demandent un compteur au tableau (une voie « réseau »)."
-              )
-            : load?.enabled && load.status
-              ? load.status.text
-              : modes.find(([m]) => m === mode)![2]}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-4">
-        <ToggleGroup
-          type="single"
-          variant="outline"
-          value={mode}
-          disabled={!admin || save.isPending || remove.isPending}
-          onValueChange={(v) => v && apply(v as Mode)}
-          className="flex-wrap"
-        >
-          {modes.map(([m, label]) => (
-            <ToggleGroupItem
-              key={m}
-              value={m}
-              className="data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
-            >
-              {label}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
-        {mode === "guarantee" && (
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <span>{t("Objectif")} +</span>
-            <Input
-              type="number"
-              className="w-24"
-              min={1}
-              step="any"
-              value={goal.kwh}
-              disabled={!admin}
-              onChange={(e) => setGoal({ ...goal, kwh: e.target.value })}
-              onBlur={() => apply("guarantee")}
-            />
-            <span>{t("kWh avant")}</span>
-            <Input
-              type="time"
-              className="w-32"
-              value={goal.by}
-              disabled={!admin}
-              onChange={(e) => setGoal({ ...goal, by: e.target.value })}
-              onBlur={() => apply("guarantee")}
-            />
-          </div>
-        )}
-        {mode !== "manual" && (
-          <p className="text-xs text-muted-foreground">
-            {t(
-              "L'ordre de priorité avec les autres appareils et les intensités se règlent dans Automatismes › Pilotage sur surplus solaire."
-            )}
-          </p>
-        )}
       </CardContent>
     </Card>
   )

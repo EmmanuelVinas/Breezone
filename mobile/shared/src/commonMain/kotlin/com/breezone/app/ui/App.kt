@@ -65,6 +65,7 @@ import com.breezone.app.ui.home.PageContext
 import com.breezone.app.ui.home.deviceKind
 import com.breezone.app.ui.icons.FzIcons
 import com.breezone.app.ui.screens.AddServerScreen
+import com.breezone.app.ui.screens.ChargeProfilesScreen
 import com.breezone.app.ui.screens.ChargingScreen
 import com.breezone.app.ui.screens.EnergyScreen
 import com.breezone.app.ui.screens.LicensesScreen
@@ -99,6 +100,7 @@ import org.koin.compose.koinInject
 @Serializable data class EnergyRoute(val serverId: String)
 @Serializable data class SolarRoute(val serverId: String)
 @Serializable data class ChargingRoute(val serverId: String)
+@Serializable data class ChargeProfilesRoute(val serverId: String)
 @Serializable data class LightRoute(val serverId: String, val deviceId: Long)
 @Serializable data class ShuttersRoute(val serverId: String)
 @Serializable data class ShutterRoute(val serverId: String, val deviceId: Long)
@@ -222,7 +224,13 @@ fun App() {
                 }
                 composable<EnergyRoute> { entry -> EnergyScreen(entry.toRoute<EnergyRoute>().serverId) }
                 composable<SolarRoute> { entry -> SolarScreen(entry.toRoute<SolarRoute>().serverId) }
-                composable<ChargingRoute> { entry -> ChargingScreen(entry.toRoute<ChargingRoute>().serverId) }
+                composable<ChargingRoute> { entry ->
+                    val r = entry.toRoute<ChargingRoute>()
+                    ChargingScreen(r.serverId, onProfiles = { nav.navigate(ChargeProfilesRoute(r.serverId)) })
+                }
+                composable<ChargeProfilesRoute> { entry ->
+                    ChargeProfilesScreen(entry.toRoute<ChargeProfilesRoute>().serverId, onBack = { nav.popBackStack() })
+                }
                 composable<LightsRoute> { entry ->
                     val r = entry.toRoute<LightsRoute>()
                     LightsScreen(r.serverId, onBack = null) { nav.navigate(LightRoute(r.serverId, it)) }

@@ -349,6 +349,19 @@ class Hub(
      * Applies an action of a trait to a device of a module: [optimistic] is shown at once, the
      * answer of the server replaces it; on failure the devices are read again.
      */
+    /** A call to a server whose failure is said in [messages] (null then). */
+    suspend fun <T> attempt(serverId: String, call: suspend BreezoneApi.() -> T): T? {
+        val api = apis[serverId] ?: return null
+        return try {
+            api.call()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _messages.tryEmit(getString(Res.string.hub_command_refused, e.message.orEmpty()))
+            null
+        }
+    }
+
     /**
      * Changes what a charger follows (its profile, a charge asked now): the new view, or null when
      * the server refused it (said in [messages]).

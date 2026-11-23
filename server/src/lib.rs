@@ -225,7 +225,16 @@ pub fn spawn_background(state: &AppState) {
     tokio::spawn(airzone_schedules::run_sync(state.clone()));
     tokio::spawn(timers::run_loop(state.clone()));
     tokio::spawn(automations::run_loop(state.clone()));
-    tokio::spawn(surplus::run_loop(state.clone()));
+    {
+        let state = state.clone();
+        tokio::spawn(async move {
+            // Before the surplus looks at them.
+            if let Err(e) = charging::adopt_surplus_chargers(&state).await {
+                tracing::error!("chargers of the surplus not moved to a charging profile: {e:#}");
+            }
+            surplus::run_loop(state).await
+        });
+    }
     tokio::spawn(state.updater.clone().run_checks());
     tokio::spawn(state.weather.clone().run());
     tokio::spawn(tempo::run_loop(state.clone()));

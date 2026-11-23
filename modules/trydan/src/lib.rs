@@ -133,6 +133,10 @@ pub fn state_of(o: &Map<String, Value>) -> State {
     if let Some(d) = int(o, "Dynamic") {
         s.insert("auto_limit".into(), json!(d == 1));
     }
+    // The schedule set in the V2C app (it starts and stops the charge by itself).
+    if let Some(t) = int(o, "Timer") {
+        s.insert("timer".into(), json!(t == 1));
+    }
     s.insert("power".into(), json!(num(o, "ChargePower").unwrap_or(0.0)));
     if let Some(v) = num(o, "VoltageInstallation").filter(|v| *v > 0.0) {
         s.insert("voltage".into(), json!(v));
@@ -195,6 +199,7 @@ impl Driver for Trydan {
             (REFERENCE, "ev.charger", "stop") => self.write("Paused", 1),
             (REFERENCE, "ev.charger", "lock") => self.write("Locked", flag("locked")?),
             (REFERENCE, "ev.charger", "set_auto_limit") => self.write("Dynamic", flag("on")?),
+            (REFERENCE, "ev.charger", "set_timer") => self.write("Timer", flag("on")?),
             _ => Err(Error::Unsupported(format!("{reference}: {trait_name}.{action}"))),
         }
     }
@@ -261,6 +266,7 @@ mod tests {
         assert_eq!((s["limit_min"].clone(), s["limit_max"].clone()), (json!(6), json!(32)));
         assert_eq!(s["power"], 0.0);
         assert_eq!(s["voltage"], 222.0);
+        assert_eq!(s["timer"], true, "the schedule of its app");
     }
 
     #[test]
@@ -300,6 +306,8 @@ mod tests {
         t.act(REFERENCE, "ev.charger", "start", json!({"limit": 10}).as_object().unwrap()).unwrap();
         let writes: Vec<String> = testing::requests().into_iter().filter(|r| r.contains("/write/")).collect();
         assert_eq!(writes, ["GET http://192.168.1.37/write/Dynamic=0", "GET http://192.168.1.37/write/Intensity=10", "GET http://192.168.1.37/write/Paused=0"]);
+        t.act(REFERENCE, "ev.charger", "set_timer", json!({"on": false}).as_object().unwrap()).unwrap();
+        assert_eq!(testing::requests().last().map(String::as_str), Some("GET http://192.168.1.37/write/Timer=0"));
         testing::answer("GET", "/write/", 200, "ERROR");
         assert!(matches!(t.act(REFERENCE, "ev.charger", "stop", &State::new()), Err(Error::Invalid(_))));
         let other: Trydan = testing::open(json!({"host": "192.168.1.37", "device_id": "OTHER"}), None);

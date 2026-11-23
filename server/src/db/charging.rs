@@ -29,6 +29,11 @@ pub async fn delete_charge_profile(db: &Db, id: i64) -> sqlx::Result<bool> {
     Ok(sqlx::query("DELETE FROM charge_profiles WHERE id = ?").bind(id).execute(db).await?.rows_affected() > 0)
 }
 
+/// The chargers of the modules: id and name.
+pub async fn chargers(db: &Db) -> sqlx::Result<Vec<(i64, String)>> {
+    sqlx::query_as("SELECT id, name FROM devices WHERE kind = 'ev.charger' ORDER BY id").fetch_all(db).await
+}
+
 /// What a charger follows: a profile, and a charge asked now.
 #[derive(Debug, Clone, Default, FromRow, PartialEq)]
 pub struct ChargerPlanRow {

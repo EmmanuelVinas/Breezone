@@ -1,10 +1,5 @@
 package com.breezone.app.ui.screens
 
-import com.breezone.app.resources.charging_now
-import com.breezone.app.data.ChargingView
-import com.breezone.app.data.BreezoneApi
-import kotlinx.coroutines.launch
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,7 +43,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.breezone.app.data.BreezoneApi
 import com.breezone.app.data.ChargerShown
+import com.breezone.app.data.ChargingView
 import com.breezone.app.data.DeviceView
 import com.breezone.app.data.EnergyDay
 import com.breezone.app.data.EnergyLive
@@ -64,7 +62,6 @@ import com.breezone.app.data.TraitIds
 import com.breezone.app.data.shown
 import com.breezone.app.resources.*
 import com.breezone.app.ui.components.CommandIndicator
-import com.breezone.app.ui.decimalSeparator
 import com.breezone.app.ui.components.DeviceGroupCard
 import com.breezone.app.ui.components.FzSlider
 import com.breezone.app.ui.components.IconBadge
@@ -72,20 +69,22 @@ import com.breezone.app.ui.components.PeriodChips
 import com.breezone.app.ui.components.PowerDayChart
 import com.breezone.app.ui.components.PowerSeries
 import com.breezone.app.ui.components.Sparkline
+import com.breezone.app.ui.decimalSeparator
 import com.breezone.app.ui.icons.FzIcons
 import com.breezone.app.ui.theme.Fz
+import kotlin.math.abs
+import kotlin.math.roundToInt
+import kotlin.time.Clock
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.toLocalDateTime
-import kotlin.time.Clock
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
-import kotlin.math.abs
-import kotlin.math.roundToInt
 
 /** "2,4 kW" or "640 W". */
 fun formatPower(watts: Double?): String {
@@ -331,7 +330,7 @@ fun chargerLabel(shown: ChargerShown): String = stringResource(
 )
 
 @Composable
-fun ChargingScreen(serverId: String, onBack: (() -> Unit)? = null) {
+fun ChargingScreen(serverId: String, onBack: (() -> Unit)? = null, onProfiles: (() -> Unit)? = null) {
     val hub = koinInject<Hub>()
     val all by hub.devices.collectAsState()
     val status by hub.deviceStatus.collectAsState()
@@ -371,7 +370,10 @@ fun ChargingScreen(serverId: String, onBack: (() -> Unit)? = null) {
                 }
                 if (view != null) {
                     item(key = "plan", contentType = "plan") { PlanCard(view) { change { cancelChargeNow(charger.id) } } }
-                    item(key = "profile", contentType = "profile") { ProfileCard(view) { id -> change { setChargeProfile(charger.id, id) } } }
+                    item(key = "profile", contentType = "profile") {
+                        val admin = hub.api(serverId)?.user?.isAdmin == true
+                        ProfileCard(view, onManage = onProfiles.takeIf { admin }) { id -> change { setChargeProfile(charger.id, id) } }
+                    }
                 }
                 item(key = "history", contentType = "history") { ChargerPowerCard(serverId, charger) }
                 item(key = "settings", contentType = "settings") {
@@ -400,6 +402,17 @@ fun ChargingScreen(serverId: String, onBack: (() -> Unit)? = null) {
                                 enabled = charger.usable,
                                 colors = SliderDefaults.colors(),
                             )
+                        }
+                        if (s.timer != null) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(stringResource(Res.string.charger_timer))
+                                    Caption(stringResource(Res.string.charger_timer_hint))
+                                }
+                                Switch(checked = s.timer == true, enabled = charger.usable, onCheckedChange = { on ->
+                                    act("set_timer", buildJsonObject { put("on", on) }, buildJsonObject { put("timer", on) })
+                                })
+                            }
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(stringResource(Res.string.charger_locked), modifier = Modifier.weight(1f))

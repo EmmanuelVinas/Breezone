@@ -413,6 +413,66 @@ pub async fn set_profile(state: &AppState, device_id: i64, profile_id: Option<i6
     Ok(())
 }
 
+/// The chargers still in the list of the solar surplus (from before the charging profiles) follow a
+/// "Solaire" profile instead, with their currents, and leave the list. Their guarantee goes (a
+/// schedule does it now), and the activity feed says so. A charger that already follows a profile
+/// keeps it.
+pub async fn adopt_surplus_chargers(state: &AppState) -> anyhow::Result<()> {
+    let chargers = db::chargers(&state.db).await?;
+    for row in db::list_surplus_loads(&state.db).await? {
+        let Some((_, name)) = chargers.iter().find(|(id, _)| *id == row.device_id) else { continue };
+        let plan = db::charger_plan(&state.db, row.device_id).await?.unwrap_or(ChargerPlanRow { device_id: row.device_id, ..Default::default() });
+        let given = if row.enabled && plan.profile_id.is_none() {
+            let solar = Profile {
+                name: "Solaire".into(),
+                profiles: vec![DayKind {
+                    id: "d".into(),
+                    name: "Tous les jours".into(),
+                    color: Some("#f59e0b".into()),
+                    slots: vec![Slot { start: "00:00".into(), mode: Mode::Solar, kw: None, min_amps: row.min_amps, max_amps: row.max_amps }],
+                }],
+                calendar: Calendar { day_start: "00:00".into(), weekdays: vec!["d".into(); 7], colors: Default::default() },
+            };
+            // The same "Solaire" for every charger set alike.
+            let same = db::list_charge_profiles(&state.db).await?.into_iter().find(|p| Profile::of(p).is_some_and(|p| p == solar));
+            let id = match same {
+                Some(p) => p.id,
+                None => db::insert_charge_profile(&state.db, &solar.name, &solar.plan_json()).await?,
+            };
+            db::set_charger_plan(&state.db, &ChargerPlanRow { profile_id: Some(id), ..plan }).await?;
+            true
+        } else {
+            false
+        };
+        db::delete_surplus_load(&state.db, row.device_id).await?;
+        let name = name.clone();
+        let text = match (&row.guarantee_kwh, &row.guarantee_by) {
+            (Some(kwh), Some(by)) if given => crate::text!(
+                "{0} suit désormais le profil de recharge « Solaire » ; sa garantie (+{1} kWh avant {2}) est à refaire avec une programmation",
+                "{0} now follows the charging profile “Solaire”; its guarantee (+{1} kWh before {2}) is to be made again with a schedule",
+                "{0} sigue ahora el perfil de carga «Solaire»; su garantía (+{1} kWh antes de las {2}) hay que rehacerla con una programación",
+                name,
+                kwh,
+                by
+            ),
+            _ if given => crate::text!(
+                "{0} suit désormais le profil de recharge « Solaire » (le surplus solaire)",
+                "{0} now follows the charging profile “Solaire” (the solar surplus)",
+                "{0} sigue ahora el perfil de carga «Solaire» (el excedente solar)",
+                name
+            ),
+            _ => crate::text!(
+                "{0} quitte la liste du surplus solaire : une borne le suit par son profil de recharge",
+                "{0} leaves the list of the solar surplus: a charger follows it by its charging profile",
+                "{0} sale de la lista del excedente solar: un cargador lo sigue con su perfil de carga",
+                name
+            ),
+        };
+        state.hub.log("automation", "info", None, Some("Breezone"), text, None).await;
+    }
+    Ok(())
+}
+
 /// What "charge now" asks.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct NowInput {

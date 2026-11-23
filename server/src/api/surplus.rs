@@ -89,9 +89,11 @@ async fn view(state: &AppState) -> ApiResult<SurplusView> {
             })
         })
         .collect::<Vec<_>>();
+    // A charger follows the surplus by its charging profile (a solar slot), not by this list.
     let candidates = devices
         .iter()
         .filter(|d| !loads.iter().any(|l| l.device_id == d.id))
+        .filter(|d| surplus::kind_of(d, &local) != Some(Kind::Charger))
         .filter_map(|d| surplus::kind_of(d, &local).map(|kind| Candidate { device_id: d.id, name: d.name.clone(), kind }))
         .collect();
     Ok(SurplusView { meter: looked.then_some(snapshot.meter), export: snapshot.export, loads, candidates })
@@ -136,6 +138,13 @@ pub async fn save(State(state): State<AppState>, _admin: AdminUser, Path(device_
             "solo un cargador, un relé o una zona de climatización de este servidor pueden seguir el excedente"
         ))
     })?;
+    if kind == Kind::Charger && !db::list_surplus_loads(&state.db).await?.iter().any(|r| r.device_id == device_id) {
+        return Err(ApiError::bad_request(crate::text!(
+            "une borne suit le surplus par son profil de recharge (Recharge › Profil de recharge : « Solaire »)",
+            "a charger follows the surplus by its charging profile (Charging › Charging profile: “Solar”)",
+            "un cargador sigue el excedente con su perfil de carga (Carga › Perfil de carga: «Solar»)"
+        )));
+    }
     let bad = |fr: &str, en: &str, es: &str| ApiError::bad_request(crate::i18n::Text { fr: fr.into(), en: en.into(), es: es.into() });
     let (lo, hi) = (limit(d, "limit_min").unwrap_or(6), limit(d, "limit_max").unwrap_or(32));
     if kind == Kind::Charger {

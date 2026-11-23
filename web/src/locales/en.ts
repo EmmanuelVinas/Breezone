@@ -2255,6 +2255,9 @@ const en: Record<string, string> = {
   "jusqu'à une énergie": "until some energy",
   "Changer le profil de la borne": "Change the profile of the charger",
   "Automatisme « {name} »": "Automation “{name}”",
+  "Programmation de son appli": "Schedule of its app",
+  "Les heures de charge réglées dans l'appli de la borne : coupez-la pour que seul le profil de Breezone décide.":
+    "The charging hours set in the charger's app: turn it off so that only the Breezone profile decides.",
 }
 
 export default en

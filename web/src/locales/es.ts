@@ -2282,6 +2282,9 @@ const es: Record<string, string> = {
   "jusqu'à une énergie": "hasta una energía",
   "Changer le profil de la borne": "Cambiar el perfil del cargador",
   "Automatisme « {name} »": "Automatización «{name}»",
+  "Programmation de son appli": "Programación de su app",
+  "Les heures de charge réglées dans l'appli de la borne : coupez-la pour que seul le profil de Breezone décide.":
+    "Las horas de carga ajustadas en la app del cargador: desactívela para que solo decida el perfil de Breezone.",
 }
 
 export default es

@@ -473,7 +473,9 @@ borne (`ev.charger`, intensité réglée entre un minimum et un maximum) ou une 
 (`switch.relay`, chauffe-eau, pompe… allumée quand sa puissance tient dans le surplus), ou une zone
 de climatisation (`climate.zone` d'une installation de ce serveur). Il faut un compteur avec le rôle
 `grid`. Seuls les appareils de ce serveur peuvent suivre le surplus (le surplus est celui de ce
-site). Le serveur regarde toutes les 10 s.
+site). Le serveur regarde toutes les 10 s. Une borne ne s'inscrit plus dans cette liste (400) : elle
+suit le surplus par un créneau `solar` de son profil de recharge, et passe avant les appareils de la
+liste ; une borne qui y était reçoit au démarrage un profil « Solaire » à ses intensités.
 
 Une zone chauffe à `heat_setpoint` quand il fait moins de `heat_below` dehors et que son système est
 en chauffage (ou auto), rafraîchit à `cool_setpoint` au-dessus de `cool_above` en mode froid (ou

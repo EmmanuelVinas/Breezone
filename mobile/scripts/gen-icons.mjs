@@ -16,7 +16,7 @@ const ICONS = [
   "battery-warning", "triangle-alert", "check", "x", "clock", "radar", "user", "eye", "eye-off",
   "circle-check", "wifi-off", "activity", "list-plus", "leaf",
   "lightbulb", "lightbulb-off", "zap", "plug-zap", "battery-medium", "solar-panel", "cloud-sun", "cloud-rain", "cloud-snow", "cloud-fog", "cloud-drizzle", "cloud-lightning", "sunrise", "sunset", "blinds", "chevron-up", "chevron-down", "square", "palette", "sun", "app-window", "workflow", "history", "car", "plug",
-  "door-open", "gamepad-2", "box", "arrow-up", "arrow-down", "layout-grid", "chart-line", "maximize-2", "minimize-2", "rotate-ccw", "users", "euro",
+  "door-open", "gamepad-2", "box", "arrow-up", "arrow-down", "layout-grid", "chart-line", "maximize-2", "minimize-2", "rotate-ccw", "users", "euro", "scissors", "merge",
 ]
 
 const n = (v) => Number(v)

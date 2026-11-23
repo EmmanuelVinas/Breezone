@@ -6,6 +6,29 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.12.0-beta.11] - 2026-11-23
+
+### Added
+
+- The charging profiles are written from the mobile app too (Recharge › Manage profiles, for the
+  administrators): from a template, slot by slot, with their calendar and Tempo colours.
+- The schedule of the charger's own app (V2C Trydan) can be turned off from its settings, so that
+  only the Breezone profile decides when it charges.
+
+### Changed
+
+- A charger follows the solar surplus by its charging profile, no longer by the list of the
+  surplus: a charger that was in it now follows a "Solaire" profile with the same currents, and
+  takes the surplus before the other loads. Its guarantee is to be made again with a schedule
+  (the activity feed says so). The mode of the charger on the charging page is gone.
+
+### Fixed
+
+- Mobile app: the boxes of the energy now take the same height, drawing from the grid is no
+  longer said under its power, and no backslash shows before an apostrophe.
+- The image of a release no longer fails now and then while its modules and its server are
+  built at once.
+
 ## [0.12.0-beta.10] - 2026-11-23
 
 ### Added

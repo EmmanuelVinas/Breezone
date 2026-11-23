@@ -123,6 +123,8 @@ export type EvChargerState = {
   auto_limit: boolean | null
   /** Stops at (kWh) */
   energy_goal: number | null
+  /** Schedule of its app */
+  timer: boolean | null
 }
 
 /** EV charger (`ev.charger@1`): action `set_limit`. */
@@ -142,6 +144,11 @@ export type EvChargerStop = Record<string, never>
 /** EV charger (`ev.charger@1`): action `lock`. */
 export type EvChargerLock = {
   locked: boolean
+}
+
+/** EV charger (`ev.charger@1`): action `set_timer`. */
+export type EvChargerSetTimer = {
+  on: boolean
 }
 
 /** EV charger (`ev.charger@1`): action `set_auto_limit`. */
@@ -335,7 +342,7 @@ export type VentilationUnitStopBoost = Record<string, never>
 export const TRAITS = ["button@1", "camera@1", "climate.zone@1", "cover.position@1", "energy.meter@1", "ev.charger@1", "light@1", "solar.inverter@1", "solar.panel@1", "energy.power@1", "environment.sensor@1", "solar.forecast@1", "switch.relay@1", "ventilation.room@1", "ventilation.unit@1"] as const
 
 /** Highest revision of each trait known to this version. */
-export const TRAIT_REVISIONS: Record<string, number> = { "button@1": 0, "camera@1": 0, "climate.zone@1": 0, "cover.position@1": 0, "energy.meter@1": 0, "ev.charger@1": 0, "light@1": 0, "solar.inverter@1": 0, "solar.panel@1": 0, "energy.power@1": 0, "environment.sensor@1": 0, "solar.forecast@1": 0, "switch.relay@1": 0, "ventilation.room@1": 0, "ventilation.unit@1": 0 }
+export const TRAIT_REVISIONS: Record<string, number> = { "button@1": 0, "camera@1": 0, "climate.zone@1": 0, "cover.position@1": 0, "energy.meter@1": 0, "ev.charger@1": 1, "light@1": 0, "solar.inverter@1": 0, "solar.panel@1": 0, "energy.power@1": 0, "environment.sensor@1": 0, "solar.forecast@1": 0, "switch.relay@1": 0, "ventilation.room@1": 0, "ventilation.unit@1": 0 }
 
 /** Kind of device each trait makes (its `ui.kind`). */
 export const TRAIT_KINDS: Record<string, string> = { "button": "remote", "camera": "camera", "climate.zone": "climate", "cover.position": "shutter", "energy.meter": "energy", "ev.charger": "charger", "light": "light", "solar.inverter": "solar", "solar.panel": "solar", "energy.power": "energy", "environment.sensor": "sensor", "solar.forecast": "solar", "switch.relay": "switch", "ventilation.room": "room-air", "ventilation.unit": "ventilation" }

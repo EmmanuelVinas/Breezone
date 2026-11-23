@@ -54,3 +54,51 @@ data class ChargeProfileInput(val profileId: Long?)
 /** "Charge now": up to `kw` (the charger's maximum without), until a time or `kwh` more. */
 @Serializable
 data class ChargeNowInput(val kw: Double? = null, val until: Long? = null, val kwh: Double? = null)
+
+/** A slot of a kind of day, until the next one (`ChargeSlot`). */
+@Serializable
+data class ChargeSlot(
+    /** "HH:MM", local time; the first at "00:00". */
+    val start: String,
+    val mode: ChargeMode,
+    val kw: Double? = null,
+    val minAmps: Long? = null,
+    val maxAmps: Long? = null,
+)
+
+@Serializable
+data class ChargeDayKind(val id: String, val name: String, val color: String? = null, val slots: List<ChargeSlot> = emptyList())
+
+/** The kind of day of each Tempo colour, when the calendar follows them. */
+@Serializable
+data class ChargeColors(val blue: String? = null, val white: String? = null, val red: String? = null) {
+    val any get() = blue != null || white != null || red != null
+}
+
+/** Which kind of day a day follows (`TariffCalendar`). */
+@Serializable
+data class ChargeCalendar(
+    /** "HH:MM": when a day starts ("06:00" for Tempo). */
+    val dayStart: String = "00:00",
+    /** Monday first. */
+    val weekdays: List<String> = emptyList(),
+    val colors: ChargeColors = ChargeColors(),
+)
+
+@Serializable
+data class ChargeUsedBy(val deviceId: Long, val name: String)
+
+/** A charging profile (`ChargeProfileView`). */
+@Serializable
+data class ChargeProfileView(
+    val id: Long,
+    val name: String,
+    val profiles: List<ChargeDayKind> = emptyList(),
+    val calendar: ChargeCalendar = ChargeCalendar(),
+    val usedBy: List<ChargeUsedBy> = emptyList(),
+    val automations: List<String> = emptyList(),
+)
+
+/** A charging profile as it is written. */
+@Serializable
+data class ChargeProfileWrite(val name: String, val profiles: List<ChargeDayKind>, val calendar: ChargeCalendar)
