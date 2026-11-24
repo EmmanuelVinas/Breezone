@@ -13,7 +13,7 @@ const ICONS = [
   "utility-pole", "puzzle", "flame", "snowflake", "fan", "droplets", "droplet", "power", "sparkles", "heater", "moon", "wind",
   "thermometer", "map-pin", "plus", "minus", "chevron-right", "chevron-left", "house", "calendar-clock",
   "settings", "cloud", "cloud-off", "refresh-cw", "play", "trash-2", "pencil", "log-out", "server",
-  "battery-warning", "triangle-alert", "check", "x", "clock", "radar", "user", "eye", "eye-off",
+  "battery-warning", "triangle-alert", "check", "x", "search", "clock", "radar", "user", "eye", "eye-off",
   "circle-check", "wifi-off", "activity", "list-plus", "leaf",
   "lightbulb", "lightbulb-off", "zap", "plug-zap", "battery-medium", "solar-panel", "cloud-sun", "cloud-rain", "cloud-snow", "cloud-fog", "cloud-drizzle", "cloud-lightning", "sunrise", "sunset", "blinds", "chevron-up", "chevron-down", "square", "palette", "sun", "app-window", "workflow", "history", "car", "plug",
   "door-open", "gamepad-2", "box", "arrow-up", "arrow-down", "layout-grid", "chart-line", "maximize-2", "minimize-2", "rotate-ccw", "users", "euro", "scissors", "merge", "qr-code",

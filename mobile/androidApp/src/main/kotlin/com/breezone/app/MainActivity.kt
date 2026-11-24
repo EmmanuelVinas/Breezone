@@ -10,7 +10,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import com.breezone.app.data.ConnectLinks
+import androidx.lifecycle.lifecycleScope
 import com.breezone.app.ui.App
+import com.breezone.app.widgets.refreshWidgets
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val askLocalNetwork = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -21,6 +24,12 @@ class MainActivity : ComponentActivity() {
         requestLocalNetworkAccess()
         if (savedInstanceState == null) openLink(intent)
         setContent { App() }
+    }
+
+    // Back on the home screen: the widgets show what was just changed in the app.
+    override fun onStop() {
+        super.onStop()
+        lifecycleScope.launch { refreshWidgets(applicationContext) }
     }
 
     override fun onNewIntent(intent: Intent) {

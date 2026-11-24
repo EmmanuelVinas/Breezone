@@ -63,6 +63,8 @@ kotlin {
             implementation(libs.androidx.activity.compose)
             implementation(libs.ktor.client.okhttp)
             implementation(libs.koin.android)
+            // Widgets of the home screen of the phone.
+            implementation(libs.glance.appwidget)
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)

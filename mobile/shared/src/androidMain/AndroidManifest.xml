@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The widgets of the home screen: one receiver per kind, and the screen that chooses what a
+     widget shows when it is placed. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity
+            android:name="com.breezone.app.widgets.WidgetConfigActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Material.NoActionBar">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+        <receiver
+            android:name="com.breezone.app.widgets.ZoneWidgetReceiver"
+            android:exported="false"
+            android:label="@string/widget_zone_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_zone" />
+        </receiver>
+        <receiver
+            android:name="com.breezone.app.widgets.EnergyWidgetReceiver"
+            android:exported="false"
+            android:label="@string/widget_energy_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_energy" />
+        </receiver>
+        <receiver
+            android:name="com.breezone.app.widgets.PriceWidgetReceiver"
+            android:exported="false"
+            android:label="@string/widget_price_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_price" />
+        </receiver>
+        <receiver
+            android:name="com.breezone.app.widgets.DeviceWidgetReceiver"
+            android:exported="false"
+            android:label="@string/widget_device_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_device" />
+        </receiver>
+        <receiver
+            android:name="com.breezone.app.widgets.ScenesWidgetReceiver"
+            android:exported="false"
+            android:label="@string/widget_scenes_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_scenes" />
+        </receiver>
+    </application>
+</manifest>

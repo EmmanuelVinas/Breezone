@@ -9,6 +9,7 @@ androidx-activity = "1.13.0"
 androidx-lifecycle = "2.11.0"
 androidx-navigation = "2.10.0"
 compose-material-icons = "1.7.3"
+glance = "1.2.0"
 compose-material3 = "1.13.0-beta02"
 compose-multiplatform = "1.12.2"
 koin = "4.2.2"
@@ -32,6 +33,7 @@ compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "compose-mu
 compose-uiTooling = { module = "org.jetbrains.compose.ui:ui-tooling", version.ref = "compose-multiplatform" }
 compose-uiToolingPreview = { module = "org.jetbrains.compose.ui:ui-tooling-preview", version.ref = "compose-multiplatform" }
 vico-multiplatform = { module = "com.patrykandpatrick.vico:multiplatform", version.ref = "vico" }
+glance-appwidget = { module = "androidx.glance:glance-appwidget", version.ref = "glance" }
 koin-android = { module = "io.insert-koin:koin-android", version.ref = "koin" }
 koin-compose-viewmodel = { module = "io.insert-koin:koin-compose-viewmodel", version.ref = "koin" }
 koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }

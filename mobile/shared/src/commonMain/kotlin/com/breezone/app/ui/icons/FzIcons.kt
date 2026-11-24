@@ -323,6 +323,14 @@ object FzIcons {
         )
     }
 
+    val Search: ImageVector by lazy {
+        lucide(
+            "Search",
+            "m21 21-4.34-4.34",
+            "M3 11a8 8 0 1 0 16 0a8 8 0 1 0 -16 0",
+        )
+    }
+
     val Clock: ImageVector by lazy {
         lucide(
             "Clock",

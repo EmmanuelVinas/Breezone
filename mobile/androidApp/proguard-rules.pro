@@ -7,3 +7,6 @@
 
 # Error messages show the exception class names (data/Errors.kt): keep them unobfuscated.
 -keepnames class * extends java.lang.Throwable
+
+# Widgets: Glance creates the callbacks of their buttons from their class names.
+-keep class * implements androidx.glance.appwidget.action.ActionCallback { <init>(); }

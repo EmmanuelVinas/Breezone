@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Texts of the widgets of the home screen (Android). -->
+<resources>
+    <string name="widget_zone_label">Zone de clim</string>
+    <string name="widget_zone_description">Température, consigne et marche d’une zone</string>
+    <string name="widget_energy_label">Énergie maintenant</string>
+    <string name="widget_energy_description">Solaire, maison, réseau et batterie</string>
+    <string name="widget_price_label">Prix de l’électricité</string>
+    <string name="widget_price_description">Le prix maintenant et les plages du jour</string>
+    <string name="widget_device_label">Appareil</string>
+    <string name="widget_device_description">Allumer ou éteindre une lumière, une prise ; l’état de la borne</string>
+    <string name="widget_scenes_label">Scènes</string>
+    <string name="widget_scenes_description">Lancer une scène d’un geste</string>
+    <string name="widget_choose">Touchez pour choisir ce que montre ce widget</string>
+    <string name="widget_sign_in">Connectez-vous d’abord à un serveur dans l’app Breezone</string>
+    <string name="widget_unreachable">%1$s : serveur injoignable</string>
+    <string name="widget_zone_setpoint">Consigne %1$s</string>
+    <string name="widget_on">Allumé</string>
+    <string name="widget_off">Éteint</string>
+    <string name="widget_solar">Solaire</string>
+    <string name="widget_home">Maison</string>
+    <string name="widget_grid">Réseau</string>
+    <string name="widget_battery">Batterie</string>
+    <string name="widget_energy_title">Énergie · %1$s</string>
+    <string name="widget_no_measure">Aucune mesure d’énergie</string>
+    <string name="widget_price_title">Prix maintenant</string>
+    <string name="widget_no_tariff">Aucun tarif renseigné</string>
+    <string name="widget_per_kwh">par kWh</string>
+    <string name="widget_tempo_blue">jour bleu</string>
+    <string name="widget_tempo_white">jour blanc</string>
+    <string name="widget_tempo_red">jour rouge</string>
+    <string name="widget_charger_charging">En charge</string>
+    <string name="widget_charger_plugged">Voiture branchée</string>
+    <string name="widget_charger_fault">Défaut</string>
+    <string name="widget_charger_available">Disponible</string>
+    <string name="widget_scenes_title">Scènes</string>
+    <string name="widget_no_scene">Aucune scène</string>
+    <string name="widget_config_title">Widget Breezone</string>
+    <string name="widget_config_hint">Choisissez ce que montre ce widget. Il se met à jour toutes les 30 min environ, et aussitôt après une action.</string>
+    <string name="widget_config_none">Rien à montrer sur vos serveurs pour ce widget.</string>
+</resources>

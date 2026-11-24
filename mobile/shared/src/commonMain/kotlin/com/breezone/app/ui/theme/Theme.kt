@@ -104,6 +104,20 @@ private val LightScheme = lightColorScheme(
 
 val LocalFzColors = staticCompositionLocalOf { DarkFz }
 
+/** The colours of the widgets of the phone's home screen: (light, dark) pairs. */
+object WidgetPalette {
+    val background = LightFz.card to DarkFz.card
+    val text = LightScheme.onSurface to DarkScheme.onSurface
+    val muted = LightFz.muted to DarkFz.muted
+    val primary = LightScheme.primary to DarkScheme.primary
+    val onPrimary = LightScheme.onPrimary to DarkScheme.onPrimary
+    val button = LightScheme.surfaceVariant to DarkScheme.surfaceVariant
+    val solar = LightFz.warning to DarkFz.warning
+    val export = LightFz.success to DarkFz.success
+    val heat = LightFz.heat to DarkFz.heat
+    val cool = LightFz.cool to DarkFz.cool
+}
+
 object FzShapes {
     /** Text fields, large buttons and framed blocks of forms. */
     val field = RoundedCornerShape(16.dp)
