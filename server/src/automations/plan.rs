@@ -110,10 +110,11 @@ fn effects(steps: &[Step], device_id: i64) -> Vec<(i64, Effect)> {
 
 /// Whether the conditions hold at `ts`, and whether one of them had to be taken as true.
 fn met(world: &World, joined: Match, conditions: &[Condition], ts: i64, assumed: &mut bool) -> bool {
-    let each = conditions.iter().map(|c| one(world, c, ts, assumed));
+    // Every condition is looked at (not only up to the first false one), to know if one was guessed.
+    let each: Vec<bool> = conditions.iter().map(|c| one(world, c, ts, assumed)).collect();
     match joined {
-        Match::All => each.fold(true, |a, b| a && b),
-        Match::Any => conditions.is_empty() || each.fold(false, |a, b| a || b),
+        Match::All => each.iter().all(|b| *b),
+        Match::Any => each.is_empty() || each.iter().any(|b| *b),
     }
 }
 
