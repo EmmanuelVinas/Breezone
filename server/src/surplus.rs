@@ -84,8 +84,9 @@ pub enum Plan {
     /// Charge at this current, from the grid if need be: a slot of its profile, or a charge asked
     /// now (`now`, with what is `left` to add when it was asked for some kWh).
     Max { amps: i64, until: Option<i64>, now: bool, left_kwh: Option<f64> },
-    /// The surplus, between these currents.
-    Solar { min_amps: i64, max_amps: i64 },
+    /// The surplus, between these currents (the same: a fixed power), once it is over `start_w`
+    /// (W; none: what the minimum current takes).
+    Solar { min_amps: i64, max_amps: i64, start_w: Option<f64> },
 }
 
 /// A load and how it is run.
@@ -249,9 +250,8 @@ fn until_text(now: i64, until: i64, tz: Tz) -> Text {
     }
 }
 
-/// What a charger does by its plan, in words.
-fn plan_text(plan: Plan, profile: Option<&str>, watts: Option<f64>, now: i64, tz: Tz) -> Text {
-    let p = profile.unwrap_or_default().to_string();
+/// What a charger does by its plan, in words (`by`: the automation that told it, or its profile).
+fn plan_text(plan: Plan, by: Option<&str>, watts: Option<f64>, now: i64, tz: Tz) -> Text {
     // How it charges: at some power, or as the charger sets it (its own load shedding).
     let how = match watts {
         Some(w) => {
@@ -260,19 +260,17 @@ fn plan_text(plan: Plan, profile: Option<&str>, watts: Option<f64>, now: i64, tz
         }
         None => crate::text!("au courant réglé par la borne", "at the current set by the charger", "a la corriente regulada por el cargador"),
     };
-    match plan {
+    let what = match plan {
         Plan::Off { until: Some(u) } => {
             let t = until_text(now, u, tz);
-            crate::text!("Profil {0} : pas de charge jusqu'à {1}", "Profile {0}: no charging until {1}", "Perfil {0}: sin carga hasta {1}", p, t.arg())
+            crate::text!("pas de charge jusqu'à {0}", "no charging until {0}", "sin carga hasta {0}", t.arg())
         }
-        Plan::Off { until: None } => crate::text!("Profil {0} : pas de charge", "Profile {0}: no charging", "Perfil {0}: sin carga", p),
-        Plan::Max { now: false, until, .. } => match until {
-            Some(u) => {
-                let t = until_text(now, u, tz);
-                crate::text!("Profil {0} : charge {1} jusqu'à {2}", "Profile {0}: charging {1} until {2}", "Perfil {0}: carga {1} hasta {2}", p, how.arg(), t.arg())
-            }
-            None => crate::text!("Profil {0} : charge {1}", "Profile {0}: charging {1}", "Perfil {0}: carga {1}", p, how.arg()),
-        },
+        Plan::Off { until: None } => crate::text!("pas de charge", "no charging", "sin carga"),
+        Plan::Max { now: false, until: Some(u), .. } => {
+            let t = until_text(now, u, tz);
+            crate::text!("charge {0} jusqu'à {1}", "charging {0} until {1}", "carga {0} hasta {1}", how.arg(), t.arg())
+        }
+        Plan::Max { now: false, until: None, .. } => crate::text!("charge {0}", "charging {0}", "carga {0}", how.arg()),
         Plan::Max { now: true, until, left_kwh, .. } => {
             let head = match until {
                 Some(u) => {
@@ -282,15 +280,23 @@ fn plan_text(plan: Plan, profile: Option<&str>, watts: Option<f64>, now: i64, tz
                 None if left_kwh.is_some() => crate::text!("Charge maintenant {0}", "Charging now {0}", "Carga ahora {0}", how.arg()),
                 None => crate::text!("Charge maintenant {0} jusqu'au débranchement", "Charging now {0} until unplugged", "Carga ahora {0} hasta desconectar", how.arg()),
             };
-            match left_kwh {
+            return match left_kwh {
                 Some(left) => {
                     let l = kw_text(left * 1000.0);
                     crate::text!("{0}, encore {1} kWh", "{0}, {1} kWh to go", "{0}, faltan {1} kWh", head.arg(), l.arg())
                 }
                 None => head,
-            }
+            };
         }
-        Plan::Solar { .. } => Text::default(),
+        Plan::Solar { .. } => return Text::default(),
+    };
+    match by {
+        Some(by) => crate::text!("{0} : {1}", "{0}: {1}", "{0}: {1}", by.to_string(), what.arg()),
+        None => {
+            // The first letter up.
+            let up = |t: String| t.chars().next().map(|c| c.to_uppercase().chain(t.chars().skip(1)).collect()).unwrap_or_default();
+            Text { fr: up(what.fr), en: up(what.en), es: up(what.es) }
+        }
     }
 }
 
@@ -369,6 +375,7 @@ impl Regulator {
                     let per_amp = (if r.voltage > 0.0 { r.voltage } else { VOLTAGE }) * r.phases.max(1) as f64;
                     // Its plan: no charge, or a charge whatever the sun; or the surplus within its limits.
                     let solar_limits;
+                    let mut start_w = None;
                     let load = match load.plan {
                         Some(plan @ Plan::Off { .. }) => {
                             if r.running {
@@ -409,7 +416,8 @@ impl Regulator {
                             statuses.insert(load.device_id, status(if asked_now { "now" } else { "charging" }, (!own).then_some(amps), text));
                             continue;
                         }
-                        Some(Plan::Solar { min_amps, max_amps }) => {
+                        Some(Plan::Solar { min_amps, max_amps, start_w: w }) => {
+                            start_w = w;
                             solar_limits = Load { min_amps, max_amps, ..load.clone() };
                             &solar_limits
                         }
@@ -447,7 +455,13 @@ impl Regulator {
                         continue;
                     }
                     let fits = (((budget + load.tolerance) / per_amp).floor() as i64).min(load.max_amps);
-                    let enough = fits >= load.min_amps;
+                    // Over the surplus that starts it (the rest of a fixed power from the grid).
+                    let enough = match start_w {
+                        Some(w) => budget + load.tolerance >= w,
+                        None => fits >= load.min_amps,
+                    };
+                    let fits = fits.max(load.min_amps);
+                    let wait_w = start_w.unwrap_or(load.min_amps as f64 * per_amp);
                     if r.running {
                         let amps = if enough {
                             m.short_since = None;
@@ -457,7 +471,7 @@ impl Regulator {
                             if now - since >= STOP_DELAY {
                                 commands.push((load.device_id, Command::Stop));
                                 *m = Memory { changed_at: Some(now), ..Memory::default() };
-                                statuses.insert(load.device_id, status("waiting", None, wait_text(load.min_amps as f64 * per_amp)));
+                                statuses.insert(load.device_id, status("waiting", None, wait_text(wait_w)));
                                 continue;
                             }
                             // A cloud: it holds at its minimum a little while.
@@ -490,7 +504,7 @@ impl Regulator {
                         } else {
                             m.enough_since = None;
                         }
-                        statuses.insert(load.device_id, status("waiting", None, wait_text(load.min_amps as f64 * per_amp)));
+                        statuses.insert(load.device_id, status("waiting", None, wait_text(wait_w)));
                     }
                 }
                 Kind::Relay => {
@@ -853,7 +867,13 @@ pub async fn tick(state: &AppState, now: i64) {
                 crate::text!("{0} : charge maintenant à {1} A", "{0}: charging now at {1} A", "{0}: carga ahora a {1} A", name, a)
             }
             Command::Start(a) if statuses.get(&id).is_some_and(|s| s.state == "charging") => {
-                crate::text!("{0} : charge à {1} A selon son profil", "{0}: charging at {1} A by its profile", "{0}: carga a {1} A según su perfil", name, a)
+                crate::text!(
+                    "{0} : charge à {1} A selon son réglage de recharge",
+                    "{0}: charging at {1} A by its charging setting",
+                    "{0}: carga a {1} A según su ajuste de carga",
+                    name,
+                    a
+                )
             }
             Command::Start(a) => crate::text!("{0} : charge solaire à {1} A", "{0}: solar charging at {1} A", "{0}: carga solar a {1} A", name, a),
             Command::Resume if statuses.get(&id).is_some_and(|s| s.state == "now") => {
@@ -865,13 +885,18 @@ pub async fn tick(state: &AppState, now: i64) {
                 )
             }
             Command::Resume => crate::text!(
-                "{0} : charge selon son profil, courant réglé par la borne",
-                "{0}: charging by its profile, current set by the charger",
-                "{0}: carga según su perfil, corriente regulada por el cargador",
+                "{0} : charge selon son réglage de recharge, courant réglé par la borne",
+                "{0}: charging by its charging setting, current set by the charger",
+                "{0}: carga según su ajuste de carga, corriente regulada por el cargador",
                 name
             ),
             Command::Stop if statuses.get(&id).is_some_and(|s| s.state == "no_charge") => {
-                crate::text!("{0} : charge suspendue selon son profil", "{0}: charging paused by its profile", "{0}: carga suspendida según su perfil", name)
+                crate::text!(
+                    "{0} : charge suspendue selon son réglage de recharge",
+                    "{0}: charging paused by its charging setting",
+                    "{0}: carga suspendida según su ajuste de carga",
+                    name
+                )
             }
             Command::Stop => {
                 crate::text!("{0} : charge suspendue, plus assez de surplus", "{0}: charging paused, not enough surplus", "{0}: carga suspendida, excedente insuficiente", name)
@@ -914,7 +939,7 @@ pub async fn run_loop(state: AppState) {
     loop {
         ticker.tick().await;
         let surplus = db::list_surplus_loads(&state.db).await.is_ok_and(|l| l.iter().any(|l| l.enabled));
-        let planned = db::list_charger_plans(&state.db).await.is_ok_and(|l| l.iter().any(|p| p.profile_id.is_some() || p.now_amps.is_some()));
+        let planned = db::list_charger_plans(&state.db).await.is_ok_and(|l| l.iter().any(|p| p.mode.is_some() || p.now_amps.is_some()));
         if !surplus && !planned {
             *state.surplus.snapshot.write().await = Snapshot::default();
             continue;
@@ -1074,14 +1099,14 @@ mod tests {
         let off = planned(Plan::Off { until: Some(at(22, 0)) });
         let (c, s) = r.step(at(18, 0), PARIS, 3000.0, &[(off.clone(), car(true, 16, 0.0))]);
         assert_eq!(c, vec![(1, Command::Stop)], "no charge now, even with sun");
-        assert_eq!((s[&1].state, s[&1].text.fr.as_str()), ("no_charge", "Profil Nuit bleue : pas de charge jusqu'à 22 h"));
+        assert_eq!((s[&1].state, s[&1].text.fr.as_str()), ("no_charge", "Nuit bleue : pas de charge jusqu'à 22 h"));
         let paused = Reading { paused: true, ..car(false, 0, 0.0) };
         assert!(r.step(at(18, 1), PARIS, 3000.0, &[(off, paused)]).0.is_empty());
         // 22:00: the off-peak hours, at night.
         let max = planned(Plan::Max { amps: 30, until: Some(at(6, 0) + 86400), now: false, left_kwh: None });
         let (c, s) = r.step(at(22, 0), PARIS, -500.0, &[(max.clone(), paused)]);
         assert_eq!(c, vec![(1, Command::Start(30))]);
-        assert_eq!((s[&1].state, s[&1].text.fr.as_str()), ("charging", "Profil Nuit bleue : charge à 6,9 kW jusqu'à demain 6 h"));
+        assert_eq!((s[&1].state, s[&1].text.fr.as_str()), ("charging", "Nuit bleue : charge à 6,9 kW jusqu'à demain 6 h"));
         // Charging: nothing more, nothing stops it at night.
         for minutes in [1, 5, 30] {
             assert!(r.step(at(22, minutes), PARIS, -7400.0, &[(max.clone(), car(true, 30, 1.0))]).0.is_empty());
@@ -1103,7 +1128,7 @@ mod tests {
         let own = |running: bool, amps: i64| Reading { auto_limit: true, paused: !running, ..car(running, amps, 0.0) };
         let (c, s) = r.step(at(22, 0), PARIS, -500.0, &[(max.clone(), own(false, 0))]);
         assert_eq!(c, vec![(1, Command::Resume)]);
-        assert_eq!(s[&1].text.fr, "Profil Nuit bleue : charge au courant réglé par la borne");
+        assert_eq!(s[&1].text.fr, "Nuit bleue : charge au courant réglé par la borne");
         assert!(r.step(at(22, 5), PARIS, -4000.0, &[(max, own(true, 12))]).0.is_empty(), "its current is its own");
     }
 
@@ -1140,7 +1165,7 @@ mod tests {
         assert_eq!((s[&1].state, s[&1].text.fr.as_str()), ("now", "Charge maintenant à 3,7 kW, encore 4,3 kWh"));
         assert_eq!(s[&1].text.en, "Charging now at 3.7 kW, 4.3 kWh to go");
         assert_eq!(s[&2].state, "no_meter");
-        let solar = planned(Plan::Solar { min_amps: 6, max_amps: 16 });
+        let solar = planned(Plan::Solar { min_amps: 6, max_amps: 16, start_w: None });
         assert_eq!(r.step_with(at(19, 1), PARIS, None, &[(solar, car(false, 0, 0.0))]).1[&1].state, "no_meter");
     }
 
@@ -1148,10 +1173,28 @@ mod tests {
     #[test]
     fn a_solar_slot_has_its_own_limits() {
         let mut r = Regulator::default();
-        let solar = planned(Plan::Solar { min_amps: 6, max_amps: 10 });
+        let solar = planned(Plan::Solar { min_amps: 6, max_amps: 10, start_w: None });
         let idle = [(solar, car(false, 0, 0.0))];
         r.step(at(12, 0), PARIS, 5000.0, &idle);
         assert_eq!(r.step(at(12, 1), PARIS, 5000.0, &idle).0, vec![(1, Command::Start(10))]);
+    }
+
+    /// 2 kW (8 A) once the surplus is over 1 kW: the rest from the grid, kept while it lasts.
+    #[test]
+    fn a_fixed_power_starts_over_its_threshold() {
+        let mut r = Regulator::default();
+        let fixed = || planned(Plan::Solar { min_amps: 8, max_amps: 8, start_w: Some(1000.0) });
+        let idle = [(fixed(), car(false, 0, 0.0))];
+        r.step(at(12, 0), PARIS, 800.0, &idle);
+        let (c, s) = r.step(at(12, 2), PARIS, 800.0, &idle);
+        assert!(c.is_empty(), "under 1 kW: {c:?}");
+        assert_eq!(s[&1].state, "waiting");
+        r.step(at(12, 3), PARIS, 1200.0, &idle);
+        assert_eq!(r.step(at(12, 4), PARIS, 1200.0, &idle).0, vec![(1, Command::Start(8))]);
+        // Charging at 8 A (1.84 kW) with 300 W still going back: 2.1 kW of surplus, it holds.
+        let (c, s) = r.step(at(12, 10), PARIS, 300.0, &[(fixed(), car(true, 8, 1840.0))]);
+        assert!(c.is_empty(), "{c:?}");
+        assert_eq!(s[&1].amps, Some(8));
     }
 
     /// Charging whatever the sun is taken off the surplus first.

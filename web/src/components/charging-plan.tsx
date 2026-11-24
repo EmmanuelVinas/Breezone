@@ -5,7 +5,7 @@ import { toast } from "sonner"
 import { Clock, Zap } from "lucide-react"
 import type {
   ChargeDay,
-  ChargeMode,
+  ChargeEffect,
   ChargeNext,
   ChargingView,
   DeviceView,
@@ -15,6 +15,7 @@ import { errorText, kwh, number, time } from "@/lib/format"
 import { locale, t } from "@/lib/i18n"
 import { TEMPO_COLOR, TEMPO_LABEL } from "@/lib/tempo"
 import { cn } from "@/lib/utils"
+import { effectColor } from "@/lib/charge-effects"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -57,12 +58,6 @@ function useChargingUpdate(device: DeviceView) {
 const SELECTED =
   "data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
 
-const MODE_COLOR: Record<ChargeMode, string> = {
-  max: "var(--primary)",
-  solar: "var(--warning)",
-  off: "var(--muted)",
-}
-
 /** Power of a current on this charger (kW). */
 function kwOf(device: DeviceView, amps: number) {
   const s = device.state ?? {}
@@ -101,9 +96,10 @@ function dayName(day: string, index: number) {
   return name.charAt(0).toUpperCase() + name.slice(1)
 }
 
-function modeText(mode: ChargeMode, kw: number | null) {
-  if (mode === "solar") return t("surplus solaire")
-  if (mode === "off") return t("pas de charge")
+function effectWords(e: ChargeEffect, kw: number | null) {
+  if (e.mode === "solar") return t("surplus solaire")
+  if (e.mode === "off") return t("pas de charge")
+  if (e.mode === "free") return t("la borne décide")
   return t("jusqu'à {kw} kW", { kw: number(kw ?? 0, 1) })
 }
 
@@ -111,11 +107,9 @@ function modeText(mode: ChargeMode, kw: number | null) {
 function NextCharge({ next, now }: { next: ChargeNext; now: number }) {
   const hours = (next.end - Math.max(now, next.start)) / 3600
   const details = [
-    modeText(next.mode, next.kw),
-    next.color
-      ? t("jour {color}", { color: TEMPO_LABEL[next.color].toLowerCase() })
-      : null,
-    next.mode === "max" && next.kw
+    effectWords(next.effect, next.kw),
+    next.automation?.name,
+    next.effect.mode !== "solar" && next.kw
       ? t("≈ {kwh} possibles", { kwh: kwh(next.kw * hours) })
       : null,
   ].filter(Boolean)
@@ -125,7 +119,7 @@ function NextCharge({ next, now }: { next: ChargeNext; now: number }) {
       <div>
         <div className="font-medium">
           {next.start <= now
-            ? t("En charge selon le profil jusqu'à {end}", {
+            ? t("En charge selon les automatismes jusqu'à {end}", {
                 end: when(next.end),
               })
             : t("Prochaine charge : {start} → {end}", {
@@ -166,18 +160,20 @@ export function PlanLines({
   )
 }
 
-/** One day of the profile, from midnight to midnight. */
+/** One day of what the automations plan, from midnight to midnight. */
 function DayStrip({
   day,
   index,
   now,
+  view,
 }: {
   day: ChargeDay
   index: number
   now: number
+  view: ChargingView
 }) {
-  const first = day.periods[0]?.start ?? 0
-  const last = day.periods[day.periods.length - 1]?.end ?? first + 86_400
+  const first = day.segments[0]?.start ?? 0
+  const last = day.segments[day.segments.length - 1]?.end ?? first + 86_400
   const span = Math.max(1, last - first)
   return (
     <>
@@ -191,29 +187,38 @@ function DayStrip({
           />
         )}
       </span>
-      <div className="relative flex h-5 overflow-hidden rounded-md bg-muted">
-        {day.periods.map((p) => (
-          <div
-            key={p.start}
-            className={cn(
-              "flex items-center justify-center overflow-hidden text-[10px] font-medium whitespace-nowrap",
-              p.mode === "off"
-                ? "text-muted-foreground"
-                : "text-primary-foreground"
-            )}
-            style={{
-              width: `${((p.end - p.start) / span) * 100}%`,
-              background: MODE_COLOR[p.mode],
-            }}
-            title={`${time(p.start)} → ${time(p.end)} · ${modeText(p.mode, p.kw)}`}
-          >
-            {p.end - p.start >= 3 * 3600 && p.mode !== "off"
-              ? p.mode === "max"
-                ? `${number(p.kw ?? 0, 1)} kW`
-                : t("surplus")
-              : null}
-          </div>
-        ))}
+      <div className="relative flex h-5 overflow-hidden rounded-md border border-dashed bg-background">
+        {day.segments.map((p) => {
+          const kw =
+            p.effect?.mode === "profile"
+              ? (view.profiles.find((x) => x.id === p.effect!.profile_id)?.kw ??
+                null)
+              : null
+          const words = p.effect
+            ? p.effect.mode === "profile"
+              ? (view.profiles.find((x) => x.id === p.effect!.profile_id)
+                  ?.name ?? "")
+              : effectWords(p.effect, kw)
+            : ""
+          const dim =
+            !p.effect || p.effect.mode === "off" || p.effect.mode === "free"
+          return (
+            <div
+              key={p.start}
+              className={cn(
+                "flex items-center justify-center overflow-hidden text-[10px] font-medium whitespace-nowrap",
+                dim ? "text-muted-foreground" : "text-primary-foreground"
+              )}
+              style={{
+                width: `${((p.end - p.start) / span) * 100}%`,
+                background: effectColor(p.effect, view.profiles),
+              }}
+              title={`${time(p.start)} → ${time(p.end)}${words ? ` · ${words}` : ""}`}
+            >
+              {p.end - p.start >= 3 * 3600 && !dim ? words : null}
+            </div>
+          )
+        })}
         {now > first && now < last && (
           <span
             className="absolute inset-y-0 w-0.5 bg-foreground"
@@ -225,9 +230,8 @@ function DayStrip({
   )
 }
 
-/** The profiles the charger may follow, and the next days of the one it follows. */
+/** What the automations tell the charger now and over the next days (read only). */
 export function ProfileCard({
-  device,
   view,
   at,
 }: {
@@ -237,74 +241,69 @@ export function ProfileCard({
   at: number
 }) {
   const admin = currentUser()?.role === "admin"
-  const update = useChargingUpdate(device)
-  const choose = useMutation({
-    mutationFn: (id: number | null) => api.setChargeProfile(device.id, id),
-    onSuccess: update,
-    onError: (e) => toast.error(errorText(e)),
-  })
   if (!view) return null
-  const editable = view.can_control && !choose.isPending
+  const current =
+    view.mode === "profile"
+      ? view.profiles.find((p) => p.id === view.profile_id)?.name
+      : view.mode === "off"
+        ? t("Ne pas charger")
+        : view.mode === "solar"
+          ? t("Surplus solaire")
+          : null
   return (
     <Card className="rounded-3xl">
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-2">
-          <CardTitle>{t("Profil de recharge")}</CardTitle>
+          <CardTitle>{t("Ce que prévoient les automatismes")}</CardTitle>
           {admin && (
             <Link
               to="/recharge/profils"
               className="text-sm font-medium text-primary hover:underline"
             >
-              {t("Gérer les profils ›")}
+              {t("Profils ›")}
             </Link>
           )}
         </div>
         <CardDescription>
-          {view.profile_id === null
-            ? t(
-                "Sans profil, la borne charge quand la voiture est branchée, ou suit le surplus solaire si elle y est inscrite."
-              )
-            : t(
-                "Le profil décide des heures de charge ; « Charger maintenant » passe avant."
-              )}
+          {view.own_schedule
+            ? null
+            : current && view.automation
+              ? t("Maintenant : « {what} », choisi par {rule}", {
+                  what: current,
+                  rule: view.automation.name,
+                })
+              : current
+                ? t("Maintenant : « {what} »", { what: current })
+                : view.automations.length
+                  ? t("Aucun automatisme n'a encore dit quoi faire à la borne.")
+                  : t(
+                      "Aucun automatisme ne pilote la borne : elle charge quand la voiture est branchée."
+                    )}
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
-        {view.profiles.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            {admin
-              ? t("Aucun profil : créez-en un dans « Gérer les profils ».")
-              : t("Aucun profil pour l'instant.")}
-          </p>
-        ) : (
-          <ToggleGroup
-            type="single"
-            variant="outline"
-            size="sm"
-            value={String(view.profile_id ?? "none")}
-            disabled={!editable}
-            onValueChange={(v) =>
-              v && choose.mutate(v === "none" ? null : Number(v))
-            }
-            className="flex-wrap justify-start"
-          >
-            {view.profiles.map((p) => (
-              <ToggleGroupItem
-                key={p.id}
-                value={String(p.id)}
-                className={SELECTED}
-              >
-                {p.name}
-              </ToggleGroupItem>
-            ))}
-            <ToggleGroupItem value="none">{t("Aucun")}</ToggleGroupItem>
-          </ToggleGroup>
+        {view.own_schedule && (
+          <div className="rounded-2xl bg-muted/60 px-3 py-2.5 text-sm">
+            <div className="font-medium">
+              {t("L'appli de la borne décide des heures de charge")}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {view.automations.length
+                ? t(
+                    "{rules} ne s'appliquent pas à cette borne. Coupez « Programmation de son appli » dans les réglages.",
+                    { rules: view.automations.map((a) => a.name).join(", ") }
+                  )
+                : t(
+                    "Coupez « Programmation de son appli » dans les réglages pour que les automatismes de Breezone décident."
+                  )}
+            </div>
+          </div>
         )}
-        {view.days.length > 0 && (
-          <div className="grid gap-3">
+        {view.days.length > 0 && view.automations.length > 0 && (
+          <div className={cn("grid gap-3", view.own_schedule && "opacity-40")}>
             <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-x-3 gap-y-2">
               {view.days.map((d, i) => (
-                <DayStrip key={d.day} day={d} index={i} now={at} />
+                <DayStrip key={d.day} day={d} index={i} now={at} view={view} />
               ))}
               <span />
               <div className="flex justify-between text-[10px] text-muted-foreground">
@@ -314,17 +313,17 @@ export function ProfileCard({
               </div>
             </div>
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-              {(
-                [
-                  ["max", t("charge, même sans soleil")],
-                  ["solar", t("surplus solaire")],
-                  ["off", t("pas de charge")],
-                ] as [ChargeMode, string][]
-              ).map(([m, label]) => (
-                <span key={m} className="inline-flex items-center gap-1.5">
+              {[
+                ...view.profiles.map(
+                  (p) => [p.name, p.color ?? "var(--primary)"] as const
+                ),
+                [t("Surplus solaire"), "var(--warning)"] as const,
+                [t("Ne pas charger"), "var(--muted)"] as const,
+              ].map(([label, color]) => (
+                <span key={label} className="inline-flex items-center gap-1.5">
                   <span
                     className="size-2.5 rounded-[3px] ring-1 ring-border"
-                    style={{ background: MODE_COLOR[m] }}
+                    style={{ background: color }}
                   />
                   {label}
                 </span>
@@ -391,7 +390,7 @@ export function ChargeNowDialog({
           <DialogTitle>{t("Charger maintenant")}</DialogTitle>
           <DialogDescription>
             {t(
-              "Sans interruption : passe avant le profil et le surplus solaire."
+              "Sans interruption : passe avant les automatismes et le surplus solaire."
             )}
           </DialogDescription>
         </DialogHeader>
@@ -500,7 +499,7 @@ export function ChargeNowDialog({
   )
 }
 
-/** The charge asked now, and how to go back to the profile. */
+/** The charge asked now, and how to go back to the automations. */
 export function NowLine({
   device,
   view,
@@ -538,8 +537,8 @@ export function NowLine({
           disabled={cancel.isPending}
           onClick={() => cancel.mutate()}
         >
-          {view.profile_id !== null
-            ? t("Revenir au profil")
+          {view.automations.length && !view.own_schedule
+            ? t("Revenir aux automatismes")
             : t("Arrêter la charge immédiate")}
         </Button>
       )}

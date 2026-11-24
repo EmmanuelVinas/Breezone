@@ -6,8 +6,9 @@ export const ANDROID_APP_URL =
   "https://play.google.com/store/apps/details?id=com.breezone.app"
 import { lang } from "@/lib/i18n"
 import type {
-  ChargeDayKind,
+  ChargeMode,
   ChargeProfileView,
+  ChargeRulePlan,
   ChargingView,
   Contract,
   DeviceView,
@@ -18,22 +19,25 @@ import type {
   PriceView,
   Room,
   Tariff,
-  TariffCalendar,
   TariffView,
   Zone,
 } from "@/lib/api.generated"
 
 /** The main views, generated from the contract of the server (`server/contracts/views.json`). */
 export type {
+  ChargeBar,
   ChargeDay,
-  ChargeDayKind,
+  ChargeDaySegment,
+  ChargeEffect,
+  ChargeEffectMode,
   ChargeMode,
   ChargeNext,
   ChargeNow,
-  ChargePeriod,
   ChargeProfileRef,
   ChargeProfileView,
-  ChargeSlot,
+  ChargeRulePlan,
+  ChargeRuleRef,
+  ChargeSegment,
   ChargeStatus,
   ChargingView,
   AirQuality,
@@ -1232,8 +1236,14 @@ export type AutomationStep =
   | { kind: "notify"; message: string }
   /** A device of the list of the solar surplus follows it, or no longer does. */
   | { kind: "surplus"; device_id: number; enabled: boolean }
-  /** A charger follows a charging profile (null: none). */
-  | { kind: "charger_profile"; device_id: number; profile_id: number | null }
+  /** What a charger does: follow a profile, no charge, the solar surplus, or its own app. */
+  | {
+      kind: "charger_profile"
+      device_id: number
+      profile_id: number | null
+      mode?: ChargeMode
+      solar?: ChargeSolar | null
+    }
   /** A charger charges now: up to `kw`, until "HH:MM" or `kwh` more, else until unplugged. */
   | {
       kind: "charger_now"
@@ -1514,11 +1524,20 @@ function pairingStep<T = SourceView>(
   )
 }
 
-/** A charging profile as it is written (`POST`/`PUT /api/charging/profiles`). */
+/** A charging profile as it is written (`POST`/`PUT /api/charging/profiles`): a power. */
 export type ChargeProfileInput = {
   name: string
-  profiles: ChargeDayKind[]
-  calendar: TariffCalendar
+  /** Up to this power (null: the charger's maximum). */
+  kw: number | null
+  color: string | null
+}
+
+/** How a charger charges on the solar surplus: following it up to `kw`, or at `kw` (`fixed`)
+ * once the surplus is over `start_kw` (the rest from the grid). */
+export type ChargeSolar = {
+  kw?: number | null
+  fixed?: boolean
+  start_kw?: number | null
 }
 
 /** "Charge now": up to `kw` (the charger's maximum without), until a time or `kwh` more. */
@@ -1535,10 +1554,8 @@ export const api = {
     request<void>("DELETE", `/api/charging/profiles/${id}`),
   charging: (deviceId: number) =>
     request<ChargingView>("GET", `/api/devices/${deviceId}/charging`),
-  setChargeProfile: (deviceId: number, profileId: number | null) =>
-    request<ChargingView>("PUT", `/api/devices/${deviceId}/charging`, {
-      profile_id: profileId,
-    }),
+  chargeAutomations: () =>
+    request<ChargeRulePlan[]>("GET", "/api/charging/automations"),
   chargeNow: (deviceId: number, input: ChargeNowInput) =>
     request<ChargingView>(
       "POST",

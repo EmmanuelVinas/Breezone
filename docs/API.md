@@ -502,9 +502,10 @@ borne (`ev.charger`, intensité réglée entre un minimum et un maximum) ou une 
 (`switch.relay`, chauffe-eau, pompe… allumée quand sa puissance tient dans le surplus), ou une zone
 de climatisation (`climate.zone` d'une installation de ce serveur). Il faut un compteur avec le rôle
 `grid`. Seuls les appareils de ce serveur peuvent suivre le surplus (le surplus est celui de ce
-site). Le serveur regarde toutes les 10 s. Une borne ne s'inscrit plus dans cette liste (400) : elle
-suit le surplus par un créneau `solar` de son profil de recharge, et passe avant les appareils de la
-liste ; une borne qui y était reçoit au démarrage un profil « Solaire » à ses intensités.
+site). Le serveur regarde toutes les 10 s. Une borne ne s'inscrit plus dans cette liste (400) : un
+automatisme lui dit de charger sur le surplus (action `charger_profile`, `mode: "solar"`), et elle
+passe avant les appareils de la liste ; une borne qui y était charge au démarrage sur le surplus à
+ses intensités.
 
 Une zone chauffe à `heat_setpoint` quand il fait moins de `heat_below` dehors et que son système est
 en chauffage (ou auto), rafraîchit à `cool_setpoint` au-dessus de `cool_above` en mode froid (ou
@@ -528,38 +529,54 @@ heat_setpoint, cool_setpoint, heat_below, cool_above, limit_min, limit_max, auto
 status: {state, amps, power, text} | null}` ; `state` ∈ `solar` (tourne sur le surplus),
 `guarantee` (tourne sur le réseau pour tenir la garantie), `waiting`, `no_car`, `unavailable`,
 `no_meter`, `idle` (une zone : pas besoin, ou mode du système contraire), `manual` (réglée à la
-main, laissée ; une borne jusqu'au débranchement), `no_charge`, `charging`, `now` (une borne qui
-suit un profil de recharge, voir ci-dessous).
+main, laissée ; une borne jusqu'au débranchement), `no_charge`, `charging`, `now` (une borne que
+les automatismes pilotent, voir ci-dessous).
 
 ## Profils de recharge
 
-Le plan de la semaine d'une borne. Un profil a la forme d'un tarif : des **types de jour** découpés
-en **créneaux** (`start` « HH:MM », le premier à « 00:00 ») et un **calendrier** (`day_start`, les
-7 `weekdays`, et `colors` bleu/blanc/rouge pour suivre les jours Tempo, de 6 h à 6 h avec
-`day_start: "06:00"`). Le `mode` d'un créneau : `off` (pas de charge), `max` (charge jusqu'à `kw`,
-le maximum de la borne sans `kw`, quel que soit le soleil), `solar` (le surplus seulement, entre
-`min_amps` et `max_amps`). Une borne suit un profil, sauf pendant une **charge immédiate** : à `kw`,
-jusqu'au débranchement, jusqu'à `until` ou jusqu'à `kwh` de plus. Le pilotage sur surplus applique
-le tout ; sans compteur réseau, `off` et `max` agissent quand même. Une action à la main (Breezone,
-appli de la borne, bouton) l'emporte jusqu'au débranchement ; choisir un profil ou charger
-maintenant la reprend.
+Un **profil** est une puissance : charger jusqu'à `kw` (le maximum de la borne sans `kw`), avec une
+couleur pour les frises. **Quand** une borne charge, ce sont les automatismes qui le disent, par
+l'action `charger_profile` : suivre un profil (`mode: "profile"`), ne pas charger (`off`), charger
+sur le surplus solaire (`solar`, avec `solar: {kw?, fixed?, start_kw?}` : suivre le surplus jusqu'à
+`kw`, ou charger à `kw` fixe ; démarrer quand le surplus dépasse `start_kw`, le minimum de la borne
+sans), ou laisser la borne faire (`free` : Breezone ne la pilote plus et allume la programmation de
+son appli). Une borne dont la programmation de l'appli est allumée (`timer` de `ev.charger`) n'est
+pas pilotée : ses automatismes échouent (« en pause »). Une **charge immédiate** passe avant tout :
+à `kw`, jusqu'au débranchement, jusqu'à `until` ou jusqu'à `kwh` de plus. Le pilotage sur surplus
+applique le tout ; sans compteur réseau, `off` et un profil agissent quand même. Une action à la
+main (Breezone, appli de la borne, bouton) l'emporte jusqu'au débranchement ; un automatisme ou une
+charge immédiate la reprend.
 
 | Méthode | Chemin | Description |
 |---------|--------|-------------|
-| GET 🔒 | `/api/charging/profiles` | `[{id, name, profiles, calendar, used_by: [{device_id, name}], automations: [nom]}]` (`automations` : les règles qui le donnent à une borne) |
-| POST 👑 | `/api/charging/profiles` | `{name, profiles: [{id, name, color?, slots: [{start, mode, kw?, min_amps?, max_amps?}]}], calendar}` → 201, le profil |
+| GET 🔒 | `/api/charging/profiles` | `[{id, name, kw, color, automations: [{id, name}]}]` (`automations` : les règles qui le donnent à une borne) |
+| POST 👑 | `/api/charging/profiles` | `{name, kw?, color?}` (20 profils au plus) → 201, le profil |
 | PUT 👑 | `/api/charging/profiles/{id}` | Même corps → le profil |
-| DELETE 👑 | `/api/charging/profiles/{id}` | Les bornes qui le suivaient ne suivent plus rien → 204 |
+| DELETE 👑 | `/api/charging/profiles/{id}` | Les bornes qui le suivaient sont laissées à elles-mêmes → 204 |
+| GET 🔒 | `/api/charging/automations` | Les automatismes qui pilotent une borne, avec leurs frises (ci-dessous) |
 | GET 🔒 | `/api/devices/{id}/charging` | La vue de la borne (ci-dessous) |
-| PUT 🔒 | `/api/devices/{id}/charging` | `{profile_id \| null}` → la vue |
 | POST 🔒 | `/api/devices/{id}/charging/now` | `{kw?, until?, kwh?}` : charger maintenant (409 sans voiture branchée) → la vue |
-| DELETE 🔒 | `/api/devices/{id}/charging/now` | Fin de la charge immédiate, retour au profil → la vue |
+| DELETE 🔒 | `/api/devices/{id}/charging/now` | Fin de la charge immédiate, retour aux automatismes → la vue |
 
-Les droits sont ceux de l'appareil : le voir pour lire, le piloter pour changer. La vue :
-`{profile_id, profiles: [{id, name}], now: {amps, kw, until, kwh, left_kwh} | null, status: {state,
-reason} | null, next: {start, end, mode, kw, color} | null, days: [{day, color, periods: [{start,
-end, mode, kw, profile, color}]}], can_control}` ; `next` est la prochaine période de charge des
-48 h (celle en cours si elle charge), `days` les 3 jours locaux à partir d'aujourd'hui.
+Les frises (`/api/charging/automations`) : `[{id, name, enabled, summary, devices: [{id, name}],
+paused, placed, assumed, bars: [{device_id, kind, label, color, others, segments: [{start, end,
+effect}]}]}]`. Chaque règle est rejouée sur une journée : ses déclencheurs à une heure (heure,
+soleil, début et fin d'une plage du tarif, avec « sinon » et « ensuite »), ses conditions qu'on sait
+d'avance (plages horaires, tarif, jour ou nuit) ; les autres sont supposées vraies (`assumed`). Une
+barre par type de jour du tarif que la règle nomme, plus les autres jours (`others`) ; sinon une
+seule. `start`/`end` en minutes depuis minuit ; `effect` : `{mode: "profile", profile_id} | {mode:
+"off"} | {mode: "solar"} | {mode: "free"} | {mode: "now", kw}`, `null` : rien de dit encore.
+`placed: false` : aucun déclencheur à une heure (mesure, appareil…), pas de frise. `paused` : toutes
+ses bornes laissent leur appli décider.
+
+Les droits sont ceux de l'appareil : le voir pour lire, le piloter pour changer. La vue de la borne :
+`{mode: "profile"|"off"|"solar"|"free", profile_id, automation: {id, name} | null, profiles: [{id,
+name, kw, color}], own_schedule, now: {amps, kw, until, kwh, left_kwh} | null, status: {state,
+reason} | null, next: {start, end, effect, kw, automation} | null, days: [{day, color, segments:
+[{start, end, effect, automation_id}]}], automations: [{id, name}], can_control}` ; `automation` :
+la règle qui a dit `mode` en dernier ; `days` : les 3 jours locaux à partir d'aujourd'hui, tous les
+automatismes actifs de la borne rejoués ensemble (le dernier déclenché l'emporte) ; `next` : la
+prochaine charge des 48 h (celle en cours si elle charge).
 
 Régulation :
 - budget = ce qui part au réseau + ce que tirent déjà les appareils pilotés (une prise qui ne mesure
@@ -659,8 +676,10 @@ réglages entre-temps est laissé tel quel, et l'historique le dit) | `{kind:"no
 le journal, `kind: "notification"`, que les applis ouvertes affichent aussitôt ; envoyé aussi au
 sujet ntfy réglé, avec le titre « Breezone · nom de la règle ») |
 `{kind:"surplus", device_id, enabled}` (un appareil de la liste du surplus solaire le suit, ou plus :
-il est alors laissé tel quel) | `{kind:"charger_profile", device_id, profile_id}` (la borne suit ce profil de recharge, `null` :
-aucun) | `{kind:"charger_now", device_id, kw?, until?, kwh?}` (charger maintenant : jusqu'à `kw`,
+il est alors laissé tel quel) | `{kind:"charger_profile", device_id, mode, profile_id?, solar?}` (ce que fait la borne : `profile`
+suit le profil `profile_id`, `off` ne charge pas, `solar` charge sur le surplus avec `solar: {kw?,
+fixed?, start_kw?}`, `free` laisse la borne faire ; sans `mode`, l'ancienne forme : un profil, ou
+`free` ; refusé quand la programmation de l'appli de la borne est allumée) | `{kind:"charger_now", device_id, kw?, until?, kwh?}` (charger maintenant : jusqu'à `kw`,
 son maximum sans ; jusqu'à `until` « HH:MM », la prochaine fois que cette heure vient, ou `kwh` de
 plus, sinon jusqu'au débranchement ; refusé sans voiture branchée).
 

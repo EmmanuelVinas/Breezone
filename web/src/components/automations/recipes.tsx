@@ -1,6 +1,4 @@
 import { useState } from "react"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { toast } from "sonner"
 import type {
   AutomationCondition,
   AutomationInput,
@@ -8,8 +6,6 @@ import type {
   AutomationTrigger,
   DeviceView,
 } from "@/lib/api"
-import { api } from "@/lib/api"
-import { errorText } from "@/lib/format"
 import { t } from "@/lib/i18n"
 import {
   Dialog,
@@ -24,14 +20,21 @@ import { newTrigger } from "./triggers"
 import { SurplusClimateSetup } from "./surplus-climate"
 
 export type Recipe = {
+  /** For the recipes other pages open (`/programmations?recette=…`). */
+  id?: string
   title: string
   description: string
   rule: AutomationInput
   /** Set up in a form of its own before its rules are made (instead of opening the editor). */
-  setup?: "surplus_climate" | "charger_solar"
-  /** The charger of a `charger_solar` recipe. */
-  charger?: DeviceView
+  setup?: "surplus_climate"
 }
+
+/** The recipes of the charger the page of the charging profiles offers. */
+export const CHARGE_RECIPES = [
+  "charge-offpeak",
+  "charge-blue-night",
+  "charge-solar",
+]
 
 export function blank(home: Home): AutomationInput {
   return {
@@ -95,16 +98,79 @@ export function recipes(home: Home): Recipe[] {
     triggers,
   })
   const out: Recipe[] = []
-  if (home.roles.grid && charger)
+  if (charger) {
+    const profile = home.chargeProfiles?.[0]?.id ?? null
+    const tell = (
+      mode: "profile" | "off" | "solar",
+      solar?: AutomationStep
+    ): AutomationStep =>
+      solar ?? {
+        kind: "charger_profile",
+        device_id: charger.id,
+        mode: profile == null && mode === "profile" ? "off" : mode,
+        profile_id: mode === "profile" ? profile : null,
+      }
+    // The off-peak hours of the tariff ("HC"), and its blue days (Tempo).
+    const offpeak =
+      home.tariff?.slots.find((s) => s.toUpperCase() === "HC") ??
+      home.tariff?.slots[0] ??
+      "HC"
+    const blue = home.tariff?.profiles.find(
+      (p) => p.id === "blue" || /bleu|blue/i.test(p.name)
+    )
     out.push({
-      title: t("Surplus solaire : charger la voiture"),
+      id: "charge-offpeak",
+      title: t("Recharge : charger en heures creuses"),
       description: t(
-        "La borne suit le profil « Solaire » : elle charge sur le surplus seulement, son intensité suit le soleil. Un autre profil se choisit sur la page Recharge."
+        "Tant que les heures creuses du tarif durent, la borne suit un profil ; ensuite, elle ne charge pas."
       ),
-      rule: blank(home),
-      setup: "charger_solar",
-      charger,
+      rule: {
+        ...base(t("Heures creuses"), [{ kind: "tariff", slot: offpeak }]),
+        actions: [tell("profile")],
+        over: [tell("off")],
+      },
     })
+    if (blue)
+      out.push({
+        id: "charge-blue-night",
+        title: t("Recharge : nuit bleue (Tempo)"),
+        description: t(
+          "Tant que les heures creuses durent, un jour bleu, la borne suit un profil ; les autres jours et ensuite, elle ne charge pas."
+        ),
+        rule: {
+          ...base(t("Nuit bleue"), [{ kind: "tariff", slot: offpeak }]),
+          conditions: [{ kind: "tariff", day: "today", profile: blue.id }],
+          actions: [tell("profile")],
+          else: [tell("off")],
+          over: [tell("off")],
+        },
+      })
+    if (home.roles.grid)
+      out.push({
+        id: "charge-solar",
+        title: t("Surplus solaire : charger la voiture"),
+        description: t(
+          "Au lever du soleil, la borne charge sur le surplus (son intensité suit le soleil) ; au coucher, elle ne charge plus."
+        ),
+        rule: {
+          ...base(t("Solaire en journée"), [
+            { kind: "sun", event: "sunrise", offset_minutes: 0, days: [] },
+            { kind: "sun", event: "sunset", offset_minutes: 0, days: [] },
+          ]),
+          conditions: [{ kind: "daylight", day: true }],
+          actions: [
+            {
+              kind: "charger_profile",
+              device_id: charger.id,
+              mode: "solar",
+              profile_id: null,
+              solar: {},
+            },
+          ],
+          else: [tell("off")],
+        },
+      })
+  }
   if (home.roles.grid && zones.length)
     out.push({
       title: t("Surplus solaire : chauffer ou rafraîchir la maison"),
@@ -477,40 +543,6 @@ export function RecipesDialog({
 }) {
   const list = recipes(home)
   const [setup, setSetup] = useState<Recipe | null>(null)
-  const qc = useQueryClient()
-  // The solar surplus for the car: the profile « Solaire » (made the first time), followed.
-  const solar = useMutation({
-    mutationFn: async (charger: DeviceView) => {
-      const name = t("Solaire")
-      const all = await api.chargeProfiles()
-      const profile =
-        all.find((p) => p.name === name) ??
-        (await api.createChargeProfile({
-          name,
-          profiles: [
-            {
-              id: "d",
-              name: t("Tous les jours"),
-              color: "#f59e0b",
-              slots: [{ start: "00:00", mode: "solar" }],
-            },
-          ],
-          calendar: {
-            day_start: "00:00",
-            weekdays: Array.from({ length: 7 }, () => "d"),
-            colors: {},
-          },
-        }))
-      return api.setChargeProfile(charger.id, profile.id)
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["charge-profiles"] })
-      qc.invalidateQueries({ queryKey: ["charging"] })
-      toast.success(t("La borne suit le profil « Solaire »"))
-      onClose()
-    },
-    onError: (e) => toast.error(errorText(e)),
-  })
   const zones = home.devices.filter(
     (d) =>
       home.drivable.has(d.id) &&
@@ -551,13 +583,7 @@ export function RecipesDialog({
                 key={r.title}
                 type="button"
                 className="grid gap-1 rounded-2xl border p-3 text-left transition-colors hover:bg-muted/50"
-                onClick={() =>
-                  r.setup === "charger_solar"
-                    ? solar.mutate(r.charger!)
-                    : r.setup
-                      ? setSetup(r)
-                      : onPick(r.rule)
-                }
+                onClick={() => (r.setup ? setSetup(r) : onPick(r.rule))}
               >
                 <span className="font-medium">{r.title}</span>
                 <span className="text-sm text-muted-foreground">

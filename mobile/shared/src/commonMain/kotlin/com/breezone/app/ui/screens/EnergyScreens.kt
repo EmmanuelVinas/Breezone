@@ -372,7 +372,7 @@ fun ChargingScreen(serverId: String, onBack: (() -> Unit)? = null, onProfiles: (
                     item(key = "plan", contentType = "plan") { PlanCard(view) { change { cancelChargeNow(charger.id) } } }
                     item(key = "profile", contentType = "profile") {
                         val admin = hub.api(serverId)?.user?.isAdmin == true
-                        ProfileCard(view, onManage = onProfiles.takeIf { admin }) { id -> change { setChargeProfile(charger.id, id) } }
+                        ProfileCard(view, onManage = onProfiles.takeIf { admin })
                     }
                 }
                 item(key = "history", contentType = "history") { ChargerPowerCard(serverId, charger) }

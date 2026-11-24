@@ -374,7 +374,7 @@ function SettingsCard({
           <SettingSwitch
             label={t("Programmation de son appli")}
             sub={t(
-              "Les heures de charge réglées dans l'appli de la borne : coupez-la pour que seul le profil de Breezone décide."
+              "Les heures de charge réglées dans l'appli de la borne : coupez-la pour que seuls les automatismes de Breezone décident."
             )}
             checked={s.timer}
             disabled={disabled}

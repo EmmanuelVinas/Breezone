@@ -1,4 +1,5 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { useSearchParams } from "react-router"
 import { useQuery } from "@tanstack/react-query"
 import { usePrice, useTariff } from "@/components/electricity/hooks"
 import { useSurplus } from "@/components/surplus"
@@ -20,7 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { AutomationEditor, inputOf } from "./editor"
 import type { Home } from "./fields"
 import { AutomationCard, AutomationsBar, UnreadableAutomations } from "./list"
-import { RecipesDialog, blank } from "./recipes"
+import { RecipesDialog, blank, recipes } from "./recipes"
 import { groupMembers } from "./steps"
 
 export function AutomationsSection() {
@@ -56,10 +57,6 @@ export function AutomationsSection() {
     queryKey: ["charge-profiles"],
     queryFn: api.chargeProfiles,
   })
-  // A charging profile that follows the Tempo colours: they can be read in a rule too.
-  const chargeTempo = (chargeProfiles.data ?? []).some((p) =>
-    Object.values(p.calendar.colors).some(Boolean)
-  )
   const { installations, ids } = useChosenInstallations()
   // The modules (and the rules on them alone) are this server's: not those of an installation
   // reached through another server.
@@ -109,7 +106,7 @@ export function AutomationsSection() {
     },
     prices: {
       tariff: !!price.data?.now,
-      tempo: !!price.data?.tempo || chargeTempo,
+      tempo: !!price.data?.tempo,
     },
     tariff: tariff && {
       profiles: tariff.profiles.map((p) => ({
@@ -181,6 +178,27 @@ export function AutomationsSection() {
   const canCreate = ready && (drivable.size > 0 || home.scenes.length > 0)
   const open = (initial: AutomationInput, id?: number) =>
     setEditing((e) => ({ id, initial, nonce: (e?.nonce ?? 0) + 1 }))
+  // Opened from another page: an automation (`?automation=12`) or a recipe (`?recette=…`).
+  const [params, setParams] = useSearchParams()
+  const asked = params.get("automation") ?? params.get("recette")
+  const [handled, setHandled] = useState<string | null>(null)
+  if (
+    asked &&
+    asked !== handled &&
+    ready &&
+    automations.isSuccess &&
+    chargeProfiles.isSuccess
+  ) {
+    setHandled(asked)
+    const id = Number(params.get("automation"))
+    const rule = id ? list.find((a) => a.id === id) : undefined
+    const recipe = recipes(home).find((r) => r.id === params.get("recette"))
+    if (rule && canEdit(rule)) open(inputOf(rule), rule.id)
+    else if (recipe) open(recipe.rule)
+  }
+  useEffect(() => {
+    if (asked && asked === handled) setParams({}, { replace: true })
+  }, [asked, handled, setParams])
 
   return (
     <section className="grid gap-4">

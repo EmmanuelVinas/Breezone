@@ -411,14 +411,46 @@ impl Context {
                     crate::text!("{0} : ne plus suivre le surplus solaire", "{0}: no longer follow the solar surplus", "{0}: dejar de seguir el excedente solar", name.arg())
                 }
             }
-            Step::ChargerProfile { device_id, profile_id } => {
+            Step::ChargerProfile { device_id, profile_id, mode, solar } => {
+                use crate::charging::Mode;
                 let name = self.device_name(*device_id);
-                match profile_id {
-                    Some(id) => match self.charge_profiles.get(id) {
+                let kw = |k: f64| Text { fr: format!("{k}").replace('.', ","), en: format!("{k}"), es: format!("{k}").replace('.', ",") };
+                match Mode::of_step(*mode, *profile_id) {
+                    Mode::Profile => match profile_id.and_then(|id| self.charge_profiles.get(&id)) {
                         Some(p) => crate::text!("{0} : profil « {1} »", "{0}: profile “{1}”", "{0}: perfil «{1}»", name.arg(), p),
                         None => crate::text!("{0} : profil supprimé", "{0}: deleted profile", "{0}: perfil eliminado", name.arg()),
                     },
-                    None => crate::text!("{0} : aucun profil", "{0}: no profile", "{0}: ningún perfil", name.arg()),
+                    Mode::Off => crate::text!("{0} : ne pas charger", "{0}: do not charge", "{0}: no cargar", name.arg()),
+                    Mode::Free => crate::text!("{0} : laisser la borne faire", "{0}: leave it to the charger", "{0}: dejar al cargador", name.arg()),
+                    Mode::Solar => {
+                        let s = solar.unwrap_or_default();
+                        let how = match (s.fixed, s.kw) {
+                            (true, Some(k)) => {
+                                let k = kw(k);
+                                crate::text!(" à {0} kW", " at {0} kW", " a {0} kW", k.arg())
+                            }
+                            (_, Some(k)) => {
+                                let k = kw(k);
+                                crate::text!(" jusqu'à {0} kW", " up to {0} kW", " hasta {0} kW", k.arg())
+                            }
+                            _ => Text::default(),
+                        };
+                        let from = match s.start_kw {
+                            Some(k) => {
+                                let k = kw(k);
+                                crate::text!(" dès {0} kW de surplus", " from {0} kW of surplus", " desde {0} kW de excedente", k.arg())
+                            }
+                            None => Text::default(),
+                        };
+                        crate::text!(
+                            "{0} : charger sur le surplus solaire{1}{2}",
+                            "{0}: charge on the solar surplus{1}{2}",
+                            "{0}: cargar con el excedente solar{1}{2}",
+                            name.arg(),
+                            how.arg(),
+                            from.arg()
+                        )
+                    }
                 }
             }
             Step::ChargerNow { device_id, kw, until, kwh } => {

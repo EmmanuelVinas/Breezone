@@ -1,43 +1,22 @@
-import { useRef, useState } from "react"
-import { Link } from "react-router"
+import { useState } from "react"
+import { Link, useNavigate } from "react-router"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import {
-  Merge,
-  Moon,
-  Plus,
-  Scissors,
-  Sun,
-  Trash2,
-  Workflow,
-  Zap,
-} from "lucide-react"
+import { ExternalLink, Plug, Plus, Sun, Trash2 } from "lucide-react"
 import type {
-  ChargeDayKind,
-  ChargeMode,
+  ChargeBar,
   ChargeProfileInput,
   ChargeProfileView,
-  ChargeSlot,
-  OffPeak,
+  ChargeRulePlan,
 } from "@/lib/api"
 import { api, currentUser } from "@/lib/api"
 import { errorText, number } from "@/lib/format"
 import { t } from "@/lib/i18n"
-import { useChosenInstallation } from "@/lib/selected-installation"
 import { cn } from "@/lib/utils"
 import { PageHeader } from "@/components/app-shell"
-import { CalendarCard } from "@/components/electricity/electricity-tab"
-import {
-  clock,
-  DAY,
-  merge,
-  minutes,
-  moveStart,
-  newProfileId,
-  PROFILE_COLORS,
-  slotEnd,
-  split,
-} from "@/components/electricity/model"
+import { PROFILE_COLORS } from "@/components/electricity/model"
+import { effectColor, effectText } from "@/lib/charge-effects"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -47,227 +26,82 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 
 const SELECTED =
   "data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
 
-const MODE_COLOR: Record<ChargeMode, string> = {
-  max: "var(--primary)",
-  solar: "var(--warning)",
-  off: "var(--muted)",
-}
-
-const MODE_LABEL: Record<ChargeMode, string> = {
-  max: t("Charger jusqu'à"),
-  solar: t("Surplus solaire seulement"),
-  off: t("Ne pas charger"),
-}
-
-/** What a slot does, in a few words. */
-function slotText(s: ChargeSlot) {
-  if (s.mode === "max")
-    return s.kw
-      ? t("jusqu'à {kw} kW", { kw: number(s.kw, 1) })
-      : t("au maximum")
-  return s.mode === "solar" ? t("surplus solaire") : t("pas de charge")
-}
-
-const every = (id: string) => Array.from({ length: 7 }, () => id)
-
-/**
- * Slots from the off-peak hours of the contract (22:00 to 06:00 without any): `on` in them,
- * `off` elsewhere.
- */
-function offPeakSlots(
-  offpeak: OffPeak[],
-  on: ChargeSlot,
-  off: ChargeSlot
-): ChargeSlot[] {
-  const ranges = offpeak.length ? offpeak : [{ from: "22:00", to: "06:00" }]
-  const half = Array.from({ length: 48 }, () => false)
-  for (const r of ranges) {
-    const from = minutes(r.from) / 30
-    const to = minutes(r.to) / 30
-    for (let i = from; i !== to; i = (i + 1) % 48) half[i] = true
-  }
-  const slots: ChargeSlot[] = []
-  half.forEach((cheap, i) => {
-    if (i > 0 && cheap === half[i - 1]) return
-    slots.push({ ...(cheap ? on : off), start: clock(i * 30) })
-  })
-  return slots
-}
-
-const OFF: ChargeSlot = { start: "00:00", mode: "off" }
-
-/** Profiles to start from. */
-function templates(offpeak: OffPeak[]): [string, ChargeProfileInput][] {
-  const night = offPeakSlots(offpeak, { start: "", mode: "max", kw: 7 }, OFF)
-  return [
-    [
-      t("Heures creuses"),
-      {
-        name: t("Heures creuses"),
-        profiles: [
-          {
-            id: "d",
-            name: t("Tous les jours"),
-            color: PROFILE_COLORS[3],
-            slots: night,
-          },
-        ],
-        calendar: { day_start: "00:00", weekdays: every("d"), colors: {} },
-      },
-    ],
-    [
-      t("Nuit bleue (Tempo)"),
-      {
-        name: t("Nuit bleue"),
-        profiles: [
-          {
-            id: "blue",
-            name: t("Jour bleu"),
-            color: PROFILE_COLORS[0],
-            slots: night,
-          },
-          {
-            id: "other",
-            name: t("Jours blanc et rouge"),
-            color: PROFILE_COLORS[2],
-            slots: [OFF],
-          },
-        ],
-        calendar: {
-          day_start: "06:00",
-          weekdays: every("blue"),
-          colors: { blue: "blue", white: "other", red: "other" },
-        },
-      },
-    ],
-    [
-      t("Solaire"),
-      {
-        name: t("Solaire"),
-        profiles: [
-          {
-            id: "d",
-            name: t("Tous les jours"),
-            color: PROFILE_COLORS[4],
-            slots: [{ start: "00:00", mode: "solar" }],
-          },
-        ],
-        calendar: { day_start: "00:00", weekdays: every("d"), colors: {} },
-      },
-    ],
+/** The legend of the friezes: each profile, the surplus, no charge. */
+export function EffectLegend({ profiles }: { profiles: ChargeProfileView[] }) {
+  const items: [string, string][] = [
+    ...profiles.map(
+      (p) => [p.name, p.color ?? "var(--primary)"] as [string, string]
+    ),
+    [t("Surplus solaire"), "var(--warning)"],
+    [t("Ne pas charger"), "var(--muted)"],
   ]
-}
-
-/** What is wrong with a profile, as the server would say it (null: nothing). */
-function problem(p: ChargeProfileInput): string | null {
-  if (!p.name.trim()) return t("Donnez un nom au profil.")
-  if (p.profiles.length === 0) return t("Ajoutez au moins un type de jour.")
-  for (const k of p.profiles) {
-    if (!k.name.trim()) return t("Chaque type de jour a besoin d'un nom.")
-    if (k.slots.some((s) => s.kw != null && (s.kw <= 0 || s.kw > 50)))
-      return t("« {name} » : une puissance de 0 à 50 kW.", { name: k.name })
-  }
-  return null
+  return (
+    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+      {items.map(([label, color]) => (
+        <span key={label} className="inline-flex items-center gap-1.5">
+          <span
+            className="size-2.5 rounded-[3px] ring-1 ring-border"
+            style={{ background: color }}
+          />
+          {label}
+        </span>
+      ))}
+    </div>
+  )
 }
 
 const HOURS = [0, 6, 12, 18, 24]
+const DAY = 24 * 60
 
-/** A kind of day as a bar of 24 hours: a slot to pick, a limit to drag. */
-function Frieze({
-  kind,
-  selected,
-  onSelect,
-  onChange,
+function hm(m: number) {
+  return `${Math.floor(m / 60)} h${m % 60 ? ` ${String(m % 60).padStart(2, "0")}` : ""}`
+}
+
+/** A frieze of an automation: read only; a stretch opens the automation. */
+function RuleBar({
+  bar,
+  profiles,
+  onOpen,
 }: {
-  kind: ChargeDayKind
-  selected: number | null
-  onSelect: (i: number) => void
-  onChange: (slots: ChargeSlot[]) => void
+  bar: ChargeBar
+  profiles: ChargeProfileView[]
+  onOpen: () => void
 }) {
-  const bar = useRef<HTMLDivElement>(null)
-  const at = (clientX: number) => {
-    const r = bar.current!.getBoundingClientRect()
-    return ((clientX - r.left) / r.width) * DAY
-  }
   return (
     <div className="grid gap-1">
-      <div
-        ref={bar}
-        className="relative h-12 touch-none rounded-xl bg-muted select-none"
-      >
-        <div className="absolute inset-0 overflow-hidden rounded-xl">
-          {kind.slots.map((s, i) => {
-            const start = minutes(s.start)
-            const end = slotEnd(kind.slots, i)
-            return (
-              <button
-                key={i}
-                type="button"
-                onClick={() => onSelect(i)}
-                aria-pressed={selected === i}
-                aria-label={t("De {from} à {to} : {what}", {
-                  from: s.start,
-                  to: clock(end),
-                  what: slotText(s),
-                })}
-                className={cn(
-                  "absolute inset-y-0 flex flex-col justify-center overflow-hidden border-r border-background px-2 text-left text-xs",
-                  s.mode === "off"
-                    ? "text-muted-foreground"
-                    : "text-primary-foreground",
-                  selected === i &&
-                    "z-[1] ring-2 ring-foreground outline-none ring-inset"
-                )}
-                style={{
-                  left: `${(start / DAY) * 100}%`,
-                  width: `${((end - start) / DAY) * 100}%`,
-                  background: MODE_COLOR[s.mode],
-                }}
-              >
-                <b className="truncate">{slotText(s)}</b>
-                <span className="truncate tabular-nums opacity-80">
-                  {s.start} – {clock(end)}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-        {kind.slots.slice(1).map((s, j) => {
-          const i = j + 1
+      <div className="relative h-11 overflow-hidden rounded-xl border border-dashed bg-background">
+        {bar.segments.map((s, i) => {
+          const off =
+            !s.effect || s.effect.mode === "off" || s.effect.mode === "free"
           return (
-            <span
+            <button
               key={i}
-              role="slider"
-              tabIndex={0}
-              aria-label={t("Début de la plage de {time}", { time: s.start })}
-              aria-valuemin={0}
-              aria-valuemax={DAY}
-              aria-valuenow={minutes(s.start)}
-              aria-valuetext={s.start}
-              className="absolute -inset-y-1 z-[2] w-2 -translate-x-1/2 cursor-ew-resize rounded bg-foreground/85 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
-              style={{ left: `${(minutes(s.start) / DAY) * 100}%` }}
-              onPointerDown={(e) =>
-                e.currentTarget.setPointerCapture(e.pointerId)
-              }
-              onPointerMove={(e) => {
-                if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
-                onChange(moveStart(kind.slots, i, at(e.clientX)))
+              type="button"
+              onClick={onOpen}
+              title={t("Ouvrir l'automatisme")}
+              className={cn(
+                "absolute inset-y-0 flex flex-col justify-center overflow-hidden border-r border-background px-2 text-left text-[11px] hover:ring-2 hover:ring-foreground hover:ring-inset focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
+                off ? "text-muted-foreground" : "text-primary-foreground"
+              )}
+              style={{
+                left: `${(s.start / DAY) * 100}%`,
+                width: `${((s.end - s.start) / DAY) * 100}%`,
+                background: effectColor(s.effect, profiles),
               }}
-              onKeyDown={(e) => {
-                const by =
-                  e.key === "ArrowLeft" ? -30 : e.key === "ArrowRight" ? 30 : 0
-                if (!by) return
-                e.preventDefault()
-                onChange(moveStart(kind.slots, i, minutes(s.start) + by))
-              }}
-            />
+            >
+              <b className="truncate">{effectText(s.effect, profiles)}</b>
+              {s.effect && (
+                <span className="truncate tabular-nums opacity-80">
+                  {hm(s.start)} – {hm(s.end)}
+                </span>
+              )}
+            </button>
           )
         })}
       </div>
@@ -289,460 +123,437 @@ function Frieze({
   )
 }
 
+/** An automation in one sentence, from its summary. */
+function sentence(r: ChargeRulePlan) {
+  const s = {
+    ...r.summary,
+    when: r.summary.when.replace(/^(quand|when|cuando)\s+/i, ""),
+  }
+  const conditions = s.conditions.join(` ${s.joined} `)
+  const parts = [
+    conditions
+      ? t("Quand {when}, si {conditions} : {then}", {
+          when: s.when,
+          conditions,
+          then: s.actions.join(", "),
+        })
+      : t("Quand {when} : {then}", {
+          when: s.when,
+          then: s.actions.join(", "),
+        }),
+  ]
+  if (s.else.length) parts.push(t("sinon {else}", { else: s.else.join(", ") }))
+  if (s.over.length)
+    parts.push(t("ensuite {over}", { over: s.over.join(", ") }))
+  return parts.join(" ; ") + "."
+}
+
+function barLabel(b: ChargeBar) {
+  if (b.others) return t("Autres jours")
+  return b.label || t("Tous les jours")
+}
+
+/** The automations that drive a charger, as friezes. */
+function RulePlans({ profiles }: { profiles: ChargeProfileView[] }) {
+  const navigate = useNavigate()
+  const plans = useQuery({
+    queryKey: ["charge-automations"],
+    queryFn: api.chargeAutomations,
+  })
+  const list = plans.data ?? []
+  const placed = list.filter((r) => r.placed)
+  const loose = list.filter((r) => !r.placed)
+  const open = (id: number) => navigate(`/programmations?automation=${id}`)
+  const several =
+    new Set(list.flatMap((r) => r.devices.map((d) => d.id))).size > 1
+  return (
+    <Card className="rounded-3xl">
+      <CardHeader>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <CardTitle>{t("Ce que prévoient les automatismes")}</CardTitle>
+            <CardDescription>
+              {t(
+                "Rappel : ils se règlent dans Automatismes. Touchez une plage pour ouvrir le sien."
+              )}
+            </CardDescription>
+          </div>
+          <Link
+            to="/programmations"
+            className="text-sm text-muted-foreground hover:underline"
+          >
+            {t("Automatismes")} ›
+          </Link>
+        </div>
+      </CardHeader>
+      <CardContent className="grid gap-3">
+        {plans.isLoading ? (
+          <Skeleton className="h-32 w-full rounded-2xl" />
+        ) : list.length === 0 ? (
+          <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+            {t(
+              "Aucun automatisme ne pilote encore la borne : partez d'une recette ci-dessus."
+            )}
+          </p>
+        ) : (
+          <>
+            {placed.map((r) => (
+              <div
+                key={r.id}
+                className={cn(
+                  "grid gap-2 rounded-2xl border p-4",
+                  (!r.enabled || r.paused) && "opacity-60"
+                )}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold">{r.name}</span>
+                    {r.paused ? (
+                      <Badge variant="secondary">
+                        {t("en pause : l'appli de la borne décide")}
+                      </Badge>
+                    ) : r.enabled ? (
+                      <Badge className="bg-success/15 text-success">
+                        {t("actif")}
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary">{t("désactivé")}</Badge>
+                    )}
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => open(r.id)}>
+                    {t("Ouvrir")} <ExternalLink />
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground">{sentence(r)}</p>
+                {r.bars.map((b, i) => (
+                  <div
+                    key={i}
+                    className="grid items-center gap-2 sm:grid-cols-[10rem_1fr]"
+                  >
+                    <span className="flex items-center gap-1.5 text-sm">
+                      {b.color && (
+                        <span
+                          className="size-2.5 rounded-full"
+                          style={{ background: b.color }}
+                        />
+                      )}
+                      {barLabel(b)}
+                      {several && (
+                        <span className="text-muted-foreground">
+                          · {r.devices.find((d) => d.id === b.device_id)?.name}
+                        </span>
+                      )}
+                    </span>
+                    <RuleBar
+                      bar={b}
+                      profiles={profiles}
+                      onOpen={() => open(r.id)}
+                    />
+                  </div>
+                ))}
+                {r.assumed && (
+                  <p className="text-xs text-muted-foreground">
+                    {t(
+                      "Certaines conditions ne se savent qu'au moment venu (présence, mesure, appareil) : la frise les suppose vraies."
+                    )}
+                  </p>
+                )}
+              </div>
+            ))}
+            {loose.length > 0 && (
+              <div className="grid gap-2">
+                <div className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                  {t("Sans heure fixe")}
+                </div>
+                {loose.map((r) => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => open(r.id)}
+                    className={cn(
+                      "flex items-center gap-3 rounded-2xl bg-muted/60 px-3 py-2.5 text-left hover:bg-muted",
+                      (!r.enabled || r.paused) && "opacity-60"
+                    )}
+                  >
+                    <Plug className="size-4 shrink-0 text-muted-foreground" />
+                    <span className="grid">
+                      <span className="text-sm font-medium">{r.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {sentence(r)}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <EffectLegend profiles={profiles} />
+            <p className="text-xs text-muted-foreground">
+              {t(
+                "Sur la même heure, le dernier automatisme déclenché l'emporte. Si la programmation de l'appli d'une borne est allumée, ses automatismes sont en pause."
+              )}
+            </p>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 /** A power typed freely ("7,4"). */
 function KwInput({
   value,
   onChange,
-  id,
+  label,
 }: {
-  value: number | null | undefined
+  value: number | null
   onChange: (v: number | null) => void
-  id: string
+  label: string
 }) {
   const [text, setText] = useState<string | null>(null)
   const shown = text ?? (value == null ? "" : String(value).replace(".", ","))
   return (
-    <Input
-      id={id}
-      inputMode="decimal"
-      placeholder={t("maximum")}
-      value={shown}
-      onChange={(e) => {
-        setText(e.target.value)
-        const raw = e.target.value.trim().replace(",", ".")
-        const v = Number(raw)
-        if (raw === "") onChange(null)
-        else if (Number.isFinite(v) && v > 0) onChange(v)
-      }}
-      onBlur={() => setText(null)}
-    />
-  )
-}
-
-/** A kind of day: its name, its colour, its slots, the slot picked to change. */
-function KindEditor({
-  kind,
-  onChange,
-  onRemove,
-  offpeak,
-}: {
-  kind: ChargeDayKind
-  onChange: (k: ChargeDayKind) => void
-  onRemove?: () => void
-  offpeak: OffPeak[]
-}) {
-  const [selected, setSelected] = useState<number | null>(null)
-  const slots = kind.slots
-  const sel = selected !== null && selected < slots.length ? selected : null
-  const setSlots = (next: ChargeSlot[]) => onChange({ ...kind, slots: next })
-  const setSlot = (i: number, patch: Partial<ChargeSlot>) =>
-    setSlots(slots.map((s, j) => (j === i ? { ...s, ...patch } : s)))
-  const cut = sel !== null ? split(slots, sel) : null
-  const charging = slots.find((s) => s.mode === "max")
-  return (
-    <div className="grid gap-3 rounded-2xl border p-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <Input
-          aria-label={t("Nom du type de jour")}
-          value={kind.name}
-          onChange={(e) => onChange({ ...kind, name: e.target.value })}
-          className="h-9 w-48 font-medium"
-        />
-        <div
-          className="flex items-center gap-1.5"
-          role="group"
-          aria-label={t("Couleur")}
-        >
-          {PROFILE_COLORS.map((c) => (
-            <button
-              key={c}
-              type="button"
-              aria-label={t("Couleur {c}", { c })}
-              aria-pressed={kind.color === c}
-              onClick={() => onChange({ ...kind, color: c })}
-              className={cn(
-                "size-6 rounded-full border",
-                kind.color === c &&
-                  "ring-2 ring-primary ring-offset-2 ring-offset-background"
-              )}
-              style={{ background: c }}
-            />
-          ))}
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            setSlots(
-              offPeakSlots(
-                offpeak,
-                { start: "", mode: "max", kw: charging?.kw ?? 7 },
-                OFF
-              )
-            )
-            setSelected(null)
-          }}
-        >
-          <Moon /> {t("Heures creuses du contrat")}
-        </Button>
-        {onRemove && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="ml-auto text-destructive"
-            onClick={onRemove}
-          >
-            <Trash2 /> {t("Supprimer")}
-          </Button>
-        )}
-      </div>
-      <Frieze
-        kind={kind}
-        selected={sel}
-        onSelect={(i) => setSelected(sel === i ? null : i)}
-        onChange={setSlots}
+    <div className="relative w-24">
+      <Input
+        aria-label={label}
+        inputMode="decimal"
+        value={shown}
+        className="pr-9 text-right"
+        onChange={(e) => {
+          setText(e.target.value)
+          const v = Number(e.target.value.trim().replace(",", "."))
+          if (Number.isFinite(v) && v > 0) onChange(v)
+        }}
+        onBlur={() => setText(null)}
       />
-      {sel !== null ? (
-        <div className="grid gap-3 rounded-xl bg-muted/50 p-3">
-          <div className="grid gap-1.5">
-            <Label>{t("Ce que fait la borne")}</Label>
-            <ToggleGroup
-              type="single"
-              variant="outline"
-              size="sm"
-              value={slots[sel].mode}
-              onValueChange={(v) =>
-                v &&
-                setSlot(sel, {
-                  mode: v as ChargeMode,
-                  kw: v === "max" ? (slots[sel].kw ?? 7) : undefined,
-                  min_amps: undefined,
-                  max_amps: undefined,
-                })
-              }
-              className="flex-wrap justify-start"
-            >
-              {(["max", "solar", "off"] as ChargeMode[]).map((m) => (
-                <ToggleGroupItem key={m} value={m} className={SELECTED}>
-                  {MODE_LABEL[m]}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-[8rem_7rem_7rem_auto] sm:items-end">
-            {slots[sel].mode === "max" ? (
-              <div className="grid gap-1.5">
-                <Label htmlFor={`${kind.id}-kw`}>{t("Jusqu'à (kW)")}</Label>
-                <KwInput
-                  key={sel}
-                  id={`${kind.id}-kw`}
-                  value={slots[sel].kw}
-                  onChange={(v) => setSlot(sel, { kw: v ?? undefined })}
-                />
-              </div>
-            ) : (
-              <span />
-            )}
-            <div className="grid gap-1.5">
-              <Label htmlFor={`${kind.id}-from`}>{t("De")}</Label>
-              <Input
-                id={`${kind.id}-from`}
-                type="time"
-                step={1800}
-                value={slots[sel].start}
-                disabled={sel === 0}
-                onChange={(e) =>
-                  e.target.value &&
-                  setSlots(moveStart(slots, sel, minutes(e.target.value)))
-                }
-              />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor={`${kind.id}-to`}>{t("À")}</Label>
-              <Input
-                id={`${kind.id}-to`}
-                type={sel + 1 < slots.length ? "time" : "text"}
-                step={1800}
-                value={sel + 1 < slots.length ? slots[sel + 1].start : "24:00"}
-                disabled={sel + 1 >= slots.length}
-                onChange={(e) =>
-                  e.target.value &&
-                  setSlots(moveStart(slots, sel + 1, minutes(e.target.value)))
-                }
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!cut}
-                onClick={() => cut && setSlots(cut)}
-              >
-                <Scissors /> {t("Couper")}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={slots.length < 2}
-                onClick={() => {
-                  setSlots(merge(slots, sel))
-                  setSelected(null)
-                }}
-              >
-                <Merge /> {t("Fusionner")}
-              </Button>
-            </div>
-          </div>
-          {slots[sel].mode === "max" && (
-            <p className="text-xs text-muted-foreground">
-              {t(
-                "Quel que soit le soleil. Une borne qui règle seule son courant (délestage) garde sa propre régulation."
-              )}
-            </p>
-          )}
-        </div>
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          {t(
-            "Touchez une plage pour choisir ce que fait la borne, glissez une limite pour la déplacer (par demi-heure)."
-          )}
-        </p>
-      )}
+      <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground">
+        kW
+      </span>
     </div>
   )
 }
 
-/** A profile being written: its name, its kinds of day, its calendar, and who follows it. */
-function ProfileForm({
-  initial,
-  saved,
-  offpeak,
-  onDone,
+type Draft = ChargeProfileInput & { id?: number; key: string }
+
+const draftOf = (p: ChargeProfileView): Draft => ({
+  id: p.id,
+  key: `p${p.id}`,
+  name: p.name,
+  kw: p.kw,
+  color: p.color,
+})
+
+/** The profiles: a name, a colour, a power each; written by the administrators. */
+function ProfilesCard({
+  profiles,
+  admin,
 }: {
-  initial: ChargeProfileInput
-  /** `null`: a new profile. */
-  saved: ChargeProfileView | null
-  offpeak: OffPeak[]
-  onDone: (id: number | null) => void
+  profiles: ChargeProfileView[]
+  admin: boolean
 }) {
   const qc = useQueryClient()
-  const [draft, setDraft] = useState(initial)
-  const issue = problem(draft)
-  const changed = JSON.stringify(draft) !== JSON.stringify(initial)
-  const done = (p: ChargeProfileView | null) => {
-    qc.invalidateQueries({ queryKey: ["charge-profiles"] })
-    qc.invalidateQueries({ queryKey: ["charging"] })
-    onDone(p?.id ?? null)
+  const saved = profiles.map(draftOf)
+  const [drafts, setDrafts] = useState<Draft[]>(saved)
+  const [seen, setSeen] = useState(profiles)
+  if (seen !== profiles) {
+    setSeen(profiles)
+    setDrafts(saved)
   }
+  const issue = drafts.find(
+    (d) => !d.name.trim() || (d.kw != null && (d.kw <= 0 || d.kw > 50))
+  )
+  const changed = JSON.stringify(drafts) !== JSON.stringify(saved)
   const save = useMutation({
-    mutationFn: () =>
-      saved
-        ? api.saveChargeProfile(saved.id, draft)
-        : api.createChargeProfile(draft),
-    onSuccess: (p) => {
-      toast.success(t("Profil enregistré"))
-      done(p)
+    mutationFn: async () => {
+      const body = (d: Draft): ChargeProfileInput => ({
+        name: d.name.trim(),
+        kw: d.kw,
+        color: d.color,
+      })
+      for (const p of saved)
+        if (!drafts.some((d) => d.id === p.id))
+          await api.deleteChargeProfile(p.id!)
+      for (const d of drafts) {
+        const before = saved.find((p) => p.id === d.id)
+        if (!d.id) await api.createChargeProfile(body(d))
+        else if (JSON.stringify(before) !== JSON.stringify(d))
+          await api.saveChargeProfile(d.id, body(d))
+      }
     },
+    onSuccess: () => toast.success(t("Profils enregistrés")),
     onError: (e) => toast.error(errorText(e)),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["charge-profiles"] })
+      qc.invalidateQueries({ queryKey: ["charge-automations"] })
+      qc.invalidateQueries({ queryKey: ["charging"] })
+    },
   })
-  const remove = useMutation({
-    mutationFn: () => api.deleteChargeProfile(saved!.id),
-    onSuccess: () => done(null),
-    onError: (e) => toast.error(errorText(e)),
-  })
-  const setKinds = (profiles: ChargeDayKind[]) =>
-    setDraft({ ...draft, profiles })
+  const set = (i: number, patch: Partial<Draft>) =>
+    setDrafts(drafts.map((d, j) => (j === i ? { ...d, ...patch } : d)))
   return (
-    <div className="grid gap-4">
-      <Card className="rounded-3xl">
-        <CardHeader>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <Input
-              aria-label={t("Nom du profil")}
-              value={draft.name}
-              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-              className="h-10 max-w-xs text-lg font-semibold"
-            />
+    <Card className="rounded-3xl">
+      <CardHeader>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <CardTitle>{t("Profils")}</CardTitle>
+          {admin && (
             <div className="flex gap-2">
-              {saved && (
-                <Button
-                  variant="ghost"
-                  className="text-destructive"
-                  disabled={remove.isPending}
-                  onClick={() => remove.mutate()}
-                >
-                  <Trash2 /> {t("Supprimer le profil")}
-                </Button>
-              )}
               <Button
-                disabled={!!issue || save.isPending || (!!saved && !changed)}
+                variant="outline"
+                size="sm"
+                disabled={drafts.length >= 20}
+                onClick={() =>
+                  setDrafts([
+                    ...drafts,
+                    {
+                      key: `n${Date.now()}`,
+                      name: t("Profil {n}", { n: drafts.length + 1 }),
+                      kw: 7,
+                      color:
+                        PROFILE_COLORS[
+                          (drafts.length + 3) % PROFILE_COLORS.length
+                        ],
+                    },
+                  ])
+                }
+              >
+                <Plus /> {t("Ajouter un profil")}
+              </Button>
+              <Button
+                size="sm"
+                disabled={!changed || !!issue || save.isPending}
                 onClick={() => save.mutate()}
               >
                 {t("Enregistrer")}
               </Button>
             </div>
-          </div>
-          <CardDescription>
-            {issue ??
-              t(
-                "Les types de jour disent ce que fait la borne heure par heure ; le calendrier, quel type suit chaque jour."
-              )}
+          )}
+        </div>
+        {issue && (
+          <CardDescription className="text-destructive">
+            {!issue.name.trim()
+              ? t("Chaque profil a besoin d'un nom.")
+              : t("« {name} » : une puissance de 0 à 50 kW.", {
+                  name: issue.name,
+                })}
           </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3">
-          {draft.profiles.map((k, i) => (
-            <KindEditor
-              key={k.id}
-              kind={k}
-              offpeak={offpeak}
-              onChange={(next) =>
-                setKinds(draft.profiles.map((o, j) => (j === i ? next : o)))
-              }
-              onRemove={
-                draft.profiles.length > 1
-                  ? () => {
-                      const rest = draft.profiles.filter((_, j) => j !== i)
-                      const swap = (id?: string) =>
-                        id === k.id ? rest[0].id : id
-                      const cal = draft.calendar
-                      setDraft({
-                        ...draft,
-                        profiles: rest,
-                        calendar: {
-                          ...cal,
-                          weekdays: cal.weekdays.map((w) => swap(w)!),
-                          colors: {
-                            blue: swap(cal.colors.blue),
-                            white: swap(cal.colors.white),
-                            red: swap(cal.colors.red),
-                          },
-                        },
-                      })
-                    }
-                  : undefined
-              }
-            />
-          ))}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={draft.profiles.length >= 10}
-              onClick={() =>
-                setKinds([
-                  ...draft.profiles,
-                  {
-                    id: newProfileId(draft.profiles),
-                    name: t("Type {n}", { n: draft.profiles.length + 1 }),
-                    color:
-                      PROFILE_COLORS[
-                        draft.profiles.length % PROFILE_COLORS.length
-                      ],
-                    slots: [OFF],
-                  },
-                ])
-              }
-            >
-              <Plus /> {t("Ajouter un type de jour")}
-            </Button>
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-              {(["max", "solar", "off"] as ChargeMode[]).map((m) => (
-                <span key={m} className="inline-flex items-center gap-1.5">
-                  <span
-                    className="size-2.5 rounded-[3px] ring-1 ring-border"
-                    style={{ background: MODE_COLOR[m] }}
-                  />
-                  {MODE_LABEL[m]}
-                </span>
-              ))}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-      <div className="grid gap-4">
-        <CalendarCard
-          tariff={draft}
-          dayStartText={t("Le jour du profil commence à")}
-          onChange={(calendar) => setDraft({ ...draft, calendar })}
-        />
-        <Card className="rounded-3xl">
-          <CardHeader>
-            <CardTitle>{t("Utilisé par")}</CardTitle>
-            <CardDescription>
-              {t(
-                "Sans couleur Tempo connue, un jour suit son jour de la semaine."
-              )}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-2 text-sm">
-            {saved?.automations.map((name) => (
-              <Link
-                key={name}
-                to="/programmations"
-                className="flex items-center gap-2 rounded-2xl bg-muted/60 px-3 py-2.5 hover:bg-muted"
-              >
-                <Workflow className="size-4 text-muted-foreground" />
-                {t("Automatisme « {name} »", { name })}
-              </Link>
-            ))}
-            {saved?.used_by.length ? (
-              saved.used_by.map((u) => (
-                <Link
-                  key={u.device_id}
-                  to="/recharge"
-                  className="flex items-center gap-2 rounded-2xl bg-muted/60 px-3 py-2.5 hover:bg-muted"
-                >
-                  <Zap className="size-4 text-primary" />
-                  {u.name}
-                </Link>
-              ))
-            ) : (
-              <p className="text-muted-foreground">
-                {t("Aucune borne : choisissez ce profil sur la page Recharge.")}
-              </p>
+        )}
+      </CardHeader>
+      <CardContent className="grid">
+        {drafts.length === 0 && (
+          <p className="py-4 text-sm text-muted-foreground">
+            {t(
+              "Aucun profil pour l'instant : ajoutez-en un, par exemple « Nuit 7 kW »."
             )}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+          </p>
+        )}
+        {drafts.map((d, i) => {
+          const view = profiles.find((p) => p.id === d.id)
+          return (
+            <div
+              key={d.key}
+              className="grid items-center gap-3 border-t py-3 first:border-t-0 md:grid-cols-[auto_minmax(10rem,1fr)_auto_minmax(8rem,1fr)_auto]"
+            >
+              <div
+                className="flex items-center gap-1"
+                role="group"
+                aria-label={t("Couleur")}
+              >
+                {PROFILE_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    disabled={!admin}
+                    aria-label={t("Couleur {c}", { c })}
+                    aria-pressed={d.color === c}
+                    onClick={() => set(i, { color: c })}
+                    className={cn(
+                      "size-4 rounded-full border",
+                      d.color === c &&
+                        "ring-2 ring-primary ring-offset-2 ring-offset-background",
+                      !admin && d.color !== c && "hidden"
+                    )}
+                    style={{ background: c }}
+                  />
+                ))}
+              </div>
+              <Input
+                aria-label={t("Nom du profil")}
+                value={d.name}
+                disabled={!admin}
+                onChange={(e) => set(i, { name: e.target.value })}
+              />
+              <div className="flex items-center gap-2">
+                <ToggleGroup
+                  type="single"
+                  variant="outline"
+                  size="sm"
+                  disabled={!admin}
+                  value={d.kw == null ? "max" : "kw"}
+                  onValueChange={(v) =>
+                    v && set(i, { kw: v === "max" ? null : (view?.kw ?? 7) })
+                  }
+                >
+                  <ToggleGroupItem value="kw" className={SELECTED}>
+                    {t("Jusqu'à")}
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="max" className={SELECTED}>
+                    {t("Maximum")}
+                  </ToggleGroupItem>
+                </ToggleGroup>
+                {d.kw != null ? (
+                  <KwInput
+                    label={t("Puissance de {name}", { name: d.name })}
+                    value={d.kw}
+                    onChange={(kw) => set(i, { kw })}
+                  />
+                ) : (
+                  <span className="w-24 text-sm text-muted-foreground">
+                    {t("de la borne")}
+                  </span>
+                )}
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {view?.automations.length
+                  ? view.automations.map((a) => a.name).join(" · ")
+                  : t("Aucun automatisme")}
+              </span>
+              {admin ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="justify-self-end text-destructive"
+                  aria-label={t("Supprimer {name}", { name: d.name })}
+                  onClick={() => setDrafts(drafts.filter((_, j) => j !== i))}
+                >
+                  <Trash2 />
+                </Button>
+              ) : (
+                <span />
+              )}
+            </div>
+          )
+        })}
+        <p className="pt-2 text-xs text-muted-foreground">
+          {t(
+            "La couleur sert aux frises. Une borne qui ne peut pas tant tire son maximum ; une borne en mode dynamique garde son délestage."
+          )}
+        </p>
+      </CardContent>
+    </Card>
   )
 }
 
-/** Recharge › Profiles: the charging profiles of the home, written by the administrators. */
+/** Recharge › Profiles: the powers a charger may follow, and what the automations plan. */
 export function ChargeProfilesPage() {
   const admin = currentUser()?.role === "admin"
   const profiles = useQuery({
     queryKey: ["charge-profiles"],
     queryFn: api.chargeProfiles,
   })
-  const installation = useChosenInstallation()
-  const tariff = useQuery({
-    queryKey: ["tariff", installation?.id],
-    queryFn: () => api.tariff(installation!.id),
-    enabled: !!installation,
-  })
-  const offpeak = tariff.data?.contract?.offpeak ?? []
-  /** The profile shown: its id, "new" with a template, or the first one. */
-  const [shown, setShown] = useState<
-    { id: number } | { template: ChargeProfileInput } | null
-  >(null)
-  const list = profiles.data ?? []
-  const current =
-    shown && "template" in shown
-      ? null
-      : (list.find((p) => p.id === (shown as { id: number } | null)?.id) ??
-        list[0] ??
-        null)
-  const initial: ChargeProfileInput | null =
-    shown && "template" in shown
-      ? shown.template
-      : current
-        ? {
-            name: current.name,
-            profiles: current.profiles,
-            calendar: current.calendar,
-          }
-        : null
+  const recipes: [string, string, boolean][] = [
+    ["charge-offpeak", t("Heures creuses"), false],
+    ["charge-blue-night", t("Nuit bleue (Tempo)"), false],
+    ["charge-solar", t("Solaire"), true],
+  ]
   return (
     <>
       <div className="mb-1 text-sm text-muted-foreground">
@@ -754,71 +565,39 @@ export function ChargeProfilesPage() {
       <PageHeader
         title={t("Profils de recharge")}
         description={t(
-          "Le plan de la semaine d'une borne : quand charger, jusqu'à quelle puissance, ou sur le surplus solaire."
+          "Ce que la borne peut tirer au plus. Quand elle charge, ce sont les automatismes qui le disent."
         )}
       />
-      {!admin ? (
-        <p className="text-sm text-muted-foreground">
-          {t("Seuls les administrateurs écrivent les profils de recharge.")}
-        </p>
-      ) : profiles.isLoading ? (
-        <Skeleton className="h-72 w-full rounded-3xl" />
-      ) : (
-        <div className="grid gap-4">
-          <div className="flex flex-wrap items-center gap-2">
-            {list.map((p) => (
-              <Button
-                key={p.id}
-                size="sm"
-                variant={current?.id === p.id ? "default" : "outline"}
-                onClick={() => setShown({ id: p.id })}
-              >
-                {p.name}
-                {p.used_by.length > 0 && (
-                  <span className="opacity-70">· {t("actif")}</span>
-                )}
-              </Button>
-            ))}
-            <span className="mx-1 text-sm text-muted-foreground">
-              {t("Nouveau :")}
-            </span>
-            {templates(offpeak).map(([label, tpl]) => (
-              <Button
-                key={label}
-                size="sm"
-                variant="outline"
-                onClick={() => setShown({ template: tpl })}
-              >
-                {tpl.profiles.some((k) =>
-                  k.slots.some((s) => s.mode === "solar")
-                ) ? (
-                  <Sun />
-                ) : (
-                  <Plus />
-                )}
+      <div className="grid gap-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-muted-foreground">
+            {t("Nouvel automatisme :")}
+          </span>
+          {recipes.map(([id, label, sun]) => (
+            <Button key={id} size="sm" variant="outline" asChild>
+              <Link to={`/programmations?recette=${id}`}>
+                {sun ? <Sun /> : <Plus />}
                 {label}
-              </Button>
-            ))}
-          </div>
-          {initial ? (
-            <ProfileForm
-              key={current ? `p${current.id}` : JSON.stringify(initial)}
-              initial={initial}
-              saved={current}
-              offpeak={offpeak}
-              onDone={(id) => setShown(id === null ? null : { id })}
-            />
-          ) : (
-            <Card className="rounded-3xl">
-              <CardContent className="py-10 text-center text-sm text-muted-foreground">
-                {t(
-                  "Aucun profil pour l'instant : partez d'un modèle ci-dessus."
-                )}
-              </CardContent>
-            </Card>
-          )}
+              </Link>
+            </Button>
+          ))}
         </div>
-      )}
+        {profiles.isLoading ? (
+          <Skeleton className="h-48 w-full rounded-3xl" />
+        ) : (
+          <>
+            <ProfilesCard profiles={profiles.data ?? []} admin={admin} />
+            <RulePlans profiles={profiles.data ?? []} />
+          </>
+        )}
+      </div>
     </>
   )
+}
+
+/** "jusqu'à 7 kW" or "au maximum" (for the texts of other screens). */
+export function profilePower(p: { kw: number | null }) {
+  return p.kw != null
+    ? t("jusqu'à {kw} kW", { kw: number(p.kw, 1) })
+    : t("au maximum")
 }

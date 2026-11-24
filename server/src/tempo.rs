@@ -87,8 +87,7 @@ async fn store(db: &db::Db, days: &[Day]) -> sqlx::Result<usize> {
 /// Reads today's and tomorrow's colours, and the season's when it is missing.
 pub async fn refresh(state: &AppState) -> anyhow::Result<()> {
     let tariffs: Vec<Tariff> = db::all_tariffs(&state.db).await?.into_iter().filter_map(|json| serde_json::from_str(&json).ok()).collect();
-    let charging = crate::charging::profiles(state).await?.values().any(|p| colored(&p.calendar));
-    if !followed(&tariffs) && !charging {
+    if !followed(&tariffs) {
         return Ok(());
     }
     // RTE itself when an account is linked (the season once, then today and tomorrow); the public

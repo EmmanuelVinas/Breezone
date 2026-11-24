@@ -5,7 +5,8 @@ import type {
   TraitField,
   TraitInfo,
 } from "@/lib/api"
-import type { DeviceAction } from "@/lib/api"
+import type { ChargeMode, DeviceAction } from "@/lib/api"
+import { number } from "@/lib/format"
 import { t } from "@/lib/i18n"
 import { deviceType, SCENE_TYPE } from "@/lib/device-icons"
 import { Badge } from "@/components/ui/badge"
@@ -568,7 +569,26 @@ export function StepEditor({
           />
         </>
       )
-    case "charger_profile":
+    case "charger_profile": {
+      const mode = step.mode ?? (step.profile_id != null ? "profile" : "free")
+      const solar = step.solar ?? {}
+      const kwPick = (
+        value: number | null | undefined,
+        onPick: (v: number | null) => void,
+        none: string
+      ) => (
+        <Pick
+          value={String(value ?? "none")}
+          onChange={(v) => onPick(v === "none" ? null : Number(v))}
+          options={[
+            ...[...new Set([...CHARGE_KW, ...(value ? [value] : [])])]
+              .sort((x, y) => x - y)
+              .map((k) => [String(k), `${number(k, 1)} kW`] as Option),
+            ["none", none],
+          ]}
+          className="w-full lg:w-40"
+        />
+      )
       return (
         <>
           <Pick
@@ -577,25 +597,76 @@ export function StepEditor({
             options={chargers(home).map((d) => [String(d.id), d.name])}
             className="w-full lg:w-56"
           />
-          <span className="text-sm">{t("suit le profil")}</span>
           <Pick
-            value={String(step.profile_id ?? "none")}
+            value={mode}
             onChange={(v) =>
               onChange({
                 ...step,
-                profile_id: v === "none" ? null : Number(v),
+                mode: v as ChargeMode,
+                profile_id:
+                  v === "profile"
+                    ? (step.profile_id ?? home.chargeProfiles?.[0]?.id ?? null)
+                    : null,
+                solar: v === "solar" ? (step.solar ?? {}) : null,
               })
             }
             options={[
-              ...(home.chargeProfiles ?? []).map(
-                (p) => [String(p.id), p.name] as Option
-              ),
-              ["none", t("aucun profil")],
+              ...(home.chargeProfiles?.length
+                ? [["profile", t("suit un profil")] as Option]
+                : []),
+              ["off", t("ne charge pas")],
+              ["solar", t("charge sur le surplus solaire")],
+              ["free", t("laisse la borne faire")],
             ]}
-            className="w-full lg:w-56"
+            className="w-full lg:w-60"
           />
+          {mode === "profile" && (
+            <Pick
+              value={String(step.profile_id ?? "")}
+              onChange={(v) => onChange({ ...step, profile_id: Number(v) })}
+              options={(home.chargeProfiles ?? []).map(
+                (p) => [String(p.id), p.name] as Option
+              )}
+              className="w-full lg:w-48"
+            />
+          )}
+          {mode === "solar" && (
+            <>
+              <Pick
+                value={solar.fixed ? "fixed" : "follow"}
+                onChange={(v) =>
+                  onChange({
+                    ...step,
+                    solar: {
+                      ...solar,
+                      fixed: v === "fixed",
+                      kw: v === "fixed" ? (solar.kw ?? 2.3) : solar.kw,
+                    },
+                  })
+                }
+                options={[
+                  ["follow", t("en suivant le surplus, au plus")],
+                  ["fixed", t("à puissance fixe")],
+                ]}
+                className="w-full lg:w-60"
+              />
+              {kwPick(
+                solar.kw,
+                (kw) => onChange({ ...step, solar: { ...solar, kw } }),
+                t("son maximum")
+              )}
+              <span className="text-sm">{t("dès un surplus de")}</span>
+              {kwPick(
+                solar.start_kw,
+                (start_kw) =>
+                  onChange({ ...step, solar: { ...solar, start_kw } }),
+                t("son minimum (6 A)")
+              )}
+            </>
+          )}
         </>
       )
+    }
     case "charger_now": {
       const until = step.until ? "time" : step.kwh ? "kwh" : "unplug"
       return (
@@ -692,8 +763,8 @@ export function StepList({
     ["wait", t("Attendre")],
     ["wait_until", t("Attendre que…")],
     ["notify", t("Prévenir")],
-    ...(charger && home.chargeProfiles?.length
-      ? [["charger_profile", t("Changer le profil de la borne")] as Option]
+    ...(charger
+      ? [["charger_profile", t("Recharge de la borne")] as Option]
       : []),
     ...(charger ? [["charger_now", t("Charger maintenant")] as Option] : []),
     ...(home.surplusLoads?.length
@@ -710,11 +781,19 @@ export function StepList({
     else if (k === "restore") step = { kind: "restore" }
     else if (k === "notify") step = { kind: "notify", message: "" }
     else if (k === "charger_profile" && charger)
-      step = {
-        kind: "charger_profile",
-        device_id: charger.id,
-        profile_id: home.chargeProfiles?.[0]?.id ?? null,
-      }
+      step = home.chargeProfiles?.length
+        ? {
+            kind: "charger_profile",
+            device_id: charger.id,
+            mode: "profile",
+            profile_id: home.chargeProfiles[0].id,
+          }
+        : {
+            kind: "charger_profile",
+            device_id: charger.id,
+            mode: "off",
+            profile_id: null,
+          }
     else if (k === "surplus" && home.surplusLoads?.[0])
       step = {
         kind: "surplus",

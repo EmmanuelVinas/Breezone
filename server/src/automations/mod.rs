@@ -44,6 +44,7 @@ use std::time::Duration;
 mod conflicts;
 mod describe;
 mod engine;
+pub mod plan;
 mod run;
 mod view;
 
@@ -377,7 +378,7 @@ impl Match {
         (!unknown).then_some(!decisive)
     }
 
-    fn word(self) -> Text {
+    pub(crate) fn word(self) -> Text {
         match self {
             Match::All => crate::text!("et", "and", "y"),
             Match::Any => crate::text!("ou", "or", "o"),
@@ -442,11 +443,16 @@ pub enum Step {
     Notify {
         message: String,
     },
-    /// A charger follows a charging profile (`None`: none).
+    /// What a charger does: follow a profile, no charge, the solar surplus, or its own app (see
+    /// `charging::Mode`; without `mode`, the form of before: a profile, or none).
     ChargerProfile {
         device_id: i64,
         #[serde(default)]
         profile_id: Option<i64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        mode: Option<crate::charging::Mode>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        solar: Option<crate::charging::Solar>,
     },
     /// A device of the list of the solar surplus follows it (`enabled`), or no longer does (it is
     /// then left as it is).
@@ -1738,8 +1744,13 @@ mod tests {
     #[test]
     fn the_actions_of_a_charger_read_like_a_sentence() {
         let c = ctx(0, 0.0, 20.0);
-        assert_eq!(c.describe_step(&Step::ChargerProfile { device_id: 2, profile_id: Some(1) }).fr, "Borne : profil « Nuit bleue »");
-        assert_eq!(c.describe_step(&Step::ChargerProfile { device_id: 2, profile_id: None }).fr, "Borne : aucun profil");
+        assert_eq!(c.describe_step(&Step::ChargerProfile { device_id: 2, profile_id: Some(1), mode: None, solar: None }).fr, "Borne : profil « Nuit bleue »");
+        assert_eq!(c.describe_step(&Step::ChargerProfile { device_id: 2, profile_id: None, mode: None, solar: None }).fr, "Borne : laisser la borne faire");
+        let off = Step::ChargerProfile { device_id: 2, profile_id: None, mode: Some(crate::charging::Mode::Off), solar: None };
+        assert_eq!(c.describe_step(&off).fr, "Borne : ne pas charger");
+        let solar = crate::charging::Solar { kw: Some(2.0), fixed: true, start_kw: Some(1.0) };
+        let sun = Step::ChargerProfile { device_id: 2, profile_id: None, mode: Some(crate::charging::Mode::Solar), solar: Some(solar) };
+        assert_eq!(c.describe_step(&sun).fr, "Borne : charger sur le surplus solaire à 2 kW dès 1 kW de surplus");
         let now = Step::ChargerNow { device_id: 2, kw: Some(7.4), until: Some("06:00".into()), kwh: None };
         assert_eq!(c.describe_step(&now).fr, "Borne : charger maintenant jusqu'à 7,4 kW, jusqu'à 06:00");
         assert_eq!(c.describe_step(&now).en, "Borne: charge now up to 7.4 kW, until 06:00");

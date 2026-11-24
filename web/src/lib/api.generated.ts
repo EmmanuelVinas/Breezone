@@ -2,7 +2,9 @@
 
 export type AirQualityLevel = "good" | "regular" | "bad"
 
-export type ChargeMode = "off" | "max" | "solar"
+export type ChargeEffectMode = "profile" | "off" | "solar" | "free" | "now"
+
+export type ChargeMode = "profile" | "off" | "solar" | "free"
 
 export type DayColor = "blue" | "white" | "red"
 
@@ -24,29 +26,51 @@ export type AirQuality = {
   threshold_high: number | null
 }
 
-/** A local day of a charging profile, midnight to midnight. */
+/** A frieze of an automation for a charger: a day of a kind of the tariff, or any day. */
+export type ChargeBar = {
+  device_id: number
+  /** The kind of day of the tariff it names (null: every day, or the other days). */
+  kind: string | null
+  /** The name of the kind of day (empty: every day, or the other days). */
+  label: string
+  color: string | null
+  /** The days of the kinds it does not name. */
+  others: boolean
+  segments: ChargeDaySegment[]
+}
+
+/** A local day, midnight to midnight. */
 export type ChargeDay = {
   /** "YYYY-MM-DD". */
   day: string
   color: DayColor | null
-  periods: ChargePeriod[]
+  segments: ChargeSegment[]
 }
 
-/** A kind of day of a charging profile. */
-export type ChargeDayKind = {
-  id: string
-  name: string
-  color: string | null
-  slots: ChargeSlot[]
+/** A stretch of a day of a frieze, in minutes from midnight. */
+export type ChargeDaySegment = {
+  start: number
+  end: number
+  /** null: nothing told yet. */
+  effect: ChargeEffect | null
 }
 
-/** When the profile charges next (now, when it does). */
+/** What an automation tells a charger. */
+export type ChargeEffect = {
+  /** profile: follow a profile; off: no charge; solar: the solar surplus; free: its own app; now: charge now. */
+  mode: ChargeEffectMode
+  profile_id?: number | null
+  /** now: the power asked (null: the charger's maximum). */
+  kw?: number | null
+}
+
+/** When the automations make it charge next (now, when they do). */
 export type ChargeNext = {
   start: number
   end: number
-  mode: ChargeMode
+  effect: ChargeEffect
   kw: number | null
-  color: DayColor | null
+  automation: ChargeRuleRef | null
 }
 
 /** A charge asked now. */
@@ -61,47 +85,66 @@ export type ChargeNow = {
   left_kwh: number | null
 }
 
-/** A stretch of time with one thing to do. */
-export type ChargePeriod = {
-  start: number
-  end: number
-  mode: ChargeMode
-  /** max: the power (the charger's maximum when the slot gives none). */
-  kw: number | null
-  /** The kind of day. */
-  profile: string
-  color: DayColor | null
-}
-
-/** A profile a charger may follow. */
+/** A profile, for the friezes. */
 export type ChargeProfileRef = {
   id: number
   name: string
+  kw: number | null
+  color: string | null
 }
 
-/** A charging profile (`GET /api/charging/profiles`). */
+/** A charging profile: a power (`GET /api/charging/profiles`). */
 export type ChargeProfileView = {
   id: number
   name: string
-  profiles: ChargeDayKind[]
-  calendar: TariffCalendar
-  /** The chargers that follow it (those the user sees). */
-  used_by: ChargeUsedBy[]
+  /** Up to this power (null: the charger's maximum). */
+  kw: number | null
+  color: string | null
   /** The automations that give it to a charger. */
-  automations: string[]
+  automations: ChargeRuleRef[]
 }
 
-/** A slot of a kind of day of a charging profile, until the next one. */
-export type ChargeSlot = {
-  /** "HH:MM", local time; the first at "00:00". */
-  start: string
-  /** off: no charge; max: up to `kw` whatever the sun; solar: the surplus only. */
-  mode: ChargeMode
-  /** max: up to this power (absent: the charger's maximum). */
-  kw?: number | null
-  /** solar: the current it keeps between (absent: the charger's). */
-  min_amps?: number | null
-  max_amps?: number | null
+/** An automation that drives a charger, with its friezes (`GET /api/charging/automations`). */
+export type ChargeRulePlan = {
+  id: number
+  name: string
+  enabled: boolean
+  summary: ChargeRuleSummary
+  /** The chargers it drives. */
+  devices: ChargeRuleRef[]
+  /** Every charger it drives lets its own app decide: it does not apply. */
+  paused: boolean
+  /** One of its triggers is at a time (else no frieze). */
+  placed: boolean
+  /** A condition that cannot be told ahead was taken as true. */
+  assumed: boolean
+  bars: ChargeBar[]
+}
+
+/** An automation (or a charger) by its id and name. */
+export type ChargeRuleRef = {
+  id: number
+  name: string
+}
+
+/** An automation in words, in the language of the request. */
+export type ChargeRuleSummary = {
+  when: string
+  triggers: string[]
+  conditions: string[]
+  joined: string
+  actions: string[]
+  else: string[]
+  over: string[]
+}
+
+/** A stretch of time with one thing told by the automations. */
+export type ChargeSegment = {
+  start: number
+  end: number
+  /** null: nothing told yet. */
+  effect: ChargeEffect | null
+  automation_id: number | null
 }
 
 /** What the charger does now, as the surplus regulator says. */
@@ -112,23 +155,24 @@ export type ChargeStatus = {
   reason: string
 }
 
-/** A charger that follows a profile. */
-export type ChargeUsedBy = {
-  device_id: number
-  name: string
-}
-
 /** What a charger follows and does (`GET /api/devices/{id}/charging`). */
 export type ChargingView = {
+  /** What it was told. */
+  mode: ChargeMode
   profile_id: number | null
-  /** The profiles it may follow. */
+  /** The automation that told it (null: none yet, or by hand). */
+  automation: ChargeRuleRef | null
   profiles: ChargeProfileRef[]
+  /** Its own app decides when it charges: the automations do not apply. */
+  own_schedule: boolean
   now: ChargeNow | null
   /** null: not looked at yet, or it follows nothing. */
   status: ChargeStatus | null
   next: ChargeNext | null
-  /** Its profile over the next 3 days, from today. */
+  /** What the automations plan over the next 3 days, from today. */
   days: ChargeDay[]
+  /** The automations that drive it. */
+  automations: ChargeRuleRef[]
   can_control: boolean
 }
 

@@ -382,8 +382,6 @@ const en: Record<string, string> = {
   "Lecture seule": "Read-only",
   "Lecture seule : vous pouvez consulter cette installation, pas la piloter.":
     "Read-only: you can view this installation, not drive it.",
-  "Les administrateurs voient et pilotent tout, et configurent le serveur. Un utilisateur ne voit que les installations que vous lui donnez, en lecture seule ou avec le pilotage, et vous choisissez ce qu'il peut y modifier.":
-    "Administrators see and drive everything, and configure the server. A user only sees the installations you give them, read-only or with control, and you choose what they may change there.",
   "Les autres serveurs Breezone qui voient des installations de celui-ci. Révoquer un partage coupe l'accès immédiatement.":
     "The other Breezone servers that see installations of this one. Revoking a share cuts access at once.",
   "Les installations ajoutées plus tard ne sont données à personne : revenez ici pour les attribuer.":
@@ -543,8 +541,6 @@ const en: Record<string, string> = {
   Système: "System",
   "Système {id}": "System {id}",
   Température: "Temperature",
-  "Température, consigne (quand la zone est allumée) et humidité":
-    "Temperature, setpoint (when the zone is on) and humidity",
   "Temps réel": "Live",
   Terminé: "Done",
   Tester: "Test",
@@ -622,7 +618,6 @@ const en: Record<string, string> = {
   "Purification arrêtée": "Purification off",
   "Purification en marche": "Purification on",
   "Purification automatique": "Automatic purification",
-  "Mesurée par le thermostat de la zone": "Measured by the zone's thermostat",
   Maintenant: "Now",
   "Pas de mesure": "No measure",
   "Air de bonne qualité": "Good air quality",
@@ -631,8 +626,6 @@ const en: Record<string, string> = {
   Bonne: "Good",
   Mauvaise: "Poor",
   "Humidité moyenne": "Mean humidity",
-  "Température, consigne (quand la zone est allumée), humidité et qualité de l'air":
-    "Temperature, setpoint (when the zone is on), humidity and air quality",
   "Mesurée par le thermostat de la zone ; heure par heure dans l'historique":
     "Measured by the zone's thermostat; hour by hour in the history",
   "Glissez les poignées sous le graphique pour zoomer, touchez la légende pour masquer une courbe":
@@ -793,8 +786,6 @@ const en: Record<string, string> = {
   Jour: "Day",
   "7 jours": "7 days",
   "30 jours": "30 days",
-  "Chaque bloc n'apparaît que si une mesure le permet : la production avec une voie « solaire », l'autonomie avec un compteur général.":
-    "Each block shows only when a measure allows it: the production with a “solar” channel, the self-sufficiency with a main meter.",
   "{n} mesure": "{n} measure",
   "{n} mesures": "{n} measures",
   "Réseau électrique": "Grid",
@@ -807,18 +798,11 @@ const en: Record<string, string> = {
   "En charge": "Charging",
   Défaut: "Fault",
   "En pause": "Paused",
-  "Lancer la charge": "Start charging",
-  "La charge démarre dès qu'une voiture est branchée.":
-    "Charging starts as soon as a car is plugged in.",
   Intensité: "Current",
-  "Maximum choisi": "Chosen maximum",
-  "Réglée par la borne": "Set by the charger",
   "Intensité maximale": "Maximum current",
   "La borne adapte l'intensité selon sa propre pince (mode dynamique).":
     "The charger adapts the current from its own clamp (dynamic mode).",
-  "S'arrêter après": "Stop after",
   "Énergie à ajouter": "Energy to add",
-  "kWh ajoutés": "kWh added",
   "Puissance de charge": "Charging power",
   "Dernières 24 heures": "Last 24 hours",
   "Session : {duration}": "Session: {duration}",
@@ -1153,7 +1137,6 @@ const en: Record<string, string> = {
   "{flow} m³/h sur {nominal} m³/h nominaux":
     "{flow} m³/h of {nominal} m³/h nominal",
   "Niveau de ventilation": "Ventilation level",
-  "Humidité des dernières 24 h": "Humidity over the last 24 h",
   "Arrêter le boost": "Stop the boost",
   "1 h": "1 h",
   "2 h": "2 h",
@@ -1374,8 +1357,6 @@ const en: Record<string, string> = {
   "Ignorer le nouveau déclenchement": "Ignore the new start",
   "Tout recommencer": "Start over",
   "Surplus solaire : charger la voiture": "Solar surplus: charge the car",
-  "Quand plus de 500 W repartent au réseau pendant 5 min, lancer la charge, puis l'arrêter quand la maison tire plus de 200 W du réseau pendant 10 min.":
-    "When more than 500 W go back to the grid for 5 min, start charging, then stop when the home draws more than 200 W from the grid for 10 min.",
   "Surplus solaire : chauffer une pièce": "Solar surplus: heat a room",
   "Quand plus de 500 W repartent au réseau, si la climatisation est en mode chaud et la pièce sous 20 °C, chauffer à 21°. Remettre comme avant quand la maison tire plus de 300 W du réseau pendant 10 min, sauf si quelqu'un a changé la zone entre-temps.":
     "When more than 500 W go back to the grid, if the air conditioning is heating and the room is below 20 °C, heat to 21°. Put it back as before when the home draws more than 300 W from the grid for 10 min, unless someone changed the zone in the meantime.",
@@ -1523,23 +1504,9 @@ const en: Record<string, string> = {
   "Par ordre de priorité : le surplus va d'abord au premier appareil.":
     "In order of priority: the surplus goes to the first device first.",
   "Ajouter un appareil…": "Add a device…",
-  "Aucun appareil ne suit le surplus. Ajoutez la borne, ou un chauffe-eau sur une prise pilotée.":
-    "No device follows the surplus. Add the charger, or a water heater on a smart plug.",
   Descendre: "Move down",
   "Suivre le surplus": "Follow the surplus",
   Manuel: "Manual",
-  "Vous lancez et arrêtez la charge ; Breezone ne la règle pas.":
-    "You start and stop charging; Breezone does not set it.",
-  "Uniquement le surplus : l'intensité suit le soleil. Peut ne pas charger.":
-    "Surplus only: the current follows the sun. May not charge.",
-  "Solaire + garantie": "Solar + guarantee",
-  "Le surplus, puis le réseau si besoin pour atteindre l'objectif à l'heure.":
-    "The surplus, then the grid if needed to reach the goal in time.",
-  "Mode de charge": "Charging mode",
-  "Les modes solaires demandent un compteur au tableau (une voie « réseau »).":
-    "The solar modes need a meter at the panel (a “grid” channel).",
-  "L'ordre de priorité avec les autres appareils et les intensités se règlent dans Automatismes › Pilotage sur surplus solaire.":
-    "The priority among the other devices and the currents are set in Automations › Solar surplus steering.",
   "Vue d'ensemble": "Overview",
   indisponible: "unavailable",
   "{temp} moy.": "{temp} avg.",
@@ -1564,7 +1531,6 @@ const en: Record<string, string> = {
   "Ce bloc n'a pas de réglage.": "This block has no settings.",
   "Réglages du bloc": "Block settings",
   "Ajouter un bloc": "Add a block",
-  "Type de bloc": "Type of block",
   Appliquer: "Apply",
   Déplacer: "Move",
   "Vue enregistrée pour vous": "Overview saved for you",
@@ -1629,13 +1595,9 @@ const en: Record<string, string> = {
   "Jour {color}": "{color} day",
   "Prix de l'électricité enregistrés": "Electricity prices saved",
   Contrat: "Contract",
-  "Un par serveur, comme le compteur que lisent ses modules. Prix TTC, comme sur la facture.":
-    "One per server, like the meter its modules read. Prices including taxes, as on the bill.",
   Fournisseur: "Supplier",
   "Puissance souscrite": "Subscribed power",
   Offre: "Offer",
-  "Choisir une offre remplit la grille avec ses plages et des prix indicatifs : vérifiez-les sur votre facture avant d'enregistrer.":
-    "Choosing an offer fills the grid with its slots and indicative prices: check them on your bill before saving.",
   "Aucun prix pour l'instant. Choisissez votre offre ci-dessus pour partir de sa grille, ou une grille personnalisée.":
     "No prices yet. Choose your offer above to start from its grid, or a custom grid.",
   Prix: "Prices",
@@ -1665,9 +1627,6 @@ const en: Record<string, string> = {
   Base: "Base",
   "Heures creuses": "Off-peak hours",
   Personnalisée: "Custom",
-  "Jour bleu": "Blue day",
-  "Jour blanc": "White day",
-  "Jour rouge": "Red day",
   Normal: "Normal",
   "Ajoutez au moins un profil.": "Add at least one profile.",
   "Chaque profil a besoin d'un nom.": "Each profile needs a name.",
@@ -1848,8 +1807,6 @@ const en: Record<string, string> = {
   "Retirer le compte {name} ?": "Remove the {name} account?",
   "Breezone oublie ses identifiants. Ce qu'il a déjà lu reste ; ce qui en dépend s'arrête.":
     "Breezone forgets its credentials. What it already read stays; what depends on it stops.",
-  "Un compte relie Breezone à un service en ligne, toujours en plus de ce qu'il lit en local : rien n'en dépend pour piloter la maison. Les identifiants restent chiffrés sur ce serveur.":
-    "An account links Breezone to an online service, always on top of what it reads locally: driving the home never depends on it. The credentials stay encrypted on this server.",
   "Pas encore de relevé Linky.": "No Linky reading yet.",
   "Linky · Enedis": "Linky · Enedis",
   "Consommation jour par jour": "Consumption day by day",
@@ -2000,8 +1957,8 @@ const en: Record<string, string> = {
   "Rafraîchir à (°C)": "Cool to (°C)",
   "quand il fait plus de (°C dehors)": "when it is above (°C outside)",
   "Puissance estimée (W)": "Estimated power (W)",
-  "Aucun appareil ne suit le surplus. Ajoutez un chauffe-eau sur une prise pilotée, ou une zone de climatisation ; la borne le suit par son profil de recharge (« Solaire »).":
-    "No device follows the surplus. Add a water heater on a smart plug, or a zone of the air conditioning; the charger follows it by its charging profile (“Solaire”).",
+  "Aucun appareil ne suit le surplus. Ajoutez un chauffe-eau sur une prise pilotée, ou une zone de climatisation ; la borne le suit par un automatisme (recette « Surplus solaire : charger la voiture »).":
+    "No device follows the surplus. Add a water heater on a smart plug, or a zone of the air conditioning; the charger follows it by an automation (recipe “Solar surplus: charge the car”).",
   "Aussi piloté par {names} : les deux se contrediraient.":
     "Also driven by {names}: the two would contradict each other.",
   "Tourne tout seul, par ordre de priorité. Il se règle dans Automatismes ; un automatisme ne doit pas piloter les mêmes appareils.":
@@ -2038,18 +1995,11 @@ const en: Record<string, string> = {
     "each camera: motion and what caused it (person, vehicle, animal), doorbell rings, picture",
   "Un coup de sonnette Reolink est un appui de bouton : il peut déclencher un automatisme.":
     "A Reolink doorbell ring is a button press: it can trigger an automation.",
-  "Service en ligne Forecast.Solar : la prévision de production selon la météo, sans compte (une clé d'API, facultative, donne plus de détail)":
-    "Forecast.Solar online service: the production forecast from the weather, without an account (an optional API key gives more detail)",
   "toutes les 30 min": "every 30 min",
   "puissance prévue maintenant, production prévue aujourd'hui, restant à produire et demain":
     "power expected now, production expected today, still to come and tomorrow",
-  "Sans latitude ni longitude, celles de la ville de l'installation sont prises. Une installation sur deux pans s'ajoute en deux fois.":
-    "Without latitude and longitude, those of the installation's city are used. Panels on two roof sides are added twice.",
-  "Service en ligne": "Online service",
   "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan, clés Wi-Fi Hoymiles, ponts Philips Hue, VMC Renson Healthbox, accessoires HomeKit (Legrand, VELUX…), modules ESPHome et Tasmota, prises Kasa et caméras Reolink. Les prises et ampoules Tapo s'ajoutent par leur adresse.":
     "Breezone looks on the network for the products it can drive: Airzone WebServers, Shelly (Plus, Pro, Gen3, Gen4), V2C Trydan chargers, Hoymiles Wi-Fi sticks, Philips Hue bridges, Renson Healthbox ventilation, HomeKit accessories (Legrand, VELUX…), ESPHome and Tasmota modules, Kasa plugs and Reolink cameras. Tapo plugs and bulbs are added by their address.",
-  "Un service en ligne : sans adresse sur le réseau":
-    "An online service: no address on the network",
   Capteurs: "Sensors",
   "Personne détectée": "Person detected",
   "Véhicule détecté": "Vehicle detected",
@@ -2161,26 +2111,9 @@ const en: Record<string, string> = {
   "surplus solaire": "solar surplus",
   "pas de charge": "no charging",
   "jusqu'à {kw} kW": "up to {kw} kW",
-  "jour {color}": "{color} day",
   "≈ {kwh} possibles": "≈ {kwh} possible",
-  "En charge selon le profil jusqu'à {end}":
-    "Charging by the profile until {end}",
   "Prochaine charge : {start} → {end}": "Next charge: {start} → {end}",
-  surplus: "surplus",
-  "Profil de recharge": "Charging profile",
-  "Gérer les profils ›": "Manage profiles ›",
-  "Sans profil, la borne charge quand la voiture est branchée, ou suit le surplus solaire si elle y est inscrite.":
-    "Without a profile, the charger charges when the car is plugged in, or follows the solar surplus if it is set to.",
-  "Le profil décide des heures de charge ; « Charger maintenant » passe avant.":
-    "The profile decides when to charge; “Charge now” comes first.",
-  "Aucun profil : créez-en un dans « Gérer les profils ».":
-    "No profile: create one in “Manage profiles”.",
-  "Aucun profil pour l'instant.": "No profile yet.",
-  Aucun: "None",
-  "charge, même sans soleil": "charging, even without sun",
   "Charger maintenant": "Charge now",
-  "Sans interruption : passe avant le profil et le surplus solaire.":
-    "Without a break: comes before the profile and the solar surplus.",
   "{kw} kW (maximum)": "{kw} kW (maximum)",
   Maximum: "Maximum",
   Débranchement: "Unplugged",
@@ -2192,72 +2125,26 @@ const en: Record<string, string> = {
   "encore {kwh}": "{kwh} to go",
   "jusqu'au débranchement": "until unplugged",
   "Charge immédiate à {kw} kW, {end}": "Charging now at {kw} kW, {end}",
-  "Revenir au profil": "Back to the profile",
   "Arrêter la charge immédiate": "Stop the charge now",
   "La borne règle seule son courant": "The charger sets its own current",
   "Délestage selon sa pince de mesure (mode dynamique)":
     "Load shedding by its current clamp (dynamic mode)",
   Suspendre: "Pause",
   "Branchez d'abord la voiture": "Plug the car in first",
-  "Charger jusqu'à": "Charge up to",
-  "Surplus solaire seulement": "Solar surplus only",
   "Ne pas charger": "Do not charge",
   "au maximum": "at the maximum",
   "Nuit bleue (Tempo)": "Blue night (Tempo)",
   "Nuit bleue": "Blue night",
-  "Jours blanc et rouge": "White and red days",
-  "Donnez un nom au profil.": "Give the profile a name.",
-  "Ajoutez au moins un type de jour.": "Add at least one kind of day.",
-  "Chaque type de jour a besoin d'un nom.": "Each kind of day needs a name.",
   "« {name} » : une puissance de 0 à 50 kW.":
     "“{name}”: a power from 0 to 50 kW.",
-  "De {from} à {to} : {what}": "From {from} to {to}: {what}",
-  "Début de la plage de {time}": "Start of the slot at {time}",
-  maximum: "maximum",
-  "Nom du type de jour": "Name of the kind of day",
-  "Heures creuses du contrat": "Off-peak hours of the contract",
-  "Ce que fait la borne": "What the charger does",
-  "Jusqu'à (kW)": "Up to (kW)",
-  "Quel que soit le soleil. Une borne qui règle seule son courant (délestage) garde sa propre régulation.":
-    "Whatever the sun. A charger that sets its own current (load shedding) keeps its own regulation.",
-  "Touchez une plage pour choisir ce que fait la borne, glissez une limite pour la déplacer (par demi-heure).":
-    "Tap a slot to choose what the charger does, drag a limit to move it (by half hours).",
-  "Profil enregistré": "Profile saved",
-  "Les types de jour disent ce que fait la borne heure par heure ; le calendrier, quel type suit chaque jour.":
-    "The kinds of day say what the charger does hour by hour; the calendar, which kind each day follows.",
-  "Type {n}": "Kind {n}",
-  "Ajouter un type de jour": "Add a kind of day",
-  "Le jour du profil commence à": "The day of the profile starts at",
-  "Utilisé par": "Used by",
-  "Sans couleur Tempo connue, un jour suit son jour de la semaine.":
-    "Without a known Tempo colour, a day follows its day of the week.",
-  "Aucune borne : choisissez ce profil sur la page Recharge.":
-    "No charger: choose this profile on the Charging page.",
   Profils: "Profiles",
   "Profils de recharge": "Charging profiles",
-  "Le plan de la semaine d'une borne : quand charger, jusqu'à quelle puissance, ou sur le surplus solaire.":
-    "The weekly plan of a charger: when to charge, up to what power, or on the solar surplus.",
-  "Seuls les administrateurs écrivent les profils de recharge.":
-    "Only administrators write charging profiles.",
   actif: "in use",
-  "Nouveau :": "New:",
-  "Aucun profil pour l'instant : partez d'un modèle ci-dessus.":
-    "No profile yet: start from a template above.",
-  "La borne suit le profil « Solaire » : elle charge sur le surplus seulement, son intensité suit le soleil. Un autre profil se choisit sur la page Recharge.":
-    "The charger follows the “Solar” profile: it charges on the surplus only, its current follows the sun. Another profile is chosen on the Charging page.",
-  "La borne suit le profil « Solaire »":
-    "The charger follows the “Solar” profile",
-  "suit le profil": "follows the profile",
-  "aucun profil": "no profile",
   "charge maintenant jusqu'à": "charges now up to",
   "son maximum": "its maximum",
   "jusqu'à une heure": "until a time",
   "jusqu'à une énergie": "until some energy",
-  "Changer le profil de la borne": "Change the profile of the charger",
-  "Automatisme « {name} »": "Automation “{name}”",
   "Programmation de son appli": "Schedule of its app",
-  "Les heures de charge réglées dans l'appli de la borne : coupez-la pour que seul le profil de Breezone décide.":
-    "The charging hours set in the charger's app: turn it off so that only the Breezone profile decides.",
   "Une plage du tarif d'électricité": "A stretch of the electricity tariff",
   "Le tarif est en": "The tariff is in",
   "Le tarif de demain est en": "Tomorrow's tariff is in",
@@ -2316,6 +2203,80 @@ const en: Record<string, string> = {
   "L'assistant doit joindre cette adresse : depuis l'extérieur de la maison, mettez l'adresse publique du serveur (Réglages › Serveurs).":
     "The assistant must reach this address: from outside the home, set the public address of the server (Settings › Servers).",
   "Claude sur mon ordinateur": "Claude on my computer",
+  "Recharge : charger en heures creuses": "Charging: charge in off-peak hours",
+  "Tant que les heures creuses du tarif durent, la borne suit un profil ; ensuite, elle ne charge pas.":
+    "While the off-peak hours of the tariff last, the charger follows a profile; then it does not charge.",
+  "Recharge : nuit bleue (Tempo)": "Charging: blue night (Tempo)",
+  "Tant que les heures creuses durent, un jour bleu, la borne suit un profil ; les autres jours et ensuite, elle ne charge pas.":
+    "While the off-peak hours last, on a blue day, the charger follows a profile; on other days and afterwards, it does not charge.",
+  "Au lever du soleil, la borne charge sur le surplus (son intensité suit le soleil) ; au coucher, elle ne charge plus.":
+    "At sunrise, the charger charges on the surplus (its current follows the sun); at sunset, it stops charging.",
+  "Solaire en journée": "Solar by day",
+  "suit un profil": "follows a profile",
+  "ne charge pas": "does not charge",
+  "charge sur le surplus solaire": "charges on the solar surplus",
+  "laisse la borne faire": "leaves it to the charger",
+  "en suivant le surplus, au plus": "following the surplus, at most",
+  "à puissance fixe": "at a fixed power",
+  "dès un surplus de": "from a surplus of",
+  "son minimum (6 A)": "its minimum (6 A)",
+  "Recharge de la borne": "Charging of the charger",
+  "la borne décide": "the charger decides",
+  "En charge selon les automatismes jusqu'à {end}":
+    "Charging by the automations until {end}",
+  "Ce que prévoient les automatismes": "What the automations plan",
+  "Profils ›": "Profiles ›",
+  "Maintenant : « {what} », choisi par {rule}":
+    "Now: “{what}”, chosen by {rule}",
+  "Maintenant : « {what} »": "Now: “{what}”",
+  "Aucun automatisme n'a encore dit quoi faire à la borne.":
+    "No automation has told the charger what to do yet.",
+  "Aucun automatisme ne pilote la borne : elle charge quand la voiture est branchée.":
+    "No automation drives the charger: it charges when the car is plugged in.",
+  "L'appli de la borne décide des heures de charge":
+    "The app of the charger decides when it charges",
+  "{rules} ne s'appliquent pas à cette borne. Coupez « Programmation de son appli » dans les réglages.":
+    "{rules} do not apply to this charger. Switch off “Schedule of its app” in the settings.",
+  "Coupez « Programmation de son appli » dans les réglages pour que les automatismes de Breezone décident.":
+    "Switch off “Schedule of its app” in the settings so that the automations of Breezone decide.",
+  "Sans interruption : passe avant les automatismes et le surplus solaire.":
+    "Without a break: comes before the automations and the solar surplus.",
+  "Revenir aux automatismes": "Back to the automations",
+  "profil supprimé": "deleted profile",
+  "La borne décide": "The charger decides",
+  "Ouvrir l'automatisme": "Open the automation",
+  "Quand {when}, si {conditions} : {then}":
+    "When {when}, if {conditions}: {then}",
+  "Quand {when} : {then}": "When {when}: {then}",
+  "sinon {else}": "else {else}",
+  "ensuite {over}": "then {over}",
+  "Autres jours": "Other days",
+  "Rappel : ils se règlent dans Automatismes. Touchez une plage pour ouvrir le sien.":
+    "A reminder: they are set in Automations. Tap a stretch to open its own.",
+  "Aucun automatisme ne pilote encore la borne : partez d'une recette ci-dessus.":
+    "No automation drives the charger yet: start from a recipe above.",
+  "en pause : l'appli de la borne décide":
+    "paused: the app of the charger decides",
+  désactivé: "off",
+  "Certaines conditions ne se savent qu'au moment venu (présence, mesure, appareil) : la frise les suppose vraies.":
+    "Some conditions are only known when the time comes (presence, a measure, a device): the frieze takes them as true.",
+  "Sans heure fixe": "Without a set time",
+  "Sur la même heure, le dernier automatisme déclenché l'emporte. Si la programmation de l'appli d'une borne est allumée, ses automatismes sont en pause.":
+    "At the same time, the last automation started wins. When the schedule of the app of a charger is on, its automations are paused.",
+  "Profils enregistrés": "Profiles saved",
+  "Profil {n}": "Profile {n}",
+  "Aucun profil pour l'instant : ajoutez-en un, par exemple « Nuit 7 kW ».":
+    "No profile yet: add one, for instance “Night 7 kW”.",
+  "Puissance de {name}": "Power of {name}",
+  "de la borne": "of the charger",
+  "Supprimer {name}": "Delete {name}",
+  "La couleur sert aux frises. Une borne qui ne peut pas tant tire son maximum ; une borne en mode dynamique garde son délestage.":
+    "The colour is for the friezes. A charger that cannot give that much draws its maximum; a charger in dynamic mode keeps its load shedding.",
+  "Ce que la borne peut tirer au plus. Quand elle charge, ce sont les automatismes qui le disent.":
+    "What the charger may draw at most. When it charges is up to the automations.",
+  "Nouvel automatisme :": "New automation:",
+  "Les heures de charge réglées dans l'appli de la borne : coupez-la pour que seuls les automatismes de Breezone décident.":
+    "The charging hours set in the app of the charger: switch it off so that only the automations of Breezone decide.",
 }
 
 export default en

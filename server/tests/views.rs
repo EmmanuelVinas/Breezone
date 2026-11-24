@@ -234,28 +234,34 @@ async fn the_server_answers_as_the_contract_says() {
     assert!(!price["now"].is_null() && !price["periods"].as_array().unwrap().is_empty(), "{price}");
     errors.extend(check(&c, &tariff, "TariffView", "energy/tariff"));
     errors.extend(check(&c, &price, "PriceView", "energy/price"));
-    // A charger that follows a charging profile, told to charge now.
+    // A charger driven by an automation, told to charge now.
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let trydan = listener.local_addr().unwrap().port();
     tokio::spawn(async move { axum::serve(listener, breezone_server::mock_devices::trydan()).await.unwrap() });
     call(reqwest::Method::POST, "/api/sources", Some(json!({"driver": "trydan", "name": "Borne", "config": {"host": format!("127.0.0.1:{trydan}")}}))).await;
     let devices = call(reqwest::Method::GET, "/api/devices", None).await;
     let charger = devices.as_array().unwrap().iter().find(|d| d["reference"] == "charger").expect("the charger")["id"].as_i64().unwrap();
-    let profile = json!({
+    let created = call(reqwest::Method::POST, "/api/charging/profiles", Some(json!({"name": "Nuit 7 kW", "kw": 7, "color": "#14b8a6"}))).await;
+    call(reqwest::Method::POST, "/api/charging/profiles", Some(json!({"name": "Maximum"}))).await;
+    // While the off-peak hours last, a blue day: the profile, else no charge; then the surplus.
+    let rule = json!({
         "name": "Nuit bleue",
-        "profiles": [
-            {"id":"blue","name":"Jour bleu","color":"#2563eb","slots":[{"start":"00:00","mode":"max","kw":7},{"start":"06:00","mode":"off"},{"start":"22:00","mode":"max"}]},
-            {"id":"sun","name":"Soleil","slots":[{"start":"00:00","mode":"solar","min_amps":6,"max_amps":16}]}
-        ],
-        "calendar": {"day_start":"06:00","weekdays":["blue","blue","blue","blue","blue","sun","sun"],"colors":{"red":"sun"}}
+        "when": {"kind": "tariff", "slot": "HC"},
+        "conditions": [{"kind": "tariff", "profile": "blue"}],
+        "actions": [{"kind": "charger_profile", "device_id": charger, "mode": "profile", "profile_id": created["id"]}],
+        "else": [{"kind": "charger_profile", "device_id": charger, "mode": "off"}],
+        "over": [{"kind": "charger_profile", "device_id": charger, "mode": "solar", "solar": {"kw": 2, "fixed": true, "start_kw": 1}}]
     });
-    let created = call(reqwest::Method::POST, "/api/charging/profiles", Some(profile)).await;
-    call(reqwest::Method::PUT, &format!("/api/devices/{charger}/charging"), Some(json!({"profile_id": created["id"]}))).await;
+    let rule = call(reqwest::Method::POST, "/api/automations", Some(rule)).await;
+    call(reqwest::Method::POST, &format!("/api/automations/{}/run", rule["id"]), None).await;
     call(reqwest::Method::POST, &format!("/api/devices/{charger}/charging/now"), Some(json!({"kw": 3.7, "kwh": 10, "until": breezone_server::db::now() + 3600}))).await;
     let profiles = call(reqwest::Method::GET, "/api/charging/profiles", None).await;
+    let plans = call(reqwest::Method::GET, "/api/charging/automations", None).await;
     let charging = call(reqwest::Method::GET, &format!("/api/devices/{charger}/charging"), None).await;
-    assert!(!charging["now"].is_null() && !charging["days"].as_array().unwrap().is_empty(), "{charging}");
+    assert!(!charging["now"].is_null() && !charging["days"].as_array().unwrap().is_empty() && !charging["automation"].is_null(), "{charging}");
+    assert!(plans[0]["bars"].as_array().is_some_and(|b| b.len() == 2), "a blue day and the others: {plans}");
     errors.extend(check(&c, &profiles, "ChargeProfileView[]", "charging/profiles"));
+    errors.extend(check(&c, &plans, "ChargeRulePlan[]", "charging/automations"));
     errors.extend(check(&c, &charging, "ChargingView", "devices/charging"));
     assert!(errors.is_empty(), "the server and contracts/views.json disagree:\n{}", errors.join("\n"));
 }

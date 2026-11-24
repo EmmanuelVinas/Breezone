@@ -6,7 +6,8 @@
     "NodeState": { "type": "\"online\" | \"offline\" | \"pending\" | \"certificate\" | \"revoked\" | \"expired\" | \"error\" | \"unknown\"" },
     "MeasureRole": { "type": "\"grid\" | \"solar\" | \"battery\" | \"consumption\"" },
     "DayColor": { "type": "\"blue\" | \"white\" | \"red\"" },
-    "ChargeMode": { "type": "\"off\" | \"max\" | \"solar\"" }
+    "ChargeMode": { "type": "\"profile\" | \"off\" | \"solar\" | \"free\"" },
+    "ChargeEffectMode": { "type": "\"profile\" | \"off\" | \"solar\" | \"free\" | \"now\"" }
   },
   "objects": {
     "Connection": {
@@ -250,48 +251,83 @@
         { "name": "white_left", "type": "number" }
       ]
     },
-    "ChargeSlot": {
-      "doc": "A slot of a kind of day of a charging profile, until the next one.",
+    "ChargeRuleRef": {
+      "doc": "An automation (or a charger) by its id and name.",
       "fields": [
-        { "name": "start", "type": "string", "doc": "\"HH:MM\", local time; the first at \"00:00\"." },
-        { "name": "mode", "type": "ChargeMode", "doc": "off: no charge; max: up to `kw` whatever the sun; solar: the surplus only." },
-        { "name": "kw", "type": "number | null", "doc": "max: up to this power (absent: the charger's maximum).", "optional": true },
-        { "name": "min_amps", "type": "number | null", "doc": "solar: the current it keeps between (absent: the charger's).", "optional": true },
-        { "name": "max_amps", "type": "number | null", "optional": true }
-      ]
-    },
-    "ChargeDayKind": {
-      "doc": "A kind of day of a charging profile.",
-      "fields": [
-        { "name": "id", "type": "string" },
-        { "name": "name", "type": "string" },
-        { "name": "color", "type": "string | null" },
-        { "name": "slots", "type": "ChargeSlot[]" }
-      ]
-    },
-    "ChargeUsedBy": {
-      "doc": "A charger that follows a profile.",
-      "fields": [
-        { "name": "device_id", "type": "number" },
+        { "name": "id", "type": "number" },
         { "name": "name", "type": "string" }
       ]
     },
     "ChargeProfileView": {
-      "doc": "A charging profile (`GET /api/charging/profiles`).",
+      "doc": "A charging profile: a power (`GET /api/charging/profiles`).",
       "fields": [
         { "name": "id", "type": "number" },
         { "name": "name", "type": "string" },
-        { "name": "profiles", "type": "ChargeDayKind[]" },
-        { "name": "calendar", "type": "TariffCalendar" },
-        { "name": "used_by", "type": "ChargeUsedBy[]", "doc": "The chargers that follow it (those the user sees)." },
-        { "name": "automations", "type": "string[]", "doc": "The automations that give it to a charger." }
+        { "name": "kw", "type": "number | null", "doc": "Up to this power (null: the charger's maximum)." },
+        { "name": "color", "type": "string | null" },
+        { "name": "automations", "type": "ChargeRuleRef[]", "doc": "The automations that give it to a charger." }
+      ]
+    },
+    "ChargeEffect": {
+      "doc": "What an automation tells a charger.",
+      "fields": [
+        { "name": "mode", "type": "ChargeEffectMode", "doc": "profile: follow a profile; off: no charge; solar: the solar surplus; free: its own app; now: charge now." },
+        { "name": "profile_id", "type": "number | null", "optional": true },
+        { "name": "kw", "type": "number | null", "doc": "now: the power asked (null: the charger's maximum).", "optional": true }
+      ]
+    },
+    "ChargeDaySegment": {
+      "doc": "A stretch of a day of a frieze, in minutes from midnight.",
+      "fields": [
+        { "name": "start", "type": "number" },
+        { "name": "end", "type": "number" },
+        { "name": "effect", "type": "ChargeEffect | null", "doc": "null: nothing told yet." }
+      ]
+    },
+    "ChargeBar": {
+      "doc": "A frieze of an automation for a charger: a day of a kind of the tariff, or any day.",
+      "fields": [
+        { "name": "device_id", "type": "number" },
+        { "name": "kind", "type": "string | null", "doc": "The kind of day of the tariff it names (null: every day, or the other days)." },
+        { "name": "label", "type": "string", "doc": "The name of the kind of day (empty: every day, or the other days)." },
+        { "name": "color", "type": "string | null" },
+        { "name": "others", "type": "boolean", "doc": "The days of the kinds it does not name." },
+        { "name": "segments", "type": "ChargeDaySegment[]" }
+      ]
+    },
+    "ChargeRuleSummary": {
+      "doc": "An automation in words, in the language of the request.",
+      "fields": [
+        { "name": "when", "type": "string" },
+        { "name": "triggers", "type": "string[]" },
+        { "name": "conditions", "type": "string[]" },
+        { "name": "joined", "type": "string" },
+        { "name": "actions", "type": "string[]" },
+        { "name": "else", "type": "string[]" },
+        { "name": "over", "type": "string[]" }
+      ]
+    },
+    "ChargeRulePlan": {
+      "doc": "An automation that drives a charger, with its friezes (`GET /api/charging/automations`).",
+      "fields": [
+        { "name": "id", "type": "number" },
+        { "name": "name", "type": "string" },
+        { "name": "enabled", "type": "boolean" },
+        { "name": "summary", "type": "ChargeRuleSummary" },
+        { "name": "devices", "type": "ChargeRuleRef[]", "doc": "The chargers it drives." },
+        { "name": "paused", "type": "boolean", "doc": "Every charger it drives lets its own app decide: it does not apply." },
+        { "name": "placed", "type": "boolean", "doc": "One of its triggers is at a time (else no frieze)." },
+        { "name": "assumed", "type": "boolean", "doc": "A condition that cannot be told ahead was taken as true." },
+        { "name": "bars", "type": "ChargeBar[]" }
       ]
     },
     "ChargeProfileRef": {
-      "doc": "A profile a charger may follow.",
+      "doc": "A profile, for the friezes.",
       "fields": [
         { "name": "id", "type": "number" },
-        { "name": "name", "type": "string" }
+        { "name": "name", "type": "string" },
+        { "name": "kw", "type": "number | null" },
+        { "name": "color", "type": "string | null" }
       ]
     },
     "ChargeNow": {
@@ -311,44 +347,46 @@
         { "name": "reason", "type": "string", "doc": "In words, in the language of the request." }
       ]
     },
-    "ChargePeriod": {
-      "doc": "A stretch of time with one thing to do.",
+    "ChargeSegment": {
+      "doc": "A stretch of time with one thing told by the automations.",
       "fields": [
         { "name": "start", "type": "number" },
         { "name": "end", "type": "number" },
-        { "name": "mode", "type": "ChargeMode" },
-        { "name": "kw", "type": "number | null", "doc": "max: the power (the charger's maximum when the slot gives none)." },
-        { "name": "profile", "type": "string", "doc": "The kind of day." },
-        { "name": "color", "type": "DayColor | null" }
+        { "name": "effect", "type": "ChargeEffect | null", "doc": "null: nothing told yet." },
+        { "name": "automation_id", "type": "number | null" }
       ]
     },
     "ChargeDay": {
-      "doc": "A local day of a charging profile, midnight to midnight.",
+      "doc": "A local day, midnight to midnight.",
       "fields": [
         { "name": "day", "type": "string", "doc": "\"YYYY-MM-DD\"." },
         { "name": "color", "type": "DayColor | null" },
-        { "name": "periods", "type": "ChargePeriod[]" }
+        { "name": "segments", "type": "ChargeSegment[]" }
       ]
     },
     "ChargeNext": {
-      "doc": "When the profile charges next (now, when it does).",
+      "doc": "When the automations make it charge next (now, when they do).",
       "fields": [
         { "name": "start", "type": "number" },
         { "name": "end", "type": "number" },
-        { "name": "mode", "type": "ChargeMode" },
+        { "name": "effect", "type": "ChargeEffect" },
         { "name": "kw", "type": "number | null" },
-        { "name": "color", "type": "DayColor | null" }
+        { "name": "automation", "type": "ChargeRuleRef | null" }
       ]
     },
     "ChargingView": {
       "doc": "What a charger follows and does (`GET /api/devices/{id}/charging`).",
       "fields": [
+        { "name": "mode", "type": "ChargeMode", "doc": "What it was told." },
         { "name": "profile_id", "type": "number | null" },
-        { "name": "profiles", "type": "ChargeProfileRef[]", "doc": "The profiles it may follow." },
+        { "name": "automation", "type": "ChargeRuleRef | null", "doc": "The automation that told it (null: none yet, or by hand)." },
+        { "name": "profiles", "type": "ChargeProfileRef[]" },
+        { "name": "own_schedule", "type": "boolean", "doc": "Its own app decides when it charges: the automations do not apply." },
         { "name": "now", "type": "ChargeNow | null" },
         { "name": "status", "type": "ChargeStatus | null", "doc": "null: not looked at yet, or it follows nothing." },
         { "name": "next", "type": "ChargeNext | null" },
-        { "name": "days", "type": "ChargeDay[]", "doc": "Its profile over the next 3 days, from today." },
+        { "name": "days", "type": "ChargeDay[]", "doc": "What the automations plan over the next 3 days, from today." },
+        { "name": "automations", "type": "ChargeRuleRef[]", "doc": "The automations that drive it." },
         { "name": "can_control", "type": "boolean" }
       ]
     }

@@ -414,8 +414,19 @@ pub(super) async fn execute(state: &AppState, row: &AutomationRow, steps: &[Step
             Step::Notify { message } => {
                 p.out.push(done(what, notify(state, &row.name, message.trim(), actor).await));
             }
-            Step::ChargerProfile { device_id, profile_id } => {
-                p.out.push(done(what, crate::charging::set_profile(state, *device_id, *profile_id).await));
+            Step::ChargerProfile { device_id, profile_id, mode, solar } => {
+                let mode = crate::charging::Mode::of_step(*mode, *profile_id);
+                let r = match ctx.device(*device_id) {
+                    // Its own app decides: the automations of Breezone wait.
+                    Some(d) if mode != crate::charging::Mode::Free && crate::charging::Charger::of(d).own_schedule => Err(ApiError::conflict(crate::text!(
+                        "en pause : l'appli de la borne décide des heures de charge",
+                        "paused: the app of the charger decides when it charges",
+                        "en pausa: la app del cargador decide las horas de carga"
+                    ))),
+                    Some(_) => crate::charging::set(state, *device_id, crate::charging::Choice { mode, profile_id: *profile_id, solar: *solar }, Some(row.id)).await,
+                    None => Err(ApiError::not_found("device not found")),
+                };
+                p.out.push(done(what, r));
             }
             Step::Surplus { device_id, enabled } => {
                 let r = async {

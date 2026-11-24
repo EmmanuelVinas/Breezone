@@ -225,8 +225,7 @@ class BreezoneApi(
         call(HttpMethod.Put, "/api/charging/profiles/$id", FzJson.encodeToString(ChargeProfileWrite.serializer(), p))
     suspend fun deleteChargeProfile(id: Long) = callUnit(HttpMethod.Delete, "/api/charging/profiles/$id")
     suspend fun charging(deviceId: Long): ChargingView = call(HttpMethod.Get, "/api/devices/$deviceId/charging")
-    suspend fun setChargeProfile(deviceId: Long, profileId: Long?): ChargingView =
-        call(HttpMethod.Put, "/api/devices/$deviceId/charging", FzJson.encodeToString(ChargeProfileInput.serializer(), ChargeProfileInput(profileId)))
+    suspend fun chargeAutomations(): List<ChargeRulePlan> = call(HttpMethod.Get, "/api/charging/automations")
     suspend fun chargeNow(deviceId: Long, input: ChargeNowInput): ChargingView =
         call(HttpMethod.Post, "/api/devices/$deviceId/charging/now", FzJson.encodeToString(ChargeNowInput.serializer(), input))
     suspend fun cancelChargeNow(deviceId: Long): ChargingView = call(HttpMethod.Delete, "/api/devices/$deviceId/charging/now")

@@ -387,13 +387,21 @@ impl Context {
                 }
                 Ok(())
             }
-            Step::ChargerProfile { device_id, profile_id } => {
+            Step::ChargerProfile { device_id, profile_id, mode, solar } => {
                 self.charger(*device_id)?;
+                let mode = crate::charging::Mode::of_step(*mode, *profile_id);
                 match profile_id {
-                    Some(id) if !self.charge_profiles.contains_key(id) => {
-                        Err(ApiError::bad_request(crate::text!("profil de recharge introuvable", "unknown charging profile", "perfil de carga desconocido")))
+                    Some(id) if mode == crate::charging::Mode::Profile && !self.charge_profiles.contains_key(id) => {
+                        return Err(ApiError::bad_request(crate::text!("profil de recharge introuvable", "unknown charging profile", "perfil de carga desconocido")));
                     }
-                    _ => Ok(()),
+                    None if mode == crate::charging::Mode::Profile => {
+                        return Err(ApiError::bad_request(crate::text!("choisissez un profil de recharge", "choose a charging profile", "elija un perfil de carga")));
+                    }
+                    _ => {}
+                }
+                match solar {
+                    Some(s) => s.validate().map_err(ApiError::bad_request),
+                    None => Ok(()),
                 }
             }
             Step::ChargerNow { device_id, kw, until, kwh } => {

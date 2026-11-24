@@ -387,8 +387,6 @@ const es: Record<string, string> = {
   "Lecture seule": "Solo lectura",
   "Lecture seule : vous pouvez consulter cette installation, pas la piloter.":
     "Solo lectura: puede consultar esta instalación, no controlarla.",
-  "Les administrateurs voient et pilotent tout, et configurent le serveur. Un utilisateur ne voit que les installations que vous lui donnez, en lecture seule ou avec le pilotage, et vous choisissez ce qu'il peut y modifier.":
-    "Los administradores lo ven y controlan todo, y configuran el servidor. Un usuario solo ve las instalaciones que usted le asigna, en solo lectura o con control, y usted elige lo que puede modificar en ellas.",
   "Les autres serveurs Breezone qui voient des installations de celui-ci. Révoquer un partage coupe l'accès immédiatement.":
     "Los otros servidores Breezone que ven instalaciones de este. Revocar un uso compartido corta el acceso de inmediato.",
   "Les installations ajoutées plus tard ne sont données à personne : revenez ici pour les attribuer.":
@@ -548,8 +546,6 @@ const es: Record<string, string> = {
   Système: "Sistema",
   "Système {id}": "Sistema {id}",
   Température: "Temperatura",
-  "Température, consigne (quand la zone est allumée) et humidité":
-    "Temperatura, consigna (cuando la zona está encendida) y humedad",
   "Temps réel": "Tiempo real",
   Terminé: "Hecho",
   Tester: "Probar",
@@ -628,7 +624,6 @@ const es: Record<string, string> = {
   "Purification arrêtée": "Purificación apagada",
   "Purification en marche": "Purificación encendida",
   "Purification automatique": "Purificación automática",
-  "Mesurée par le thermostat de la zone": "Medida por el termostato de la zona",
   Maintenant: "Ahora",
   "Pas de mesure": "Sin medida",
   "Air de bonne qualité": "Aire de buena calidad",
@@ -637,8 +632,6 @@ const es: Record<string, string> = {
   Bonne: "Buena",
   Mauvaise: "Mala",
   "Humidité moyenne": "Humedad media",
-  "Température, consigne (quand la zone est allumée), humidité et qualité de l'air":
-    "Temperatura, consigna (cuando la zona está encendida), humedad y calidad del aire",
   "Mesurée par le thermostat de la zone ; heure par heure dans l'historique":
     "Medida por el termostato de la zona; hora a hora en el historial",
   "Glissez les poignées sous le graphique pour zoomer, touchez la légende pour masquer une courbe":
@@ -801,8 +794,6 @@ const es: Record<string, string> = {
   Jour: "Día",
   "7 jours": "7 días",
   "30 jours": "30 días",
-  "Chaque bloc n'apparaît que si une mesure le permet : la production avec une voie « solaire », l'autonomie avec un compteur général.":
-    "Cada bloque solo aparece si una medida lo permite: la producción con un canal «solar», la autonomía con un contador general.",
   "{n} mesure": "{n} medida",
   "{n} mesures": "{n} medidas",
   "Réseau électrique": "Red",
@@ -815,18 +806,11 @@ const es: Record<string, string> = {
   "En charge": "Cargando",
   Défaut: "Fallo",
   "En pause": "En pausa",
-  "Lancer la charge": "Iniciar la carga",
-  "La charge démarre dès qu'une voiture est branchée.":
-    "La carga empieza en cuanto se conecta un coche.",
   Intensité: "Intensidad",
-  "Maximum choisi": "Máximo elegido",
-  "Réglée par la borne": "Regulada por el cargador",
   "Intensité maximale": "Intensidad máxima",
   "La borne adapte l'intensité selon sa propre pince (mode dynamique).":
     "El cargador adapta la intensidad según su propia pinza (modo dinámico).",
-  "S'arrêter après": "Detenerse tras",
   "Énergie à ajouter": "Energía a añadir",
-  "kWh ajoutés": "kWh añadidos",
   "Puissance de charge": "Potencia de carga",
   "Dernières 24 heures": "Últimas 24 horas",
   "Session : {duration}": "Sesión: {duration}",
@@ -1162,7 +1146,6 @@ const es: Record<string, string> = {
   "{flow} m³/h sur {nominal} m³/h nominaux":
     "{flow} m³/h de {nominal} m³/h nominales",
   "Niveau de ventilation": "Nivel de ventilación",
-  "Humidité des dernières 24 h": "Humedad de las últimas 24 h",
   "Arrêter le boost": "Detener el boost",
   "1 h": "1 h",
   "2 h": "2 h",
@@ -1386,8 +1369,6 @@ const es: Record<string, string> = {
   "Ignorer le nouveau déclenchement": "Ignorar la nueva activación",
   "Tout recommencer": "Volver a empezar",
   "Surplus solaire : charger la voiture": "Excedente solar: cargar el coche",
-  "Quand plus de 500 W repartent au réseau pendant 5 min, lancer la charge, puis l'arrêter quand la maison tire plus de 200 W du réseau pendant 10 min.":
-    "Cuando más de 500 W vuelven a la red durante 5 min, iniciar la carga y detenerla cuando la casa consume más de 200 W de la red durante 10 min.",
   "Surplus solaire : chauffer une pièce":
     "Excedente solar: calentar una habitación",
   "Quand plus de 500 W repartent au réseau, si la climatisation est en mode chaud et la pièce sous 20 °C, chauffer à 21°. Remettre comme avant quand la maison tire plus de 300 W du réseau pendant 10 min, sauf si quelqu'un a changé la zone entre-temps.":
@@ -1540,23 +1521,9 @@ const es: Record<string, string> = {
   "Par ordre de priorité : le surplus va d'abord au premier appareil.":
     "Por orden de prioridad: el excedente va primero al primer aparato.",
   "Ajouter un appareil…": "Añadir un aparato…",
-  "Aucun appareil ne suit le surplus. Ajoutez la borne, ou un chauffe-eau sur une prise pilotée.":
-    "Ningún aparato sigue el excedente. Añada el cargador, o un termo en un enchufe inteligente.",
   Descendre: "Bajar",
   "Suivre le surplus": "Seguir el excedente",
   Manuel: "Manual",
-  "Vous lancez et arrêtez la charge ; Breezone ne la règle pas.":
-    "Usted inicia y detiene la carga; Breezone no la regula.",
-  "Uniquement le surplus : l'intensité suit le soleil. Peut ne pas charger.":
-    "Solo el excedente: la intensidad sigue al sol. Puede no cargar.",
-  "Solaire + garantie": "Solar + garantía",
-  "Le surplus, puis le réseau si besoin pour atteindre l'objectif à l'heure.":
-    "El excedente y, si hace falta, la red para alcanzar el objetivo a tiempo.",
-  "Mode de charge": "Modo de carga",
-  "Les modes solaires demandent un compteur au tableau (une voie « réseau »).":
-    "Los modos solares necesitan un contador en el cuadro (un canal «red»).",
-  "L'ordre de priorité avec les autres appareils et les intensités se règlent dans Automatismes › Pilotage sur surplus solaire.":
-    "La prioridad con los demás aparatos y las intensidades se ajustan en Automatismos › Pilotaje por excedente solar.",
   "Vue d'ensemble": "Vista general",
   indisponible: "no disponible",
   "{temp} moy.": "{temp} med.",
@@ -1582,7 +1549,6 @@ const es: Record<string, string> = {
   "Ce bloc n'a pas de réglage.": "Este bloque no tiene ajustes.",
   "Réglages du bloc": "Ajustes del bloque",
   "Ajouter un bloc": "Añadir un bloque",
-  "Type de bloc": "Tipo de bloque",
   Appliquer: "Aplicar",
   Déplacer: "Mover",
   "Vue enregistrée pour vous": "Vista guardada para usted",
@@ -1650,13 +1616,9 @@ const es: Record<string, string> = {
   "Jour {color}": "Día {color}",
   "Prix de l'électricité enregistrés": "Precios de la electricidad guardados",
   Contrat: "Contrato",
-  "Un par serveur, comme le compteur que lisent ses modules. Prix TTC, comme sur la facture.":
-    "Uno por servidor, como el contador que leen sus módulos. Precios con impuestos, como en la factura.",
   Fournisseur: "Proveedor",
   "Puissance souscrite": "Potencia contratada",
   Offre: "Oferta",
-  "Choisir une offre remplit la grille avec ses plages et des prix indicatifs : vérifiez-les sur votre facture avant d'enregistrer.":
-    "Elegir una oferta rellena la tabla con sus franjas y precios orientativos: compruébelos en su factura antes de guardar.",
   "Aucun prix pour l'instant. Choisissez votre offre ci-dessus pour partir de sa grille, ou une grille personnalisée.":
     "Aún no hay precios. Elija su oferta arriba para partir de su tabla, o una tabla personalizada.",
   Prix: "Precios",
@@ -1686,9 +1648,6 @@ const es: Record<string, string> = {
   Base: "Base",
   "Heures creuses": "Horas valle",
   Personnalisée: "Personalizada",
-  "Jour bleu": "Día azul",
-  "Jour blanc": "Día blanco",
-  "Jour rouge": "Día rojo",
   Normal: "Normal",
   "Ajoutez au moins un profil.": "Añada al menos un perfil.",
   "Chaque profil a besoin d'un nom.": "Cada perfil necesita un nombre.",
@@ -1869,8 +1828,6 @@ const es: Record<string, string> = {
   "Retirer le compte {name} ?": "¿Retirar la cuenta {name}?",
   "Breezone oublie ses identifiants. Ce qu'il a déjà lu reste ; ce qui en dépend s'arrête.":
     "Breezone olvida sus credenciales. Lo ya leído se queda; lo que depende de ella se detiene.",
-  "Un compte relie Breezone à un service en ligne, toujours en plus de ce qu'il lit en local : rien n'en dépend pour piloter la maison. Les identifiants restent chiffrés sur ce serveur.":
-    "Una cuenta une Breezone a un servicio en línea, siempre además de lo que lee en local: manejar la casa nunca depende de ella. Las credenciales quedan cifradas en este servidor.",
   "Pas encore de relevé Linky.": "Aún sin lectura Linky.",
   "Linky · Enedis": "Linky · Enedis",
   "Consommation jour par jour": "Consumo día a día",
@@ -2024,8 +1981,8 @@ const es: Record<string, string> = {
   "Rafraîchir à (°C)": "Enfriar a (°C)",
   "quand il fait plus de (°C dehors)": "cuando hace más de (°C fuera)",
   "Puissance estimée (W)": "Potencia estimada (W)",
-  "Aucun appareil ne suit le surplus. Ajoutez un chauffe-eau sur une prise pilotée, ou une zone de climatisation ; la borne le suit par son profil de recharge (« Solaire »).":
-    "Ningún aparato sigue el excedente. Añada un calentador en un enchufe pilotado, o una zona de climatización; el cargador lo sigue con su perfil de carga («Solaire»).",
+  "Aucun appareil ne suit le surplus. Ajoutez un chauffe-eau sur une prise pilotée, ou une zone de climatisation ; la borne le suit par un automatisme (recette « Surplus solaire : charger la voiture »).":
+    "Ningún dispositivo sigue el excedente. Añada un calentador en un enchufe controlado, o una zona de climatización; el cargador lo sigue con una automatización (receta «Excedente solar: cargar el coche»).",
   "Aussi piloté par {names} : les deux se contrediraient.":
     "También pilotado por {names}: ambos se contradirían.",
   "Tourne tout seul, par ordre de priorité. Il se règle dans Automatismes ; un automatisme ne doit pas piloter les mêmes appareils.":
@@ -2062,18 +2019,11 @@ const es: Record<string, string> = {
     "cada cámara: movimiento y lo que lo causó (persona, vehículo, animal), timbrazos, imagen",
   "Un coup de sonnette Reolink est un appui de bouton : il peut déclencher un automatisme.":
     "Un timbrazo Reolink es una pulsación de botón: puede activar una automatización.",
-  "Service en ligne Forecast.Solar : la prévision de production selon la météo, sans compte (une clé d'API, facultative, donne plus de détail)":
-    "Servicio en línea Forecast.Solar: la previsión de producción según el tiempo, sin cuenta (una clave de API, opcional, da más detalle)",
   "toutes les 30 min": "cada 30 min",
   "puissance prévue maintenant, production prévue aujourd'hui, restant à produire et demain":
     "potencia prevista ahora, producción prevista hoy, la que queda y mañana",
-  "Sans latitude ni longitude, celles de la ville de l'installation sont prises. Une installation sur deux pans s'ajoute en deux fois.":
-    "Sin latitud ni longitud, se toman las de la ciudad de la instalación. Una instalación en dos faldones se añade dos veces.",
-  "Service en ligne": "Servicio en línea",
   "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan, clés Wi-Fi Hoymiles, ponts Philips Hue, VMC Renson Healthbox, accessoires HomeKit (Legrand, VELUX…), modules ESPHome et Tasmota, prises Kasa et caméras Reolink. Les prises et ampoules Tapo s'ajoutent par leur adresse.":
     "Breezone busca en la red los productos que sabe controlar: WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), cargadores V2C Trydan, llaves Wi-Fi Hoymiles, puentes Philips Hue, ventilación Renson Healthbox, accesorios HomeKit (Legrand, VELUX…), módulos ESPHome y Tasmota, enchufes Kasa y cámaras Reolink. Los enchufes y bombillas Tapo se añaden por su dirección.",
-  "Un service en ligne : sans adresse sur le réseau":
-    "Un servicio en línea: sin dirección en la red",
   Capteurs: "Sensores",
   "Personne détectée": "Persona detectada",
   "Véhicule détecté": "Vehículo detectado",
@@ -2188,26 +2138,9 @@ const es: Record<string, string> = {
   "surplus solaire": "excedente solar",
   "pas de charge": "sin carga",
   "jusqu'à {kw} kW": "hasta {kw} kW",
-  "jour {color}": "día {color}",
   "≈ {kwh} possibles": "≈ {kwh} posibles",
-  "En charge selon le profil jusqu'à {end}":
-    "Cargando según el perfil hasta {end}",
   "Prochaine charge : {start} → {end}": "Próxima carga: {start} → {end}",
-  surplus: "excedente",
-  "Profil de recharge": "Perfil de carga",
-  "Gérer les profils ›": "Gestionar los perfiles ›",
-  "Sans profil, la borne charge quand la voiture est branchée, ou suit le surplus solaire si elle y est inscrite.":
-    "Sin perfil, el cargador carga cuando el coche está conectado, o sigue el excedente solar si está inscrito.",
-  "Le profil décide des heures de charge ; « Charger maintenant » passe avant.":
-    "El perfil decide las horas de carga; «Cargar ahora» tiene prioridad.",
-  "Aucun profil : créez-en un dans « Gérer les profils ».":
-    "Ningún perfil: cree uno en «Gestionar los perfiles».",
-  "Aucun profil pour l'instant.": "Ningún perfil por ahora.",
-  Aucun: "Ninguno",
-  "charge, même sans soleil": "carga, incluso sin sol",
   "Charger maintenant": "Cargar ahora",
-  "Sans interruption : passe avant le profil et le surplus solaire.":
-    "Sin interrupción: tiene prioridad sobre el perfil y el excedente solar.",
   "{kw} kW (maximum)": "{kw} kW (máximo)",
   Maximum: "Máximo",
   Débranchement: "Desconexión",
@@ -2219,72 +2152,26 @@ const es: Record<string, string> = {
   "encore {kwh}": "faltan {kwh}",
   "jusqu'au débranchement": "hasta desconectar",
   "Charge immédiate à {kw} kW, {end}": "Carga inmediata a {kw} kW, {end}",
-  "Revenir au profil": "Volver al perfil",
   "Arrêter la charge immédiate": "Detener la carga inmediata",
   "La borne règle seule son courant": "El cargador regula solo su corriente",
   "Délestage selon sa pince de mesure (mode dynamique)":
     "Deslastre según su pinza de medida (modo dinámico)",
   Suspendre: "Pausar",
   "Branchez d'abord la voiture": "Conecte primero el coche",
-  "Charger jusqu'à": "Cargar hasta",
-  "Surplus solaire seulement": "Solo excedente solar",
   "Ne pas charger": "No cargar",
   "au maximum": "al máximo",
   "Nuit bleue (Tempo)": "Noche azul (Tempo)",
   "Nuit bleue": "Noche azul",
-  "Jours blanc et rouge": "Días blancos y rojos",
-  "Donnez un nom au profil.": "Dé un nombre al perfil.",
-  "Ajoutez au moins un type de jour.": "Añada al menos un tipo de día.",
-  "Chaque type de jour a besoin d'un nom.":
-    "Cada tipo de día necesita un nombre.",
   "« {name} » : une puissance de 0 à 50 kW.":
     "«{name}»: una potencia de 0 a 50 kW.",
-  "De {from} à {to} : {what}": "De {from} a {to}: {what}",
-  "Début de la plage de {time}": "Inicio de la franja de las {time}",
-  maximum: "máximo",
-  "Nom du type de jour": "Nombre del tipo de día",
-  "Heures creuses du contrat": "Horas valle del contrato",
-  "Ce que fait la borne": "Lo que hace el cargador",
-  "Jusqu'à (kW)": "Hasta (kW)",
-  "Quel que soit le soleil. Une borne qui règle seule son courant (délestage) garde sa propre régulation.":
-    "Haga sol o no. Un cargador que regula solo su corriente (deslastre) mantiene su propia regulación.",
-  "Touchez une plage pour choisir ce que fait la borne, glissez une limite pour la déplacer (par demi-heure).":
-    "Toque una franja para elegir lo que hace el cargador, arrastre un límite para moverlo (por medias horas).",
-  "Profil enregistré": "Perfil guardado",
-  "Les types de jour disent ce que fait la borne heure par heure ; le calendrier, quel type suit chaque jour.":
-    "Los tipos de día dicen lo que hace el cargador hora a hora; el calendario, qué tipo sigue cada día.",
-  "Type {n}": "Tipo {n}",
-  "Ajouter un type de jour": "Añadir un tipo de día",
-  "Le jour du profil commence à": "El día del perfil empieza a las",
-  "Utilisé par": "Usado por",
-  "Sans couleur Tempo connue, un jour suit son jour de la semaine.":
-    "Sin color Tempo conocido, un día sigue su día de la semana.",
-  "Aucune borne : choisissez ce profil sur la page Recharge.":
-    "Ningún cargador: elija este perfil en la página Carga.",
   Profils: "Perfiles",
   "Profils de recharge": "Perfiles de carga",
-  "Le plan de la semaine d'une borne : quand charger, jusqu'à quelle puissance, ou sur le surplus solaire.":
-    "El plan semanal de un cargador: cuándo cargar, hasta qué potencia, o con el excedente solar.",
-  "Seuls les administrateurs écrivent les profils de recharge.":
-    "Solo los administradores escriben los perfiles de carga.",
   actif: "en uso",
-  "Nouveau :": "Nuevo:",
-  "Aucun profil pour l'instant : partez d'un modèle ci-dessus.":
-    "Ningún perfil por ahora: parta de un modelo de arriba.",
-  "La borne suit le profil « Solaire » : elle charge sur le surplus seulement, son intensité suit le soleil. Un autre profil se choisit sur la page Recharge.":
-    "El cargador sigue el perfil «Solar»: carga solo con el excedente, su intensidad sigue al sol. Otro perfil se elige en la página Carga.",
-  "La borne suit le profil « Solaire »": "El cargador sigue el perfil «Solar»",
-  "suit le profil": "sigue el perfil",
-  "aucun profil": "ningún perfil",
   "charge maintenant jusqu'à": "carga ahora hasta",
   "son maximum": "su máximo",
   "jusqu'à une heure": "hasta una hora",
   "jusqu'à une énergie": "hasta una energía",
-  "Changer le profil de la borne": "Cambiar el perfil del cargador",
-  "Automatisme « {name} »": "Automatización «{name}»",
   "Programmation de son appli": "Programación de su app",
-  "Les heures de charge réglées dans l'appli de la borne : coupez-la pour que seul le profil de Breezone décide.":
-    "Las horas de carga ajustadas en la app del cargador: desactívela para que solo decida el perfil de Breezone.",
   "Une plage du tarif d'électricité": "Una franja de la tarifa eléctrica",
   "Le tarif est en": "La tarifa está en",
   "Le tarif de demain est en": "La tarifa de mañana está en",
@@ -2344,6 +2231,80 @@ const es: Record<string, string> = {
   "L'assistant doit joindre cette adresse : depuis l'extérieur de la maison, mettez l'adresse publique du serveur (Réglages › Serveurs).":
     "El asistente debe alcanzar esta dirección: desde fuera de casa, ponga la dirección pública del servidor (Ajustes › Servidores).",
   "Claude sur mon ordinateur": "Claude en mi ordenador",
+  "Recharge : charger en heures creuses": "Recarga: cargar en horas valle",
+  "Tant que les heures creuses du tarif durent, la borne suit un profil ; ensuite, elle ne charge pas.":
+    "Mientras duran las horas valle de la tarifa, el cargador sigue un perfil; después, no carga.",
+  "Recharge : nuit bleue (Tempo)": "Recarga: noche azul (Tempo)",
+  "Tant que les heures creuses durent, un jour bleu, la borne suit un profil ; les autres jours et ensuite, elle ne charge pas.":
+    "Mientras duran las horas valle, un día azul, el cargador sigue un perfil; los demás días y después, no carga.",
+  "Au lever du soleil, la borne charge sur le surplus (son intensité suit le soleil) ; au coucher, elle ne charge plus.":
+    "Al amanecer, el cargador carga con el excedente (su intensidad sigue al sol); al atardecer, deja de cargar.",
+  "Solaire en journée": "Solar de día",
+  "suit un profil": "sigue un perfil",
+  "ne charge pas": "no carga",
+  "charge sur le surplus solaire": "carga con el excedente solar",
+  "laisse la borne faire": "deja hacer al cargador",
+  "en suivant le surplus, au plus": "siguiendo el excedente, como máximo",
+  "à puissance fixe": "a potencia fija",
+  "dès un surplus de": "desde un excedente de",
+  "son minimum (6 A)": "su mínimo (6 A)",
+  "Recharge de la borne": "Recarga del cargador",
+  "la borne décide": "el cargador decide",
+  "En charge selon les automatismes jusqu'à {end}":
+    "Cargando según las automatizaciones hasta {end}",
+  "Ce que prévoient les automatismes": "Lo que prevén las automatizaciones",
+  "Profils ›": "Perfiles ›",
+  "Maintenant : « {what} », choisi par {rule}":
+    "Ahora: «{what}», elegido por {rule}",
+  "Maintenant : « {what} »": "Ahora: «{what}»",
+  "Aucun automatisme n'a encore dit quoi faire à la borne.":
+    "Ninguna automatización ha dicho aún qué hacer al cargador.",
+  "Aucun automatisme ne pilote la borne : elle charge quand la voiture est branchée.":
+    "Ninguna automatización controla el cargador: carga cuando el coche está conectado.",
+  "L'appli de la borne décide des heures de charge":
+    "La app del cargador decide las horas de carga",
+  "{rules} ne s'appliquent pas à cette borne. Coupez « Programmation de son appli » dans les réglages.":
+    "{rules} no se aplican a este cargador. Desactive «Programación de su app» en los ajustes.",
+  "Coupez « Programmation de son appli » dans les réglages pour que les automatismes de Breezone décident.":
+    "Desactive «Programación de su app» en los ajustes para que decidan las automatizaciones de Breezone.",
+  "Sans interruption : passe avant les automatismes et le surplus solaire.":
+    "Sin interrupción: pasa antes que las automatizaciones y el excedente solar.",
+  "Revenir aux automatismes": "Volver a las automatizaciones",
+  "profil supprimé": "perfil eliminado",
+  "La borne décide": "El cargador decide",
+  "Ouvrir l'automatisme": "Abrir la automatización",
+  "Quand {when}, si {conditions} : {then}":
+    "Cuando {when}, si {conditions}: {then}",
+  "Quand {when} : {then}": "Cuando {when}: {then}",
+  "sinon {else}": "si no, {else}",
+  "ensuite {over}": "después {over}",
+  "Autres jours": "Otros días",
+  "Rappel : ils se règlent dans Automatismes. Touchez une plage pour ouvrir le sien.":
+    "Recordatorio: se ajustan en Automatizaciones. Toque una franja para abrir la suya.",
+  "Aucun automatisme ne pilote encore la borne : partez d'une recette ci-dessus.":
+    "Ninguna automatización controla aún el cargador: parta de una receta de arriba.",
+  "en pause : l'appli de la borne décide":
+    "en pausa: decide la app del cargador",
+  désactivé: "desactivada",
+  "Certaines conditions ne se savent qu'au moment venu (présence, mesure, appareil) : la frise les suppose vraies.":
+    "Algunas condiciones solo se saben en su momento (presencia, medida, dispositivo): la franja las supone verdaderas.",
+  "Sans heure fixe": "Sin hora fija",
+  "Sur la même heure, le dernier automatisme déclenché l'emporte. Si la programmation de l'appli d'une borne est allumée, ses automatismes sont en pause.":
+    "A la misma hora, gana la última automatización iniciada. Si la programación de la app de un cargador está activada, sus automatizaciones quedan en pausa.",
+  "Profils enregistrés": "Perfiles guardados",
+  "Profil {n}": "Perfil {n}",
+  "Aucun profil pour l'instant : ajoutez-en un, par exemple « Nuit 7 kW ».":
+    "Ningún perfil por ahora: añada uno, por ejemplo «Noche 7 kW».",
+  "Puissance de {name}": "Potencia de {name}",
+  "de la borne": "del cargador",
+  "Supprimer {name}": "Eliminar {name}",
+  "La couleur sert aux frises. Une borne qui ne peut pas tant tire son maximum ; une borne en mode dynamique garde son délestage.":
+    "El color sirve para las franjas. Un cargador que no puede tanto da su máximo; un cargador en modo dinámico mantiene su deslastre.",
+  "Ce que la borne peut tirer au plus. Quand elle charge, ce sont les automatismes qui le disent.":
+    "Lo que el cargador puede tomar como máximo. Cuándo carga lo dicen las automatizaciones.",
+  "Nouvel automatisme :": "Nueva automatización:",
+  "Les heures de charge réglées dans l'appli de la borne : coupez-la pour que seuls les automatismes de Breezone décident.":
+    "Las horas de carga ajustadas en la app del cargador: desactívela para que solo decidan las automatizaciones de Breezone.",
 }
 
 export default es

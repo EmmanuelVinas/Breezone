@@ -1,240 +1,142 @@
-//! Charging profiles of the chargers (roadmap E39): the plan of the week of a charger.
+//! Charging profiles of the chargers (roadmap E39).
 //!
-//! A profile has the shape of a tariff (see `price`): **kinds of day** ("blue day", "week-end"…)
-//! cut into **slots** of clock time, and a **calendar** that says which kind a day is, by its day
-//! of the week or by its Tempo colour (a day of the calendar may start at 06:00). A slot says what
-//! the charger does: nothing (`off`), charge up to some kW whatever the sun (`max`, the charger
-//! sharing the power of the home if it can), or charge on the solar surplus only (`solar`).
+//! A **profile** is a power: charge up to some kW, or up to what the charger can. **When** a charger
+//! charges is up to the automations: the action "charging of the charger" tells it to follow a
+//! profile, not to charge, to charge on the solar surplus (following it, or at a fixed power once it
+//! is high enough), or to let the charger decide by its own app ([`Mode`]). A charger whose own
+//! schedule is on (`timer` of `ev.charger`) is left to it: the automations do not drive it.
 //!
-//! A charger follows one profile, unless it was told to **charge now** (at some kW, until it is
-//! unplugged, until a time or until some kWh more). The surplus regulator (`surplus`) does what
-//! they say: this module only tells it what the plan is at each moment.
+//! A charger may also be told to **charge now** (at some kW, until it is unplugged, until a time or
+//! until some kWh more), which comes first. The surplus regulator (`surplus`) does what they say:
+//! this module only tells it what the plan is at each moment.
 
-use crate::db::{self, ChargerPlanRow};
+use crate::db::{self, ChargeProfileRow, ChargerPlanRow};
 use crate::devices::DeviceView;
-use crate::price::{self, Calendar, DayColor};
 use crate::surplus::Plan;
 use crate::AppState;
-use chrono::{Duration, NaiveDate, TimeZone};
-use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 
-pub const MAX_KINDS: usize = 10;
-pub const MAX_SLOTS: usize = 24;
+pub const MAX_PROFILES: usize = 20;
 /// More than any charger of a home (kW).
 pub const MAX_KW: f64 = 50.0;
-/// How far the next charge is looked for.
-const NEXT_WITHIN: i64 = 48 * 3600;
 /// Voltage when the charger does not tell it.
 const VOLTAGE: f64 = 230.0;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Mode {
-    Off,
-    Max,
-    Solar,
-}
-
+/// A profile as it is written.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Slot {
-    /// "HH:MM", local time.
-    pub start: String,
-    pub mode: Mode,
-    /// `max`: up to this power (none: the charger's maximum).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub kw: Option<f64>,
-    /// `solar`: the current it keeps between (none: the charger's).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub min_amps: Option<i64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_amps: Option<i64>,
-}
-
-/// What a kind of day does, slot by slot.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct DayKind {
-    pub id: String,
+pub struct ProfileInput {
     pub name: String,
+    /// Up to this power (none: the charger's maximum).
+    #[serde(default)]
+    pub kw: Option<f64>,
+    /// A colour for the screens ("#14b8a6").
     #[serde(default)]
     pub color: Option<String>,
-    /// From midnight (the first starts at "00:00"), each until the next one.
-    pub slots: Vec<Slot>,
 }
 
-/// A charging profile.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Profile {
-    pub name: String,
-    pub profiles: Vec<DayKind>,
-    pub calendar: Calendar,
+fn kw_ok(kw: Option<f64>) -> bool {
+    kw.is_none_or(|kw| kw.is_finite() && kw > 0.0 && kw <= MAX_KW)
 }
 
-/// What is stored of a profile besides its name.
-#[derive(Serialize, Deserialize)]
-struct Stored {
-    profiles: Vec<DayKind>,
-    calendar: Calendar,
-}
-
-impl Profile {
-    /// A stored profile (`None`: written by a newer version, or broken).
-    pub fn of(row: &db::ChargeProfileRow) -> Option<Profile> {
-        let s: Stored = serde_json::from_str(&row.plan).ok()?;
-        Some(Profile { name: row.name.clone(), profiles: s.profiles, calendar: s.calendar })
-    }
-
-    pub fn plan_json(&self) -> String {
-        serde_json::to_string(&Stored { profiles: self.profiles.clone(), calendar: self.calendar.clone() }).unwrap_or_default()
-    }
-}
-
-/// Whether a profile can be used: kinds of day that cover each day, a calendar that names them.
-pub fn validate(p: &Profile) -> Result<(), String> {
+pub fn validate(p: &ProfileInput) -> Result<(), String> {
     if p.name.trim().is_empty() || p.name.chars().count() > 60 {
         return Err("name: 1 to 60 characters".into());
     }
-    if p.profiles.is_empty() || p.profiles.len() > MAX_KINDS {
-        return Err(format!("profiles: 1 to {MAX_KINDS}"));
+    if !kw_ok(p.kw) {
+        return Err(format!("kw: a power between 0 and {MAX_KW} kW"));
     }
-    for (i, k) in p.profiles.iter().enumerate() {
-        if k.id.trim().is_empty() || k.id.len() > 40 || p.profiles[..i].iter().any(|o| o.id == k.id) {
-            return Err("each profile needs an id of its own (40 characters at most)".into());
-        }
-        if k.name.trim().is_empty() || k.name.chars().count() > 60 || k.color.as_deref().is_some_and(|c| c.len() > 20) {
-            return Err(format!("profile {}: a name of 60 characters at most", k.id));
-        }
-        if k.slots.is_empty() || k.slots.len() > MAX_SLOTS {
-            return Err(format!("profile {}: 1 to {MAX_SLOTS} slots", k.id));
-        }
-        let mut previous = None;
-        for s in &k.slots {
-            let Some(start) = price::clock(&s.start) else { return Err(format!("profile {}: start \"HH:MM\" expected, not {}", k.id, s.start)) };
-            match previous {
-                None if start != chrono::NaiveTime::MIN => return Err(format!("profile {}: the first slot starts at 00:00", k.id)),
-                Some(before) if start <= before => return Err(format!("profile {}: slots in the order of the day", k.id)),
-                _ => {}
-            }
-            if s.kw.is_some_and(|kw| !kw.is_finite() || kw <= 0.0 || kw > MAX_KW) {
-                return Err(format!("profile {}: a power between 0 and {MAX_KW} kW", k.id));
-            }
-            let amps_ok = |a: Option<i64>| a.is_none_or(|a| (1..=80).contains(&a));
-            if !amps_ok(s.min_amps) || !amps_ok(s.max_amps) || matches!((s.min_amps, s.max_amps), (Some(lo), Some(hi)) if lo > hi) {
-                return Err(format!("profile {}: a current from 1 to 80 A, the minimum below the maximum", k.id));
-            }
-            previous = Some(start);
-        }
-    }
-    let c = &p.calendar;
-    if price::clock(&c.day_start).is_none() {
-        return Err("calendar.day_start: \"HH:MM\" expected".into());
-    }
-    let known = |id: &String| p.profiles.iter().any(|k| &k.id == id);
-    if c.weekdays.len() != 7 || !c.weekdays.iter().all(known) {
-        return Err("calendar.weekdays: a profile for each of the 7 days".into());
-    }
-    if ![&c.colors.blue, &c.colors.white, &c.colors.red].into_iter().flatten().all(known) {
-        return Err("calendar.colors: profiles of the charging profile".into());
+    if p.color.as_deref().is_some_and(|c| c.len() > 20) {
+        return Err("color: 20 characters at most".into());
     }
     Ok(())
 }
 
-/// The slot of a profile at a moment.
-#[derive(Debug, Clone, PartialEq)]
-pub struct SlotAt<'a> {
-    pub slot: &'a Slot,
-    pub kind: &'a DayKind,
-    /// The colour of the day, when the calendar follows it.
-    pub color: Option<DayColor>,
+/// What a charger is told to do.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Mode {
+    /// Charge whenever the car asks, up to the power of a profile.
+    Profile,
+    /// No charge.
+    Off,
+    /// The solar surplus only (see [`Solar`]).
+    Solar,
+    /// Breezone leaves it to the charger and its app (its own schedule is switched on).
+    Free,
 }
 
-pub fn slot_at<'a>(p: &'a Profile, color: &dyn Fn(NaiveDate) -> Option<DayColor>, tz: Tz, ts: i64) -> Option<SlotAt<'a>> {
-    let at = price::local(ts, tz);
-    let day = price::calendar_day(&p.calendar.day_start, at);
-    let (id, color) = price::kind_of_day(&p.calendar, color, day);
-    let kind = p.profiles.iter().find(|k| k.id == id)?;
-    let slot = price::slot_at(&kind.slots, |s| s.start.as_str(), at.time())?;
-    Some(SlotAt { slot, kind, color })
-}
-
-/// A stretch of time with one thing to do.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct Period {
-    pub start: i64,
-    pub end: i64,
-    pub mode: Mode,
-    pub kw: Option<f64>,
-    #[serde(skip)]
-    pub min_amps: Option<i64>,
-    #[serde(skip)]
-    pub max_amps: Option<i64>,
-    /// The kind of day.
-    pub profile: String,
-    pub color: Option<DayColor>,
-}
-
-/// What the profile does from `from` to `until`, as the stretches it holds.
-pub fn periods(p: &Profile, color: &dyn Fn(NaiveDate) -> Option<DayColor>, tz: Tz, from: i64, until: i64) -> Vec<Period> {
-    if until <= from {
-        return vec![];
+impl Mode {
+    /// The mode of an action: written, or the form of before (a profile, or none).
+    pub fn of_step(mode: Option<Mode>, profile_id: Option<i64>) -> Mode {
+        mode.unwrap_or(if profile_id.is_some() { Mode::Profile } else { Mode::Free })
     }
-    let times: Vec<&str> = p.profiles.iter().flat_map(|k| k.slots.iter().map(|s| s.start.as_str())).chain([p.calendar.day_start.as_str()]).collect();
-    let cuts = price::cuts(&times, tz, from, until);
-    let mut out: Vec<Period> = vec![];
-    for (i, start) in cuts.iter().enumerate() {
-        let end = cuts.get(i + 1).copied().unwrap_or(until);
-        let Some(s) = slot_at(p, color, tz, *start) else { continue };
-        let same = |prev: &Period| {
-            prev.end == *start && prev.mode == s.slot.mode && prev.kw == s.slot.kw && prev.min_amps == s.slot.min_amps && prev.max_amps == s.slot.max_amps && prev.color == s.color
-        };
-        match out.last_mut() {
-            Some(prev) if same(prev) => prev.end = end,
-            _ => out.push(Period {
-                start: *start,
-                end,
-                mode: s.slot.mode,
-                kw: s.slot.kw,
-                min_amps: s.slot.min_amps,
-                max_amps: s.slot.max_amps,
-                profile: s.kind.id.clone(),
-                color: s.color,
-            }),
+
+    fn stored(self) -> Option<&'static str> {
+        match self {
+            Mode::Profile => Some("profile"),
+            Mode::Off => Some("off"),
+            Mode::Solar => Some("solar"),
+            Mode::Free => None,
         }
     }
-    out
+
+    /// What a charger follows by its stored row.
+    pub fn of_row(row: &ChargerPlanRow) -> Mode {
+        match row.mode.as_deref() {
+            Some("profile") if row.profile_id.is_some() => Mode::Profile,
+            Some("off") => Mode::Off,
+            Some("solar") => Mode::Solar,
+            _ => Mode::Free,
+        }
+    }
 }
 
-/// The next time the charger charges (now, if it does): the first stretch of the next 48 hours
-/// that is not `off`.
-pub fn next(p: &Profile, color: &dyn Fn(NaiveDate) -> Option<DayColor>, tz: Tz, now: i64) -> Option<Period> {
-    periods(p, color, tz, now, now + NEXT_WITHIN).into_iter().find(|p| p.mode != Mode::Off)
+/// How a charger charges on the solar surplus.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+pub struct Solar {
+    /// `fixed`: charge at this power once the surplus is over `start_kw` (the rest from the grid);
+    /// else follow the surplus up to it (none: the charger's maximum).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kw: Option<f64>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub fixed: bool,
+    /// Start when the surplus is over it, stop below it (kW; none: the charger's minimum current).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_kw: Option<f64>,
 }
 
-/// A local day of the profile, from midnight to midnight.
-#[derive(Debug, Clone, Serialize)]
-pub struct DayView {
-    /// "YYYY-MM-DD".
-    pub day: String,
-    /// Its colour, when the calendar follows it and it is known.
-    pub color: Option<DayColor>,
-    pub periods: Vec<Period>,
+impl Solar {
+    pub fn validate(&self) -> Result<(), String> {
+        if !kw_ok(self.kw) || !kw_ok(self.start_kw) {
+            return Err(format!("solar: powers between 0 and {MAX_KW} kW"));
+        }
+        if self.fixed && self.kw.is_none() {
+            return Err("solar: a fixed power needs its kW".into());
+        }
+        Ok(())
+    }
+
+    fn of(row: &ChargerPlanRow) -> Solar {
+        row.solar.as_deref().and_then(|s| serde_json::from_str(s).ok()).unwrap_or_default()
+    }
+
+    /// The plan on a charger: the currents it keeps between, and the surplus that starts it.
+    pub fn plan(&self, c: &Charger) -> Plan {
+        let (lo, hi) = (c.limit_min, c.limit_max.max(c.limit_min));
+        let max_amps = self.kw.map_or(hi, |kw| amps_of(kw, c.voltage, c.phases, lo, hi));
+        let min_amps = if self.fixed { max_amps } else { lo };
+        Plan::Solar { min_amps, max_amps, start_w: self.start_kw.map(|k| k * 1000.0) }
+    }
 }
 
-fn midnight(day: NaiveDate, tz: Tz) -> i64 {
-    tz.from_local_datetime(&day.and_time(chrono::NaiveTime::MIN)).earliest().map_or(0, |t| t.timestamp())
-}
-
-/// The `n` local days from `first`.
-pub fn days(p: &Profile, color: &dyn Fn(NaiveDate) -> Option<DayColor>, tz: Tz, first: NaiveDate, n: i64) -> Vec<DayView> {
-    (0..n)
-        .map(|i| {
-            let day = first + Duration::days(i);
-            let (_, c) = price::kind_of_day(&p.calendar, color, day);
-            DayView { day: day.format("%Y-%m-%d").to_string(), color: c, periods: periods(p, color, tz, midnight(day, tz), midnight(day + Duration::days(1), tz)) }
-        })
-        .collect()
+/// What a charger is told, as an action gives it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Choice {
+    pub mode: Mode,
+    pub profile_id: Option<i64>,
+    pub solar: Option<Solar>,
 }
 
 /// The current that gives at most `kw` on a charger (between its limits).
@@ -259,6 +161,8 @@ pub struct Charger {
     pub phases: u32,
     pub limit_min: i64,
     pub limit_max: i64,
+    /// Its own schedule (the app of the charger) decides when it charges.
+    pub own_schedule: bool,
 }
 
 impl Charger {
@@ -272,6 +176,7 @@ impl Charger {
             phases: num("phases").unwrap_or(1.0) as u32,
             limit_min: num("limit_min").unwrap_or(6.0) as i64,
             limit_max: num("limit_max").unwrap_or(32.0) as i64,
+            own_schedule: d.state.get("timer").and_then(Value::as_bool).unwrap_or(false),
         }
     }
 
@@ -302,9 +207,9 @@ pub fn now_over(row: &ChargerPlanRow, c: &Charger, now: i64) -> Option<NowOver> 
     }
 }
 
-/// What a charger does now by its plan: the charge asked now, else the slot of its profile
-/// (`None`: it follows nothing).
-pub fn plan_now(row: &ChargerPlanRow, profile: Option<&Profile>, c: &Charger, color: &dyn Fn(NaiveDate) -> Option<DayColor>, tz: Tz, now: i64) -> Option<Plan> {
+/// What a charger does now: the charge asked now, else what it was told (`None`: it is left to
+/// itself, or to its own schedule).
+pub fn plan_now(row: &ChargerPlanRow, profile: Option<&ChargeProfileRow>, c: &Charger, now: i64) -> Option<Plan> {
     if let Some(amps) = row.now_amps.filter(|_| now_over(row, c, now).is_none()) {
         let left = match (row.now_kwh, row.now_base_energy) {
             (Some(kwh), Some(base)) => Some((kwh - (c.session_energy - base)).max(0.0)),
@@ -312,38 +217,20 @@ pub fn plan_now(row: &ChargerPlanRow, profile: Option<&Profile>, c: &Charger, co
         };
         return Some(Plan::Max { amps: amps.clamp(c.limit_min, c.limit_max.max(c.limit_min)), until: row.now_until, now: true, left_kwh: left });
     }
-    let p = profile?;
-    let horizon = now + 7 * 24 * 3600;
-    let list = periods(p, color, tz, now, horizon);
-    let first = list.first()?.clone();
-    // Until it does something else (whatever the colour of the days in between).
-    let same = |q: &Period| q.mode == first.mode && q.kw == first.kw && q.min_amps == first.min_amps && q.max_amps == first.max_amps;
-    let end = list.iter().take_while(|q| same(q)).last().map_or(first.end, |q| q.end);
-    let until = Some(end).filter(|end| *end < horizon);
-    Some(match first.mode {
-        Mode::Off => Plan::Off { until },
-        Mode::Max => Plan::Max { amps: c.amps(first.kw), until, now: false, left_kwh: None },
-        Mode::Solar => {
-            let lo = first.min_amps.unwrap_or(c.limit_min).clamp(c.limit_min, c.limit_max.max(c.limit_min));
-            let hi = first.max_amps.unwrap_or(16.min(c.limit_max)).clamp(lo, c.limit_max.max(lo));
-            Plan::Solar { min_amps: lo, max_amps: hi }
-        }
-    })
+    if c.own_schedule {
+        return None;
+    }
+    match Mode::of_row(row) {
+        Mode::Profile => profile.map(|p| Plan::Max { amps: c.amps(p.kw), until: None, now: false, left_kwh: None }),
+        Mode::Off => Some(Plan::Off { until: None }),
+        Mode::Solar => Some(Solar::of(row).plan(c)),
+        Mode::Free => None,
+    }
 }
 
-/// The stored profiles, by id (those this version cannot read are left out).
-pub async fn profiles(state: &AppState) -> sqlx::Result<HashMap<i64, Profile>> {
-    Ok(db::list_charge_profiles(&state.db).await?.iter().filter_map(|r| Profile::of(r).map(|p| (r.id, p))).collect())
-}
-
-/// The Tempo colours known around now (yesterday to the day after tomorrow).
-pub async fn colors_around(state: &AppState, now: i64) -> sqlx::Result<HashMap<NaiveDate, DayColor>> {
-    let today = crate::rollup::local_day(now, state.cfg.timezone);
-    crate::tempo::colors(&state.db, today - Duration::days(1), today + Duration::days(3)).await
-}
-
-/// The plan of every charger that follows one now, with the name of its profile. A charge asked
-/// now that is over is cleared (it is said in the activity feed).
+/// The plan of every charger that follows one now, with who set it (the automation, else the
+/// profile) for the texts. A charge asked now that is over is cleared (it is said in the activity
+/// feed).
 pub async fn plans(state: &AppState, devices: &[DeviceView], now: i64) -> HashMap<i64, (Plan, Option<String>)> {
     let rows = match db::list_charger_plans(&state.db).await {
         Ok(rows) => rows,
@@ -355,10 +242,8 @@ pub async fn plans(state: &AppState, devices: &[DeviceView], now: i64) -> HashMa
     if rows.is_empty() {
         return HashMap::new();
     }
-    let profiles = profiles(state).await.unwrap_or_default();
-    let known = colors_around(state, now).await.unwrap_or_default();
-    let color = |d: NaiveDate| known.get(&d).copied();
-    let tz = state.cfg.timezone;
+    let profiles: HashMap<i64, ChargeProfileRow> = db::list_charge_profiles(&state.db).await.unwrap_or_default().into_iter().map(|p| (p.id, p)).collect();
+    let rules: HashMap<i64, String> = db::list_automations(&state.db).await.unwrap_or_default().into_iter().map(|r| (r.id, r.name)).collect();
     let mut out = HashMap::new();
     for mut row in rows {
         let Some(d) = devices.iter().find(|d| d.id == row.device_id && d.traits.iter().any(|t| t.starts_with("ev.charger@"))) else { continue };
@@ -391,80 +276,88 @@ pub async fn plans(state: &AppState, devices: &[DeviceView], now: i64) -> HashMa
             row = ChargerPlanRow { now_amps: None, now_kw: None, now_until: None, now_kwh: None, now_base_energy: None, ..row };
         }
         let profile = row.profile_id.and_then(|id| profiles.get(&id));
-        if let Some(plan) = plan_now(&row, profile, &c, &color, tz, now) {
-            let name = if row.now_amps.is_some() { None } else { profile.map(|p| p.name.clone()) };
-            out.insert(row.device_id, (plan, name));
+        if let Some(plan) = plan_now(&row, profile, &c, now) {
+            let by = if row.now_amps.is_some() { None } else { row.automation_id.and_then(|id| rules.get(&id).cloned()).or_else(|| profile.map(|p| p.name.clone())) };
+            out.insert(row.device_id, (plan, by));
         }
     }
     out
 }
 
-/// Gives a charger a profile (`None`: none): it takes it at once, even after a stop by hand.
-pub async fn set_profile(state: &AppState, device_id: i64, profile_id: Option<i64>) -> crate::error::ApiResult<()> {
+/// Tells a charger what to do (`automation`: the one that does, `None`: by hand). It takes it at
+/// once, even after a stop by hand. `Free` switches its own schedule on.
+pub async fn set(state: &AppState, device_id: i64, choice: Choice, automation: Option<i64>) -> crate::error::ApiResult<()> {
     use crate::error::ApiError;
-    if let Some(pid) = profile_id {
-        if !db::list_charge_profiles(&state.db).await?.iter().any(|r| r.id == pid) {
+    if choice.mode == Mode::Profile {
+        let known = match choice.profile_id {
+            Some(pid) => db::list_charge_profiles(&state.db).await?.iter().any(|r| r.id == pid),
+            None => false,
+        };
+        if !known {
             return Err(ApiError::not_found(crate::text!("profil de recharge introuvable", "charging profile not found", "perfil de carga no encontrado")));
         }
     }
+    if let Some(s) = &choice.solar {
+        s.validate().map_err(ApiError::bad_request)?;
+    }
     let row = db::charger_plan(&state.db, device_id).await?.unwrap_or(ChargerPlanRow { device_id, ..Default::default() });
-    db::set_charger_plan(&state.db, &ChargerPlanRow { profile_id, ..row }).await?;
+    let solar = (choice.mode == Mode::Solar).then(|| serde_json::to_string(&choice.solar.unwrap_or_default()).unwrap_or_default());
+    let profile_id = choice.profile_id.filter(|_| choice.mode == Mode::Profile);
+    db::set_charger_plan(&state.db, &ChargerPlanRow { mode: choice.mode.stored().map(Into::into), profile_id, automation_id: automation, solar, ..row }).await?;
+    if choice.mode == Mode::Free {
+        own_schedule(state, device_id, true).await?;
+    }
     state.surplus.release(device_id).await;
     Ok(())
 }
 
-/// The chargers still in the list of the solar surplus (from before the charging profiles) follow a
-/// "Solaire" profile instead, with their currents, and leave the list. Their guarantee goes (a
-/// schedule does it now), and the activity feed says so. A charger that already follows a profile
+/// Switches the schedule of the charger's own app on or off, when it has one.
+pub async fn own_schedule(state: &AppState, device_id: i64, on: bool) -> crate::error::ApiResult<()> {
+    let Some(d) = crate::devices::get(state, device_id).await? else { return Ok(()) };
+    if d.state.get("timer").and_then(Value::as_bool).is_none() || d.state.get("timer").and_then(Value::as_bool) == Some(on) {
+        return Ok(());
+    }
+    let input =
+        crate::devices::ActionInput { trait_name: "ev.charger".into(), action: "set_timer".into(), params: serde_json::Map::from_iter([("on".to_string(), Value::Bool(on))]) };
+    crate::devices::act(state, d.id, &input, "Breezone").await
+}
+
+/// The chargers still in the list of the solar surplus (from before the charging profiles) charge
+/// on the surplus by their plan instead, with their currents, and leave the list. Their guarantee
+/// goes (an automation does it now), and the activity feed says so. A charger told something else
 /// keeps it.
 pub async fn adopt_surplus_chargers(state: &AppState) -> anyhow::Result<()> {
     let chargers = db::chargers(&state.db).await?;
     for row in db::list_surplus_loads(&state.db).await? {
         let Some((_, name)) = chargers.iter().find(|(id, _)| *id == row.device_id) else { continue };
         let plan = db::charger_plan(&state.db, row.device_id).await?.unwrap_or(ChargerPlanRow { device_id: row.device_id, ..Default::default() });
-        let given = if row.enabled && plan.profile_id.is_none() {
-            let solar = Profile {
-                name: "Solaire".into(),
-                profiles: vec![DayKind {
-                    id: "d".into(),
-                    name: "Tous les jours".into(),
-                    color: Some("#f59e0b".into()),
-                    slots: vec![Slot { start: "00:00".into(), mode: Mode::Solar, kw: None, min_amps: row.min_amps, max_amps: row.max_amps }],
-                }],
-                calendar: Calendar { day_start: "00:00".into(), weekdays: vec!["d".into(); 7], colors: Default::default() },
-            };
-            // The same "Solaire" for every charger set alike.
-            let same = db::list_charge_profiles(&state.db).await?.into_iter().find(|p| Profile::of(p).is_some_and(|p| p == solar));
-            let id = match same {
-                Some(p) => p.id,
-                None => db::insert_charge_profile(&state.db, &solar.name, &solar.plan_json()).await?,
-            };
-            db::set_charger_plan(&state.db, &ChargerPlanRow { profile_id: Some(id), ..plan }).await?;
-            true
-        } else {
-            false
-        };
+        let given = row.enabled && Mode::of_row(&plan) == Mode::Free;
+        if given {
+            // Its currents as powers (230 V, one phase: what it said is not known here).
+            let solar = Solar { kw: row.max_amps.map(|a| kw_of(a, VOLTAGE, 1)), fixed: false, start_kw: row.min_amps.map(|a| kw_of(a, VOLTAGE, 1)) };
+            db::set_charger_plan(&state.db, &ChargerPlanRow { mode: Some("solar".into()), solar: serde_json::to_string(&solar).ok(), automation_id: None, ..plan }).await?;
+        }
         db::delete_surplus_load(&state.db, row.device_id).await?;
         let name = name.clone();
         let text = match (&row.guarantee_kwh, &row.guarantee_by) {
             (Some(kwh), Some(by)) if given => crate::text!(
-                "{0} suit désormais le profil de recharge « Solaire » ; sa garantie (+{1} kWh avant {2}) est à refaire avec une programmation",
-                "{0} now follows the charging profile “Solaire”; its guarantee (+{1} kWh before {2}) is to be made again with a schedule",
-                "{0} sigue ahora el perfil de carga «Solaire»; su garantía (+{1} kWh antes de las {2}) hay que rehacerla con una programación",
+                "{0} charge désormais sur le surplus solaire par son réglage de recharge ; sa garantie (+{1} kWh avant {2}) est à refaire avec un automatisme",
+                "{0} now charges on the solar surplus by its charging setting; its guarantee (+{1} kWh before {2}) is to be made again with an automation",
+                "{0} carga ahora con el excedente solar según su ajuste de carga; su garantía (+{1} kWh antes de las {2}) hay que rehacerla con una automatización",
                 name,
                 kwh,
                 by
             ),
             _ if given => crate::text!(
-                "{0} suit désormais le profil de recharge « Solaire » (le surplus solaire)",
-                "{0} now follows the charging profile “Solaire” (the solar surplus)",
-                "{0} sigue ahora el perfil de carga «Solaire» (el excedente solar)",
+                "{0} charge désormais sur le surplus solaire par son réglage de recharge",
+                "{0} now charges on the solar surplus by its charging setting",
+                "{0} carga ahora con el excedente solar según su ajuste de carga",
                 name
             ),
             _ => crate::text!(
-                "{0} quitte la liste du surplus solaire : une borne le suit par son profil de recharge",
-                "{0} leaves the list of the solar surplus: a charger follows it by its charging profile",
-                "{0} sale de la lista del excedente solar: un cargador lo sigue con su perfil de carga",
+                "{0} quitte la liste du surplus solaire : une borne le suit par un automatisme",
+                "{0} leaves the list of the solar surplus: a charger follows it by an automation",
+                "{0} sale de la lista del excedente solar: un cargador lo sigue con una automatización",
                 name
             ),
         };
@@ -492,7 +385,7 @@ pub async fn charge_now(state: &AppState, d: &DeviceView, input: &NowInput) -> c
     use crate::error::ApiError;
     let now = db::now();
     let bad = |fr: &str, en: &str, es: &str| ApiError::bad_request(crate::i18n::Text { fr: fr.into(), en: en.into(), es: es.into() });
-    if input.kw.is_some_and(|k| !k.is_finite() || k <= 0.0 || k > MAX_KW) {
+    if !kw_ok(input.kw) {
         return Err(bad("puissance de 0 à 50 kW", "power from 0 to 50 kW", "potencia de 0 a 50 kW"));
     }
     if input.until.is_some_and(|u| u <= now || u > now + 7 * 24 * 3600) {
@@ -527,114 +420,62 @@ pub async fn charge_now(state: &AppState, d: &DeviceView, input: &NowInput) -> c
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::price::ColorProfiles;
-    use chrono_tz::Europe::Paris;
-
-    fn slot(start: &str, mode: Mode, kw: Option<f64>) -> Slot {
-        Slot { start: start.into(), mode, kw, min_amps: None, max_amps: None }
-    }
-
-    /// The blue night: 7 kW in the off-peak hours (22:00 to 06:00) of a blue day, nothing on the
-    /// peak hours, nothing on white and red days; days of Tempo from 06:00 to 06:00.
-    fn blue_night() -> Profile {
-        Profile {
-            name: "Nuit bleue".into(),
-            profiles: vec![
-                DayKind {
-                    id: "blue".into(),
-                    name: "Jour bleu".into(),
-                    color: None,
-                    slots: vec![slot("00:00", Mode::Max, Some(7.0)), slot("06:00", Mode::Off, None), slot("22:00", Mode::Max, Some(7.0))],
-                },
-                DayKind { id: "other".into(), name: "Blanc et rouge".into(), color: None, slots: vec![slot("00:00", Mode::Off, None)] },
-            ],
-            calendar: Calendar {
-                day_start: "06:00".into(),
-                weekdays: vec!["blue".into(); 7],
-                colors: ColorProfiles { blue: Some("blue".into()), white: Some("other".into()), red: Some("other".into()) },
-            },
-        }
-    }
-
-    fn at(date: &str, time: &str) -> i64 {
-        let d = NaiveDate::parse_from_str(date, "%Y-%m-%d").unwrap();
-        Paris.from_local_datetime(&d.and_time(price::clock(time).unwrap())).earliest().unwrap().timestamp()
-    }
-
-    fn day(s: &str) -> NaiveDate {
-        NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap()
-    }
-
-    /// Monday 2026-11-16 blue, Tuesday red, Wednesday blue.
-    fn colors(d: NaiveDate) -> Option<DayColor> {
-        match d.format("%d").to_string().as_str() {
-            "16" | "18" => Some(DayColor::Blue),
-            "17" => Some(DayColor::Red),
-            _ => None,
-        }
-    }
 
     fn trydan() -> Charger {
-        Charger { online: true, plugged: true, session_energy: 0.0, voltage: 230.0, phases: 1, limit_min: 6, limit_max: 32 }
+        Charger { online: true, plugged: true, session_energy: 0.0, voltage: 230.0, phases: 1, limit_min: 6, limit_max: 32, own_schedule: false }
+    }
+
+    fn profile(kw: Option<f64>) -> ChargeProfileRow {
+        ChargeProfileRow { id: 1, name: "Nuit 7 kW".into(), kw, color: None }
+    }
+
+    fn told(mode: &str) -> ChargerPlanRow {
+        ChargerPlanRow { device_id: 1, mode: Some(mode.into()), profile_id: (mode == "profile").then_some(1), ..Default::default() }
     }
 
     #[test]
     fn a_profile_is_checked() {
-        assert_eq!(validate(&blue_night()), Ok(()));
-        let mut p = blue_night();
-        p.profiles[0].slots[0].start = "01:00".into();
-        assert!(validate(&p).unwrap_err().contains("00:00"));
-        let mut p = blue_night();
-        p.profiles[0].slots[2].kw = Some(70.0);
-        assert!(validate(&p).is_err(), "more than a charger of a home");
-        let mut p = blue_night();
-        p.calendar.colors.red = Some("nope".into());
-        assert!(validate(&p).is_err());
-        let mut p = blue_night();
-        p.profiles[1].slots[0].min_amps = Some(16);
-        p.profiles[1].slots[0].max_amps = Some(10);
-        assert!(validate(&p).is_err(), "the minimum above the maximum");
-        let mut p = blue_night();
-        p.name = " ".into();
-        assert!(validate(&p).is_err());
-        let json = serde_json::json!({"name": "x", "profiles": [{"id": "a", "name": "A", "slots": [{"start": "00:00", "mode": "sun"}]}], "calendar": {"weekdays": vec!["a"; 7]}});
-        assert!(serde_json::from_value::<Profile>(json).is_err(), "an unknown mode");
+        let p = |name: &str, kw| ProfileInput { name: name.into(), kw, color: None };
+        assert_eq!(validate(&p("Nuit 7 kW", Some(7.0))), Ok(()));
+        assert_eq!(validate(&p("Maximum", None)), Ok(()));
+        assert!(validate(&p(" ", Some(7.0))).is_err());
+        assert!(validate(&p("Trop", Some(70.0))).is_err(), "more than a charger of a home");
+        assert!(validate(&p("Rien", Some(0.0))).is_err());
+        assert!(Solar { fixed: true, ..Default::default() }.validate().is_err(), "a fixed power needs its kW");
+        assert_eq!(Solar { kw: Some(2.0), fixed: true, start_kw: Some(1.0) }.validate(), Ok(()));
     }
 
     #[test]
-    fn the_blue_night_charges_in_the_off_peak_hours_of_blue_days_only() {
-        let p = blue_night();
-        let mode = |date: &str, time: &str| slot_at(&p, &colors, Paris, at(date, time)).map(|s| (s.slot.mode, s.slot.kw)).unwrap();
-        assert_eq!(mode("2026-11-16", "12:00"), (Mode::Off, None), "peak hours of a blue day");
-        assert_eq!(mode("2026-11-16", "23:00"), (Mode::Max, Some(7.0)), "off-peak hours of a blue day");
-        assert_eq!(mode("2026-11-17", "03:00"), (Mode::Max, Some(7.0)), "the night still belongs to the blue Monday");
-        assert_eq!(mode("2026-11-17", "07:00"), (Mode::Off, None), "red Tuesday");
-        assert_eq!(mode("2026-11-17", "23:00"), (Mode::Off, None), "a red night");
-        assert_eq!(mode("2026-11-18", "05:59"), (Mode::Off, None), "still the red day until 06:00");
-        assert_eq!(mode("2026-11-18", "22:00"), (Mode::Max, Some(7.0)), "blue again");
+    fn the_mode_of_an_action_reads_the_form_of_before() {
+        assert_eq!(Mode::of_step(None, Some(3)), Mode::Profile);
+        assert_eq!(Mode::of_step(None, None), Mode::Free);
+        assert_eq!(Mode::of_step(Some(Mode::Solar), None), Mode::Solar);
+        assert_eq!(serde_json::to_value(Mode::Off).unwrap(), "off");
     }
 
     #[test]
-    fn the_periods_and_the_next_charge() {
-        let p = blue_night();
-        let list = periods(&p, &colors, Paris, at("2026-11-16", "06:00"), at("2026-11-17", "06:00"));
-        let shape: Vec<(i64, Mode)> = list.iter().map(|p| ((p.end - p.start) / 3600, p.mode)).collect();
-        assert_eq!(shape, vec![(16, Mode::Off), (8, Mode::Max)]);
-        assert_eq!(list[1].color, Some(DayColor::Blue));
-        // From Monday noon: the night of Monday.
-        let n = next(&p, &colors, Paris, at("2026-11-16", "12:00")).unwrap();
-        assert_eq!((n.start, n.end, n.kw), (at("2026-11-16", "22:00"), at("2026-11-17", "06:00"), Some(7.0)));
-        // From Tuesday (red) morning: Wednesday night, the next blue one.
-        let n = next(&p, &colors, Paris, at("2026-11-17", "08:00")).unwrap();
-        assert_eq!(n.start, at("2026-11-18", "22:00"));
-        // In the night: now.
-        assert_eq!(next(&p, &colors, Paris, at("2026-11-16", "23:00")).unwrap().start, at("2026-11-16", "23:00"));
-        // Three local days, each from midnight.
-        let three = days(&p, &colors, Paris, day("2026-11-16"), 3);
-        assert_eq!(three.iter().map(|d| d.color).collect::<Vec<_>>(), vec![Some(DayColor::Blue), Some(DayColor::Red), Some(DayColor::Blue)]);
-        let monday: Vec<(i64, Mode)> = three[0].periods.iter().map(|p| ((p.end - p.start) / 3600, p.mode)).collect();
-        // Sunday's night (no colour: its day of the week, blue) until 06:00, then Monday.
-        assert_eq!(monday, vec![(6, Mode::Max), (16, Mode::Off), (2, Mode::Max)]);
+    fn what_a_charger_does_by_what_it_was_told() {
+        let c = trydan();
+        assert_eq!(plan_now(&told("profile"), Some(&profile(Some(7.0))), &c, 0), Some(Plan::Max { amps: 30, until: None, now: false, left_kwh: None }));
+        assert_eq!(plan_now(&told("profile"), Some(&profile(None)), &c, 0), Some(Plan::Max { amps: 32, until: None, now: false, left_kwh: None }), "the charger's maximum");
+        assert_eq!(plan_now(&told("profile"), None, &c, 0), None, "a profile gone");
+        assert_eq!(plan_now(&told("off"), None, &c, 0), Some(Plan::Off { until: None }));
+        assert_eq!(plan_now(&ChargerPlanRow { device_id: 1, ..Default::default() }, None, &c, 0), None, "left alone");
+        // Its own schedule on: the automations do not drive it.
+        assert_eq!(plan_now(&told("off"), None, &Charger { own_schedule: true, ..c }, 0), None);
+    }
+
+    #[test]
+    fn the_solar_surplus_followed_or_at_a_fixed_power() {
+        let c = trydan();
+        // Followed, up to the charger's maximum, from its minimum.
+        assert_eq!(Solar::default().plan(&c), Plan::Solar { min_amps: 6, max_amps: 32, start_w: None });
+        // Followed up to 3 kW.
+        assert_eq!(Solar { kw: Some(3.0), ..Default::default() }.plan(&c), Plan::Solar { min_amps: 6, max_amps: 13, start_w: None });
+        // 2 kW once the surplus is over 1 kW.
+        assert_eq!(Solar { kw: Some(2.0), fixed: true, start_kw: Some(1.0) }.plan(&c), Plan::Solar { min_amps: 8, max_amps: 8, start_w: Some(1000.0) });
+        let row = ChargerPlanRow { solar: Some(r#"{"kw":2,"fixed":true,"start_kw":1}"#.into()), ..told("solar") };
+        assert_eq!(plan_now(&row, None, &c, 0), Some(Plan::Solar { min_amps: 8, max_amps: 8, start_w: Some(1000.0) }));
     }
 
     #[test]
@@ -649,10 +490,15 @@ mod tests {
 
     #[test]
     fn a_charge_now_lasts_until_unplugged_a_time_or_its_energy() {
-        let now = at("2026-11-16", "12:00");
-        let asked = ChargerPlanRow { device_id: 1, profile_id: None, now_amps: Some(30), now_kw: Some(7.0), now_until: None, now_kwh: None, now_base_energy: Some(2.0) };
+        let now = 1_000_000;
+        let asked = ChargerPlanRow { device_id: 1, now_amps: Some(30), now_kw: Some(7.0), now_base_energy: Some(2.0), ..Default::default() };
         let c = Charger { session_energy: 5.0, ..trydan() };
-        assert_eq!(plan_now(&asked, None, &c, &colors, Paris, now), Some(Plan::Max { amps: 30, until: None, now: true, left_kwh: None }));
+        assert_eq!(plan_now(&asked, None, &c, now), Some(Plan::Max { amps: 30, until: None, now: true, left_kwh: None }));
+        assert_eq!(
+            plan_now(&asked, None, &Charger { own_schedule: true, ..c }, now),
+            Some(Plan::Max { amps: 30, until: None, now: true, left_kwh: None }),
+            "asked now, whatever its own schedule"
+        );
         assert_eq!(now_over(&asked, &Charger { plugged: false, ..c }, now), Some(NowOver::Unplugged));
         assert_eq!(now_over(&asked, &Charger { online: false, plugged: false, ..c }, now), None, "unreachable is not unplugged");
         let until = ChargerPlanRow { now_until: Some(now + 60), ..asked.clone() };
@@ -660,25 +506,10 @@ mod tests {
         assert_eq!(now_over(&until, &c, now + 60), Some(NowOver::Time));
         // +5 kWh from 2 kWh: 3 done, 2 to go; done at 7.
         let kwh = ChargerPlanRow { now_kwh: Some(5.0), ..asked.clone() };
-        assert_eq!(plan_now(&kwh, None, &c, &colors, Paris, now), Some(Plan::Max { amps: 30, until: None, now: true, left_kwh: Some(2.0) }));
+        assert_eq!(plan_now(&kwh, None, &c, now), Some(Plan::Max { amps: 30, until: None, now: true, left_kwh: Some(2.0) }));
         assert_eq!(now_over(&kwh, &Charger { session_energy: 7.0, ..c }, now), Some(NowOver::Energy));
-        // Over: back to the profile.
-        let p = blue_night();
-        let with_profile = ChargerPlanRow { profile_id: Some(1), ..kwh };
-        assert_eq!(plan_now(&with_profile, Some(&p), &Charger { session_energy: 7.0, ..c }, &colors, Paris, now), Some(Plan::Off { until: Some(at("2026-11-16", "22:00")) }));
-    }
-
-    #[test]
-    fn the_plan_of_a_profile_at_a_moment() {
-        let p = blue_night();
-        let row = ChargerPlanRow { device_id: 1, profile_id: Some(1), ..Default::default() };
-        let plan = |date, time| plan_now(&row, Some(&p), &trydan(), &colors, Paris, at(date, time));
-        assert_eq!(plan("2026-11-16", "23:00"), Some(Plan::Max { amps: 30, until: Some(at("2026-11-17", "06:00")), now: false, left_kwh: None }));
-        // Red Tuesday then a red night: no charge until Wednesday 22:00.
-        assert_eq!(plan("2026-11-17", "07:00"), Some(Plan::Off { until: Some(at("2026-11-18", "22:00")) }));
-        let mut solar = p.clone();
-        solar.profiles[1].slots[0] = Slot { start: "00:00".into(), mode: Mode::Solar, kw: None, min_amps: Some(8), max_amps: None };
-        assert_eq!(plan_now(&row, Some(&solar), &trydan(), &colors, Paris, at("2026-11-17", "12:00")), Some(Plan::Solar { min_amps: 8, max_amps: 16 }));
-        assert_eq!(plan_now(&ChargerPlanRow { profile_id: None, ..row }, None, &trydan(), &colors, Paris, at("2026-11-17", "12:00")), None);
+        // Over: back to what it was told.
+        let off = ChargerPlanRow { mode: Some("off".into()), ..kwh };
+        assert_eq!(plan_now(&off, None, &Charger { session_energy: 7.0, ..c }, now), Some(Plan::Off { until: None }));
     }
 }

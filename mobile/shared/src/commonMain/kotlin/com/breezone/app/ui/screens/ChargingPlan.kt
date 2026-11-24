@@ -44,6 +44,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -52,7 +53,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.breezone.app.data.ChargeDay
+import com.breezone.app.data.ChargeEffect
+import com.breezone.app.data.ChargeEffectMode
 import com.breezone.app.data.ChargeMode
+import com.breezone.app.data.ChargeProfileRef
 import com.breezone.app.data.ChargeNext
 import com.breezone.app.data.ChargeNowInput
 import com.breezone.app.data.ChargingView
@@ -60,48 +64,7 @@ import com.breezone.app.data.DayColor
 import com.breezone.app.data.DeviceView
 import com.breezone.app.data.EvChargerState
 import com.breezone.app.data.Hub
-import com.breezone.app.resources.Res
-import com.breezone.app.resources.charging_any_profile
-import com.breezone.app.resources.charging_back_to_profile
-import com.breezone.app.resources.charging_day_color
-import com.breezone.app.resources.charging_in_progress
-import com.breezone.app.resources.charging_kw
-import com.breezone.app.resources.charging_kw_max
-import com.breezone.app.resources.charging_kwh_unit
-import com.breezone.app.resources.charging_legend_max
-import com.breezone.app.resources.charging_legend_off
-import com.breezone.app.resources.charging_legend_solar
-import com.breezone.app.resources.charging_maximum
-import com.breezone.app.resources.charging_next
-import com.breezone.app.resources.charge_profiles_manage
-import com.breezone.app.resources.charging_no_profile
-import com.breezone.app.resources.charging_no_profile_admin
-import com.breezone.app.resources.charging_none
-import com.breezone.app.resources.charging_now
-import com.breezone.app.resources.charging_now_hint
-import com.breezone.app.resources.charging_now_kwh_left
-import com.breezone.app.resources.charging_now_line
-import com.breezone.app.resources.charging_now_shedding
-import com.breezone.app.resources.charging_now_start
-import com.breezone.app.resources.charging_now_until
-import com.breezone.app.resources.charging_now_unplugged
-import com.breezone.app.resources.charging_possible
-import com.breezone.app.resources.charging_power
-import com.breezone.app.resources.charging_profile
-import com.breezone.app.resources.charging_profile_hint
-import com.breezone.app.resources.charging_stop_now
-import com.breezone.app.resources.charging_tomorrow_at
-import com.breezone.app.resources.charging_until
-import com.breezone.app.resources.charging_until_energy
-import com.breezone.app.resources.charging_until_time
-import com.breezone.app.resources.charging_until_unplugged
-import com.breezone.app.resources.charging_up_to
-import com.breezone.app.resources.days_names
-import com.breezone.app.resources.tempo_blue
-import com.breezone.app.resources.tempo_red
-import com.breezone.app.resources.tempo_today
-import com.breezone.app.resources.tempo_tomorrow
-import com.breezone.app.resources.tempo_white
+import com.breezone.app.resources.*
 import com.breezone.app.ui.clock
 import com.breezone.app.ui.decimalSeparator
 import com.breezone.app.ui.icons.FzIcons
@@ -148,12 +111,31 @@ private fun whenText(ts: Long): String {
     }
 }
 
+/** "#14b8a6" → a colour (none: not one). */
+internal fun hexColor(hex: String?): Color? = hex?.removePrefix("#")?.takeIf { it.length == 6 }?.toLongOrNull(16)?.let { Color(0xFF000000 or it) }
+
+/** The colour of a stretch of a frieze: a profile by its own, the rest by what it is. */
 @Composable
-private fun modeColor(mode: ChargeMode): Color = when (mode) {
-    ChargeMode.Max -> MaterialTheme.colorScheme.primary
-    ChargeMode.Solar -> Fz.colors.warning
-    ChargeMode.Off -> MaterialTheme.colorScheme.surfaceVariant
+internal fun effectColor(effect: ChargeEffect?, profiles: List<ChargeProfileRef>): Color = when (effect?.mode) {
+    ChargeEffectMode.Profile -> hexColor(profiles.firstOrNull { it.id == effect.profileId }?.color) ?: MaterialTheme.colorScheme.primary
+    ChargeEffectMode.Now -> MaterialTheme.colorScheme.primary
+    ChargeEffectMode.Solar -> Fz.colors.warning
+    ChargeEffectMode.Off -> MaterialTheme.colorScheme.surfaceVariant
+    ChargeEffectMode.Free, null -> Color.Transparent
 }
+
+/** What a stretch of a frieze tells the charger, in a few words. */
+@Composable
+internal fun effectText(effect: ChargeEffect?, profiles: List<ChargeProfileRef>): String = when (effect?.mode) {
+    ChargeEffectMode.Profile -> profiles.firstOrNull { it.id == effect.profileId }?.name ?: stringResource(Res.string.charge_profiles_deleted)
+    ChargeEffectMode.Now -> stringResource(Res.string.charging_now)
+    ChargeEffectMode.Solar -> stringResource(Res.string.charging_legend_solar)
+    ChargeEffectMode.Off -> stringResource(Res.string.charging_legend_off)
+    ChargeEffectMode.Free -> stringResource(Res.string.charging_free)
+    null -> ""
+}
+
+internal fun dim(effect: ChargeEffect?) = effect == null || effect.mode == ChargeEffectMode.Off || effect.mode == ChargeEffectMode.Free
 
 @Composable
 private fun tempoTone(color: DayColor): Color = when (color) {
@@ -163,29 +145,17 @@ private fun tempoTone(color: DayColor): Color = when (color) {
 }
 
 @Composable
-private fun modeText(mode: ChargeMode, kw: Double?): String = when (mode) {
-    ChargeMode.Max -> stringResource(Res.string.charging_up_to, kw(kw ?: 0.0))
-    ChargeMode.Solar -> stringResource(Res.string.charging_legend_solar)
-    ChargeMode.Off -> stringResource(Res.string.charging_legend_off)
-}
-
-@Composable
 private fun NextCharge(next: ChargeNext) {
     val now = nowSeconds()
-    val colorName = next.color?.let {
-        stringResource(
-            when (it) {
-                DayColor.Blue -> Res.string.tempo_blue
-                DayColor.White -> Res.string.tempo_white
-                DayColor.Red -> Res.string.tempo_red
-            },
-        )
-    }
     val hours = (next.end - maxOf(now, next.start)) / 3600.0
+    val what = when (next.effect.mode) {
+        ChargeEffectMode.Solar -> stringResource(Res.string.charging_legend_solar)
+        else -> stringResource(Res.string.charging_up_to, kw(next.kw ?: 0.0))
+    }
     val details = listOfNotNull(
-        modeText(next.mode, next.kw),
-        colorName?.let { stringResource(Res.string.charging_day_color, it.lowercase()) },
-        next.kw?.takeIf { next.mode == ChargeMode.Max }?.let { stringResource(Res.string.charging_possible, formatEnergy(it * hours)) },
+        what,
+        next.automation?.name,
+        next.kw?.takeIf { next.effect.mode != ChargeEffectMode.Solar }?.let { stringResource(Res.string.charging_possible, formatEnergy(it * hours)) },
     )
     val end = if (date(next.start) == date(next.end)) clock(next.end) else whenText(next.end)
     Row(
@@ -209,7 +179,7 @@ private fun NextCharge(next: ChargeNext) {
 @Composable
 internal fun PlanCard(view: ChargingView, onCancelNow: () -> Unit) {
     val now = view.now
-    val next = view.next.takeIf { now == null }
+    val next = view.next.takeIf { now == null && !view.ownSchedule }
     // The regulator may not have seen yet a charge now called off.
     val reason = view.status?.takeIf { now == null && it.state != "now" }?.reason?.takeIf { it.isNotBlank() }
     if (now == null && next == null && reason == null) return
@@ -227,7 +197,7 @@ internal fun PlanCard(view: ChargingView, onCancelNow: () -> Unit) {
             }
             if (view.canControl) {
                 OutlinedButton(onClick = onCancelNow, shape = Fz.shapes.button, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(if (view.profileId != null) Res.string.charging_back_to_profile else Res.string.charging_stop_now))
+                    Text(stringResource(if (view.automations.isNotEmpty() && !view.ownSchedule) Res.string.charging_back_to_profile else Res.string.charging_stop_now))
                 }
             }
         }
@@ -236,11 +206,11 @@ internal fun PlanCard(view: ChargingView, onCancelNow: () -> Unit) {
     }
 }
 
-/** One local day of the profile, from midnight to midnight. */
+/** One local day of what the automations plan, from midnight to midnight. */
 @Composable
-private fun DayStrip(day: ChargeDay, label: String) {
-    val first = day.periods.firstOrNull()?.start ?: 0L
-    val last = day.periods.lastOrNull()?.end ?: (first + 86_400)
+private fun DayStrip(day: ChargeDay, label: String, profiles: List<ChargeProfileRef>) {
+    val first = day.segments.firstOrNull()?.start ?: 0L
+    val last = day.segments.lastOrNull()?.end ?: (first + 86_400)
     val span = (last - first).coerceAtLeast(1).toFloat()
     val now = nowSeconds()
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -251,15 +221,15 @@ private fun DayStrip(day: ChargeDay, label: String) {
                 Box(Modifier.size(8.dp).background(tempoTone(it), CircleShape))
             }
         }
-        Box(Modifier.weight(1f).height(20.dp).clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.surfaceVariant)) {
+        Box(Modifier.weight(1f).height(20.dp).clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.background)) {
             Row(Modifier.fillMaxWidth().fillMaxHeight()) {
-                day.periods.forEach { p ->
+                day.segments.forEach { p ->
                     Box(
-                        Modifier.weight(((p.end - p.start) / span).coerceAtLeast(0.001f)).fillMaxHeight().background(modeColor(p.mode)),
+                        Modifier.weight(((p.end - p.start) / span).coerceAtLeast(0.001f)).fillMaxHeight().background(effectColor(p.effect, profiles)),
                         contentAlignment = Alignment.Center,
                     ) {
-                        if (p.mode == ChargeMode.Max && p.end - p.start >= 4 * 3600) {
-                            Text(stringResource(Res.string.charging_kw, kw(p.kw ?: 0.0)), fontSize = 10.sp, color = MaterialTheme.colorScheme.onPrimary, maxLines = 1)
+                        if (!dim(p.effect) && p.end - p.start >= 4 * 3600) {
+                            Text(effectText(p.effect, profiles), fontSize = 10.sp, color = MaterialTheme.colorScheme.onPrimary, maxLines = 1, overflow = TextOverflow.Clip)
                         }
                     }
                 }
@@ -275,46 +245,70 @@ private fun DayStrip(day: ChargeDay, label: String) {
     }
 }
 
-/** The profiles the charger may follow, and the next days of the one it follows. */
+/** The legend of the friezes: each profile, the surplus, no charge. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun ProfileCard(view: ChargingView, onManage: (() -> Unit)?, onChoose: (Long?) -> Unit) {
+internal fun EffectLegend(profiles: List<ChargeProfileRef>) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        val items = profiles.map { it.name to (hexColor(it.color) ?: MaterialTheme.colorScheme.primary) } +
+            listOf(
+                stringResource(Res.string.charging_legend_solar) to Fz.colors.warning,
+                stringResource(Res.string.charging_legend_off) to MaterialTheme.colorScheme.surfaceVariant,
+            )
+        items.forEach { (text, color) ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(10.dp).clip(RoundedCornerShape(3.dp)).background(color))
+                Spacer(Modifier.width(5.dp))
+                Caption(text)
+            }
+        }
+    }
+}
+
+/** What the automations tell the charger now and over the next days (read only). */
+@Composable
+internal fun ProfileCard(view: ChargingView, onManage: (() -> Unit)?) {
     val names = stringArrayResource(Res.array.days_names)
     SectionCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.weight(1f)) { SectionTitle(stringResource(Res.string.charging_profile)) }
+            Box(Modifier.weight(1f)) { SectionTitle(stringResource(Res.string.charging_plan_title)) }
             onManage?.let { TextButton(onClick = it) { Text(stringResource(Res.string.charge_profiles_manage)) } }
         }
-        if (view.profiles.isEmpty()) {
-            Muted(stringResource(if (onManage != null) Res.string.charging_no_profile_admin else Res.string.charging_no_profile))
-            return@SectionCard
+        val current = when (view.mode) {
+            ChargeMode.Profile -> view.profiles.firstOrNull { it.id == view.profileId }?.name
+            ChargeMode.Off -> stringResource(Res.string.charging_legend_off)
+            ChargeMode.Solar -> stringResource(Res.string.charging_legend_solar)
+            ChargeMode.Free -> null
         }
-        Caption(stringResource(if (view.profileId == null) Res.string.charging_any_profile else Res.string.charging_profile_hint))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            view.profiles.forEach { p ->
-                FilterChip(
-                    selected = view.profileId == p.id,
-                    enabled = view.canControl,
-                    onClick = { if (view.profileId != p.id) onChoose(p.id) },
-                    label = { Text(p.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        if (view.ownSchedule) {
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(12.dp),
+            ) {
+                Text(stringResource(Res.string.charging_app_decides), fontWeight = FontWeight.Medium)
+                Caption(
+                    if (view.automations.isEmpty()) stringResource(Res.string.charging_app_decides_hint)
+                    else stringResource(Res.string.charging_app_decides_rules, view.automations.joinToString(", ") { it.name }),
                 )
             }
-            FilterChip(
-                selected = view.profileId == null,
-                enabled = view.canControl,
-                onClick = { if (view.profileId != null) onChoose(null) },
-                label = { Text(stringResource(Res.string.charging_none)) },
+        } else {
+            Caption(
+                when {
+                    current != null && view.automation != null -> stringResource(Res.string.charging_plan_now_by, current, view.automation.name)
+                    current != null -> stringResource(Res.string.charging_plan_now, current)
+                    view.automations.isNotEmpty() -> stringResource(Res.string.charging_plan_waiting)
+                    else -> stringResource(Res.string.charging_plan_none)
+                },
             )
         }
-        if (view.days.isNotEmpty()) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (view.days.isNotEmpty() && view.automations.isNotEmpty()) {
+            Column(Modifier.alpha(if (view.ownSchedule) 0.4f else 1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 view.days.forEachIndexed { i, d ->
                     val label = when (i) {
                         0 -> stringResource(Res.string.tempo_today)
                         1 -> stringResource(Res.string.tempo_tomorrow)
                         else -> names[LocalDate.parse(d.day).dayOfWeek.isoDayNumber - 1]
                     }
-                    DayStrip(d, label)
+                    DayStrip(d, label, view.profiles)
                 }
                 Row(Modifier.padding(start = 84.dp)) {
                     listOf("0 h", "6 h", "12 h", "18 h", "24 h").forEachIndexed { i, h ->
@@ -322,16 +316,7 @@ internal fun ProfileCard(view: ChargingView, onManage: (() -> Unit)?, onChoose: 
                         Text(h, fontSize = 10.sp, color = Fz.colors.muted)
                     }
                 }
-            }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                listOf(ChargeMode.Max to Res.string.charging_legend_max, ChargeMode.Solar to Res.string.charging_legend_solar, ChargeMode.Off to Res.string.charging_legend_off)
-                    .forEach { (m, text) ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(10.dp).clip(RoundedCornerShape(3.dp)).background(modeColor(m)))
-                            Spacer(Modifier.width(5.dp))
-                            Caption(stringResource(text))
-                        }
-                    }
+                EffectLegend(view.profiles)
             }
         }
     }

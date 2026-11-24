@@ -464,7 +464,7 @@ export function SurplusCard() {
         {v.loads.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             {t(
-              "Aucun appareil ne suit le surplus. Ajoutez un chauffe-eau sur une prise pilotée, ou une zone de climatisation ; la borne le suit par son profil de recharge (« Solaire »)."
+              "Aucun appareil ne suit le surplus. Ajoutez un chauffe-eau sur une prise pilotée, ou une zone de climatisation ; la borne le suit par un automatisme (recette « Surplus solaire : charger la voiture »)."
             )}
           </p>
         ) : (

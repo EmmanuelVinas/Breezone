@@ -131,7 +131,7 @@ async fn a_charger_and_a_heater_follow_the_surplus() {
     call("PUT", &format!("/api/surplus/loads/{relay_id}"), Some(json!({"power": 2000}))).await;
 
     // A charger in the list from before the charging profiles (16 A at most, a guarantee): it
-    // follows a "Solaire" profile with its currents, leaves the list, and its guarantee is told.
+    // charges on the surplus by its charging setting, leaves the list, and its guarantee is told.
     let legacy = breezone_server::db::SurplusLoadRow {
         max_amps: Some(16),
         guarantee_kwh: Some(20.0),
@@ -145,16 +145,16 @@ async fn a_charger_and_a_heater_follow_the_surplus() {
     let order: Vec<i64> = view["loads"].as_array().unwrap().iter().map(|l| l["device_id"].as_i64().unwrap()).collect();
     assert_eq!(order, vec![relay_id]);
     let (_, plan) = call("GET", &format!("/api/devices/{charger_id}/charging"), None).await;
-    assert_eq!(plan["profiles"][0]["name"], "Solaire", "{plan}");
-    assert_eq!(plan["profile_id"], plan["profiles"][0]["id"]);
-    let (_, profiles) = call("GET", "/api/charging/profiles", None).await;
-    assert_eq!(profiles[0]["profiles"][0]["slots"], json!([{"start": "00:00", "mode": "solar", "max_amps": 16}]));
+    assert_eq!((plan["mode"].as_str(), &plan["automation"]), (Some("solar"), &Value::Null), "{plan}");
+    let row = breezone_server::db::charger_plan(&state.db, charger_id).await.unwrap().unwrap();
+    let solar: Value = serde_json::from_str(row.solar.as_deref().unwrap()).unwrap();
+    assert_eq!(solar["kw"], 3.7, "16 A");
     let (_, events) = call("GET", "/api/events", None).await;
     let said: Vec<&str> = events.as_array().unwrap().iter().filter_map(|e| e["message"].as_str()).collect();
     assert!(said.iter().any(|m| m.contains("garantie (+20 kWh avant 07:00) est à refaire")), "{said:?}");
     // Once: nothing more to move.
     breezone_server::charging::adopt_surplus_chargers(&state).await.unwrap();
-    assert_eq!(call("GET", "/api/charging/profiles", None).await.1.as_array().unwrap().len(), 1);
+    assert!(breezone_server::db::list_surplus_loads(&state.db).await.unwrap().iter().all(|l| l.device_id != charger_id));
 
     let look = |grid: f64, t: i64| {
         let (state, meter) = (state.clone(), meter.clone());
@@ -181,7 +181,7 @@ async fn a_charger_and_a_heater_follow_the_surplus() {
     }
     let (_, view) = call("GET", "/api/surplus", None).await;
     assert_eq!(view["export"], 2300.0);
-    // The charger on its profile first, then the list.
+    // The charger by its setting first, then the list.
     let (_, plan) = call("GET", &format!("/api/devices/{charger_id}/charging"), None).await;
     assert_eq!(plan["status"]["reason"], "Charge solaire à 10 A", "{plan}");
     assert_eq!(view["loads"][0]["status"]["text"], "Attend 2 kW de surplus", "{view}");
@@ -258,30 +258,39 @@ async fn a_charger_follows_its_profile_and_charges_now() {
         }
     };
 
-    // A profile that never charges.
-    let nothing =
-        |slots: Value| json!({"name": "Rien", "profiles": [{"id": "d", "name": "Tous les jours", "slots": slots}], "calendar": {"weekdays": ["d", "d", "d", "d", "d", "d", "d"]}});
-    let (s, _) = call(&admin, "POST", "/api/charging/profiles", Some(nothing(json!([{"start": "01:00", "mode": "off"}])))).await;
-    assert_eq!(s, StatusCode::BAD_REQUEST, "the first slot starts at midnight");
-    let (s, p) = call(&admin, "POST", "/api/charging/profiles", Some(nothing(json!([{"start": "00:00", "mode": "off"}])))).await;
+    // Profiles are powers.
+    let (s, _) = call(&admin, "POST", "/api/charging/profiles", Some(json!({"name": "Trop", "kw": 70}))).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST, "more than a charger of a home");
+    let (s, p) = call(&admin, "POST", "/api/charging/profiles", Some(json!({"name": "Nuit 7 kW", "kw": 7, "color": "#14b8a6"}))).await;
     assert_eq!(s, StatusCode::CREATED, "{p}");
     let profile = p["id"].as_i64().unwrap();
+    let (s, _) = call(&admin, "POST", "/api/charging/profiles", Some(json!({"name": "Maximum"}))).await;
+    assert_eq!(s, StatusCode::CREATED);
+
+    // An automation says no charge.
     let path = format!("/api/devices/{id}/charging");
-    let (s, _) = call(&admin, "PUT", &path, Some(json!({"profile_id": profile + 100}))).await;
-    assert_eq!(s, StatusCode::NOT_FOUND);
-    let (s, v) = call(&admin, "PUT", &path, Some(json!({"profile_id": profile}))).await;
+    let rule = |action: Value| json!({"name": "Pas de charge", "when": {"kind": "time", "time": "03:00"}, "actions": [action]});
+    let (s, _) = call(&admin, "POST", "/api/automations", Some(rule(json!({"kind": "charger_profile", "device_id": id, "mode": "profile", "profile_id": profile + 100})))).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST, "an unknown profile");
+    let (s, r) = call(&admin, "POST", "/api/automations", Some(rule(json!({"kind": "charger_profile", "device_id": id, "mode": "off"})))).await;
+    assert_eq!(s, StatusCode::CREATED, "{r}");
+    let rule_id = r["id"].as_i64().unwrap();
+    assert_eq!(r["summary"]["actions"][0], "Trydan : ne pas charger", "{r}");
+    let (s, v) = call(&admin, "POST", &format!("/api/automations/{rule_id}/run"), None).await;
     assert_eq!(s, StatusCode::OK, "{v}");
-    assert_eq!((v["profile_id"].as_i64(), v["days"].as_array().unwrap().len(), &v["next"]), (Some(profile), 3, &Value::Null), "{v}");
-    assert_eq!(v["days"][0]["periods"][0]["mode"], "off");
-    let (_, list) = call(&admin, "GET", "/api/charging/profiles", None).await;
-    assert_eq!(list[0]["used_by"][0]["device_id"], id, "{list}");
+    let (_, v) = call(&admin, "GET", &path, None).await;
+    assert_eq!((v["mode"].as_str(), v["automation"]["name"].as_str(), v["days"].as_array().unwrap().len()), (Some("off"), Some("Pas de charge"), 3), "{v}");
+    assert_eq!(v["days"][1]["segments"][0]["effect"]["mode"], "off", "{v}");
+    assert_eq!(v["next"], Value::Null, "nothing charges");
+    let (_, plans) = call(&admin, "GET", "/api/charging/automations", None).await;
+    assert_eq!(plans[0]["bars"][0]["segments"], json!([{"start": 0, "end": 1440, "effect": {"mode": "off"}}]), "{plans}");
 
     // No charge: the charge that started when the car was plugged in is stopped.
     let t0 = breezone_server::db::now();
     look(t0).await;
     assert_eq!(charger.lock().unwrap()["Paused"], 1);
     let (_, v) = call(&admin, "GET", &path, None).await;
-    assert_eq!((v["status"]["state"].as_str(), v["status"]["reason"].as_str()), (Some("no_charge"), Some("Profil Rien : pas de charge")), "{v}");
+    assert_eq!((v["status"]["state"].as_str(), v["status"]["reason"].as_str()), (Some("no_charge"), Some("Pas de charge : pas de charge")), "{v}");
 
     // Charge now, 3.7 kW (16 A), 2 kWh more.
     let (s, v) = call(&admin, "POST", &format!("{path}/now"), Some(json!({"kw": 3.7, "kwh": 2.0}))).await;
@@ -294,7 +303,7 @@ async fn a_charger_follows_its_profile_and_charges_now() {
     }
     let (_, v) = call(&admin, "GET", &path, None).await;
     assert_eq!(v["status"]["reason"], "Charge maintenant à 3,7 kW, encore 2 kWh", "{v}");
-    // The 2 kWh are in: back to the profile, which stops it once the charger has settled.
+    // The 2 kWh are in: back to what the automation said, which stops it once the charger has settled.
     charger.lock().unwrap()["ChargeEnergy"] = json!(2.1);
     look(t0 + 20).await;
     let (_, v) = call(&admin, "GET", &path, None).await;
@@ -327,11 +336,29 @@ async fn a_charger_follows_its_profile_and_charges_now() {
     let ana = login("/api/auth/login", json!({"username": "ana", "password": "motdepasse1"})).await;
     let (s, v) = call(&ana, "GET", &path, None).await;
     assert_eq!((s, v["can_control"].as_bool()), (StatusCode::OK, Some(false)));
-    assert_eq!(call(&ana, "PUT", &path, Some(json!({"profile_id": null}))).await.0, StatusCode::FORBIDDEN);
-    assert_eq!(call(&ana, "POST", "/api/charging/profiles", Some(nothing(json!([{"start": "00:00", "mode": "max"}])))).await.0, StatusCode::FORBIDDEN);
+    assert_eq!(call(&ana, "POST", &format!("{path}/now"), Some(json!({}))).await.0, StatusCode::FORBIDDEN);
+    assert_eq!(call(&ana, "POST", "/api/charging/profiles", Some(json!({"name": "x"}))).await.0, StatusCode::FORBIDDEN);
 
-    // Deleted: the charger follows nothing.
+    // The 7 kW profile: the automation now gives it.
+    let (s, _) = call(
+        &admin,
+        "PUT",
+        &format!("/api/automations/{rule_id}"),
+        Some(
+            json!({"name": "Nuit", "when": {"kind": "time", "time": "22:00"}, "actions": [{"kind": "charger_profile", "device_id": id, "mode": "profile", "profile_id": profile}]}),
+        ),
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK);
+    let (_, list) = call(&admin, "GET", "/api/charging/profiles", None).await;
+    let seven = list.as_array().unwrap().iter().find(|p| p["id"] == profile).unwrap();
+    assert_eq!(seven["automations"][0]["name"], "Nuit", "{list}");
+    // Its own app decides: the automation does not apply.
+    charger.lock().unwrap()["Timer"] = json!(1);
+    state.drivers.poll(1).await;
+    let (_, v) = call(&admin, "POST", &format!("/api/automations/{rule_id}/run"), None).await;
+    assert!(v["results"][0]["ok"] == false && v.to_string().contains("appli de la borne"), "{v}");
+
+    // Deleted: the charger is left alone.
     assert_eq!(call(&admin, "DELETE", &format!("/api/charging/profiles/{profile}"), None).await.0, StatusCode::NO_CONTENT);
-    let (_, v) = call(&admin, "GET", &path, None).await;
-    assert_eq!((&v["profile_id"], v["days"].as_array().unwrap().len()), (&Value::Null, 0));
 }

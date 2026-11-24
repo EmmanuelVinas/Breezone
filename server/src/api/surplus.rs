@@ -140,9 +140,9 @@ pub async fn save(State(state): State<AppState>, _admin: AdminUser, Path(device_
     })?;
     if kind == Kind::Charger && !db::list_surplus_loads(&state.db).await?.iter().any(|r| r.device_id == device_id) {
         return Err(ApiError::bad_request(crate::text!(
-            "une borne suit le surplus par son profil de recharge (Recharge › Profil de recharge : « Solaire »)",
-            "a charger follows the surplus by its charging profile (Charging › Charging profile: “Solar”)",
-            "un cargador sigue el excedente con su perfil de carga (Carga › Perfil de carga: «Solar»)"
+            "une borne suit le surplus par un automatisme (recette « Surplus solaire : charger la voiture »)",
+            "a charger follows the surplus by an automation (recipe “Solar surplus: charge the car”)",
+            "un cargador sigue el excedente con una automatización (receta «Excedente solar: cargar el coche»)"
         )));
     }
     let bad = |fr: &str, en: &str, es: &str| ApiError::bad_request(crate::i18n::Text { fr: fr.into(), en: en.into(), es: es.into() });
