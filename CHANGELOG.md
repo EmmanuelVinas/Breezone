@@ -6,6 +6,34 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.13.0-beta.2] - 2026-11-24
+
+### Changed
+
+- A charging profile is now a power only: up to some kW, or the charger's maximum, with a colour.
+  When a charger charges is up to the automations: their action "charging of the charger" tells it
+  to follow a profile, not to charge, to charge on the solar surplus (following it up to some kW,
+  or at a fixed power once the surplus is over a threshold, the rest from the grid), or to leave it
+  to the charger's own app. The profiles of before (kinds of day, slots, calendar) are removed by
+  this update: make the profiles again, then the automations with the recipes of Charging ›
+  Profiles (off-peak hours, blue nights of Tempo, solar).
+- The page of the charging profiles shows what the automations plan, a frieze for each one (a day
+  of each kind of the tariff it names, and the other days); a stretch opens its automation, and
+  those without a set time are listed apart. The charging screen (web and app) tells what the
+  charger follows and which automation chose it, with the next three days; the profile is no
+  longer chosen there by hand.
+- With the schedule of the charger's own app switched on, the automations of Breezone leave that
+  charger alone (they are shown paused, and fail with that reason).
+
+### Added
+
+- Mobile app: a search and filters by part of the home when adding a card to the home screen of
+  the app (cards, rooms, devices and charts, added in one touch).
+- Mobile app (Android): widgets for the phone's home screen: a zone of the air conditioning (its
+  setpoint and power), energy now, the electricity price of the day, a device (a light, a plug, the
+  charger) and scenes. What each one shows is chosen when it is placed; it is read again about every
+  30 minutes, after each of its buttons, and when leaving the app.
+
 ## [0.13.0-beta.1] - 2026-11-24
 
 ### Added
@@ -1547,7 +1575,8 @@ solar surplus for the air conditioning…), and what follows.
 - Project renamed from FreeZone to Breezone (former `FREEZONE_*` variables and `freezone.db` are
   still recognised).
 
-[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.1...HEAD
+[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.2...HEAD
+[0.13.0-beta.2]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.1...v0.13.0-beta.2
 [0.13.0-beta.1]: https://github.com/EmmanuelVinas/breezone/compare/v0.12.0...v0.13.0-beta.1
 [0.12.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.10.1...v0.11.0
