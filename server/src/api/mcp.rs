@@ -430,11 +430,11 @@ fn sections() -> Vec<(&'static str, &'static str)> {
     let mut start = None;
     let mut offset = 0;
     for line in API_REFERENCE.split_inclusive('\n') {
-        if line.starts_with("## ") {
+        if let Some(title) = line.strip_prefix("## ") {
             if let Some((title, from)) = start {
                 out.push((title, &API_REFERENCE[from..offset]));
             }
-            start = Some((line[3..].trim(), offset));
+            start = Some((title.trim(), offset));
         }
         offset += line.len();
     }
