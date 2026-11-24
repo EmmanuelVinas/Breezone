@@ -6,6 +6,24 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.13.0-beta.1] - 2026-11-24
+
+### Added
+
+- Access tokens: a user creates them in Settings › Connected devices for an assistant or a script,
+  which then signs in without the password, with the rights of that user. A token is shown once,
+  can be revoked at any time, and is removed when the password changes.
+- An MCP server (`/mcp`): an assistant (Claude, ChatGPT…) reads the state of the home, drives the
+  zones and the devices, writes routines, automations, Airzone schedules and timers, and installs
+  modules for an administrator, through the API and its rights. The web UI gives the command to
+  add it to Claude Code.
+- A QR code connects a phone: the web UI shows it for oneself (Connected devices) or for a user;
+  scanned with the phone's camera, it opens the app with the server and the username filled in
+  (never the password). It can be copied as a link, downloaded or shared.
+- The app has a card of today's electricity price: the price now, the next change, the slots of
+  the whole day on a band, and the Tempo colours. The price route gives the periods of the whole
+  local day with `today=true`.
+
 ## [0.12.0] - 2026-11-23
 
 The first stable release of 0.12: everything of its betas below, above all the hardware and the
@@ -1529,7 +1547,8 @@ solar surplus for the air conditioning…), and what follows.
 - Project renamed from FreeZone to Breezone (former `FREEZONE_*` variables and `freezone.db` are
   still recognised).
 
-[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.1...HEAD
+[0.13.0-beta.1]: https://github.com/EmmanuelVinas/breezone/compare/v0.12.0...v0.13.0-beta.1
 [0.12.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/EmmanuelVinas/breezone/compare/v0.10.0...v0.10.1
