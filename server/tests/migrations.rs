@@ -53,6 +53,7 @@ const APPLIED: &[(&str, &str)] = &[
     ("0046_module_store.sql", "8872be63b32ae54e99a0c85ff135491317891039589d8fb9ce323714ff2b5e55"),
     ("0047_module_repositories.sql", "26d5c8e532e64a904f750d3ca551581d0c863b19ee478e29b900efefefb08bf6"),
     ("0048_charge_profiles.sql", "3aefe3d5695439982338886e31920031162355adca0e0d0c7017155fa6b6f35d"),
+    ("0049_api_tokens.sql", "9c20c19af03169f9dc1bfeaf53f77811036627ad34c14e00a806dc55e4283f23"),
 ];
 
 #[test]

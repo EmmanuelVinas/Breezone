@@ -45,6 +45,8 @@ base64 = "0.23.1"
 chrono = "0.4.45"
 chrono-tz = "0.10.4"
 futures-util = "0.3.34"
+# The MCP tools send their calls through the API router (`oneshot`).
+tower = { version = "0.5", default-features = false, features = ["util"] }
 jsonwebtoken = { version = "11.1.0", default-features = false, features = ["rust_crypto"] }
 chacha20poly1305 = "0.11.0"
 ed25519-dalek = "3"

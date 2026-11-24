@@ -202,5 +202,6 @@ private fun BlockKind.hint() = when (this) {
     BlockKind.VentilationRooms -> Res.string.block_ventilation_rooms_hint
     BlockKind.LightPanel -> Res.string.block_light_panel_hint
     BlockKind.PriceNow -> Res.string.block_price_now_hint
+    BlockKind.PriceToday -> Res.string.block_price_today_hint
     BlockKind.Spacer -> Res.string.block_spacer_hint
 }

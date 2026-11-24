@@ -131,6 +131,9 @@ pub struct PasswordChange {
 
 /// Changes the password and signs out every *other* device.
 pub async fn change_password(State(state): State<AppState>, user: AuthUser, Json(req): Json<PasswordChange>) -> ApiResult<StatusCode> {
+    if user.token_id.is_some() {
+        return Err(ApiError::forbidden("an access token cannot change the password"));
+    }
     let current = db::user_by_id(&state.db, user.id).await?.ok_or_else(|| ApiError::not_found("user not found"))?;
     if !auth::verify_password(req.current_password, current.password_hash).await {
         return Err(ApiError::bad_request("current password is incorrect"));

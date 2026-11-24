@@ -12,7 +12,6 @@
 
 use crate::access::Access;
 use crate::auth;
-use crate::db;
 use crate::hub::HubMessage;
 use crate::i18n::{Lang, Text};
 use crate::AppState;
@@ -147,7 +146,7 @@ async fn live(mut sink: futures_util::stream::SplitSink<WebSocket, Message>, mut
                 if sink.send(Message::Ping(Vec::new().into())).await.is_err() { break; }
             }
             _ = session_check.tick() => {
-                if !matches!(db::session_by_id(&state.db, user.session_id).await, Ok(Some(_))) {
+                if !crate::auth::still_signed_in(&state, &user).await {
                     let _ = send_json(&mut sink, &json!({ "type": "error", "error": "session revoked" })).await;
                     break;
                 }

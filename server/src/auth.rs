@@ -10,6 +10,9 @@
 //! * Rotation: each refresh returns a new refresh token. The previous one stays valid for a
 //!   short grace window so that a response lost on a flaky mobile network does not log the
 //!   user out.
+//! * Access tokens of a user (`bzt_…`): long-lived random secrets a user creates for a tool (an
+//!   assistant over MCP, a script), stored hashed, sent as `Authorization: Bearer bzt_…`. They
+//!   act as the user, but cannot create tokens nor change a password.
 
 use crate::db::{self, Db, Session, User};
 use crate::error::{ApiError, ApiResult};
@@ -243,6 +246,16 @@ pub fn new_refresh_token() -> String {
     URL_SAFE_NO_PAD.encode(random_bytes::<32>())
 }
 
+/// The start of the access tokens of the users, which tells them from the JWTs.
+pub const API_TOKEN_PREFIX: &str = "bzt_";
+
+/// A new access token, and the start of it shown to tell tokens apart.
+pub fn new_api_token() -> (String, String) {
+    let token = format!("{API_TOKEN_PREFIX}{}", URL_SAFE_NO_PAD.encode(random_bytes::<32>()));
+    let hint = format!("{}…", &token[..API_TOKEN_PREFIX.len() + 6]);
+    (token, hint)
+}
+
 pub fn hash_token(token: &str) -> String {
     hex::encode(Sha256::digest(token.as_bytes()))
 }
@@ -311,7 +324,10 @@ pub struct AuthUser {
     pub id: i64,
     pub username: String,
     pub role: String,
+    /// The device session (0 when signed in by an access token).
     pub session_id: i64,
+    /// The access token used, if any.
+    pub token_id: Option<i64>,
 }
 
 impl AuthUser {
@@ -321,13 +337,27 @@ impl AuthUser {
 }
 
 pub async fn authenticate(state: &AppState, token: &str) -> ApiResult<AuthUser> {
+    if token.starts_with(API_TOKEN_PREFIX) {
+        let t = db::api_token_by_hash(&state.db, &hash_token(token)).await?.ok_or_else(|| ApiError::unauthorized("invalid or revoked access token"))?;
+        let user = db::user_by_id(&state.db, t.user_id).await?.ok_or_else(|| ApiError::unauthorized("user no longer exists"))?;
+        db::touch_api_token(&state.db, t.id).await?;
+        return Ok(AuthUser { id: user.id, username: user.username, role: user.role, session_id: 0, token_id: Some(t.id) });
+    }
     let claims = state.auth.verify_access(token)?;
     let session = db::session_by_id(&state.db, claims.sid).await?.ok_or_else(|| ApiError::unauthorized("session revoked"))?;
     if session.user_id != claims.uid {
         return Err(ApiError::unauthorized("session revoked"));
     }
     let user = db::user_by_id(&state.db, claims.uid).await?.ok_or_else(|| ApiError::unauthorized("user no longer exists"))?;
-    Ok(AuthUser { id: user.id, username: user.username, role: user.role, session_id: session.id })
+    Ok(AuthUser { id: user.id, username: user.username, role: user.role, session_id: session.id, token_id: None })
+}
+
+/// The session or the access token a user signed in with still exists (revoked: cut off).
+pub async fn still_signed_in(state: &AppState, user: &AuthUser) -> bool {
+    match user.token_id {
+        Some(id) => matches!(db::api_token_exists(&state.db, id).await, Ok(true)),
+        None => matches!(db::session_by_id(&state.db, user.session_id).await, Ok(Some(_))),
+    }
 }
 
 impl FromRequestParts<AppState> for AuthUser {

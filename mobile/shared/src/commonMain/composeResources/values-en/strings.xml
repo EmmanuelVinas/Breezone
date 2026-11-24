@@ -102,6 +102,7 @@
     <string name="add_server_sign_in">Sign in</string>
     <string name="add_server_create">Create account</string>
     <string name="add_server_stay_signed_in">You will stay signed in: your password is only asked again if this phone’s secure keychain changes, or if you sign this device out from Breezone.</string>
+    <string name="add_server_from_link">Server received through a link or a QR code. Check that the address is really that of your Breezone server before typing your password.</string>
     <string name="add_server_forget">Forget this server</string>
     <string name="add_server_error_unreachable">Server unreachable</string>
     <string name="add_server_error_mismatch">Passwords do not match</string>
@@ -714,6 +715,11 @@
     <string name="price_now">Price now</string>
     <string name="price_per_kwh">%1$s / kWh</string>
     <string name="price_none">No tariff for now</string>
+    <string name="block_price_today">Today’s price</string>
+    <string name="block_price_today_hint">The price of the kWh now, its slots over the day and the Tempo colour</string>
+    <string name="price_today_title">Electricity price today</string>
+    <string name="price_next">%1$s at %2$s (%3$s)</string>
+    <string name="price_change">Change</string>
     <string name="tempo_today">Today</string>
     <string name="tempo_tomorrow">Tomorrow</string>
     <string name="tempo_blue">Blue</string>

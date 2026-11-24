@@ -124,6 +124,16 @@ pub struct PriceQuery {
     /// How far ahead the periods go.
     #[serde(default = "default_hours")]
     pub hours: i64,
+    /// The periods of the whole local day instead (midnight to midnight), the hours gone included.
+    #[serde(default)]
+    pub today: bool,
+}
+
+/// The start of a local day (the first moment after midnight when the clocks skip it).
+fn day_start(day: NaiveDate, tz: chrono_tz::Tz) -> i64 {
+    use chrono::TimeZone;
+    let midnight = day.and_time(chrono::NaiveTime::MIN);
+    tz.from_local_datetime(&midnight).earliest().or_else(|| tz.from_local_datetime(&(midnight + chrono::Duration::hours(1))).earliest()).map_or(0, |t| t.timestamp())
 }
 
 fn default_hours() -> i64 {
@@ -168,7 +178,11 @@ pub async fn now(State(state): State<AppState>, user: AuthUser, Path(id): Path<i
     Ok(Json(PriceView {
         currency,
         now: price::price_at(&tariffs, &color, tz, now),
-        periods: price::periods(&tariffs, &color, tz, now, now + q.hours.clamp(1, 7 * 24) * 3600),
+        periods: if q.today {
+            price::periods(&tariffs, &color, tz, day_start(today, tz), day_start(today + chrono::Days::new(1), tz))
+        } else {
+            price::periods(&tariffs, &color, tz, now, now + q.hours.clamp(1, 7 * 24) * 3600)
+        },
         tempo: followed.then(|| TempoView {
             today: color(today),
             tomorrow: color(today + chrono::Days::new(1)),

@@ -104,6 +104,13 @@ async fn administrators_set_the_prices_everyone_reads() {
     let periods = v["periods"].as_array().unwrap();
     assert_eq!(periods.len(), 1, "one price all along: {v}");
     assert_eq!(periods[0]["end"].as_i64().unwrap() - periods[0]["start"].as_i64().unwrap(), 12 * 3600);
+    // The whole day, the hours gone included: it starts before now and ends after.
+    let (_, v) = user.call(Method::GET, &format!("{e}/price?today=true"), None).await;
+    let periods = v["periods"].as_array().unwrap();
+    let now = chrono::Utc::now().timestamp();
+    assert_eq!(periods.len(), 1, "{v}");
+    assert!(periods[0]["start"].as_i64().unwrap() <= now && periods[0]["end"].as_i64().unwrap() > now, "{v}");
+    assert!((23 * 3600..=25 * 3600).contains(&(periods[0]["end"].as_i64().unwrap() - periods[0]["start"].as_i64().unwrap())), "a day long: {v}");
 
     let (status, _) = admin.call(Method::DELETE, &format!("{e}/prices/2024-02-01"), None).await;
     assert_eq!(status, StatusCode::OK);

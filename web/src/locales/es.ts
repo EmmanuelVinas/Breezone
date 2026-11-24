@@ -2300,6 +2300,50 @@ const es: Record<string, string> = {
   "Une condition d'un module": "Una condición de un módulo",
   "Condition indisponible": "Condición no disponible",
   "Un module change d'état": "Un módulo cambia de estado",
+  "Scannez ce QR code avec l'appareil photo du téléphone pour ouvrir Breezone sur le serveur {server} avec l'identifiant {name}.":
+    "Escanee este código QR con la cámara del teléfono para abrir Breezone en el servidor {server} con el usuario {name}.",
+  "Partage impossible": "No se pudo compartir",
+  "Connecter un téléphone pour {name}": "Conectar un teléfono para {name}",
+  "Scannez ce QR code avec l'appareil photo du téléphone : l'application Breezone s'ouvre avec le serveur et l'identifiant remplis. Il ne reste qu'à saisir le mot de passe, qui n'est pas dans le QR code.":
+    "Escanee este código QR con la cámara del teléfono: la aplicación Breezone se abre con el servidor y el usuario rellenados. Solo queda escribir la contraseña, que no está en el código QR.",
+  "Adresse du serveur": "Dirección del servidor",
+  "L'adresse que le téléphone joint : celle du réseau local à la maison, ou l'adresse publique pour l'utiliser de partout.":
+    "La dirección a la que llega el teléfono: la de la red local de casa, o la dirección pública para usarlo desde cualquier lugar.",
+  "Cette adresse ne marche que sur cet ordinateur : mettez celle que le téléphone joint (par exemple http://192.168.1.20:8427).":
+    "Esta dirección solo funciona en este ordenador: ponga la que alcanza el teléfono (por ejemplo http://192.168.1.20:8427).",
+  "QR code de connexion": "Código QR de conexión",
+  "Adresse attendue : http://… ou https://…":
+    "Dirección esperada: http://… o https://…",
+  "Lien copié": "Enlace copiado",
+  "Copier le lien": "Copiar el enlace",
+  "Télécharger l'image": "Descargar la imagen",
+  Partager: "Compartir",
+  "Connecter un téléphone": "Conectar un teléfono",
+  Copié: "Copiado",
+  "Jeton révoqué": "Token revocado",
+  "Jetons d'accès (MCP)": "Tokens de acceso (MCP)",
+  "Un assistant (Claude, ChatGPT…) ou un script se connecte avec un jeton au lieu de votre mot de passe, avec vos droits : il lit l'état de la maison, pilote les appareils, écrit des routines, des automatismes et des programmations, et installe des modules si vous êtes administrateur. Révoquez un jeton pour le couper aussitôt.":
+    "Un asistente (Claude, ChatGPT…) o un script se conecta con un token en lugar de su contraseña, con sus derechos: lee el estado de la casa, controla los dispositivos, escribe rutinas, automatismos y programaciones, e instala módulos si es administrador. Revoque un token para cortarlo al instante.",
+  "Aucun jeton pour l'instant.": "Ningún token por ahora.",
+  "utilisé {when}": "usado {when}",
+  "jamais utilisé": "nunca usado",
+  "L'outil qui s'en sert est coupé aussitôt et ne pourra plus se connecter avec.":
+    "La herramienta que lo usa se corta al instante y ya no podrá conectarse con él.",
+  "Créer un jeton": "Crear un token",
+  "Jeton créé": "Token creado",
+  "Nouveau jeton d'accès": "Nuevo token de acceso",
+  "Copiez-le maintenant : il ne sera plus affiché. Il donne vos droits à qui le possède.":
+    "Cópielo ahora: no se volverá a mostrar. Quien lo tenga obtiene sus derechos.",
+  "Donnez-lui le nom de l'outil qui s'en servira, pour le reconnaître et le révoquer plus tard.":
+    "Póngale el nombre de la herramienta que lo usará, para reconocerlo y revocarlo más tarde.",
+  Jeton: "Token",
+  "Adresse du serveur MCP": "Dirección del servidor MCP",
+  "Claude Code": "Claude Code",
+  "Autres clients MCP (configuration JSON)":
+    "Otros clientes MCP (configuración JSON)",
+  "L'assistant doit joindre cette adresse : depuis l'extérieur de la maison, mettez l'adresse publique du serveur (Réglages › Serveurs).":
+    "El asistente debe alcanzar esta dirección: desde fuera de casa, ponga la dirección pública del servidor (Ajustes › Servidores).",
+  "Claude sur mon ordinateur": "Claude en mi ordenador",
 }
 
 export default es

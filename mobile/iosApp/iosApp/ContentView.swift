@@ -14,5 +14,6 @@ struct ContentView: View {
     var body: some View {
         ComposeView()
                 .ignoresSafeArea()
+                .onOpenURL { url in _ = MainViewControllerKt.openLink(url: url.absoluteString) }
     }
 }

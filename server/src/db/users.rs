@@ -206,7 +206,9 @@ pub async fn delete_session(db: &Db, id: i64) -> sqlx::Result<()> {
     Ok(())
 }
 
+/// Signs a user out of their devices but one, and removes their access tokens.
 pub async fn delete_user_sessions(db: &Db, user_id: i64, except: Option<i64>) -> sqlx::Result<()> {
     sqlx::query("DELETE FROM sessions WHERE user_id = ? AND id != ?").bind(user_id).bind(except.unwrap_or(-1)).execute(db).await?;
+    sqlx::query("DELETE FROM api_tokens WHERE user_id = ?").bind(user_id).execute(db).await?;
     Ok(())
 }

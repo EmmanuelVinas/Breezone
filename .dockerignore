@@ -10,3 +10,5 @@ data
 !web/**/*.md
 docs
 mobile
+# The reference of the API, embedded in the server for its MCP tools.
+!docs/API.md

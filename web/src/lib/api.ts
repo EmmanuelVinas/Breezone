@@ -407,6 +407,16 @@ export type Incident = {
   cause: string | null
 }
 
+/** An access token of the user, for a tool (MCP, script). */
+export type ApiToken = {
+  id: number
+  name: string
+  /** The start of the token. */
+  hint: string
+  created_at: number
+  last_used_at: number | null
+}
+
 export type Session = {
   id: number
   device_name: string
@@ -1915,6 +1925,10 @@ export const api = {
     }),
   sessions: () => request<Session[]>("GET", "/api/sessions"),
   revokeSession: (id: number) => request<void>("DELETE", `/api/sessions/${id}`),
+  tokens: () => request<ApiToken[]>("GET", "/api/tokens"),
+  createToken: (name: string) =>
+    request<ApiToken & { token: string }>("POST", "/api/tokens", { name }),
+  revokeToken: (id: number) => request<void>("DELETE", `/api/tokens/${id}`),
 
   users: () => request<UserDetails[]>("GET", "/api/users"),
   createUser: (

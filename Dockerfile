@@ -44,6 +44,8 @@ ARG TARGETARCH
 RUN apk add --no-cache musl-dev gcc make
 WORKDIR /src
 COPY server/ ./
+# The reference of the API, embedded for the MCP server (`include_str!("../../../docs/API.md")`).
+COPY docs/API.md /docs/API.md
 # The registry and the build folder are caches kept by BuildKit (and by the CI): a new version, or
 # a change of the server, compiles only what changed; the dependencies stay compiled. The binaries
 # are copied out of the cache, which is not part of the image. The crates are downloaded by one

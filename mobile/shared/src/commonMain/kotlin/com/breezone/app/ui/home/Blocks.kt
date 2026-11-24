@@ -97,6 +97,12 @@ import com.breezone.app.ui.screens.VentilationHouseCard
 import com.breezone.app.ui.screens.ZoneHistorySection
 import com.breezone.app.ui.screens.ventilationLevel
 import com.breezone.app.ui.theme.Fz
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.lerp
+import com.breezone.app.ui.clock
+import com.breezone.app.ui.nowSeconds
 import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.getPluralString
@@ -179,6 +185,7 @@ enum class BlockKind(
     VentilationRooms(BlockTypes.VENTILATION_ROOMS, Res.string.block_ventilation_rooms, FzIcons.ChartLine, BlockSize.Full, BlockChoice.Measure),
     LightPanel(BlockTypes.LIGHT_PANEL, Res.string.block_light_panel, FzIcons.Lightbulb, BlockSize.Full, BlockChoice.Light),
     PriceNow(BlockTypes.PRICE_NOW, Res.string.block_price_now, FzIcons.Euro, BlockSize.Half),
+    PriceToday(BlockTypes.PRICE, Res.string.block_price_today, FzIcons.Euro, BlockSize.Full),
     Spacer(BlockTypes.SPACER, Res.string.block_spacer, FzIcons.Square, BlockSize.Half),
     ;
 
@@ -196,7 +203,7 @@ enum class BlockKind(
         VentilationHouse -> ctx.server.withTrait(TraitIds.VENTILATION_UNIT).isNotEmpty() && AppPage.Ventilation in ctx.pages
         VentilationRooms -> ctx.server.withTrait(TraitIds.VENTILATION_ROOM).isNotEmpty() && AppPage.Ventilation in ctx.pages
         LightPanel -> ctx.server.withTrait(TraitIds.LIGHT).isNotEmpty() && AppPage.Lights in ctx.pages
-        PriceNow -> ctx.installation != null
+        PriceNow, PriceToday -> ctx.installation != null
         else -> true
     }
 
@@ -273,6 +280,7 @@ fun BlockContent(b: DashboardBlock, ctx: HomeContext, editing: Boolean) {
             )
         } ?: Gone()
         BlockKind.PriceNow -> PriceBlock(ctx, editing)
+        BlockKind.PriceToday -> PriceTodayBlock(ctx, editing)
         // An empty cell, to leave room: seen only while arranging.
         BlockKind.Spacer -> if (editing) SectionCard { Muted(stringResource(Res.string.block_spacer)) }
         null -> if (editing) Waiting(b, ctx, true)
@@ -632,15 +640,7 @@ private fun VentilationRoomsBlock(field: String, hours: Int, ctx: HomeContext) {
 /** The price of the kWh now, with the Tempo colours of today and tomorrow. */
 @Composable
 private fun PriceBlock(ctx: HomeContext, editing: Boolean) {
-    val id = ctx.installation?.id
-    var price by remember(id) { mutableStateOf<PriceView?>(null) }
-    LaunchedEffect(ctx.serverId, id) {
-        if (id == null) return@LaunchedEffect
-        while (true) {
-            runCatching { ctx.hub.api(ctx.serverId)?.price(id) }.getOrNull()?.let { price = it }
-            delay(60_000)
-        }
-    }
+    val price = rememberPrice(ctx, today = false)
     val now = price?.now
     if (now == null) {
         if (editing) SectionCard { Muted(stringResource(Res.string.price_none)) }
@@ -655,6 +655,94 @@ private fun PriceBlock(ctx: HomeContext, editing: Boolean) {
         Text(formatPrice(now.price, price?.currency.orEmpty()), fontSize = 22.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
         listOf(now.slot, now.profileName).filter { it.isNotBlank() }.takeIf { it.isNotEmpty() }?.let { Caption(it.joinToString(" · "), maxLines = 1) }
         price?.tempo?.let { t ->
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                TempoDay(stringResource(Res.string.tempo_today), t.today, Modifier.weight(1f))
+                TempoDay(stringResource(Res.string.tempo_tomorrow), t.tomorrow, Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+/** The price of the installation, read again every minute. */
+@Composable
+private fun rememberPrice(ctx: HomeContext, today: Boolean): PriceView? {
+    val id = ctx.installation?.id
+    var price by remember(id) { mutableStateOf<PriceView?>(null) }
+    LaunchedEffect(ctx.serverId, id) {
+        if (id == null) return@LaunchedEffect
+        while (true) {
+            runCatching { ctx.hub.api(ctx.serverId)?.let { if (today) it.priceToday(id) else it.price(id) } }.getOrNull()?.let { price = it }
+            delay(60_000)
+        }
+    }
+    return price
+}
+
+/** The price of the kWh today: now, the next change, the slots of the day on a band, and Tempo. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PriceTodayBlock(ctx: HomeContext, editing: Boolean) {
+    val price = rememberPrice(ctx, today = true)
+    val now = price?.now
+    if (price == null || now == null) {
+        if (editing) SectionCard { Muted(stringResource(Res.string.price_none)) }
+        return
+    }
+    val currency = price.currency
+    val periods = price.periods
+    val at = nowSeconds()
+    val low = periods.minOfOrNull { it.price } ?: now.price
+    val high = periods.maxOfOrNull { it.price } ?: now.price
+    val cheap = Fz.colors.success
+    val dear = Fz.colors.warning
+    val tone = { p: Double -> lerp(cheap, dear, if (high > low) ((p - low) / (high - low)).toFloat() else 0f) }
+    SectionCard(Modifier.clickable { ctx.nav.openPage(AppPage.Energy) }) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(FzIcons.Euro, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(6.dp))
+            Text(stringResource(Res.string.price_today_title), fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, maxLines = 1)
+        }
+        Text(stringResource(Res.string.price_per_kwh, formatPrice(now.price, currency)), fontSize = 22.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        val next = periods.firstOrNull { it.start > at && it.price != now.price }
+        val nextText = next?.let { stringResource(Res.string.price_next, it.slot.ifBlank { stringResource(Res.string.price_change) }, clock(it.start), formatPrice(it.price, currency)) }
+        listOfNotNull(now.slot.takeIf { it.isNotBlank() }, now.profileName.takeIf { it.isNotBlank() }, nextText).takeIf { it.isNotEmpty() }?.let { Caption(it.joinToString(" · ")) }
+        if (periods.isNotEmpty()) {
+            val first = periods.first().start
+            val last = periods.last().end
+            val span = (last - first).coerceAtLeast(1)
+            Spacer(Modifier.height(8.dp))
+            Box(Modifier.fillMaxWidth().height(22.dp).clip(RoundedCornerShape(6.dp))) {
+                Row(Modifier.matchParentSize(), horizontalArrangement = Arrangement.spacedBy(1.dp)) {
+                    periods.forEach { p ->
+                        Box(Modifier.weight((p.end - p.start).coerceAtLeast(1).toFloat()).fillMaxHeight().background(tone(p.price).copy(alpha = if (p.end <= at) 0.25f else 0.6f)))
+                    }
+                }
+                if (at in first..last) {
+                    Box(Modifier.fillMaxWidth(((at - first).toFloat() / span).coerceIn(0.005f, 1f)).fillMaxHeight()) {
+                        Box(Modifier.align(Alignment.CenterEnd).width(2.dp).fillMaxHeight().background(MaterialTheme.colorScheme.onSurface))
+                    }
+                }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Caption(clock(first))
+                Caption(clock(first + span / 2))
+                Caption(clock(last))
+            }
+            val slots = periods.distinctBy { it.slot to it.price }.sortedBy { it.price }
+            if (slots.size > 1) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    slots.forEach { s ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(8.dp).background(tone(s.price), CircleShape))
+                            Spacer(Modifier.width(5.dp))
+                            Text(listOf(s.slot, formatPrice(s.price, currency)).filter { it.isNotBlank() }.joinToString(" · "), fontSize = 12.sp, maxLines = 1)
+                        }
+                    }
+                }
+            }
+        }
+        price.tempo?.let { t ->
             Spacer(Modifier.height(4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 TempoDay(stringResource(Res.string.tempo_today), t.today, Modifier.weight(1f))

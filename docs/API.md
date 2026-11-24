@@ -64,6 +64,35 @@ serveur).
 
 `TokenPair` : `{access_token, refresh_token, token_type, expires_in, refresh_expires_at, user}`.
 
+### Jetons d'accès et serveur MCP
+
+Un utilisateur crée des **jetons d'accès** pour ses outils (un assistant par MCP, un script) au lieu
+de leur donner son mot de passe. Un jeton (`bzt_…`) s'envoie comme les autres :
+`Authorization: Bearer bzt_…`. Il agit avec les droits de son utilisateur sur toute l'API, mais ne
+crée pas d'autre jeton et ne change pas de mot de passe. Seule son empreinte est gardée : il ne
+s'affiche qu'à sa création. Un changement ou une réinitialisation du mot de passe supprime les jetons
+de l'utilisateur, comme ses sessions.
+
+| Méthode | Chemin | Description |
+|---------|--------|-------------|
+| GET 🔒 | `/api/tokens` | Jetons de l'utilisateur : `[{id, user_id, name, hint, created_at, last_used_at}]` (`hint` : le début du jeton) |
+| POST 🔒 | `/api/tokens` | `{name}` (1 à 64 caractères) → 201 `{token, id, name, hint, …}` ; 20 jetons au plus (409) ; refusé à un jeton (403) |
+| DELETE 🔒 | `/api/tokens/{id}` | Révoque un de ses jetons (immédiat) |
+
+`POST /mcp` est un serveur [MCP](https://modelcontextprotocol.io) (transport « Streamable HTTP »,
+réponses JSON, sans flux SSE ni session ; versions 2025-06-18, 2025-03-26 et 2024-11-05), authentifié
+par un jeton d'accès (sans jeton : `401` avec `WWW-Authenticate: Bearer`). Chaque outil est un appel de
+cette API, fait avec les droits de l'utilisateur : état des installations et des appareils, pilotage
+des zones et des appareils, routines, automatismes, programmations Airzone, minuteries, modules et
+sources (administrateurs). `api_reference` donne ce document section par section ; `api_request`
+appelle une autre route, sauf l'authentification, les utilisateurs, les jetons, les sessions, les
+comptes liés, le compte Airzone, la fédération, l'export de configuration et la mise à jour. Exemple
+avec Claude Code :
+
+```
+claude mcp add --transport http breezone https://breezone.example.org/mcp --header "Authorization: Bearer bzt_…"
+```
+
 ## Utilisateurs 👑
 
 | Méthode | Chemin | Description |
@@ -229,7 +258,7 @@ Un tarif contient l'abonnement (par mois), le prix de rachat facultatif (`export
 | PUT 🛠 | `/api/installations/{id}/electricity/contract` | `{country?, supplier?, offer?="custom", power_kva?, currency?="EUR", offpeak?:[{from, to}]}` → `TariffView`. `offer` `base`, `hc` ou `tempo` : les tarifs sont remplacés par ceux de la CRE pour `power_kva` (502 si elle est injoignable ou n'a pas de prix pour cette puissance) ; `offpeak` (heures creuses, à l'heure ou à la demi-heure ; 22:00 → 06:00 par défaut) découpe les prix de l'offre `hc` |
 | PUT 🛠 | `/api/installations/{id}/electricity/prices/{YYYY-MM-DD}` | `Tariff` : `{subscription, export_price?, profiles:[{id, name, color?, slots:[{start, name, price}]}], calendar:{day_start?="00:00", weekdays:[7 profils], colors?:{blue?, white?, red?}}}`, le tarif à partir de ce jour (créé ou remplacé) → `TariffView` |
 | DELETE 🛠 | `/api/installations/{id}/electricity/prices/{YYYY-MM-DD}` | → `TariffView` ; 404 s'il n'y en a pas |
-| GET 🔒 | `/api/installations/{id}/electricity/price?hours=24` | `PriceView` : `{currency, now:{price, slot, profile, profile_name, color, day}, periods:[{start, end, price, slot, profile, profile_name, color}], tempo}`, le prix maintenant et les plages des heures qui viennent (1 h à 7 jours). `now` vaut `null` sans tarif. `tempo` (`null` si aucun tarif ne suit les couleurs) : `{today, tomorrow, red_left, white_left}`, couleurs du jour et du lendemain et jours rouges et blancs restants de la saison (du 1er septembre au 31 août) |
+| GET 🔒 | `/api/installations/{id}/electricity/price?hours=24` | `PriceView` : `{currency, now:{price, slot, profile, profile_name, color, day}, periods:[{start, end, price, slot, profile, profile_name, color}], tempo}`, le prix maintenant et les plages des heures qui viennent (1 h à 7 jours). Avec `today=true`, les plages couvrent toute la journée locale, de minuit à minuit, heures passées comprises (`hours` est alors ignoré). `now` vaut `null` sans tarif. `tempo` (`null` si aucun tarif ne suit les couleurs) : `{today, tomorrow, red_left, white_left}`, couleurs du jour et du lendemain et jours rouges et blancs restants de la saison (du 1er septembre au 31 août) |
 
 Les offres réglementées d'EDF (`base`, `hc`, `tempo`) prennent les prix publiés en open data par la
 CRE (historique du Tarif Bleu résidentiel : `Option_Base.csv`, `Option_HPHC.csv`,

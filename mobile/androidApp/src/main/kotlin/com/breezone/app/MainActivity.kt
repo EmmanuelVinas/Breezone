@@ -1,6 +1,7 @@
 package com.breezone.app
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -8,6 +9,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import com.breezone.app.data.ConnectLinks
 import com.breezone.app.ui.App
 
 class MainActivity : ComponentActivity() {
@@ -17,7 +19,17 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         requestLocalNetworkAccess()
+        if (savedInstanceState == null) openLink(intent)
         setContent { App() }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        openLink(intent)
+    }
+
+    private fun openLink(intent: Intent?) {
+        intent?.takeIf { it.action == Intent.ACTION_VIEW }?.dataString?.let { ConnectLinks.open(it) }
     }
 
     /**

@@ -65,6 +65,8 @@ import com.breezone.app.ui.home.PageContext
 import com.breezone.app.ui.home.deviceKind
 import com.breezone.app.ui.icons.FzIcons
 import com.breezone.app.ui.screens.AddServerScreen
+import com.breezone.app.data.ConnectLinks
+import kotlinx.coroutines.flow.filterNotNull
 import com.breezone.app.ui.screens.ChargeProfilesScreen
 import com.breezone.app.ui.screens.ChargingScreen
 import com.breezone.app.ui.screens.EnergyScreen
@@ -91,7 +93,7 @@ import org.koin.compose.koinInject
 @Serializable object HomeRoute
 @Serializable object SettingsRoute
 @Serializable object LicensesRoute
-@Serializable data class AddServerRoute(val reauthServerId: String? = null)
+@Serializable data class AddServerRoute(val reauthServerId: String? = null, val url: String? = null, val username: String? = null)
 @Serializable data class HouseRoute(val serverId: String, val installationId: Long)
 @Serializable data class InstallationRoute(val serverId: String, val installationId: Long)
 @Serializable data class RoutinesRoute(val serverId: String, val installationId: Long)
@@ -157,6 +159,12 @@ fun App() {
         val onRoot = items.any { destination?.hasRoute(it.route::class) == true } && !(current != null && destination?.hasRoute<HomeRoute>() == true)
 
         LaunchedEffect(Unit) { hub.messages.collect { snackbar.showSnackbar(it) } }
+        LaunchedEffect(Unit) {
+            ConnectLinks.pending.filterNotNull().collect { link ->
+                ConnectLinks.consume()
+                nav.navigate(AddServerRoute(url = link.url, username = link.username)) { launchSingleTop = true }
+            }
+        }
         LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { hub.refresh() }
 
         val choose: (String, Long) -> Unit = { serverId, id ->
@@ -271,6 +279,8 @@ fun App() {
                     val r = entry.toRoute<AddServerRoute>()
                     AddServerScreen(
                         reauthServerId = r.reauthServerId,
+                        linkUrl = r.url,
+                        linkUsername = r.username,
                         canGoBack = servers.isNotEmpty(),
                         onBack = { nav.popBackStack() },
                         onDone = {

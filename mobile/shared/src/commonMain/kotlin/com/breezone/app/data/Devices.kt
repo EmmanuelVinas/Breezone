@@ -234,6 +234,16 @@ data class PriceAt(
     val profileName: String = "",
 )
 
+/** A stretch of time at one price. */
+@Serializable
+data class PricePeriod(
+    val start: Long,
+    val end: Long,
+    val price: Double,
+    val slot: String = "",
+    val profileName: String = "",
+)
+
 @Serializable
 data class TempoView(val today: DayColor? = null, val tomorrow: DayColor? = null)
 
@@ -242,6 +252,7 @@ data class TempoView(val today: DayColor? = null, val tomorrow: DayColor? = null
 data class PriceView(
     val currency: String = "EUR",
     val now: PriceAt? = null,
+    val periods: List<PricePeriod> = emptyList(),
     val tempo: TempoView? = null,
 )
 

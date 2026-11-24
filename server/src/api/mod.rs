@@ -10,6 +10,7 @@ mod federation;
 pub(crate) mod home;
 mod hvac;
 mod linked;
+mod mcp;
 mod modules;
 pub(crate) mod price;
 mod routines;
@@ -18,6 +19,7 @@ mod sources;
 mod surplus;
 mod system;
 mod timers;
+mod tokens;
 mod weather;
 mod ws;
 
@@ -45,6 +47,11 @@ pub fn router() -> Router<AppState> {
         .route("/api/me/language", put(account::change_language))
         .route("/api/sessions", get(account::list_sessions))
         .route("/api/sessions/{id}", axum::routing::delete(account::delete_session))
+        // Access tokens of a user, for tools (MCP, scripts)
+        .route("/api/tokens", get(tokens::list).post(tokens::create))
+        .route("/api/tokens/{id}", axum::routing::delete(tokens::delete))
+        // MCP server (Model Context Protocol) for assistants
+        .route("/mcp", post(mcp::handle).get(mcp::no_stream).delete(mcp::no_stream))
         // Users (admin)
         .route("/api/users", get(account::list_users).post(account::create_user))
         .route("/api/users/{id}", put(account::update_user).delete(account::delete_user))

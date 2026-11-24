@@ -214,6 +214,8 @@ class BreezoneApi(
     suspend fun energyRange(): EnergyRange = call(HttpMethod.Get, "/api/energy/range")
     /** The price of electricity of an installation now, and the Tempo colours. */
     suspend fun price(installationId: Long): PriceView = call(HttpMethod.Get, "/api/installations/$installationId/electricity/price?hours=24")
+    /** The same with the periods of the whole local day (servers before 0.12.1 give the next 24 hours). */
+    suspend fun priceToday(installationId: Long): PriceView = call(HttpMethod.Get, "/api/installations/$installationId/electricity/price?today=true")
     suspend fun deviceHistoryOver(deviceId: Long, hours: Int): DeviceHistory =
         call(HttpMethod.Get, "/api/devices/$deviceId/history?hours=$hours&bucket=${Periods.bucket(hours)}")
     suspend fun chargeProfiles(): List<ChargeProfileView> = call(HttpMethod.Get, "/api/charging/profiles")

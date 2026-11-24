@@ -2272,6 +2272,50 @@ const en: Record<string, string> = {
   "Une condition d'un module": "A condition of a module",
   "Condition indisponible": "Condition unavailable",
   "Un module change d'état": "A module changes state",
+  "Scannez ce QR code avec l'appareil photo du téléphone pour ouvrir Breezone sur le serveur {server} avec l'identifiant {name}.":
+    "Scan this QR code with the phone's camera to open Breezone on the server {server} with the username {name}.",
+  "Partage impossible": "Sharing failed",
+  "Connecter un téléphone pour {name}": "Connect a phone for {name}",
+  "Scannez ce QR code avec l'appareil photo du téléphone : l'application Breezone s'ouvre avec le serveur et l'identifiant remplis. Il ne reste qu'à saisir le mot de passe, qui n'est pas dans le QR code.":
+    "Scan this QR code with the phone's camera: the Breezone app opens with the server and the username filled in. Only the password is left to type; it is not in the QR code.",
+  "Adresse du serveur": "Server address",
+  "L'adresse que le téléphone joint : celle du réseau local à la maison, ou l'adresse publique pour l'utiliser de partout.":
+    "The address the phone reaches: the one on the home network, or the public address to use it from anywhere.",
+  "Cette adresse ne marche que sur cet ordinateur : mettez celle que le téléphone joint (par exemple http://192.168.1.20:8427).":
+    "This address only works on this computer: put the one the phone reaches (for example http://192.168.1.20:8427).",
+  "QR code de connexion": "Sign-in QR code",
+  "Adresse attendue : http://… ou https://…":
+    "Expected address: http://… or https://…",
+  "Lien copié": "Link copied",
+  "Copier le lien": "Copy the link",
+  "Télécharger l'image": "Download the image",
+  Partager: "Share",
+  "Connecter un téléphone": "Connect a phone",
+  Copié: "Copied",
+  "Jeton révoqué": "Token revoked",
+  "Jetons d'accès (MCP)": "Access tokens (MCP)",
+  "Un assistant (Claude, ChatGPT…) ou un script se connecte avec un jeton au lieu de votre mot de passe, avec vos droits : il lit l'état de la maison, pilote les appareils, écrit des routines, des automatismes et des programmations, et installe des modules si vous êtes administrateur. Révoquez un jeton pour le couper aussitôt.":
+    "An assistant (Claude, ChatGPT…) or a script signs in with a token instead of your password, with your rights: it reads the state of the home, drives the devices, writes routines, automations and schedules, and installs modules if you are an administrator. Revoke a token to cut it off at once.",
+  "Aucun jeton pour l'instant.": "No token yet.",
+  "utilisé {when}": "used {when}",
+  "jamais utilisé": "never used",
+  "L'outil qui s'en sert est coupé aussitôt et ne pourra plus se connecter avec.":
+    "The tool using it is cut off at once and can no longer sign in with it.",
+  "Créer un jeton": "Create a token",
+  "Jeton créé": "Token created",
+  "Nouveau jeton d'accès": "New access token",
+  "Copiez-le maintenant : il ne sera plus affiché. Il donne vos droits à qui le possède.":
+    "Copy it now: it will not be shown again. Whoever holds it gets your rights.",
+  "Donnez-lui le nom de l'outil qui s'en servira, pour le reconnaître et le révoquer plus tard.":
+    "Name it after the tool that will use it, to recognise it and revoke it later.",
+  Jeton: "Token",
+  "Adresse du serveur MCP": "MCP server address",
+  "Claude Code": "Claude Code",
+  "Autres clients MCP (configuration JSON)":
+    "Other MCP clients (JSON configuration)",
+  "L'assistant doit joindre cette adresse : depuis l'extérieur de la maison, mettez l'adresse publique du serveur (Réglages › Serveurs).":
+    "The assistant must reach this address: from outside the home, set the public address of the server (Settings › Servers).",
+  "Claude sur mon ordinateur": "Claude on my computer",
 }
 
 export default en

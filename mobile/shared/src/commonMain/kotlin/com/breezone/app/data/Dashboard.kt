@@ -100,6 +100,7 @@ object BlockTypes {
     const val VENTILATION_ROOMS = "ventilation_rooms"
     const val LIGHT_PANEL = "light_panel"
     const val PRICE_NOW = "price_now"
+    const val PRICE = "price"
     const val SPACER = "spacer"
 }
 

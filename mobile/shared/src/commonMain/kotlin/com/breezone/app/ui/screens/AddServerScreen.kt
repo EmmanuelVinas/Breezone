@@ -66,12 +66,12 @@ import org.koin.compose.koinInject
  * brand new server.
  */
 @Composable
-fun AddServerScreen(reauthServerId: String?, canGoBack: Boolean, onBack: () -> Unit, onDone: () -> Unit) {
+fun AddServerScreen(reauthServerId: String?, canGoBack: Boolean, linkUrl: String? = null, linkUsername: String? = null, onBack: () -> Unit, onDone: () -> Unit) {
     val hub = koinInject<Hub>()
     val existing = reauthServerId?.let { hub.server(it)?.account }
     val scope = rememberCoroutineScope()
-    var url by remember { mutableStateOf(existing?.url ?: "") }
-    var username by remember { mutableStateOf(existing?.username ?: "") }
+    var url by remember { mutableStateOf(existing?.url ?: linkUrl ?: "") }
+    var username by remember { mutableStateOf(existing?.username ?: linkUsername ?: "") }
     var password by remember { mutableStateOf("") }
     var confirm by remember { mutableStateOf("") }
     var needsSetup by remember { mutableStateOf(false) }
@@ -155,6 +155,17 @@ fun AddServerScreen(reauthServerId: String?, canGoBack: Boolean, onBack: () -> U
                 },
             ),
         )
+        // A link may come from anyone: the address must be checked before a password is typed.
+        if (existing == null && linkUrl != null) {
+            Row(
+                Modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f), Fz.shapes.field).padding(12.dp),
+                verticalAlignment = Alignment.Top,
+            ) {
+                Icon(FzIcons.QrCode, null, Modifier.size(16.dp).padding(top = 2.dp), tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.size(8.dp))
+                Muted(stringResource(Res.string.add_server_from_link))
+            }
+        }
         OutlinedTextField(
             value = if (demoLogin) DEMO_LOGIN_URL else url,
             onValueChange = { url = it; needsSetup = false },

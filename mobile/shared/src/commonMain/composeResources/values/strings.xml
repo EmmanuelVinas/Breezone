@@ -103,6 +103,7 @@
     <string name="add_server_sign_in">Se connecter</string>
     <string name="add_server_create">Créer le compte</string>
     <string name="add_server_stay_signed_in">Vous resterez connecté : le mot de passe ne sera redemandé que si le trousseau sécurisé de ce téléphone change, ou si vous déconnectez cet appareil depuis Breezone.</string>
+    <string name="add_server_from_link">Serveur reçu par un lien ou un QR code. Vérifiez que l’adresse est bien celle de votre serveur Breezone avant de saisir votre mot de passe.</string>
     <string name="add_server_forget">Oublier ce serveur</string>
     <string name="add_server_error_unreachable">Serveur injoignable</string>
     <string name="add_server_error_mismatch">Les mots de passe ne correspondent pas</string>
@@ -729,6 +730,11 @@
     <string name="price_now">Prix maintenant</string>
     <string name="price_per_kwh">%1$s / kWh</string>
     <string name="price_none">Pas de tarif pour l’instant</string>
+    <string name="block_price_today">Prix du jour</string>
+    <string name="block_price_today_hint">Le prix du kWh maintenant, ses plages de la journée et la couleur Tempo</string>
+    <string name="price_today_title">Prix de l’électricité aujourd’hui</string>
+    <string name="price_next">%1$s à %2$s (%3$s)</string>
+    <string name="price_change">Changement</string>
     <string name="tempo_today">Aujourd’hui</string>
     <string name="tempo_tomorrow">Demain</string>
     <string name="tempo_blue">Bleu</string>

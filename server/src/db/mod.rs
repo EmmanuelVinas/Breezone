@@ -30,6 +30,7 @@ mod schedules;
 mod settings;
 mod tariffs;
 mod timers;
+mod tokens;
 mod users;
 
 pub use access::*;
@@ -50,6 +51,7 @@ pub use schedules::*;
 pub use settings::*;
 pub use tariffs::*;
 pub use timers::*;
+pub use tokens::*;
 pub use users::*;
 
 pub type Db = SqlitePool;

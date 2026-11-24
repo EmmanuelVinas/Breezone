@@ -11,6 +11,7 @@ import {
   Network,
   Pencil,
   Plus,
+  QrCode,
   Radar,
   RefreshCw,
   Smartphone,
@@ -44,6 +45,8 @@ import { ModulesTab } from "@/components/modules-tab"
 import { ConnectionDot } from "@/components/connection-badge"
 import { Confirm } from "@/components/confirm"
 import { ServersTab } from "@/components/federation"
+import { ConnectPhoneDialog } from "@/components/connect-phone"
+import { AccessTokens } from "@/components/access-tokens"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -737,6 +740,7 @@ function UsersTab() {
     null
   )
   const [newPassword, setNewPassword] = useState("")
+  const [phone, setPhone] = useState<string | null>(null)
   const refresh = () => qc.invalidateQueries({ queryKey: ["users"] })
   const create = useMutation({
     mutationFn: () =>
@@ -860,6 +864,15 @@ function UsersTab() {
               onClick={() => setReset({ id: u.id, username: u.username })}
             >
               {t("Mot de passe")}
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              aria-label={t("QR code de connexion")}
+              title={t("QR code de connexion")}
+              onClick={() => setPhone(u.username)}
+            >
+              <QrCode />
             </Button>
             {u.id !== me?.id && (
               <Confirm
@@ -1005,6 +1018,12 @@ function UsersTab() {
         </DialogContent>
       </Dialog>
 
+      <ConnectPhoneDialog
+        username={phone ?? ""}
+        open={phone !== null}
+        onOpenChange={(o) => !o && setPhone(null)}
+      />
+
       <Dialog open={reset !== null} onOpenChange={(o) => !o && setReset(null)}>
         <DialogContent>
           <DialogHeader>
@@ -1046,6 +1065,8 @@ function UsersTab() {
 
 function DevicesTab() {
   const qc = useQueryClient()
+  const me = currentUser()
+  const [phone, setPhone] = useState(false)
   const sessions = useQuery({ queryKey: ["sessions"], queryFn: api.sessions })
   const revoke = useMutation({
     mutationFn: api.revokeSession,
@@ -1097,6 +1118,18 @@ function DevicesTab() {
           </div>
         ))}
       </CardContent>
+      {me && (
+        <CardFooter>
+          <Button variant="outline" onClick={() => setPhone(true)}>
+            <QrCode /> {t("Connecter un téléphone")}
+          </Button>
+          <ConnectPhoneDialog
+            username={me.username}
+            open={phone}
+            onOpenChange={setPhone}
+          />
+        </CardFooter>
+      )}
     </Card>
   )
 }
@@ -1329,8 +1362,9 @@ export function SettingsPage() {
             <ConfigTransfer />
           </TabsContent>
         )}
-        <TabsContent value="devices">
+        <TabsContent value="devices" className="grid gap-6">
           <DevicesTab />
+          <AccessTokens />
         </TabsContent>
         <TabsContent value="account">
           <AccountTab />
