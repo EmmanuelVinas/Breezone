@@ -6,6 +6,30 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.13.0-beta.3] - 2026-11-25
+
+### Added
+
+- The history Breezone missed while it was stopped, or while a device could not be reached, is
+  taken back from the hardware that keeps its measures: only what it measured, never an estimate.
+  Shortly after a start, then every hour, the gaps of the last seven days are filled, the counters
+  joining what was recorded, and the activity feed says it. The Shelly module 1.2.0 gives the
+  minutes a Pro 3EM in single phase keeps (some seven weeks of them). Modules declare it with the
+  call `history` (module interface 1.2).
+- An automation can be deleted from its editor, next to Save.
+
+### Changed
+
+- The action of the charger in the automations charges "up to" a profile or at the charger's
+  maximum: no profile is needed for the latter, and the recipes "off-peak hours" and "blue night"
+  use it when there is no profile yet (they no longer say "do not charge" then). Their descriptions
+  are clearer.
+
+### Fixed
+
+- The friezes of the charging profiles page no longer show a broken frame when a stretch is
+  pointed at.
+
 ## [0.13.0-beta.2] - 2026-11-24
 
 ### Changed
@@ -1575,7 +1599,8 @@ solar surplus for the air conditioning…), and what follows.
 - Project renamed from FreeZone to Breezone (former `FREEZONE_*` variables and `freezone.db` are
   still recognised).
 
-[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.2...HEAD
+[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.3...HEAD
+[0.13.0-beta.3]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.2...v0.13.0-beta.3
 [0.13.0-beta.2]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.1...v0.13.0-beta.2
 [0.13.0-beta.1]: https://github.com/EmmanuelVinas/breezone/compare/v0.12.0...v0.13.0-beta.1
 [0.12.0]: https://github.com/EmmanuelVinas/breezone/compare/v0.11.0...v0.12.0
