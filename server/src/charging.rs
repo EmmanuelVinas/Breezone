@@ -57,7 +57,7 @@ pub fn validate(p: &ProfileInput) -> Result<(), String> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Mode {
-    /// Charge whenever the car asks, up to the power of a profile.
+    /// Charge whenever the car asks, up to the power of a profile (none: the charger's maximum).
     Profile,
     /// No charge.
     Off,
@@ -85,7 +85,7 @@ impl Mode {
     /// What a charger follows by its stored row.
     pub fn of_row(row: &ChargerPlanRow) -> Mode {
         match row.mode.as_deref() {
-            Some("profile") if row.profile_id.is_some() => Mode::Profile,
+            Some("profile") => Mode::Profile,
             Some("off") => Mode::Off,
             Some("solar") => Mode::Solar,
             _ => Mode::Free,
@@ -221,7 +221,11 @@ pub fn plan_now(row: &ChargerPlanRow, profile: Option<&ChargeProfileRow>, c: &Ch
         return None;
     }
     match Mode::of_row(row) {
-        Mode::Profile => profile.map(|p| Plan::Max { amps: c.amps(p.kw), until: None, now: false, left_kwh: None }),
+        // Without a profile: the charger's maximum; a profile deleted since: nothing.
+        Mode::Profile => match (row.profile_id, profile) {
+            (None, _) => Some(Plan::Max { amps: c.amps(None), until: None, now: false, left_kwh: None }),
+            (Some(_), p) => p.map(|p| Plan::Max { amps: c.amps(p.kw), until: None, now: false, left_kwh: None }),
+        },
         Mode::Off => Some(Plan::Off { until: None }),
         Mode::Solar => Some(Solar::of(row).plan(c)),
         Mode::Free => None,
@@ -289,9 +293,10 @@ pub async fn plans(state: &AppState, devices: &[DeviceView], now: i64) -> HashMa
 pub async fn set(state: &AppState, device_id: i64, choice: Choice, automation: Option<i64>) -> crate::error::ApiResult<()> {
     use crate::error::ApiError;
     if choice.mode == Mode::Profile {
+        // No profile: up to the charger's maximum.
         let known = match choice.profile_id {
             Some(pid) => db::list_charge_profiles(&state.db).await?.iter().any(|r| r.id == pid),
-            None => false,
+            None => true,
         };
         if !known {
             return Err(ApiError::not_found(crate::text!("profil de recharge introuvable", "charging profile not found", "perfil de carga no encontrado")));
@@ -459,6 +464,8 @@ mod tests {
         assert_eq!(plan_now(&told("profile"), Some(&profile(Some(7.0))), &c, 0), Some(Plan::Max { amps: 30, until: None, now: false, left_kwh: None }));
         assert_eq!(plan_now(&told("profile"), Some(&profile(None)), &c, 0), Some(Plan::Max { amps: 32, until: None, now: false, left_kwh: None }), "the charger's maximum");
         assert_eq!(plan_now(&told("profile"), None, &c, 0), None, "a profile gone");
+        let max = ChargerPlanRow { profile_id: None, ..told("profile") };
+        assert_eq!(plan_now(&max, None, &c, 0), Some(Plan::Max { amps: 32, until: None, now: false, left_kwh: None }), "no profile: the charger's maximum");
         assert_eq!(plan_now(&told("off"), None, &c, 0), Some(Plan::Off { until: None }));
         assert_eq!(plan_now(&ChargerPlanRow { device_id: 1, ..Default::default() }, None, &c, 0), None, "left alone");
         // Its own schedule on: the automations do not drive it.

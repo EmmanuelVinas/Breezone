@@ -9,8 +9,11 @@
 //!
 //! Besides the readings, the module keeps the Shelly's WebSocket (`/rpc`): each `NotifyStatus`
 //! makes Breezone read it at once (a relay switched by hand shows without waiting).
+//!
+//! History: a channel `em1:N` keeps a record a minute for weeks (`EM1Data.GetData`), which fills
+//! what Breezone could not record (`history`).
 
-use breezone_module_sdk::{device, host, json, module, Described, DeviceInfo, Driver, Error, Found, Map, Result, State, Value};
+use breezone_module_sdk::{device, host, json, module, unsupported, Described, DeviceInfo, Driver, Error, Found, History, HistoryPoint, Map, Result, State, Value};
 use std::cell::Cell;
 
 /// Shelly models by firmware application (`app` of `/shelly`): the name shown, and a note when the
@@ -177,6 +180,42 @@ fn states_of(status: &Map<String, Value>) -> Vec<(String, State)> {
     out
 }
 
+/// The minutes of an `EM1Data.GetData` answer before `until`: the energy drawn and given back
+/// (Wh, turned into kWh) and the mean power, voltage and current of each.
+fn history_of(page: &Value, until: i64) -> History {
+    let keys: Vec<&str> = page["keys"].as_array().map(|k| k.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+    let at = |name: &str| keys.iter().position(|k| *k == name);
+    let (drawn, given, voltage, current) = (at("total_act_energy"), at("total_act_ret_energy"), at("avg_voltage"), at("avg_current"));
+    let mut points = vec![];
+    for block in page["data"].as_array().into_iter().flatten() {
+        let (Some(start), Some(period)) = (block["ts"].as_i64(), block["period"].as_i64().filter(|p| *p > 0)) else { continue };
+        for (i, row) in block["values"].as_array().into_iter().flatten().enumerate() {
+            let ts = start + i as i64 * period;
+            if ts >= until {
+                break;
+            }
+            let v = |k: Option<usize>| k.and_then(|k| row.get(k)).and_then(Value::as_f64);
+            let mut values = Map::new();
+            if let (Some(d), Some(g)) = (v(drawn), v(given)) {
+                values.insert("energy_in".into(), json!(d / 1000.0));
+                values.insert("energy_out".into(), json!(g / 1000.0));
+                values.insert("power".into(), json!(((d - g) * 3600.0 / period as f64 * 10.0).round() / 10.0));
+            }
+            if let Some(x) = v(voltage) {
+                values.insert("voltage".into(), json!(x));
+            }
+            if let Some(x) = v(current) {
+                values.insert("current".into(), json!(x));
+            }
+            if !values.is_empty() {
+                points.push(HistoryPoint { ts, period, values });
+            }
+        }
+    }
+    let more = page["next_record_ts"].as_i64().filter(|n| *n < until && points.last().is_none_or(|p| *n > p.ts));
+    History { points, more }
+}
+
 pub struct Shelly {
     host: String,
     /// Id of the device expected at this address (from the scanner): another one is refused.
@@ -250,6 +289,13 @@ impl Driver for Shelly {
         Ok(Described { model: shown, firmware, devices: devices_of(&model, &status), identity: Some(id) })
     }
 
+    fn history(config: Value, secret: Option<Value>, reference: &str, since: i64, until: i64) -> Result<History> {
+        let Some(("em1", n)) = component(reference) else { return unsupported("history") };
+        let shelly = Shelly::open(config, secret)?;
+        let page = shelly.rpc("EM1Data.GetData", &format!("id={n}&ts={since}&end_ts={until}"))?;
+        Ok(history_of(&page, until))
+    }
+
     fn read(&self) -> Result<Vec<(String, State)>> {
         let states = states_of(&self.status()?);
         self.listen();
@@ -306,6 +352,41 @@ impl Driver for Shelly {
 }
 
 module!(Shelly);
+
+#[cfg(test)]
+mod history_tests {
+    use super::*;
+    use breezone_module_sdk::testing;
+
+    #[test]
+    fn a_channel_gives_its_minutes_back() {
+        testing::reset();
+        let page = json!({
+            "keys": ["total_act_energy", "total_act_ret_energy", "lag_react_energy", "lead_react_energy", "max_act_power", "min_act_power", "max_aprt_power", "min_aprt_power", "max_voltage", "min_voltage", "avg_voltage", "max_current", "min_current", "avg_current"],
+            "data": [{"ts": 1000, "period": 60, "values": [
+                [1.25, 0.0, 0.0, 0.0, 85.8, 68.8, 422.5, 404.1, 227.0, 222.5, 224.1, 1.86, 1.81, 1.83],
+                [0.0, 5.0, 0.0, 0.0, 0.0, -300.0, 0.0, 0.0, 227.0, 222.5, 225.0, 1.3, 1.3, 1.3],
+                [0.5, 0.0, 0.0, 0.0, 30.0, 30.0, 0.0, 0.0, 227.0, 222.5, 225.0, 0.2, 0.2, 0.2]
+            ]}],
+            "next_record_ts": 1180
+        });
+        testing::answer_json("GET", "/rpc/EM1Data.GetData?id=1&ts=1000&end_ts=1120", &page);
+        let h = <Shelly as Driver>::history(json!({"host": "192.168.1.40"}), None, "em1:1", 1000, 1120).unwrap();
+        // The third minute starts at `until`: left out, and nothing more to ask.
+        assert_eq!(h.points.len(), 2);
+        assert_eq!(h.more, None);
+        assert_eq!((h.points[0].ts, h.points[0].period), (1000, 60));
+        assert_eq!(h.points[0].values["power"], json!(75.0), "1.25 Wh in a minute");
+        assert_eq!(h.points[0].values["energy_in"], json!(0.00125));
+        assert_eq!(h.points[1].values["power"], json!(-300.0), "given back");
+        assert_eq!(h.points[1].values["voltage"], json!(225.0));
+        // Further on, the rest is asked.
+        testing::answer_json("GET", "/rpc/EM1Data.GetData?id=1&ts=1000&end_ts=5000", &page);
+        assert_eq!(<Shelly as Driver>::history(json!({"host": "192.168.1.40"}), None, "em1:1", 1000, 5000).unwrap().more, Some(1180));
+        // Only the channels of one phase keep their minutes here.
+        assert!(<Shelly as Driver>::history(json!({"host": "192.168.1.40"}), None, "switch:0", 1000, 5000).is_err());
+    }
+}
 
 #[cfg(test)]
 mod tests {

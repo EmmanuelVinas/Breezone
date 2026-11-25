@@ -31,6 +31,25 @@ pub async fn insert_device_samples(db: &Db, samples: &[DeviceSample]) -> sqlx::R
     tx.commit().await
 }
 
+/// Adds history points where there is none yet (what the hardware kept of a gap): a point
+/// Breezone recorded is never replaced.
+pub async fn add_device_samples(db: &Db, samples: &[DeviceSample]) -> sqlx::Result<u64> {
+    let mut tx = db.begin().await?;
+    let mut added = 0;
+    for s in samples {
+        added += sqlx::query("INSERT OR IGNORE INTO device_samples (device_id, ts, field, value) VALUES (?, ?, ?, ?)")
+            .bind(s.device_id)
+            .bind(s.ts)
+            .bind(&s.field)
+            .bind(s.value)
+            .execute(&mut *tx)
+            .await?
+            .rows_affected();
+    }
+    tx.commit().await?;
+    Ok(added)
+}
+
 /// History of some devices from `since` to `until` (excluded), sorted by device then time; every
 /// field when `fields` is empty.
 pub async fn device_samples(db: &Db, devices: &[i64], fields: &[&str], since: i64, until: i64) -> sqlx::Result<Vec<DeviceSample>> {

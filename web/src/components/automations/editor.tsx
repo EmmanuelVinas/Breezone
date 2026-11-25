@@ -11,6 +11,17 @@ import type {
 } from "@/lib/api"
 import { api } from "@/lib/api"
 import { t } from "@/lib/i18n"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -128,6 +139,16 @@ export function AutomationEditor({
     onSuccess: () => {
       toast.success(id ? t("Automatisme modifié") : t("Automatisme créé"))
       qc.invalidateQueries({ queryKey: ["automations"] })
+      onClose()
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : String(e)),
+  })
+  const remove = useMutation({
+    mutationFn: () => api.deleteAutomation(id!),
+    onSuccess: () => {
+      toast.success(t("Automatisme supprimé"))
+      qc.invalidateQueries({ queryKey: ["automations"] })
+      qc.invalidateQueries({ queryKey: ["charge-automations"] })
       onClose()
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : String(e)),
@@ -380,6 +401,35 @@ export function AutomationEditor({
           )}
         </div>
         <DialogFooter>
+          {id !== undefined && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="text-destructive sm:mr-auto"
+                  disabled={remove.isPending}
+                >
+                  <Trash2 /> {t("Supprimer")}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    {t("Supprimer « {name} » ?", { name: draft.name })}
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {t("Cet automatisme ne se déclenchera plus.")}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>{t("Annuler")}</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => remove.mutate()}>
+                    {t("Supprimer")}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
           <Button
             onClick={() => save.mutate()}
             disabled={save.isPending || !complete(draft)}

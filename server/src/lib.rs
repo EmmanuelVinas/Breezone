@@ -12,6 +12,7 @@ pub mod airzone_schedules;
 pub mod api;
 pub mod auth;
 pub mod automations;
+pub mod backfill;
 pub mod backup;
 pub mod capabilities;
 pub mod charging;
@@ -224,6 +225,7 @@ pub fn spawn_background(state: &AppState) {
     tokio::spawn(cloud::run_auto_sync(state.clone()));
     tokio::spawn(airzone_schedules::run_sync(state.clone()));
     tokio::spawn(timers::run_loop(state.clone()));
+    tokio::spawn(backfill::run_loop(state.clone()));
     tokio::spawn(automations::run_loop(state.clone()));
     {
         let state = state.clone();

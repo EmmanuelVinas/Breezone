@@ -106,6 +106,6 @@
         }
       }
     },
-    "optional_calls": { "type": "array", "items": { "enum": ["rooms", "scenes", "picture", "forecast", "listen", "unlock", "diagnostic", "probe", "schedules", "forget", "identify"] } }
+    "optional_calls": { "type": "array", "items": { "enum": ["rooms", "scenes", "picture", "forecast", "listen", "unlock", "diagnostic", "probe", "schedules", "forget", "identify", "history"] } }
   }
 }

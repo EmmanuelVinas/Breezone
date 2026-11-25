@@ -1,6 +1,6 @@
 {
   "id": "shelly",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "name": {
     "en": "Shelly (Plus, Pro, Gen3, Gen4)",
     "es": "Shelly (Plus, Pro, Gen3, Gen4)",
@@ -10,7 +10,7 @@
     "driver"
   ],
   "requires": {
-    "api": "^1.1"
+    "api": "^1.2"
   },
   "provides": {
     "traits": [
@@ -71,7 +71,8 @@
   "optional_calls": [
     "identify",
     "probe",
-    "diagnostic"
+    "diagnostic",
+    "history"
   ],
   "read_every_s": 5
 }

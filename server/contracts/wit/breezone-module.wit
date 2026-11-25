@@ -13,7 +13,8 @@
 // * a function added to `host` raises the minor version of the interface (`INTERFACE` of the
 //   server): a module that uses it requires it (`requires.api` of its manifest, "^1.1"), and an
 //   older server does not offer it.
-// Version 1.1: `host.receive`, `extras.forget`, `extras.identify`.
+// Version 1.1: `host.receive`, `extras.forget`, `extras.identify`. Version 1.2: `extras.history`
+// (an older server refuses a manifest that lists `history` in its `optional_calls`).
 package breezone:module@1.0.0;
 
 interface types {
@@ -306,6 +307,15 @@ interface extras {
     /// firmware, mac, supported (false: found but not usable), flags, port, host ("ip:port" when
     /// the port must be kept).
     identify: func(host: string, announced: option<json>) -> option<json>;
+
+    /// What the hardware kept of a device between `since` and `until` (seconds), for the history
+    /// Breezone could not record (it was stopped, the hardware unreachable): only what the
+    /// hardware measured, never an estimate. `history` in `optional-calls`; from the source's
+    /// configuration and secret, in an instance of its own. JSON: `{"points": [{"ts", "period",
+    /// <field>: <value>…}], "more": ts | null}` in time order: each number is the mean over the
+    /// `period` (seconds) from `ts`, a counter (a field in kWh) what it rose by during it. `more`:
+    /// ask again from there (an answer is kept short).
+    history: func(config: json, secret: option<string>, reference: string, since: s64, until: s64) -> result<json, error>;
 }
 
 /// What a module is built against.

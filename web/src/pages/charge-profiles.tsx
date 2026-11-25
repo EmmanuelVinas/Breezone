@@ -75,7 +75,7 @@ function RuleBar({
 }) {
   return (
     <div className="grid gap-1">
-      <div className="relative h-11 overflow-hidden rounded-xl border border-dashed bg-background">
+      <div className="relative h-11 overflow-hidden rounded-xl bg-muted/40">
         {bar.segments.map((s, i) => {
           const off =
             !s.effect || s.effect.mode === "off" || s.effect.mode === "free"
@@ -86,7 +86,7 @@ function RuleBar({
               onClick={onOpen}
               title={t("Ouvrir l'automatisme")}
               className={cn(
-                "absolute inset-y-0 flex flex-col justify-center overflow-hidden border-r border-background px-2 text-left text-[11px] hover:ring-2 hover:ring-foreground hover:ring-inset focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
+                "absolute inset-y-0 flex cursor-pointer flex-col justify-center overflow-hidden border-r border-background px-2 text-left text-[11px] transition-[filter] hover:brightness-125 focus-visible:brightness-125 focus-visible:outline-none",
                 off ? "text-muted-foreground" : "text-primary-foreground"
               )}
               style={{

@@ -90,6 +90,16 @@ pub trait Driver: Send + Sync {
     fn forget(&self) -> DriverFuture<'_, ()> {
         Box::pin(async { Ok(()) })
     }
+    /// Whether the hardware keeps a history Breezone can read back ([`Driver::history`]).
+    fn keeps_history(&self) -> bool {
+        false
+    }
+    /// What the hardware kept of a device between `since` and `until` (seconds): only what it
+    /// measured. JSON: `{"points": [{"ts", "period", <field>…}], "more": ts | null}`, each number
+    /// the mean over the period, a counter what it rose by.
+    fn history<'a>(&'a self, _reference: &'a str, _since: i64, _until: i64) -> DriverFuture<'a, serde_json::Value> {
+        Box::pin(async { Err(DriverError::Unsupported("history".into())) })
+    }
     /// The schedules the hardware keeps and runs itself (`schedule.hardware`).
     fn schedules(&self) -> DriverFuture<'_, Vec<Schedule>> {
         Box::pin(async { Err(DriverError::Unsupported("schedules".into())) })

@@ -32,6 +32,7 @@ export function effectText(
   if (!e) return ""
   switch (e.mode) {
     case "profile":
+      if (e.profile_id == null) return t("Maximum de la borne")
       return (
         profiles.find((p) => p.id === e.profile_id)?.name ??
         t("profil supprimé")

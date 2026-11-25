@@ -969,6 +969,23 @@ impl WasmModule {
         answer.map_err(from_wit)
     }
 
+    /// `extras.history` on an instance of its own: what the hardware kept of a device.
+    pub async fn history(&self, config: &serde_json::Value, secret: Option<&str>, reference: &str, since: i64, until: i64) -> Result<serde_json::Value, DriverError> {
+        let (mut store, _, instance) = self.instantiate_with(self.one_shot()).await?;
+        let missing = || DriverError::Unsupported(format!("{}: no history", self.id));
+        let extras = instance.get_export_index(&mut store, None, EXTRAS).ok_or_else(missing)?;
+        let index = instance.get_export_index(&mut store, Some(&extras), "history").ok_or_else(missing)?;
+        let func = instance
+            .get_typed_func::<(String, Option<String>, String, i64, i64), (Result<String, WitError>,)>(&mut store, &index)
+            .map_err(|e| DriverError::Invalid(format!("{}: history: {e}", self.id)))?;
+        let args = (config.to_string(), secret.map(str::to_string), reference.to_string(), since, until);
+        let (answer,) = tokio::time::timeout(CALL_TIMEOUT, func.call_async(&mut store, args))
+            .await
+            .map_err(|_| DriverError::Unreachable(format!("{}: no answer", self.id)))?
+            .map_err(|e| DriverError::Invalid(format!("{}: {e}", self.id)))?;
+        serde_json::from_str(&answer.map_err(from_wit)?).map_err(|e| DriverError::Invalid(format!("{}: history: {e}", self.id)))
+    }
+
     /// The context of an instance of its own (a probe, a step of an appairage, a query): what its
     /// subscriptions receive goes to its inbox, for `receive`.
     fn one_shot(&self) -> Arc<SourceCtx> {
@@ -1354,6 +1371,18 @@ impl Driver for WasmSource {
             }
             let config = serde_json::from_str(&self.config).unwrap_or(serde_json::Value::Null);
             self.module.forget(&config, self.secret.as_deref()).await
+        })
+    }
+
+    fn keeps_history(&self) -> bool {
+        self.has("history").is_ok()
+    }
+
+    fn history<'a>(&'a self, reference: &'a str, since: i64, until: i64) -> DriverFuture<'a, serde_json::Value> {
+        Box::pin(async move {
+            self.has("history")?;
+            let config = serde_json::from_str(&self.config).unwrap_or(serde_json::Value::Null);
+            self.module.history(&config, self.secret.as_deref(), reference, since, until).await
         })
     }
 

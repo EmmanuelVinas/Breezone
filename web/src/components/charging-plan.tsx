@@ -15,7 +15,7 @@ import { errorText, kwh, number, time } from "@/lib/format"
 import { locale, t } from "@/lib/i18n"
 import { TEMPO_COLOR, TEMPO_LABEL } from "@/lib/tempo"
 import { cn } from "@/lib/utils"
-import { effectColor } from "@/lib/charge-effects"
+import { effectColor, effectText } from "@/lib/charge-effects"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -196,8 +196,7 @@ function DayStrip({
               : null
           const words = p.effect
             ? p.effect.mode === "profile"
-              ? (view.profiles.find((x) => x.id === p.effect!.profile_id)
-                  ?.name ?? "")
+              ? effectText(p.effect, view.profiles)
               : effectWords(p.effect, kw)
             : ""
           const dim =
@@ -244,7 +243,9 @@ export function ProfileCard({
   if (!view) return null
   const current =
     view.mode === "profile"
-      ? view.profiles.find((p) => p.id === view.profile_id)?.name
+      ? view.profile_id == null
+        ? t("Maximum de la borne")
+        : view.profiles.find((p) => p.id === view.profile_id)?.name
       : view.mode === "off"
         ? t("Ne pas charger")
         : view.mode === "solar"

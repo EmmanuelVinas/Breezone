@@ -107,6 +107,33 @@ pub async fn roll_up(db: &Db, tz: Tz, now: i64) -> sqlx::Result<()> {
 }
 
 /// The days of the Airzone zones, from their readings, once the day is over.
+/// Sums up again the hours and days from `from` to `until` already summed up (history added
+/// afterwards: what the hardware kept of a gap); those after are summed up by [`roll_up`].
+pub async fn redo(db: &Db, tz: Tz, from: i64, until: i64) -> sqlx::Result<()> {
+    let value = value_sql();
+    let Some(next) = db::get_setting(db, NEXT_HOUR).await?.and_then(|v| v.parse::<i64>().ok()) else { return Ok(()) };
+    let (start, end) = (from.div_euclid(HOUR) * HOUR, (until.div_euclid(HOUR) * HOUR + HOUR).min(next));
+    if start < end {
+        let hourly = format!(
+            "INSERT OR REPLACE INTO device_hourly (device_id, field, ts, value)
+             SELECT device_id, field, (ts / {HOUR}) * {HOUR}, {value} FROM device_samples WHERE ts >= ? AND ts < ? GROUP BY device_id, field, ts / {HOUR}"
+        );
+        sqlx::query(AssertSqlSafe(hourly.as_str())).bind(start).bind(end).execute(db).await?;
+    }
+    let Some(next_day) = db::get_setting(db, NEXT_DAY).await?.and_then(|v| NaiveDate::parse_from_str(&v, "%Y-%m-%d").ok()) else { return Ok(()) };
+    let daily = format!(
+        "INSERT OR REPLACE INTO device_daily (device_id, field, ts, value)
+         SELECT device_id, field, ?, {value} FROM device_hourly WHERE ts >= ? AND ts < ? GROUP BY device_id, field"
+    );
+    let mut day = local_day(from, tz);
+    while day <= local_day(until, tz) && day < next_day {
+        let (a, b) = (midnight(day, tz), midnight(day + Days::new(1), tz));
+        sqlx::query(AssertSqlSafe(daily.as_str())).bind(a).bind(a).bind(b).execute(db).await?;
+        day = day + Days::new(1);
+    }
+    Ok(())
+}
+
 async fn roll_up_zones(db: &Db, tz: Tz, now: i64) -> sqlx::Result<()> {
     let today = local_day(now, tz);
     let mut day = match db::get_setting(db, NEXT_ZONE_DAY).await?.and_then(|v| NaiveDate::parse_from_str(&v, "%Y-%m-%d").ok()) {

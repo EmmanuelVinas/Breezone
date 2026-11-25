@@ -107,7 +107,7 @@ export function recipes(home: Home): Recipe[] {
       solar ?? {
         kind: "charger_profile",
         device_id: charger.id,
-        mode: profile == null && mode === "profile" ? "off" : mode,
+        mode,
         profile_id: mode === "profile" ? profile : null,
       }
     // The off-peak hours of the tariff ("HC"), and its blue days (Tempo).
@@ -122,7 +122,7 @@ export function recipes(home: Home): Recipe[] {
       id: "charge-offpeak",
       title: t("Recharge : charger en heures creuses"),
       description: t(
-        "Tant que les heures creuses du tarif durent, la borne suit un profil ; ensuite, elle ne charge pas."
+        "Pendant les heures creuses du tarif, la borne charge (jusqu'à la puissance d'un profil, ou à son maximum) ; en heures pleines, elle ne charge pas."
       ),
       rule: {
         ...base(t("Heures creuses"), [{ kind: "tariff", slot: offpeak }]),
@@ -135,7 +135,7 @@ export function recipes(home: Home): Recipe[] {
         id: "charge-blue-night",
         title: t("Recharge : nuit bleue (Tempo)"),
         description: t(
-          "Tant que les heures creuses durent, un jour bleu, la borne suit un profil ; les autres jours et ensuite, elle ne charge pas."
+          "Les jours bleus, la borne charge pendant les heures creuses (jusqu'à la puissance d'un profil, ou à son maximum). Les jours blancs et rouges, et en heures pleines, elle ne charge pas."
         ),
         rule: {
           ...base(t("Nuit bleue"), [{ kind: "tariff", slot: offpeak }]),

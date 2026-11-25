@@ -416,9 +416,10 @@ impl Context {
                 let name = self.device_name(*device_id);
                 let kw = |k: f64| Text { fr: format!("{k}").replace('.', ","), en: format!("{k}"), es: format!("{k}").replace('.', ",") };
                 match Mode::of_step(*mode, *profile_id) {
-                    Mode::Profile => match profile_id.and_then(|id| self.charge_profiles.get(&id)) {
-                        Some(p) => crate::text!("{0} : profil « {1} »", "{0}: profile “{1}”", "{0}: perfil «{1}»", name.arg(), p),
-                        None => crate::text!("{0} : profil supprimé", "{0}: deleted profile", "{0}: perfil eliminado", name.arg()),
+                    Mode::Profile => match profile_id.map(|id| self.charge_profiles.get(&id)) {
+                        Some(Some(p)) => crate::text!("{0} : profil « {1} »", "{0}: profile “{1}”", "{0}: perfil «{1}»", name.arg(), p),
+                        Some(None) => crate::text!("{0} : profil supprimé", "{0}: deleted profile", "{0}: perfil eliminado", name.arg()),
+                        None => crate::text!("{0} : charger au maximum de la borne", "{0}: charge at the charger's maximum", "{0}: cargar al máximo del cargador", name.arg()),
                     },
                     Mode::Off => crate::text!("{0} : ne pas charger", "{0}: do not charge", "{0}: no cargar", name.arg()),
                     Mode::Free => crate::text!("{0} : laisser la borne faire", "{0}: leave it to the charger", "{0}: dejar al cargador", name.arg()),

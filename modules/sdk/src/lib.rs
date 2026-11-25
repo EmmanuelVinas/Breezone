@@ -108,6 +108,13 @@ pub trait Driver: Sized + 'static {
     fn forget(_config: Value, _secret: Option<Value>) -> Result<()> {
         Ok(())
     }
+    /// What the hardware kept of a device from `since` to `until` (seconds), for the history
+    /// Breezone could not record (`history` in `optional_calls`): only what it measured. From the
+    /// source's configuration and secret, in an instance of its own; keep each answer short and
+    /// give `more` to be asked the rest.
+    fn history(_config: Value, _secret: Option<Value>, _reference: &str, _since: i64, _until: i64) -> Result<History> {
+        unsupported("history")
+    }
     /// Ends the connections it keeps, before the server stops.
     fn close(&self) {}
     /// Whether this address is hardware of this module, and its name (the network scan, by a
@@ -130,6 +137,39 @@ pub trait Driver: Sized + 'static {
     /// the user's language (`lang`: "fr", "en", "es").
     fn pair(_step: &str, _input: Value) -> Result<Paired> {
         unsupported("pair")
+    }
+}
+
+/// A stretch of what the hardware measured ([`Driver::history`]): each number the mean over
+/// `period` seconds from `ts`, a counter (a field in kWh) what it rose by during it.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct HistoryPoint {
+    pub ts: i64,
+    pub period: i64,
+    pub values: Map<String, Value>,
+}
+
+/// What the hardware kept of a device ([`Driver::history`]), in time order; `more`: ask again
+/// from there.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct History {
+    pub points: Vec<HistoryPoint>,
+    pub more: Option<i64>,
+}
+
+impl History {
+    pub fn to_json(&self) -> Value {
+        let points: Vec<Value> = self
+            .points
+            .iter()
+            .map(|p| {
+                let mut v = p.values.clone();
+                v.insert("ts".into(), json!(p.ts));
+                v.insert("period".into(), json!(p.period));
+                Value::Object(v)
+            })
+            .collect();
+        json!({"points": points, "more": self.more})
     }
 }
 
@@ -321,6 +361,12 @@ macro_rules! module {
             fn identify(host: String, announced: Option<String>) -> Option<String> {
                 let announced: Option<$crate::Value> = announced.and_then(|a| $crate::serde_json::from_str(&a).ok());
                 <$driver as $crate::Driver>::identify(&host, announced.as_ref()).map(|f| f.to_json().to_string())
+            }
+
+            fn history(config: String, secret: Option<String>, reference: String, since: i64, until: i64) -> $crate::Result<String> {
+                let config = $crate::serde_json::from_str(&config).map_err(|e| $crate::Error::Invalid(e.to_string()))?;
+                let secret = secret.map(|s| $crate::serde_json::from_str(&s).unwrap_or($crate::Value::String(s)));
+                Ok(<$driver as $crate::Driver>::history(config, secret, &reference, since, until)?.to_json().to_string())
             }
         }
 

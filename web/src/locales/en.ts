@@ -2204,15 +2204,10 @@ const en: Record<string, string> = {
     "The assistant must reach this address: from outside the home, set the public address of the server (Settings › Servers).",
   "Claude sur mon ordinateur": "Claude on my computer",
   "Recharge : charger en heures creuses": "Charging: charge in off-peak hours",
-  "Tant que les heures creuses du tarif durent, la borne suit un profil ; ensuite, elle ne charge pas.":
-    "While the off-peak hours of the tariff last, the charger follows a profile; then it does not charge.",
   "Recharge : nuit bleue (Tempo)": "Charging: blue night (Tempo)",
-  "Tant que les heures creuses durent, un jour bleu, la borne suit un profil ; les autres jours et ensuite, elle ne charge pas.":
-    "While the off-peak hours last, on a blue day, the charger follows a profile; on other days and afterwards, it does not charge.",
   "Au lever du soleil, la borne charge sur le surplus (son intensité suit le soleil) ; au coucher, elle ne charge plus.":
     "At sunrise, the charger charges on the surplus (its current follows the sun); at sunset, it stops charging.",
   "Solaire en journée": "Solar by day",
-  "suit un profil": "follows a profile",
   "ne charge pas": "does not charge",
   "charge sur le surplus solaire": "charges on the solar surplus",
   "laisse la borne faire": "leaves it to the charger",
@@ -2277,6 +2272,13 @@ const en: Record<string, string> = {
   "Nouvel automatisme :": "New automation:",
   "Les heures de charge réglées dans l'appli de la borne : coupez-la pour que seuls les automatismes de Breezone décident.":
     "The charging hours set in the app of the charger: switch it off so that only the automations of Breezone decide.",
+  "Automatisme supprimé": "Automation deleted",
+  "Pendant les heures creuses du tarif, la borne charge (jusqu'à la puissance d'un profil, ou à son maximum) ; en heures pleines, elle ne charge pas.":
+    "During the off-peak hours of the tariff, the charger charges (up to the power of a profile, or at its maximum); during the peak hours, it does not.",
+  "Les jours bleus, la borne charge pendant les heures creuses (jusqu'à la puissance d'un profil, ou à son maximum). Les jours blancs et rouges, et en heures pleines, elle ne charge pas.":
+    "On blue days, the charger charges during the off-peak hours (up to the power of a profile, or at its maximum). On white and red days, and during the peak hours, it does not.",
+  "charge, jusqu'à": "charges, up to",
+  "Maximum de la borne": "Charger's maximum",
 }
 
 export default en

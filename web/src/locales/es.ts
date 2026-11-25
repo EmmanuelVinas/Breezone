@@ -2232,15 +2232,10 @@ const es: Record<string, string> = {
     "El asistente debe alcanzar esta dirección: desde fuera de casa, ponga la dirección pública del servidor (Ajustes › Servidores).",
   "Claude sur mon ordinateur": "Claude en mi ordenador",
   "Recharge : charger en heures creuses": "Recarga: cargar en horas valle",
-  "Tant que les heures creuses du tarif durent, la borne suit un profil ; ensuite, elle ne charge pas.":
-    "Mientras duran las horas valle de la tarifa, el cargador sigue un perfil; después, no carga.",
   "Recharge : nuit bleue (Tempo)": "Recarga: noche azul (Tempo)",
-  "Tant que les heures creuses durent, un jour bleu, la borne suit un profil ; les autres jours et ensuite, elle ne charge pas.":
-    "Mientras duran las horas valle, un día azul, el cargador sigue un perfil; los demás días y después, no carga.",
   "Au lever du soleil, la borne charge sur le surplus (son intensité suit le soleil) ; au coucher, elle ne charge plus.":
     "Al amanecer, el cargador carga con el excedente (su intensidad sigue al sol); al atardecer, deja de cargar.",
   "Solaire en journée": "Solar de día",
-  "suit un profil": "sigue un perfil",
   "ne charge pas": "no carga",
   "charge sur le surplus solaire": "carga con el excedente solar",
   "laisse la borne faire": "deja hacer al cargador",
@@ -2305,6 +2300,13 @@ const es: Record<string, string> = {
   "Nouvel automatisme :": "Nueva automatización:",
   "Les heures de charge réglées dans l'appli de la borne : coupez-la pour que seuls les automatismes de Breezone décident.":
     "Las horas de carga ajustadas en la app del cargador: desactívela para que solo decidan las automatizaciones de Breezone.",
+  "Automatisme supprimé": "Automatización eliminada",
+  "Pendant les heures creuses du tarif, la borne charge (jusqu'à la puissance d'un profil, ou à son maximum) ; en heures pleines, elle ne charge pas.":
+    "Durante las horas valle de la tarifa, el cargador carga (hasta la potencia de un perfil, o a su máximo); en horas punta, no carga.",
+  "Les jours bleus, la borne charge pendant les heures creuses (jusqu'à la puissance d'un profil, ou à son maximum). Les jours blancs et rouges, et en heures pleines, elle ne charge pas.":
+    "Los días azules, el cargador carga en horas valle (hasta la potencia de un perfil, o a su máximo). Los días blancos y rojos, y en horas punta, no carga.",
+  "charge, jusqu'à": "carga, hasta",
+  "Maximum de la borne": "Máximo del cargador",
 }
 
 export default es

@@ -101,6 +101,13 @@ provided, types, bounds, required fields). `modules/tasmota/src/lib.rs` has exam
   left out). Breezone reads it every 5 minutes (`read_every_s` to change it) and offers its fields
   to the rules: the yes/no and the choices as conditions and triggers, the numbers as measures
   with a threshold. `modules/rte/` gives today's and tomorrow's Tempo colour and the days left.
+- History Breezone missed (it was stopped, the hardware unreachable): a module whose hardware keeps
+  its measures lists `history` in `optional_calls` (interface 1.2: `"api": "^1.2"`) and implements
+  `Driver::history(config, secret, reference, since, until)`, which gives a `History`: points in
+  time order, each number the mean over its `period`, a counter (kWh) what it rose by, and `more`
+  to be asked the rest (keep each answer short). Only what the hardware measured: Breezone fills
+  the gaps of its history with it, the counters counted back from the value after the gap.
+  `modules/shelly/` is an example (`EM1Data.GetData`, a record a minute).
 - The network scan: a module lists `identify` in `optional_calls` and implements
   `Driver::identify(host, announced)`, which gives a `Found` (model, note, device id, firmware,
   MAC, flags for its appairage, whether it is supported). It is asked for an address where one of

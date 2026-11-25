@@ -611,9 +611,7 @@ export function StepEditor({
               })
             }
             options={[
-              ...(home.chargeProfiles?.length
-                ? [["profile", t("suit un profil")] as Option]
-                : []),
+              ["profile", t("charge, jusqu'à")],
               ["off", t("ne charge pas")],
               ["solar", t("charge sur le surplus solaire")],
               ["free", t("laisse la borne faire")],
@@ -622,11 +620,19 @@ export function StepEditor({
           />
           {mode === "profile" && (
             <Pick
-              value={String(step.profile_id ?? "")}
-              onChange={(v) => onChange({ ...step, profile_id: Number(v) })}
-              options={(home.chargeProfiles ?? []).map(
-                (p) => [String(p.id), p.name] as Option
-              )}
+              value={String(step.profile_id ?? "max")}
+              onChange={(v) =>
+                onChange({
+                  ...step,
+                  profile_id: v === "max" ? null : Number(v),
+                })
+              }
+              options={[
+                ...(home.chargeProfiles ?? []).map(
+                  (p) => [String(p.id), p.name] as Option
+                ),
+                ["max", t("son maximum")],
+              ]}
               className="w-full lg:w-48"
             />
           )}
@@ -781,19 +787,12 @@ export function StepList({
     else if (k === "restore") step = { kind: "restore" }
     else if (k === "notify") step = { kind: "notify", message: "" }
     else if (k === "charger_profile" && charger)
-      step = home.chargeProfiles?.length
-        ? {
-            kind: "charger_profile",
-            device_id: charger.id,
-            mode: "profile",
-            profile_id: home.chargeProfiles[0].id,
-          }
-        : {
-            kind: "charger_profile",
-            device_id: charger.id,
-            mode: "off",
-            profile_id: null,
-          }
+      step = {
+        kind: "charger_profile",
+        device_id: charger.id,
+        mode: "profile",
+        profile_id: home.chargeProfiles?.[0]?.id ?? null,
+      }
     else if (k === "surplus" && home.surplusLoads?.[0])
       step = {
         kind: "surplus",

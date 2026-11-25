@@ -127,7 +127,11 @@ internal fun effectColor(effect: ChargeEffect?, profiles: List<ChargeProfileRef>
 /** What a stretch of a frieze tells the charger, in a few words. */
 @Composable
 internal fun effectText(effect: ChargeEffect?, profiles: List<ChargeProfileRef>): String = when (effect?.mode) {
-    ChargeEffectMode.Profile -> profiles.firstOrNull { it.id == effect.profileId }?.name ?: stringResource(Res.string.charge_profiles_deleted)
+    ChargeEffectMode.Profile -> if (effect.profileId == null) {
+        stringResource(Res.string.charge_profiles_max)
+    } else {
+        profiles.firstOrNull { it.id == effect.profileId }?.name ?: stringResource(Res.string.charge_profiles_deleted)
+    }
     ChargeEffectMode.Now -> stringResource(Res.string.charging_now)
     ChargeEffectMode.Solar -> stringResource(Res.string.charging_legend_solar)
     ChargeEffectMode.Off -> stringResource(Res.string.charging_legend_off)
@@ -275,7 +279,7 @@ internal fun ProfileCard(view: ChargingView, onManage: (() -> Unit)?) {
             onManage?.let { TextButton(onClick = it) { Text(stringResource(Res.string.charge_profiles_manage)) } }
         }
         val current = when (view.mode) {
-            ChargeMode.Profile -> view.profiles.firstOrNull { it.id == view.profileId }?.name
+            ChargeMode.Profile -> view.profileId?.let { id -> view.profiles.firstOrNull { it.id == id }?.name } ?: stringResource(Res.string.charge_profiles_max)
             ChargeMode.Off -> stringResource(Res.string.charging_legend_off)
             ChargeMode.Solar -> stringResource(Res.string.charging_legend_solar)
             ChargeMode.Free -> null
