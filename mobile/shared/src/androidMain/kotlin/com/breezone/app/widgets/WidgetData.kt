@@ -19,6 +19,10 @@ data class WidgetConfig(
     val systemId: Long? = null,
     val zoneId: Long? = null,
     val deviceId: Long? = null,
+    /** The lights of a room, switched together. */
+    val roomId: Long? = null,
+    /** All the lights of the home, switched together. */
+    val allLights: Boolean = false,
     /** Shown while the server cannot be read. */
     val title: String = "",
 )
@@ -49,3 +53,13 @@ internal fun api(serverId: String): BreezoneApi? = hub().api(serverId)
 
 /** A device a widget can switch: a light or a plug (on/off), or a charger (shown). */
 internal fun DeviceView.widgetTrait(): String? = listOf("light", "switch.relay", "ev.charger").firstOrNull { t -> traits.any { it.startsWith("$t@") } }
+
+/** The widget switches lights together (a room's, or all of them) instead of one device. */
+internal val WidgetConfig.lightGroup get() = allLights || roomId != null
+
+/** The lights of a widget of a room, or of the whole home. */
+internal fun List<DeviceView>.lightsOf(config: WidgetConfig): List<DeviceView> =
+    filter { d -> d.sourceId != null && d.traits.any { it.startsWith("light@") } && (config.allLights || d.roomId == config.roomId) }.sortedBy { it.position }
+
+/** Lights switched together, and the name of their room. */
+internal data class LightGroup(val name: String, val lights: List<DeviceView>)

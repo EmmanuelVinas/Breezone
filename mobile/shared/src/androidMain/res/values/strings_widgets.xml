@@ -8,7 +8,7 @@
     <string name="widget_price_label">Prix de l’électricité</string>
     <string name="widget_price_description">Le prix maintenant et les plages du jour</string>
     <string name="widget_device_label">Appareil</string>
-    <string name="widget_device_description">Allumer ou éteindre une lumière, une prise ; l’état de la borne</string>
+    <string name="widget_device_description">Allumer ou éteindre une lumière, une prise ou toutes les lumières d’une pièce ; l’état de la borne</string>
     <string name="widget_scenes_label">Scènes</string>
     <string name="widget_scenes_description">Lancer une scène d’un geste</string>
     <string name="widget_choose">Touchez pour choisir ce que montre ce widget</string>
@@ -38,4 +38,11 @@
     <string name="widget_config_title">Widget Breezone</string>
     <string name="widget_config_hint">Choisissez ce que montre ce widget. Il se met à jour toutes les 30 min environ, et aussitôt après une action.</string>
     <string name="widget_config_none">Rien à montrer sur vos serveurs pour ce widget.</string>
+    <string name="widget_lights_all">Toutes les lumières</string>
+    <string name="widget_lights_room_sub">Toutes ses lumières · %1$s</string>
+    <plurals name="widget_lights_on_of">
+        <item quantity="one">%1$d allumée sur %2$d</item>
+        <item quantity="many">%1$d allumées sur %2$d</item>
+        <item quantity="other">%1$d allumées sur %2$d</item>
+    </plurals>
 </resources>

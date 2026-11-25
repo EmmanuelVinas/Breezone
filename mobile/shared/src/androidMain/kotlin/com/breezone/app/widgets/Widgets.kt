@@ -56,12 +56,15 @@ import androidx.glance.unit.ColorProvider
 import com.breezone.app.data.DayColor
 import com.breezone.app.data.DeviceActionInput
 import com.breezone.app.data.EnergyLive
+import com.breezone.app.data.LightState
 import com.breezone.app.data.PriceView
 import com.breezone.app.data.Routine
 import com.breezone.app.data.Zone
 import com.breezone.app.data.ZoneCommand
 import com.breezone.app.shared.R
 import com.breezone.app.ui.theme.WidgetPalette
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -328,10 +331,17 @@ class PriceWidget : BreezoneWidget(WidgetKind.Price) {
 // ---------------------------------------------------------------------------------------
 
 class DeviceWidget : BreezoneWidget(WidgetKind.Device) {
-    override suspend fun load(context: Context, config: WidgetConfig) = api(config.serverId)?.devices()?.firstOrNull { it.id == config.deviceId }
+    override suspend fun load(context: Context, config: WidgetConfig): Any? {
+        val api = api(config.serverId) ?: return null
+        if (!config.lightGroup) return api.devices().firstOrNull { it.id == config.deviceId }
+        val lights = api.devices().lightsOf(config)
+        val name = config.roomId?.let { id -> runCatching { api.rooms() }.getOrNull()?.firstOrNull { it.id == id }?.name } ?: config.title
+        return LightGroup(name, lights)
+    }
 
     @Composable
     override fun Content(data: Any, config: WidgetConfig, appWidgetId: Int) {
+        if (data is LightGroup) return Group(data, appWidgetId)
         val device = data as com.breezone.app.data.DeviceView
         val context = LocalContext.current
         val trait = device.widgetTrait()
@@ -357,15 +367,40 @@ class DeviceWidget : BreezoneWidget(WidgetKind.Device) {
             }
         }
     }
+
+    /** The lights of a room (or of the home): on when any of them is; the button switches them all. */
+    @Composable
+    private fun Group(group: LightGroup, appWidgetId: Int) {
+        val context = LocalContext.current
+        val lit = group.lights.count { it.available && it.stateAs(LightState.serializer())?.on == true }
+        Row(GlanceModifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+            Column(GlanceModifier.defaultWeight()) {
+                Text(group.name, style = style(14.sp, bold = true), maxLines = 1)
+                Text(context.resources.getQuantityString(R.plurals.widget_lights_on_of, lit, lit, group.lights.size), style = style(12.sp, Muted), maxLines = 1)
+            }
+            if (group.lights.any { it.switchable() }) {
+                PowerButton(lit > 0, actionRunCallback<DeviceAction>(actionParametersOf(ConfigKey to appWidgetId, OnKey to (lit == 0), TraitKey to "light")))
+            }
+        }
+    }
 }
+
+private fun com.breezone.app.data.DeviceView.switchable() = usable && stateAs(LightState.serializer())?.reachable != false
 
 class DeviceAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         val config = WidgetStore.get(context, parameters[ConfigKey] ?: return) ?: return
-        val id = config.deviceId ?: return
+        val api = api(config.serverId) ?: return
         val on = parameters[OnKey] ?: return
         val trait = parameters[TraitKey] ?: return
-        runCatching { api(config.serverId)?.act(id, DeviceActionInput(trait, "set", JsonObject(mapOf("on" to JsonPrimitive(on))))) }
+        val set = DeviceActionInput(trait, "set", JsonObject(mapOf("on" to JsonPrimitive(on))))
+        if (config.lightGroup) {
+            val lights = runCatching { api.devices().lightsOf(config) }.getOrDefault(emptyList()).filter { it.switchable() }
+            coroutineScope { lights.forEach { d -> launch { runCatching { api.act(d.id, set) } } } }
+        } else {
+            val id = config.deviceId ?: return
+            runCatching { api.act(id, set) }
+        }
         DeviceWidget().refresh(context, glanceId)
     }
 }

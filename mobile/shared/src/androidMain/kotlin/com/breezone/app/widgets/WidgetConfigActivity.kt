@@ -101,8 +101,20 @@ class WidgetConfigActivity : ComponentActivity() {
                 WidgetKind.Zone -> api.status().filter { it.controllable }.flatMap { i ->
                     i.zones.sortedBy { it.position }.map { z -> Choice(z.name, "${i.name} · $label", WidgetConfig(id, installationId = i.id, systemId = z.systemId, zoneId = z.zoneId, title = z.name)) }
                 }
-                WidgetKind.Device -> api.devices().filter { it.sourceId != null && it.widgetTrait() != null }.sortedBy { it.name }
-                    .map { d -> Choice(d.name, label, WidgetConfig(id, deviceId = d.id, title = d.name)) }
+                WidgetKind.Device -> {
+                    val devices = api.devices()
+                    val all = WidgetConfig(id, allLights = true, title = getString(R.string.widget_lights_all))
+                    val groups = if (devices.lightsOf(all).size < 2) emptyList() else {
+                        val lightsSub = getString(R.string.widget_lights_room_sub, label)
+                        val rooms = api.rooms().sortedBy { it.position }.mapNotNull { r ->
+                            val c = WidgetConfig(id, roomId = r.id, title = r.name)
+                            Choice(r.name, lightsSub, c).takeIf { devices.lightsOf(c).isNotEmpty() }
+                        }
+                        listOf(Choice(all.title, label, all)) + rooms
+                    }
+                    groups + devices.filter { it.sourceId != null && it.widgetTrait() != null }.sortedBy { it.name }
+                        .map { d -> Choice(d.name, label, WidgetConfig(id, deviceId = d.id, title = d.name)) }
+                }
             }
         }.getOrDefault(emptyList())
     }
