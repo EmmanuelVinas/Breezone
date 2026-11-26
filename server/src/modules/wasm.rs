@@ -1305,6 +1305,10 @@ impl Driver for WasmSource {
         self.every
     }
 
+    fn cloud(&self) -> bool {
+        crate::accounts::is_cloud(&self.module.id)
+    }
+
     fn describe(&self) -> DriverFuture<'_, Described> {
         Box::pin(async move {
             let d = guest!(self, call_describe).await?;

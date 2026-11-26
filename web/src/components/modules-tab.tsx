@@ -21,6 +21,8 @@ import {
   Link2,
   House,
   Loader2,
+  Check,
+  X,
   PlugZap,
   Plus,
   RefreshCw,
@@ -1819,15 +1821,33 @@ function TwinsCard({ sourceId }: { sourceId: number }) {
     queryFn: () => api.sourceTwins(sourceId),
     refetchInterval: 60_000,
   })
+  // How the last choice of each device ended, shown a moment by its side.
+  const [outcome, setOutcome] = useState<Record<string, boolean>>({})
+  const show = (reference: string, ok: boolean) => {
+    setOutcome((o) => ({ ...o, [reference]: ok }))
+    setTimeout(
+      () =>
+        setOutcome((o) => {
+          const rest = { ...o }
+          delete rest[reference]
+          return rest
+        }),
+      2500
+    )
+  }
   const set = useMutation({
     mutationFn: (input: Parameters<typeof api.setSourceTwin>[1]) =>
       api.setSourceTwin(sourceId, input),
-    onSuccess: (v) => {
+    onSuccess: (v, input) => {
       qc.setQueryData(["twins", sourceId], v)
       qc.invalidateQueries({ queryKey: ["devices"] })
       qc.invalidateQueries({ queryKey: ["sources"] })
+      show(input.reference, true)
     },
-    onError: (e) => toast.error(errorText(e)),
+    onError: (e, input) => {
+      toast.error(errorText(e))
+      show(input.reference, false)
+    },
   })
   const data = twins.data
   if (!data || data.devices.length === 0) return null
@@ -1859,6 +1879,12 @@ function TwinsCard({ sourceId }: { sourceId: number }) {
                 : d.chosen && d.twin_of
                   ? key(d.twin_of[0], d.twin_of[1])
                   : "auto"
+          const busy = set.isPending && set.variables?.reference === d.reference
+          const asked = busy
+            ? set.variables.choice === "link"
+              ? key(set.variables.source_id!, set.variables.local!)
+              : set.variables.choice
+            : value
           const candidates = data.locals.filter(
             (l) => family(l.kind) === family(d.kind)
           )
@@ -1898,8 +1924,30 @@ function TwinsCard({ sourceId }: { sourceId: number }) {
                   )}
                 </div>
               </div>
+              <span
+                role="status"
+                className="inline-flex size-5 items-center justify-center"
+              >
+                {busy ? (
+                  <Loader2
+                    aria-label={t("Envoi en cours")}
+                    className="size-4 animate-spin text-muted-foreground"
+                  />
+                ) : outcome[d.reference] === true ? (
+                  <Check
+                    aria-label={t("Appliqué")}
+                    className="size-4 animate-in text-success duration-200 zoom-in-50 fade-in"
+                  />
+                ) : outcome[d.reference] === false ? (
+                  <X
+                    aria-label={t("Refusé")}
+                    className="size-4 animate-in text-destructive duration-200 zoom-in-50 fade-in"
+                  />
+                ) : null}
+              </span>
               <Select
-                value={value}
+                value={asked}
+                disabled={busy}
                 onValueChange={(v) => {
                   if (v === "auto" || v === "own" || v === "ignore")
                     set.mutate({ reference: d.reference, choice: v })
