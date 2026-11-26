@@ -6,6 +6,35 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.13.0-beta.4] - 2026-11-26
+
+### Added
+
+- Anker SOLIX Smart Plug Gen 2 and Smart Meter Gen 2, read locally through the Modbus TCP their app
+  turns on: the plug's state, power and energy, switched on and off; the meter's power (per phase in
+  three phase), the energy drawn and returned, and its second set of clamps when used. The network
+  scan finds them.
+- Deye micro-inverters (SUN-M200G4, SUN600 to SUN2000G3), read locally through the Wi-Fi logger
+  built in: the inverter and each of its inputs. The logger's serial number is read from its web
+  page when not typed; when the logger closes its port, its web page still gives the power and the
+  production. Read only.
+- The Anker SolarBank 2 and 3, through Anker's cloud (Anker gives them no local access), with the
+  account of the app in Settings › Accounts: the battery's charge, what it charges or gives back,
+  its panels and what it sends to the home, every minute. A second account the system is shared
+  with keeps the app logged in. Read only.
+- A battery type of device, with its charge, its state (charging, discharging, idle), its panels and
+  what it sends to the home; it takes the battery role of the energy page.
+- Delta Dore Tydom gateways, locally, with the MAC address and the password of the gateway: shutters
+  (position, stop) and lights (on, off, brightness). Its other devices are listed in the module's
+  diagnostic, to be supported next. Modules may now open a WebSocket with headers (module
+  interface 1.3).
+- The Android widget of a device can switch all the lights of a room, or of the home, at once.
+
+### Fixed
+
+- The devices of a cloud module are linked to the local ones again, by hand or by their name; a
+  choice shows it is being sent, then applied or refused.
+
 ## [0.13.0-beta.3] - 2026-11-25
 
 ### Added
@@ -1599,7 +1628,8 @@ solar surplus for the air conditioning…), and what follows.
 - Project renamed from FreeZone to Breezone (former `FREEZONE_*` variables and `freezone.db` are
   still recognised).
 
-[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.3...HEAD
+[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.4...HEAD
+[0.13.0-beta.4]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.3...v0.13.0-beta.4
 [0.13.0-beta.3]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.2...v0.13.0-beta.3
 [0.13.0-beta.2]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.1...v0.13.0-beta.2
 [0.13.0-beta.1]: https://github.com/EmmanuelVinas/breezone/compare/v0.12.0...v0.13.0-beta.1
