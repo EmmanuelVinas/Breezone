@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.13.0-beta.6] - 2026-11-26
+
 ### Fixed
 
 - A module installed from Breezone's library is replaced at start by the newer one that comes with
@@ -1664,7 +1666,8 @@ solar surplus for the air conditioning…), and what follows.
 - Project renamed from FreeZone to Breezone (former `FREEZONE_*` variables and `freezone.db` are
   still recognised).
 
-[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.5...HEAD
+[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.6...HEAD
+[0.13.0-beta.6]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.5...v0.13.0-beta.6
 [0.13.0-beta.5]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.4...v0.13.0-beta.5
 [0.13.0-beta.4]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.3...v0.13.0-beta.4
 [0.13.0-beta.3]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.2...v0.13.0-beta.3
