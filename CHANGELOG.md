@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.13.0-beta.5] - 2026-11-26
+
 ### Added
 
 - Zigbee through a SONOFF ZBBridge Pro flashed with Tasmota (Zigbee2Tasmota, no Zigbee2MQTT nor MQTT
@@ -29,6 +31,9 @@ All notable changes are documented here. The format follows
 
 - Tasmota 16 is read and found on the network again: it answers only requests that say where they
   come from.
+- The HomeKit, ESPHome and EZVIZ modules come with a higher version, so that installations that
+  kept their first version get their latest changes: a paired gateway shows as already added in the
+  network scan, and the Ecometer points to its Netatmo account.
 
 ## [0.13.0-beta.4] - 2026-11-26
 
@@ -1652,7 +1657,8 @@ solar surplus for the air conditioning…), and what follows.
 - Project renamed from FreeZone to Breezone (former `FREEZONE_*` variables and `freezone.db` are
   still recognised).
 
-[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.4...HEAD
+[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.5...HEAD
+[0.13.0-beta.5]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.4...v0.13.0-beta.5
 [0.13.0-beta.4]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.3...v0.13.0-beta.4
 [0.13.0-beta.3]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.2...v0.13.0-beta.3
 [0.13.0-beta.2]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.1...v0.13.0-beta.2
