@@ -77,7 +77,7 @@ jobs:
           gh release download modules -p index.json -D /tmp/current 2>/dev/null || true
           ids=()
           for id in "${candidates[@]}"; do
-            test -f "modules/$id/manifest.json" || { echo "::error::modules/$id/manifest.json is missing"; exit 1; }
+            test -f "modules/$id/manifest.json" || { echo "::error::modules/$id/manifest.json is missing on $GITHUB_REF_NAME (run the workflow with --ref on the branch that has it)"; exit 1; }
             version=$(jq -r .version "modules/$id/manifest.json")
             if [[ -f /tmp/current/index.json ]] && jq -e --arg id "$id" --arg v "$version" '.modules[] | select(.id == $id) | .versions[] | select(.manifest.version == $v)' /tmp/current/index.json >/dev/null; then
               echo "$id $version is already published"
