@@ -2338,16 +2338,28 @@ const es: Record<string, string> = {
     "carga de la batería, potencia de carga o descarga, potencia de los paneles conectados y potencia enviada a la casa",
   "L'API est celle de l'application Anker, sans documentation d'Anker : elle peut changer sans prévenir. Le cloud met à jour une SolarBank 2 toutes les quelques minutes.":
     "La API es la de la aplicación Anker, sin documentación de Anker: puede cambiar sin aviso. La nube actualiza una SolarBank 2 cada pocos minutos.",
-  "WebSocket local de la passerelle Tydom (adresse MAC et mot de passe de la passerelle) : aucun passage par le cloud Delta Dore":
-    "WebSocket local de la pasarela Tydom (dirección MAC y contraseña de la pasarela): nada pasa por la nube de Delta Dore",
   "toutes les 30 s, et dès que la passerelle signale un changement":
     "cada 30 s, y en cuanto la pasarela señala un cambio",
   "position des volets et stores, état et intensité des lumières":
     "posición de las persianas y toldos, estado e intensidad de las luces",
   "ouverture, fermeture et arrêt des volets, marche, arrêt et intensité des lumières":
     "apertura, cierre y parada de las persianas, encendido, apagado e intensidad de las luces",
-  "Le mot de passe est celui de la passerelle, pas celui du compte Delta Dore : il est parfois sur l'étiquette, sinon l'application Tydom ou le compte Delta Dore le donne. Les autres appareils (alarme, chauffage, capteurs…) apparaissent dans le diagnostic du module, pour être pris en charge ensuite.":
-    "La contraseña es la de la pasarela, no la de la cuenta Delta Dore: a veces está en la etiqueta, si no la da la aplicación Tydom o la cuenta Delta Dore. Los demás aparatos (alarma, calefacción, sensores…) aparecen en el diagnóstico del módulo, para ser compatibles después.",
+  "WebSocket local de la passerelle Tydom (adresse MAC et mot de passe de la passerelle) : le cloud Delta Dore ne sert qu'à donner ce mot de passe, s'il n'est pas saisi":
+    "WebSocket local de la pasarela Tydom (dirección MAC y contraseña de la pasarela): la nube de Delta Dore solo da esa contraseña, si no se escribe",
+  "Le mot de passe est celui de la passerelle, pas celui du compte Delta Dore. Il n'est souvent sur aucune étiquette : laissez-le vide et connectez le compte Delta Dore (Réglages › Comptes et services), qui le donne. Les autres appareils (alarme, chauffage, capteurs…) apparaissent dans le diagnostic du module, pour être pris en charge ensuite.":
+    "La contraseña es la de la pasarela, no la de la cuenta Delta Dore. A menudo no está en ninguna etiqueta: déjela vacía y conecte la cuenta Delta Dore (Ajustes › Cuentas y servicios), que la da. Los demás aparatos (alarma, calefacción, sensores…) aparecen en el diagnóstico del módulo, para ser compatibles después.",
+  "Le compte de l'application Tydom, seulement pour le mot de passe de vos passerelles Tydom : Delta Dore le garde, il n'est sur aucune étiquette. Breezone le reçoit une fois, le garde chiffré, puis pilote les passerelles en local, sans le cloud.":
+    "La cuenta de la aplicación Tydom, solo para la contraseña de sus pasarelas Tydom: Delta Dore la guarda, no está en ninguna etiqueta. Breezone la recibe una vez, la guarda cifrada y luego controla las pasarelas en local, sin la nube.",
+  "Connectez ici le compte de l'application Tydom (e-mail et mot de passe).":
+    "Conecte aquí la cuenta de la aplicación Tydom (correo y contraseña).",
+  "Ajoutez ensuite la passerelle dans Modules (Delta Dore Tydom) avec son adresse IP et son adresse MAC, en laissant son mot de passe vide.":
+    "Luego añada la pasarela en Módulos (Delta Dore Tydom) con su dirección IP y su dirección MAC, dejando su contraseña vacía.",
+  "Une passerelle ajoutée au compte plus tard : utilisez « Tester » pour que Breezone apprenne son mot de passe.":
+    "Una pasarela añadida a la cuenta más tarde: use « Probar » para que Breezone aprenda su contraseña.",
+  "E-mail du compte Delta Dore": "Correo de la cuenta Delta Dore",
+  "Désactivé : les passerelles déjà ajoutées gardent leur connexion locale tant que Breezone tourne ; au prochain démarrage, celles sans mot de passe saisi ne se connectent plus.":
+    "Desactivada: las pasarelas ya añadidas mantienen su conexión local mientras Breezone funciona; en el próximo arranque, las que no tienen contraseña escrita ya no se conectan.",
+  "{email} : {n} passerelle(s)": "{email}: {n} pasarela(s)",
 }
 
 export default es

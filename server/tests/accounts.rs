@@ -198,9 +198,9 @@ async fn accounts_are_linked_used_and_removed() {
     let (s, list) = c.call(reqwest::Method::GET, "/api/accounts", None).await;
     assert_eq!(s, StatusCode::OK, "{list}");
     let kinds: Vec<&str> = list.as_array().unwrap().iter().map(|a| a["kind"].as_str().unwrap()).collect();
-    assert_eq!(kinds, ["airzone", "anker_cloud", "ezviz", "forecast_solar", "linky", "weather", "netatmo", "rte"], "the Airzone account, then the modules by name");
+    assert_eq!(kinds, ["airzone", "anker_cloud", "deltadore", "ezviz", "forecast_solar", "linky", "weather", "netatmo", "rte"], "the Airzone account, then the modules by name");
     let account = |list: &Value, kind: &str| list.as_array().unwrap().iter().find(|a| a["kind"] == kind).cloned().unwrap();
-    assert!(["airzone", "ezviz", "linky", "netatmo", "rte"].iter().all(|k| {
+    assert!(["airzone", "deltadore", "ezviz", "linky", "netatmo", "rte"].iter().all(|k| {
         let a = account(&list, k);
         a["connected"] == false && a["state"] == "none" && a["enabled"] == true
     }));
@@ -296,4 +296,59 @@ async fn accounts_are_linked_used_and_removed() {
     assert_eq!(s, StatusCode::NO_CONTENT);
     let (_, list) = c.call(reqwest::Method::GET, "/api/accounts", None).await;
     assert_eq!(account(&list, "rte")["connected"], false);
+}
+
+/// Delta Dore: its login (Azure B2C, a multipart form), then the sites of the account, each with
+/// the MAC and the password of its Tydom gateway.
+fn deltadore() -> Router {
+    Router::new()
+        .route(
+            "/deltadoreadb2ciot.onmicrosoft.com/v2.0/.well-known/openid-configuration",
+            get(|| async { Json(json!({"token_endpoint": "https://deltadoreadb2ciot.b2clogin.com/deltadoreadb2ciot.onmicrosoft.com/oauth2/v2.0/token?p=b2c"})) }),
+        )
+        .route(
+            "/deltadoreadb2ciot.onmicrosoft.com/oauth2/v2.0/token",
+            post(|h: HeaderMap, body: String| async move {
+                let multipart = h.get("content-type").and_then(|v| v.to_str().ok()).is_some_and(|v| v.starts_with("multipart/form-data"));
+                if multipart && body.contains("\r\n\r\nguillaume@example.com\r\n") && body.contains("\r\n\r\nbon\r\n") {
+                    (Code::OK, Json(json!({"access_token": "dd-token"})))
+                } else {
+                    (Code::BAD_REQUEST, Json(json!({"error": "invalid_grant", "error_description": "AADB2C90225: The username or password provided in the request are invalid."})))
+                }
+            }),
+        )
+        .route(
+            "/sitesmanagement/api/v1/sites",
+            get(|h: HeaderMap| async move {
+                if bearer(&h) != "Bearer dd-token" {
+                    return (Code::UNAUTHORIZED, Json(json!({})));
+                }
+                (Code::OK, Json(json!({"sites": [{"id": "s1", "gateway": {"mac": "001A25123456", "password": "gateway-secret"}}]})))
+            }),
+        )
+}
+
+#[tokio::test]
+async fn the_delta_dore_account_learns_the_passwords_of_its_gateways() {
+    let dir = std::env::temp_dir().join(format!("breezone-deltadore-test-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let cfg = support::config(&dir);
+    let port = serve(deltadore()).await;
+    for host in ["deltadoreadb2ciot.b2clogin.com", "prod.iotdeltadore.com"] {
+        breezone_server::modules::wasm::redirect_for_tests(host, &format!("127.0.0.1:{port}"));
+    }
+    let state = breezone_server::init_state(cfg).await.unwrap();
+    let port = serve(breezone_server::app(state)).await;
+    let mut c = Client { base: format!("http://127.0.0.1:{port}"), http: reqwest::Client::new(), token: None };
+    let (_, v) = c.call(reqwest::Method::POST, "/api/setup", Some(json!({"username":"admin","password":"motdepasse1"}))).await;
+    c.token = Some(v["access_token"].as_str().unwrap().into());
+
+    let (s, v) = c.call(reqwest::Method::PUT, "/api/accounts/deltadore", Some(json!({"email": "guillaume@example.com", "password": "faux"}))).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST, "a wrong password is the user's to fix: {v}");
+    let (s, v) = c.call(reqwest::Method::PUT, "/api/accounts/deltadore", Some(json!({"email": "guillaume@example.com", "password": "bon"}))).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    assert_eq!((v["connected"].clone(), v["state"].clone()), (json!(true), json!("ok")));
+    assert_eq!(v["config"]["email"], "guillaume@example.com");
+    assert_eq!(v["config"]["gateways"], json!(["001A25123456"]), "the gateways reached are shown: {v}");
+    assert!(!v.to_string().contains("gateway-secret") && !v.to_string().contains("\"bon\""), "no password shown: {v}");
 }

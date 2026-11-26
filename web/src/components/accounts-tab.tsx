@@ -3,6 +3,7 @@ import { Link } from "react-router"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   BatteryMedium,
+  Blinds,
   CalendarDays,
   Cctv,
   CloudSun,
@@ -218,6 +219,32 @@ const KINDS: Partial<Record<AccountKind, Kind>> = {
       "Désactivé : le module Anker SOLIX (cloud) s'arrête, la SolarBank n'est plus lue."
     ),
   },
+  deltadore: {
+    title: "Delta Dore",
+    icon: Blinds,
+    description: t(
+      "Le compte de l'application Tydom, seulement pour le mot de passe de vos passerelles Tydom : Delta Dore le garde, il n'est sur aucune étiquette. Breezone le reçoit une fois, le garde chiffré, puis pilote les passerelles en local, sans le cloud."
+    ),
+    steps: [
+      t(
+        "Connectez ici le compte de l'application Tydom (e-mail et mot de passe)."
+      ),
+      t(
+        "Ajoutez ensuite la passerelle dans Modules (Delta Dore Tydom) avec son adresse IP et son adresse MAC, en laissant son mot de passe vide."
+      ),
+      t(
+        "Une passerelle ajoutée au compte plus tard : utilisez « Tester » pour que Breezone apprenne son mot de passe."
+      ),
+    ],
+    link: { url: "https://www.deltadore.fr", label: "deltadore.fr" },
+    fields: [
+      { name: "email", label: t("E-mail du compte Delta Dore") },
+      { name: "password", label: t("Mot de passe"), secret: true },
+    ],
+    off: t(
+      "Désactivé : les passerelles déjà ajoutées gardent leur connexion locale tant que Breezone tourne ; au prochain démarrage, celles sans mot de passe saisi ne se connectent plus."
+    ),
+  },
   weather: {
     title: t("Météo"),
     icon: CloudSun,
@@ -339,6 +366,11 @@ function summary(a: AccountView): string | null {
     return t("{email} : {n} appareil(s)", {
       email: c.email,
       n: c.devices?.length ?? 0,
+    })
+  if (a.kind === "deltadore" && c.email)
+    return t("{email} : {n} passerelle(s)", {
+      email: c.email,
+      n: c.gateways?.length ?? 0,
     })
   if (a.kind === "anker_cloud" && c.email)
     return t("{email} : {n} SolarBank", {

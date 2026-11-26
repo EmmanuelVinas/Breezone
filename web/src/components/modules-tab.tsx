@@ -778,7 +778,7 @@ const DRIVER: Record<
     icon: Blinds,
     tone: "bg-primary/15 text-primary",
     connection: t(
-      "WebSocket local de la passerelle Tydom (adresse MAC et mot de passe de la passerelle) : aucun passage par le cloud Delta Dore"
+      "WebSocket local de la passerelle Tydom (adresse MAC et mot de passe de la passerelle) : le cloud Delta Dore ne sert qu'à donner ce mot de passe, s'il n'est pas saisi"
     ),
     every: t("toutes les 30 s, et dès que la passerelle signale un changement"),
     reads: t("position des volets et stores, état et intensité des lumières"),
@@ -786,7 +786,7 @@ const DRIVER: Record<
       "ouverture, fermeture et arrêt des volets, marche, arrêt et intensité des lumières"
     ),
     note: t(
-      "Le mot de passe est celui de la passerelle, pas celui du compte Delta Dore : il est parfois sur l'étiquette, sinon l'application Tydom ou le compte Delta Dore le donne. Les autres appareils (alarme, chauffage, capteurs…) apparaissent dans le diagnostic du module, pour être pris en charge ensuite."
+      "Le mot de passe est celui de la passerelle, pas celui du compte Delta Dore. Il n'est souvent sur aucune étiquette : laissez-le vide et connectez le compte Delta Dore (Réglages › Comptes et services), qui le donne. Les autres appareils (alarme, chauffage, capteurs…) apparaissent dans le diagnostic du module, pour être pris en charge ensuite."
     ),
   },
   tplink: {

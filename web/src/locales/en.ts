@@ -2310,16 +2310,28 @@ const en: Record<string, string> = {
     "battery charge, charging or discharging power, power of the panels connected and power sent to the home",
   "L'API est celle de l'application Anker, sans documentation d'Anker : elle peut changer sans prévenir. Le cloud met à jour une SolarBank 2 toutes les quelques minutes.":
     "The API is the one of the Anker app, not documented by Anker: it may change without notice. The cloud updates a SolarBank 2 every few minutes.",
-  "WebSocket local de la passerelle Tydom (adresse MAC et mot de passe de la passerelle) : aucun passage par le cloud Delta Dore":
-    "Local WebSocket of the Tydom gateway (MAC address and password of the gateway): nothing goes through the Delta Dore cloud",
   "toutes les 30 s, et dès que la passerelle signale un changement":
     "every 30 s, and as soon as the gateway tells of a change",
   "position des volets et stores, état et intensité des lumières":
     "position of the shutters and blinds, state and brightness of the lights",
   "ouverture, fermeture et arrêt des volets, marche, arrêt et intensité des lumières":
     "opening, closing and stopping of the shutters, on, off and brightness of the lights",
-  "Le mot de passe est celui de la passerelle, pas celui du compte Delta Dore : il est parfois sur l'étiquette, sinon l'application Tydom ou le compte Delta Dore le donne. Les autres appareils (alarme, chauffage, capteurs…) apparaissent dans le diagnostic du module, pour être pris en charge ensuite.":
-    "The password is the gateway's, not the Delta Dore account's: it is sometimes on the label, otherwise the Tydom app or the Delta Dore account gives it. The other devices (alarm, heating, sensors…) show in the diagnostic of the module, to be supported next.",
+  "WebSocket local de la passerelle Tydom (adresse MAC et mot de passe de la passerelle) : le cloud Delta Dore ne sert qu'à donner ce mot de passe, s'il n'est pas saisi":
+    "Local WebSocket of the Tydom gateway (MAC address and password of the gateway): the Delta Dore cloud only gives that password, when it is not typed",
+  "Le mot de passe est celui de la passerelle, pas celui du compte Delta Dore. Il n'est souvent sur aucune étiquette : laissez-le vide et connectez le compte Delta Dore (Réglages › Comptes et services), qui le donne. Les autres appareils (alarme, chauffage, capteurs…) apparaissent dans le diagnostic du module, pour être pris en charge ensuite.":
+    "The password is the gateway's, not the Delta Dore account's. It is often on no label: leave it empty and connect the Delta Dore account (Settings › Accounts and services), which gives it. The other devices (alarm, heating, sensors…) show in the diagnostic of the module, to be supported next.",
+  "Le compte de l'application Tydom, seulement pour le mot de passe de vos passerelles Tydom : Delta Dore le garde, il n'est sur aucune étiquette. Breezone le reçoit une fois, le garde chiffré, puis pilote les passerelles en local, sans le cloud.":
+    "The account of the Tydom app, only for the password of your Tydom gateways: Delta Dore keeps it, it is on no label. Breezone gets it once, keeps it encrypted, then drives the gateways locally, without the cloud.",
+  "Connectez ici le compte de l'application Tydom (e-mail et mot de passe).":
+    "Connect here the account of the Tydom app (e-mail and password).",
+  "Ajoutez ensuite la passerelle dans Modules (Delta Dore Tydom) avec son adresse IP et son adresse MAC, en laissant son mot de passe vide.":
+    "Then add the gateway in Modules (Delta Dore Tydom) with its IP address and its MAC address, leaving its password empty.",
+  "Une passerelle ajoutée au compte plus tard : utilisez « Tester » pour que Breezone apprenne son mot de passe.":
+    "A gateway added to the account later: use « Test » so that Breezone learns its password.",
+  "E-mail du compte Delta Dore": "E-mail of the Delta Dore account",
+  "Désactivé : les passerelles déjà ajoutées gardent leur connexion locale tant que Breezone tourne ; au prochain démarrage, celles sans mot de passe saisi ne se connectent plus.":
+    "Switched off: the gateways already added keep their local connection while Breezone runs; at the next start, those without a typed password no longer connect.",
+  "{email} : {n} passerelle(s)": "{email}: {n} gateway(s)",
 }
 
 export default en

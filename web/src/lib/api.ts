@@ -1444,6 +1444,7 @@ export type AccountKind =
   | "netatmo"
   | "ezviz"
   | "anker_cloud"
+  | "deltadore"
   | "weather"
   | "forecast_solar"
   /** The account of a module installed from a library (its form is in its manifest). */
@@ -1468,6 +1469,8 @@ export type AccountView = {
     homes?: { name: string; rooms: number; modules: number }[]
     /** EZVIZ: the names of the devices of the account. */
     devices?: string[]
+    /** Delta Dore: the MAC addresses of the Tydom gateways the account reaches. */
+    gateways?: string[]
     /** Anker SOLIX: the SolarBanks the account reaches. */
     solarbanks?: number
     /** Forecast.Solar: the panels. */

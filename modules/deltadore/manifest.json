@@ -1,0 +1,44 @@
+{
+  "id": "deltadore",
+  "version": "1.0.0",
+  "name": {
+    "en": "Delta Dore",
+    "es": "Delta Dore",
+    "fr": "Delta Dore"
+  },
+  "roles": [
+    "account"
+  ],
+  "requires": {
+    "api": "^1.1"
+  },
+  "permissions": {
+    "network": {
+      "lan": false,
+      "hosts": [
+        "deltadoreadb2ciot.b2clogin.com",
+        "prod.iotdeltadore.com"
+      ]
+    }
+  },
+  "config": [
+    {
+      "name": "email",
+      "type": "string",
+      "label": {
+        "fr": "E-mail du compte Delta Dore (application Tydom)",
+        "en": "E-mail of the Delta Dore account (Tydom app)",
+        "es": "Correo de la cuenta Delta Dore (aplicación Tydom)"
+      }
+    },
+    {
+      "name": "password",
+      "type": "password",
+      "label": {
+        "fr": "Mot de passe",
+        "en": "Password",
+        "es": "Contraseña"
+      }
+    }
+  ]
+}

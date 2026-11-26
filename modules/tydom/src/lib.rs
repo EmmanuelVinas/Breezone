@@ -1,5 +1,7 @@
 //! Delta Dore Tydom gateways (1.0, Home, 2.0), through their local WebSocket, as `tydom2mqtt`
-//! reaches them: no Delta Dore cloud once the password of the gateway is known.
+//! reaches them: no Delta Dore cloud once the password of the gateway is known. A gateway whose
+//! password is not on its label (Tydom 2.0, Home) gets it from the Delta Dore account linked in
+//! Breezone (`deltadore`, see `cloud`), once, when the source opens.
 //!
 //!   GET  https://<ip>/mediation/client?mac=<MAC>&appli=1 → 401, a Digest challenge (realm
 //!        « protected area »): user the MAC, the password of the gateway
@@ -19,6 +21,11 @@ use breezone_module_sdk::{device, host, json, module, Described, DeviceInfo, Dri
 use md5::{Digest, Md5};
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
+
+pub mod cloud;
+
+/// The account of Delta Dore, a module of its own.
+const ACCOUNT: &str = "deltadore";
 
 const REALM: &str = "protected area";
 const TIMEOUT_MS: u32 = 8000;
@@ -402,6 +409,17 @@ impl Tydom {
     }
 }
 
+/// The password of the gateway from the linked Delta Dore account: the one it kept when it was
+/// connected, else asked to Delta Dore now.
+fn password_from_account(mac: &str) -> Result<String> {
+    let account = host::account(ACCOUNT)
+        .map_err(|_| Error::Invalid("le mot de passe de la passerelle est requis : saisis-le, ou connecte le compte Delta Dore (Réglages › Comptes et services)".into()))?;
+    if let Some(p) = account["gateways"][mac].as_str() {
+        return Ok(p.to_string());
+    }
+    cloud::gateway_password(&account, mac)
+}
+
 impl Driver for Tydom {
     fn open(config: Value, secret: Option<Value>) -> Result<Self> {
         let host = config["host"].as_str().map(str::trim).unwrap_or_default();
@@ -410,10 +428,11 @@ impl Driver for Tydom {
         }
         let mac =
             mac_of(config["mac"].as_str().unwrap_or_default()).ok_or_else(|| Error::Invalid("l'adresse MAC a 12 caractères (001A25…), sur l'étiquette de la passerelle".into()))?;
-        let password = secret
-            .and_then(|s| s["password"].as_str().map(str::to_string))
-            .filter(|p| !p.is_empty())
-            .ok_or_else(|| Error::Invalid("le mot de passe de la passerelle est requis".into()))?;
+        let typed = secret.and_then(|s| s["password"].as_str().map(str::to_string)).filter(|p| !p.is_empty());
+        let password = match typed {
+            Some(p) => p,
+            None => password_from_account(&mac)?,
+        };
         Ok(Tydom {
             host: host.to_string(),
             mac,
@@ -633,5 +652,16 @@ mod tests {
     fn a_configuration_is_checked() {
         assert!(Tydom::open(json!({"host": "192.168.1.80", "mac": "001A25"}), Some(json!({"password": "x"}))).is_err());
         assert!(Tydom::open(json!({"host": "192.168.1.80", "mac": "001A25123456"}), None).is_err());
+    }
+
+    #[test]
+    fn without_its_password_the_gateway_takes_the_one_of_the_account() {
+        testing::reset();
+        testing::account("deltadore", &json!({"email": "guillaume@example.com", "password": "pw", "gateways": {"001A25123456": "kept"}}));
+        let t = Tydom::open(json!({"host": "192.168.1.80", "mac": "00:1A:25:12:34:56"}), Some(json!({"password": ""}))).unwrap();
+        assert_eq!(t.password, "kept");
+        assert!(testing::requests().is_empty(), "kept by the account: Delta Dore is not asked");
+        let typed = Tydom::open(json!({"host": "192.168.1.80", "mac": "001A25123456"}), Some(json!({"password": "typed"}))).unwrap();
+        assert_eq!(typed.password, "typed", "what is typed comes first");
     }
 }
