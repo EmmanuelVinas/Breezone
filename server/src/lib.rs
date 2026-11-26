@@ -55,12 +55,12 @@ use crate::auth::AuthService;
 use crate::config::Config;
 use crate::db::Db;
 use crate::hub::Hub;
-use axum::http::{header, HeaderValue};
-use axum::response::Html;
+use axum::http::{header, HeaderValue, StatusCode, Uri};
+use axum::response::{Html, IntoResponse, Response};
 use axum::Router;
 use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
-use tower_http::services::{ServeDir, ServeFile};
+use tower_http::services::ServeDir;
 use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::trace::TraceLayer;
 
@@ -182,20 +182,88 @@ pub(crate) fn yes() -> bool {
 /// The full HTTP application: API + web UI.
 pub fn app(state: AppState) -> Router {
     let web_dir = state.cfg.web_dir.clone();
+    let base_path = state.cfg.base_path.clone();
     let index = web_dir.join("index.html");
     let router = api::router();
     let router = if index.exists() {
         // Single page app: unknown paths are routed client-side.
-        router.fallback_service(ServeDir::new(&web_dir).fallback(ServeFile::new(index)))
+        let base = base_path.clone();
+        let page = axum::routing::get(move |uri: Uri| spa_index(index.clone(), base.clone(), uri));
+        router.fallback_service(ServeDir::new(&web_dir).append_index_html_on_directories(false).fallback(page))
     } else {
         router.fallback(|| async { Html("<h1>Breezone</h1><p>The server is running, but the web UI is not installed (BREEZONE_WEB_DIR).</p>") })
     };
-    with_security_headers(router)
+    let router = with_security_headers(router)
         .layer(axum::middleware::from_fn(incidents::record))
         .layer(axum::middleware::from_fn(i18n::middleware))
         .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any))
         .layer(TraceLayer::new_for_http())
-        .with_state(state)
+        .with_state(state);
+    if base_path.is_empty() {
+        return router;
+    }
+    // The proxy keeps the prefix in the requests: removed before the routes are matched.
+    let stripped = tower::ServiceBuilder::new()
+        .map_request(move |mut req: axum::extract::Request| {
+            if let Some(uri) = strip_base_path(req.uri(), &base_path) {
+                *req.uri_mut() = uri;
+            }
+            req
+        })
+        .service(router);
+    Router::new().fallback_service(stripped)
+}
+
+fn strip_base_path(uri: &Uri, base_path: &str) -> Option<Uri> {
+    let rest = uri.path().strip_prefix(base_path)?;
+    let path = match rest {
+        "" => "/",
+        r if r.starts_with('/') => r,
+        _ => return None,
+    };
+    let path_and_query = match uri.query() {
+        Some(q) => format!("{path}?{q}"),
+        None => path.to_owned(),
+    };
+    let mut parts = uri.clone().into_parts();
+    parts.path_and_query = Some(path_and_query.parse().ok()?);
+    Uri::from_parts(parts).ok()
+}
+
+/// The page of the web UI, with a `<base>` that leads back to the root of the app, so that it
+/// works under a sub-path of a reverse proxy (`https://nas.local/breezone/`): its scripts, styles
+/// and calls to the API are relative to it.
+async fn spa_index(index: std::path::PathBuf, base_path: String, uri: Uri) -> Response {
+    match tokio::fs::read_to_string(&index).await {
+        Ok(html) => {
+            let mut res = Html(with_base_href(&html, &base_href(&base_path, uri.path()))).into_response();
+            // Always the page of the installed version, right after an update.
+            res.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
+            res
+        }
+        Err(_) => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+/// Absolute when the prefix is known, else relative to the path the server sees: a proxy that
+/// removes the prefix leaves `/zones/3` for `/breezone/zones/3`, and `../` leads back to
+/// `/breezone/` as well as to `/` without a proxy.
+fn base_href(base_path: &str, path: &str) -> String {
+    if !base_path.is_empty() {
+        return format!("{base_path}/");
+    }
+    match path.matches('/').count().saturating_sub(1) {
+        0 => "./".to_owned(),
+        depth => "../".repeat(depth),
+    }
+}
+
+fn with_base_href(html: &str, href: &str) -> String {
+    let tag = format!("<base href=\"{href}\" />");
+    match html.find("<head>") {
+        Some(i) => format!("{}{tag}{}", &html[..i + "<head>".len()], &html[i + "<head>".len()..]),
+        None => format!("{tag}{html}"),
+    }
 }
 
 /// Browser protections for the web UI: only its own scripts, never shown inside another site's
@@ -335,4 +403,33 @@ async fn shutdown_signal() {
         _ = terminate => {},
     }
     tracing::info!("shutting down");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn base_href_leads_back_to_the_root_of_the_app() {
+        assert_eq!(base_href("", "/"), "./");
+        assert_eq!(base_href("", "/settings"), "./");
+        assert_eq!(base_href("", "/zones/3"), "../");
+        assert_eq!(base_href("", "/a/b/c"), "../../");
+        assert_eq!(base_href("/breezone", "/zones/3"), "/breezone/");
+    }
+
+    #[test]
+    fn base_path_is_removed_from_the_requests() {
+        let strip = |u: &str| strip_base_path(&u.parse().unwrap(), "/breezone").map(|u| u.to_string());
+        assert_eq!(strip("/breezone").as_deref(), Some("/"));
+        assert_eq!(strip("/breezone/api/devices?x=1").as_deref(), Some("/api/devices?x=1"));
+        assert_eq!(strip("/breezonex/api"), None);
+        assert_eq!(strip("/api/devices"), None);
+    }
+
+    #[test]
+    fn base_is_the_first_element_of_the_head() {
+        let html = with_base_href("<html><head><meta charset=\"UTF-8\" /></head></html>", "../");
+        assert_eq!(html, "<html><head><base href=\"../\" /><meta charset=\"UTF-8\" /></head></html>");
+    }
 }

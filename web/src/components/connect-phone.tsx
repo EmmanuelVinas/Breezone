@@ -4,6 +4,7 @@ import { QRCodeCanvas } from "qrcode.react"
 import { Copy, Download, Share2, TriangleAlert } from "lucide-react"
 import { toast } from "sonner"
 import { api } from "@/lib/api"
+import { appOrigin } from "@/lib/base"
 import { t } from "@/lib/i18n"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -52,7 +53,7 @@ export function ConnectPhoneDialog({
     enabled: open,
   })
   const [edited, setEdited] = useState<string | null>(null)
-  const server = edited ?? identity.data?.public_url ?? window.location.origin
+  const server = edited ?? identity.data?.public_url ?? appOrigin()
   const valid = /^https?:\/\/[^/\s]+/.test(server.trim())
   const link = connectLink(server, username)
   const canvas = useRef<HTMLCanvasElement>(null)

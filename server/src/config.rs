@@ -8,6 +8,10 @@ pub struct Config {
     pub port: u16,
     pub data_dir: PathBuf,
     pub web_dir: PathBuf,
+    /// `BREEZONE_BASE_PATH`: the path the web UI is published under behind a reverse proxy that
+    /// keeps it in the requests (`/breezone`), normalised without the trailing slash; empty at the
+    /// root. A proxy that removes it needs nothing: the page finds its own base.
+    pub base_path: String,
     pub poll_interval_secs: u64,
     /// How often the sources of devices (Shelly…) are read.
     pub device_read_ms: u64,
@@ -84,6 +88,16 @@ fn flag(name: &str) -> Option<bool> {
     var(name).map(|v| !matches!(v.trim().to_lowercase().as_str(), "false" | "0" | "no" | "off"))
 }
 
+/// `breezone/`, `/breezone/` → `/breezone`; `/` → empty. Only the characters of a plain path are
+/// kept: the value ends up in the page.
+fn normalize_base_path(v: &str) -> String {
+    v.split('/')
+        .map(|s| s.chars().filter(|c| c.is_ascii_alphanumeric() || "-_.~".contains(*c)).collect::<String>())
+        .filter(|s| !s.is_empty() && s != "." && s != "..")
+        .map(|s| format!("/{s}"))
+        .collect()
+}
+
 fn num<T: std::str::FromStr>(name: &str, default: T) -> T {
     var(name).and_then(|v| v.trim().parse().ok()).unwrap_or(default)
 }
@@ -96,6 +110,7 @@ impl Config {
             port: num("BREEZONE_PORT", 8427),
             data_dir: var("BREEZONE_DATA_DIR").map(PathBuf::from).unwrap_or_else(|| "data".into()),
             web_dir: var("BREEZONE_WEB_DIR").map(PathBuf::from).unwrap_or_else(|| "web".into()),
+            base_path: var("BREEZONE_BASE_PATH").map(|v| normalize_base_path(&v)).unwrap_or_default(),
             poll_interval_secs: num("BREEZONE_POLL_INTERVAL_SECS", 15).max(2),
             device_read_ms: num("BREEZONE_DEVICE_READ_MS", 5000).max(500),
             node_retry_max_secs: 300,
@@ -142,6 +157,7 @@ impl Config {
             port: 0,
             data_dir,
             web_dir: "web".into(),
+            base_path: String::new(),
             poll_interval_secs: 3600,
             device_read_ms: 5000,
             node_retry_max_secs: 1,
@@ -197,6 +213,15 @@ pub fn parse_bootstrap(value: &str) -> Vec<BootstrapInstallation> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn normalizes_the_base_path() {
+        assert_eq!(normalize_base_path("breezone/"), "/breezone");
+        assert_eq!(normalize_base_path("/breezone"), "/breezone");
+        assert_eq!(normalize_base_path("/"), "");
+        assert_eq!(normalize_base_path("/a//b/\"<x>"), "/a/b/x");
+        assert_eq!(normalize_base_path("/../x"), "/x");
+    }
 
     #[test]
     fn parses_bootstrap_hosts() {

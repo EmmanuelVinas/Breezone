@@ -24,6 +24,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import type { LiveState } from "@/hooks/use-live"
 import { ANDROID_APP_URL, api, currentUser } from "@/lib/api"
+import { appUrl } from "@/lib/base"
 import { cn } from "@/lib/utils"
 import {
   useModulesHere,
@@ -363,7 +364,7 @@ export function AppShell({
             <span className="text-xs text-muted-foreground/70">
               Breezone {version} ·{" "}
               <a
-                href="/third-party-licenses.txt"
+                href={appUrl("/third-party-licenses.txt")}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-foreground hover:underline"

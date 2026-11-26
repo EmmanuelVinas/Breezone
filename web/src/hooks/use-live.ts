@@ -3,6 +3,7 @@ import { useEffect, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import type { FeedEvent, Installation } from "@/lib/api"
 import { getAccessToken } from "@/lib/api"
+import { appUrl } from "@/lib/base"
 import { lang } from "@/lib/i18n"
 
 export type LiveState = "connecting" | "live" | "offline"
@@ -44,7 +45,7 @@ export function useLive(enabled: boolean): LiveState {
       const token = await getAccessToken()
       if (!token || stopped) return schedule()
       const proto = location.protocol === "https:" ? "wss" : "ws"
-      ws = new WebSocket(`${proto}://${location.host}/api/ws`)
+      ws = new WebSocket(`${proto}://${location.host}${appUrl("/api/ws")}`)
       ws.onopen = () =>
         ws?.send(JSON.stringify({ type: "auth", token, lang: lang() }))
       ws.onmessage = (e) => {

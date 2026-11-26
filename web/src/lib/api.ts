@@ -4,6 +4,7 @@ import type { WeatherView } from "@/lib/weather"
 /** The Android app on Google Play. */
 export const ANDROID_APP_URL =
   "https://play.google.com/store/apps/details?id=com.breezone.app"
+import { appUrl } from "@/lib/base"
 import { lang } from "@/lib/i18n"
 import type {
   ChargeMode,
@@ -612,7 +613,7 @@ async function refreshOnce(attempts: number): Promise<boolean> {
   const refresh = localStorage.getItem(REFRESH_KEY)
   if (!refresh) return false
   try {
-    const res = await fetch("/api/auth/refresh", {
+    const res = await fetch(appUrl("/api/auth/refresh"), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -687,7 +688,7 @@ export async function request<T>(
     const headers: Record<string, string> = { "Accept-Language": lang() }
     if (body !== undefined) headers["Content-Type"] = "application/json"
     if (token) headers["Authorization"] = `Bearer ${token}`
-    return fetch(path, {
+    return fetch(appUrl(path), {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -719,7 +720,7 @@ export async function request<T>(
 /** The last picture of a camera (its last event), as a blob: an `<img>` cannot send the token. */
 export async function devicePicture(id: number): Promise<Blob> {
   const token = await getAccessToken()
-  const res = await fetch(`/api/devices/${id}/picture`, {
+  const res = await fetch(appUrl(`/api/devices/${id}/picture`), {
     headers: {
       "Accept-Language": lang(),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),

@@ -70,6 +70,20 @@ the repository's [full `docker-compose.yml`](../../docker-compose.yml) has a `cl
 
 To drive another site from this server, see [Linking two sites](../federation.md).
 
+## Behind a reverse proxy, under a sub-path
+
+Breezone can be published under a path of an existing site, e.g. `https://nas.local/breezone/`,
+without its own port or domain name. Point the proxy at `http://<server>:8427/`, with the
+WebSocket headers (`Upgrade` and `Connection`) for the live updates.
+
+- If the proxy **removes** the path (`/breezone/zones/3` reaches Breezone as `/zones/3`), there is
+  nothing else to set.
+- If it **keeps** it (Breezone receives `/breezone/zones/3`), set `BREEZONE_BASE_PATH=/breezone`.
+  When unsure, set it anyway: it works in both cases.
+
+Open the address with its trailing slash (`/breezone/`). The mobile app takes the full address
+(`https://nas.local/breezone`).
+
 ## Updates
 
 **From Breezone itself** (*Settings › Breezone*, administrators): Breezone downloads the new version
@@ -101,6 +115,7 @@ Environment variables, all optional (see also [`.env.sample`](../../.env.sample)
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `BREEZONE_PORT` | `8427` | Port of the web UI, the API and the WebSocket |
+| `BREEZONE_BASE_PATH` | — | Path the UI is published under, behind a reverse proxy that keeps it in the requests (`/breezone`); see [sub-path](#behind-a-reverse-proxy-under-a-sub-path) |
 | `BREEZONE_HTTP_PORT` | `8427` | Published port (repository's compose file) |
 | `BREEZONE_VERSION` | `latest` | Image tag (repository's compose file) |
 | `TZ` / `BREEZONE_TZ` | `Europe/Paris` | Time zone (schedules, sunrise and sunset) |

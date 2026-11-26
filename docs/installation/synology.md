@@ -228,6 +228,17 @@ Utilisez cette adresse dans l'application mobile hors de chez vous, et dans *Ré
 Ce serveur › Adresse publique* pour l'appairage avec un autre serveur Breezone (HTTP n'est accepté
 qu'en réseau local).
 
+### Sous un chemin de Web Station (sans port ni domaine)
+
+Pour garder l'accès au réseau local, sans ouvrir de port, Breezone peut aussi être publié sous un
+chemin d'un site existant de Web Station, par exemple `https://monnas.local/breezone/`, avec un
+proxy inversé vers `http://localhost:8427/` et les en-têtes WebSocket ci-dessus.
+
+Ajoutez alors au projet la variable `BREEZONE_BASE_PATH: /breezone` (dans `environment:`), puis
+**Arrêter › Créer** pour la prendre en compte. Ouvrez l'adresse avec sa barre finale
+(`/breezone/`). Sans cette variable, la page peut rester blanche, avec dans la console du navigateur
+« type MIME interdit (« text/html ») » sur les fichiers `assets/…`.
+
 ### Cloudflare Tunnel
 
 Sans ouvrir aucun port sur la box : ajoutez au projet le service `cloudflared` décrit dans le

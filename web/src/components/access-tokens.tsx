@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Bot, Copy, KeyRound, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { api } from "@/lib/api"
+import { appOrigin } from "@/lib/base"
 import { dateTime, errorText, relativeTime } from "@/lib/format"
 import { t } from "@/lib/i18n"
 import { Confirm } from "@/components/confirm"
@@ -84,7 +85,7 @@ export function AccessTokens() {
     },
     onError: (e) => toast.error(errorText(e)),
   })
-  const server = (identity.data?.public_url ?? window.location.origin).replace(
+  const server = (identity.data?.public_url ?? appOrigin()).replace(
     /\/+$/,
     ""
   )

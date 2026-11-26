@@ -73,6 +73,20 @@ authentification.
 
 Pour piloter un autre site depuis ce serveur, voir [Relier deux sites](../federation.md).
 
+## Derrière un proxy inversé, sous un sous-chemin
+
+Breezone peut être publié sous un chemin d'un site existant, par exemple
+`https://nas.local/breezone/`, sans port ni nom de domaine à lui. Faites pointer le proxy vers
+`http://<serveur>:8427/`, avec les en-têtes WebSocket (`Upgrade` et `Connection`) pour le temps réel.
+
+- Si le proxy **retire** le chemin (`/breezone/zones/3` arrive à Breezone en `/zones/3`), il n'y a
+  rien d'autre à régler.
+- S'il le **garde** (Breezone reçoit `/breezone/zones/3`), ajoutez `BREEZONE_BASE_PATH=/breezone`.
+  Dans le doute, ajoutez-la : elle fonctionne dans les deux cas.
+
+Ouvrez l'adresse avec sa barre finale (`/breezone/`). L'application mobile prend l'adresse complète
+(`https://nas.local/breezone`).
+
 ## Mises à jour
 
 **Depuis Breezone** (*Réglages › Breezone*, administrateurs) : Breezone télécharge la nouvelle
@@ -104,6 +118,7 @@ Variables d'environnement, toutes facultatives (voir aussi [`.env.sample`](../..
 | Variable | Par défaut | Rôle |
 | --- | --- | --- |
 | `BREEZONE_PORT` | `8427` | Port de l'interface web, de l'API et du WebSocket |
+| `BREEZONE_BASE_PATH` | — | Chemin sous lequel l'interface est publiée, derrière un proxy inversé qui le garde dans les requêtes (`/breezone`) ; voir [sous-chemin](#derrière-un-proxy-inversé-sous-un-sous-chemin) |
 | `BREEZONE_HTTP_PORT` | `8427` | Port publié (compose du dépôt) |
 | `BREEZONE_VERSION` | `latest` | Tag de l'image (compose du dépôt) |
 | `TZ` / `BREEZONE_TZ` | `Europe/Paris` | Fuseau horaire (programmations, lever et coucher du soleil) |

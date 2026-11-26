@@ -8,6 +8,9 @@ const server = process.env.BREEZONE_DEV_SERVER ?? "http://localhost:8427"
 
 // https://vite.dev/config/
 export default defineConfig({
+  // Relative to the page's <base>, which the server sets: the app also works under a sub-path
+  // of a reverse proxy (https://nas.local/breezone/).
+  base: "./",
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {

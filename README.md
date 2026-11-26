@@ -116,7 +116,8 @@ docker run -d --name breezone --restart unless-stopped --network host \
 Then open `http://<your-server>:8427`: the first page creates the administrator account.
 
 **Full guide: [docs/installation](docs/installation/README.md)**: Docker Compose, network, remote
-access without VPN, updates, backup, every setting, modules. Synology NAS, step by step (in French):
+access without VPN, behind a reverse proxy under a sub-path (`https://nas.local/breezone/`), updates,
+backup, every setting, modules. Synology NAS, step by step (in French):
 [docs/installation/synology.md](docs/installation/synology.md).
 
 ## Mobile app

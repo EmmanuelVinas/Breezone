@@ -8,6 +8,7 @@ import {
 } from "react-router"
 import { useQuery } from "@tanstack/react-query"
 import { api, isSignedIn, onAuthChange } from "@/lib/api"
+import { basePath } from "@/lib/base"
 import { useLive } from "@/hooks/use-live"
 import { AppShell } from "@/components/app-shell"
 import { ThisServerOnly } from "@/components/this-server-only"
@@ -188,7 +189,7 @@ function Gate() {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={basePath || undefined}>
       <Gate />
     </BrowserRouter>
   )
