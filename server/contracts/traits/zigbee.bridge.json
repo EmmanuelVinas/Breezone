@@ -1,0 +1,31 @@
+{
+  "trait": "zigbee.bridge",
+  "version": 1,
+  "revision": 0,
+  "label": { "fr": "Pont Zigbee", "en": "Zigbee bridge", "es": "Puente Zigbee" },
+  "state": [
+    { "name": "pairing", "type": "bool", "history": false, "label": { "fr": "Appairage ouvert", "en": "Pairing open", "es": "Emparejamiento abierto" } },
+    { "name": "devices", "type": "integer", "history": false, "min": 0, "label": { "fr": "Appareils Zigbee", "en": "Zigbee devices", "es": "Dispositivos Zigbee" } }
+  ],
+  "actions": [
+    {
+      "name": "pair",
+      "label": { "fr": "Appairer un appareil Zigbee", "en": "Pair a Zigbee device", "es": "Emparejar un dispositivo Zigbee" },
+      "params": [
+        { "name": "on", "type": "bool", "label": { "fr": "Appairage ouvert", "en": "Pairing open", "es": "Emparejamiento abierto" } }
+      ]
+    }
+  ],
+  "ui": {
+    "kind": "other",
+    "primary": "devices",
+    "card": [
+      {"widget": "toggle", "field": "pairing", "action": "pair", "param": "on"},
+      {"widget": "value", "field": "devices"}
+    ],
+    "detail": [
+      {"widget": "toggle", "field": "pairing", "action": "pair", "param": "on"},
+      {"widget": "value", "field": "devices"}
+    ]
+  }
+}

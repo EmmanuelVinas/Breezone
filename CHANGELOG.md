@@ -6,6 +6,30 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Zigbee through a SONOFF ZBBridge Pro flashed with Tasmota (Zigbee2Tasmota, no Zigbee2MQTT nor MQTT
+  server): the bridge is a device whose switch opens the network to a new device for a minute, and
+  the devices paired to it show up by themselves. Temperature and humidity sensors (SONOFF
+  SNZB-02D…) give their measures and battery, a measure older than three hours is no longer told;
+  Zigbee plugs are switched on and off, Zigbee lamps dimmed and their white set (not their colours
+  yet). A name given in Breezone goes to the bridge, and to the relays of any Tasmota. Devices
+  Breezone cannot translate yet (contact, motion…) are listed in the module's diagnostic, which
+  also tells what to do when the bridge's Zigbee is off. The fake modules of the demos have a
+  Zigbee bridge.
+- Modules can give the hardware the name of a device chosen in Breezone (module interface 1.4).
+- The Delta Dore account in Settings › Accounts: a Tydom gateway whose password is on no label gets
+  it from there. Leave its password empty when adding it; Breezone learns it once, keeps it
+  encrypted, then reaches the gateway on the local network only.
+- The web UI works behind a reverse proxy that publishes it under a path
+  (`https://nas.local/breezone/`), with `BREEZONE_BASE_PATH` when the proxy keeps that path in the
+  requests.
+
+### Fixed
+
+- Tasmota 16 is read and found on the network again: it answers only requests that say where they
+  come from.
+
 ## [0.13.0-beta.4] - 2026-11-26
 
 ### Added

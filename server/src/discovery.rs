@@ -184,7 +184,9 @@ pub fn interned(id: &str) -> &'static str {
 async fn hinted(host: &str, open: &[u16], hints: &[crate::modules::manifest::HttpHint]) -> bool {
     let Ok(http) = reqwest::Client::builder().timeout(Duration::from_secs(2)).redirect(reqwest::redirect::Policy::none()).build() else { return false };
     for h in hints.iter().filter(|h| open.contains(&h.port)) {
-        let Ok(resp) = http.get(format!("http://{host}:{}{}", h.port, h.path)).send().await else { continue };
+        // Tasmota 16 answers its commands only to a request that says where it comes from.
+        let base = format!("http://{host}:{}", h.port);
+        let Ok(resp) = http.get(format!("{base}{}", h.path)).header("Referer", format!("{base}/")).send().await else { continue };
         if !resp.status().is_success() {
             continue;
         }

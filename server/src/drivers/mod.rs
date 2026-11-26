@@ -9,7 +9,7 @@
 use crate::db::{self, Db};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -99,6 +99,10 @@ pub trait Driver: Send + Sync {
     /// the mean over the period, a counter what it rose by.
     fn history<'a>(&'a self, _reference: &'a str, _since: i64, _until: i64) -> DriverFuture<'a, serde_json::Value> {
         Box::pin(async { Err(DriverError::Unsupported("history".into())) })
+    }
+    /// A device was named in Breezone: the hardware takes the name too, when it keeps names.
+    fn rename<'a>(&'a self, _reference: &'a str, _name: &'a str) -> DriverFuture<'a, ()> {
+        Box::pin(async { Err(DriverError::Unsupported("rename".into())) })
     }
     /// The schedules the hardware keeps and runs itself (`schedule.hardware`).
     fn schedules(&self) -> DriverFuture<'_, Vec<Schedule>> {
@@ -323,6 +327,8 @@ struct Running {
     cloud_view: Vec<CloudDevice>,
     /// Every device it described, its twins and those ignored included (sorted out at each reading).
     described: Vec<DeviceInfo>,
+    /// The devices it read but did not describe even when asked again: not asked again for them.
+    undescribed: BTreeSet<String>,
 }
 
 /// A device's name (normalised) and family.
@@ -655,6 +661,7 @@ impl Runtime {
                         failures: 0,
                         twins: HashMap::new(),
                         described: vec![],
+                        undescribed: BTreeSet::new(),
                         cloud_view: vec![],
                     }
                 }
@@ -689,11 +696,24 @@ impl Runtime {
         if let Some(r) = self.sources.write().await.get_mut(&id) {
             r.last_read = Some(Instant::now());
         }
-        let described = if known { None } else { Some(driver.describe().await) };
+        let mut described = if known { None } else { Some(driver.describe().await) };
         let result = match &described {
             Some(Err(e)) => Err(e.clone()),
             _ => driver.read().await,
         };
+        // A device it reads but did not describe (one just paired to a bridge): described again.
+        let unknown: BTreeSet<String> = match (&described, &result) {
+            (None, Ok(states)) => {
+                let sources = self.sources.read().await;
+                let r = sources.get(&id);
+                let known = |k: &String| r.is_some_and(|r| r.described.iter().any(|d| &d.reference == k) || r.undescribed.contains(k));
+                states.keys().filter(|k| !known(k)).cloned().collect()
+            }
+            _ => BTreeSet::new(),
+        };
+        if !unknown.is_empty() {
+            described = Some(driver.describe().await);
+        }
         // The devices of the local sources (for a cloud source), or those the cloud can also drive.
         let (locals, in_cloud): (Vec<(i64, DeviceInfo)>, HashSet<LocalKey>) = {
             let sources = self.sources.read().await;
@@ -711,6 +731,8 @@ impl Runtime {
             let mut sources = self.sources.write().await;
             let Some(r) = sources.get_mut(&id) else { return };
             if let Some(Ok(d)) = described {
+                r.undescribed.extend(unknown);
+                r.undescribed.retain(|k| !d.devices.iter().any(|x| &x.reference == k));
                 r.status.model = Some(d.model);
                 r.status.firmware = d.firmware;
                 identity = d.identity.filter(|_| config_identity(&r.source).is_none()).map(|i| (r.source.clone(), i));
@@ -1346,6 +1368,7 @@ mod tests {
                 failures: 0,
                 twins: HashMap::new(),
                 described: vec![],
+                undescribed: BTreeSet::new(),
                 cloud_view: vec![],
             };
             rt.sources.write().await.insert(id, running);
@@ -1365,6 +1388,75 @@ mod tests {
         rt.act(local_id, "2.8", "cover.position", "stop", &State::new()).await.unwrap();
         rt.act(local_id, "2.8", "cover.position", "set", &State::new()).await.unwrap();
         assert_eq!(*done.lock().unwrap(), ["h/v1 stop", "2.8 set"], "what the local module can do stays its own");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A bridge: it reads `read`, describes `described`, and counts its descriptions.
+    struct Bridge {
+        described: std::sync::Mutex<Vec<&'static str>>,
+        read: std::sync::Mutex<Vec<&'static str>>,
+        descriptions: std::sync::atomic::AtomicU32,
+    }
+
+    impl Driver for Bridge {
+        fn describe(&self) -> DriverFuture<'_, Described> {
+            Box::pin(async move {
+                self.descriptions.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                let devices =
+                    self.described.lock().unwrap().iter().map(|r| DeviceInfo { reference: r.to_string(), kind: "sensor".into(), traits: vec![], name: r.to_string() }).collect();
+                Ok(Described { model: "bridge".into(), firmware: None, devices, identity: None })
+            })
+        }
+        fn read(&self) -> DriverFuture<'_, HashMap<String, State>> {
+            Box::pin(async move { Ok(self.read.lock().unwrap().iter().map(|r| (r.to_string(), State::new())).collect()) })
+        }
+        fn act<'a>(&'a self, _reference: &'a str, _trait_name: &'a str, _action: &'a str, _params: &'a State) -> DriverFuture<'a, ()> {
+            Box::pin(async move { Ok(()) })
+        }
+    }
+
+    #[tokio::test]
+    async fn a_device_read_but_not_described_has_the_source_described_again() {
+        let dir = std::env::temp_dir().join(format!("breezone-redescribe-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let db = db::connect(&dir.join("breezone.db")).await.unwrap();
+        let rt = Runtime::new(db.clone(), [0; 32]);
+        let id = db::insert_source(&db, "tasmota", "Pont Zigbee", "{}").await.unwrap();
+        let source = db::list_sources(&db).await.unwrap().into_iter().find(|s| s.id == id).unwrap();
+        let bridge = Arc::new(Bridge { described: std::sync::Mutex::new(vec!["zigbee"]), read: std::sync::Mutex::new(vec!["zigbee"]), descriptions: Default::default() });
+        let driver: Arc<dyn Driver> = bridge.clone();
+        let running = Running {
+            source,
+            driver: Some(driver),
+            devices: vec![],
+            states: HashMap::new(),
+            status: SourceStatus { state: "unknown", ..Default::default() },
+            pending: HashMap::new(),
+            last_read: None,
+            failures: 0,
+            twins: HashMap::new(),
+            described: vec![],
+            undescribed: BTreeSet::new(),
+            cloud_view: vec![],
+        };
+        rt.sources.write().await.insert(id, running);
+        let count = || bridge.descriptions.load(std::sync::atomic::Ordering::SeqCst);
+        let devices = || async { rt.sources.read().await[&id].devices.iter().map(|d| d.reference.clone()).collect::<Vec<_>>() };
+
+        rt.poll(id).await;
+        rt.poll(id).await;
+        assert_eq!(count(), 1, "described once");
+        // A sensor was just paired: it is read, then described.
+        bridge.read.lock().unwrap().push("zigbee/0x01");
+        bridge.described.lock().unwrap().push("zigbee/0x01");
+        rt.poll(id).await;
+        assert_eq!((count(), devices().await), (2, vec!["zigbee".to_string(), "zigbee/0x01".to_string()]));
+        // One it reads but never describes is not asked about at each reading.
+        bridge.read.lock().unwrap().push("other");
+        rt.poll(id).await;
+        rt.poll(id).await;
+        assert_eq!(count(), 3);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

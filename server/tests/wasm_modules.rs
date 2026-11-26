@@ -107,6 +107,46 @@ async fn the_tasmota_module_describes_reads_and_drives() {
     assert!(matches!(source.act("energy", "switch.relay", "set", &params).await, Err(DriverError::Unsupported(_))));
 }
 
+/// The fake ZBBridge Pro of the demos, on a port of its own.
+async fn fake_zigbee_bridge() -> String {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, breezone_server::mock_devices::zigbee_bridge()).await.unwrap() });
+    let _ = reqwest::Client::new().get(format!("http://{addr}/cm?cmnd=Status%200")).timeout(std::time::Duration::from_secs(30)).send().await;
+    addr.to_string()
+}
+
+#[tokio::test]
+async fn the_tasmota_module_pairs_names_and_drives_zigbee_devices() {
+    let _serial = SERIAL.lock().await;
+    let host = fake_zigbee_bridge().await;
+    let module = Arc::new(WasmModule::load("tasmota", &wasm("tasmota"), local(), None).unwrap().with_optional_calls(&["rename".into()]));
+    assert_eq!(module.probe(&host).await.as_deref(), Some("Pont Zigbee"));
+    let source = module.open(None, &json!({ "host": host }), None).await.unwrap();
+    let d = source.describe().await.unwrap();
+    let kinds: Vec<(&str, &str)> = d.devices.iter().map(|x| (x.reference.as_str(), x.kind.as_str())).collect();
+    assert_eq!(
+        kinds,
+        [("zigbee", "zigbee.bridge"), ("zigbee/0x00124B0026B64D1E", "sensor"), ("zigbee/0x7CB03EBB0A0292DD", "switch.relay"), ("zigbee/0x0017880102AABBCC", "light")]
+    );
+    let s = source.read().await.unwrap();
+    assert!(s["zigbee/0x00124B0026B64D1E"]["temperature"].is_number());
+    assert_eq!(s["zigbee"]["devices"], 4);
+
+    // Paired: a new sensor is read, which the host then describes.
+    source.act("zigbee", "zigbee.bridge", "pair", json!({"on": true}).as_object().unwrap()).await.unwrap();
+    let s = source.read().await.unwrap();
+    assert_eq!(s["zigbee"]["pairing"], true);
+    assert!(s.contains_key("zigbee/0x00124B0026B70011"));
+
+    source.rename("zigbee/0x00124B0026B70011", "Salle de bains").await.unwrap();
+    source.act("zigbee/0x0017880102AABBCC", "light", "set", json!({"on": true, "brightness": 50}).as_object().unwrap()).await.unwrap();
+    let d = source.describe().await.unwrap();
+    assert_eq!(d.devices.iter().find(|x| x.reference == "zigbee/0x00124B0026B70011").map(|x| x.name.as_str()), Some("Salle de bains"));
+    let s = source.read().await.unwrap();
+    assert_eq!((s["zigbee/0x0017880102AABBCC"]["on"].clone(), s["zigbee/0x0017880102AABBCC"]["brightness"].clone()), (json!(true), json!(50)));
+}
+
 #[tokio::test]
 async fn a_module_reaches_only_what_it_is_allowed() {
     let _serial = SERIAL.lock().await;
@@ -260,6 +300,17 @@ async fn an_installed_module_runs_its_sources() {
     let (code, r) = call("POST", &format!("/api/devices/{}/actions", relay["id"]), Some(json!({"trait": "switch.relay", "action": "set", "params": {"on": true}})), t()).await;
     assert_eq!(code, 200, "{r}");
     assert!(commands.lock().unwrap().contains(&"Power2 On".to_string()));
+    // Named in Breezone: the module takes the name too, without the answer waiting for it.
+    let (code, _) = call("PUT", &format!("/api/devices/{}", relay["id"]), Some(json!({"name": "Télévision"})), t()).await;
+    assert_eq!(code, 200);
+    let renamed = || commands.lock().unwrap().contains(&"FriendlyName2 Télévision".to_string());
+    for _ in 0..50 {
+        if renamed() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    assert!(renamed(), "{:?}", commands.lock().unwrap());
     let (_, modules) = call("GET", "/api/modules", None, t()).await;
     assert!(modules.as_array().unwrap().iter().any(|m| m["id"] == "tasmotawasm" && m["loaded"] == true));
 
@@ -632,7 +683,7 @@ async fn a_module_that_comes_with_breezone_is_installed_with_it() {
     let mut cfg = breezone_server::config::Config::for_tests(dir.join("data"));
     cfg.web_dir = dir.join("app/web");
     breezone_server::init_state(cfg).await.unwrap();
-    assert_eq!(breezone_server::modules::manifest("tasmota").map(|m| m.version.as_str()), Some("1.0.1"), "shipped with Breezone: installed again");
+    assert_eq!(breezone_server::modules::manifest("tasmota").map(|m| m.version.as_str()), Some("1.1.0"), "shipped with Breezone: installed again");
 }
 
 /// A service module that comes with Breezone, with an account (lot L9): its account is connected
@@ -918,6 +969,7 @@ async fn the_shipped_modules_load() {
         ("rte", json!(null)),
         ("weather", json!(null)),
         ("linky", json!(null)),
+        ("deltadore", json!(null)),
         // Its devices come with its account: nothing reached before a read.
         ("netatmo", json!({})),
         ("ezviz", json!({})),

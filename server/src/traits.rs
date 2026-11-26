@@ -25,6 +25,7 @@ const FILES: &[(&str, &str)] = &[
     ("switch.relay.json", include_str!("../contracts/traits/switch.relay.json")),
     ("ventilation.room.json", include_str!("../contracts/traits/ventilation.room.json")),
     ("ventilation.unit.json", include_str!("../contracts/traits/ventilation.unit.json")),
+    ("zigbee.bridge.json", include_str!("../contracts/traits/zigbee.bridge.json")),
 ];
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

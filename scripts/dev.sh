@@ -60,7 +60,7 @@ if [ "${FAKE}" = "true" ]; then
   MOCK_DEVICES=""
   # With the modules, the weather too (Open-Meteo is asked for the city of the installation).
   [ "${MODULES}" = "true" ] && export BREEZONE_WEATHER="${BREEZONE_WEATHER:-1}" BREEZONE_FORECAST_SOLAR_URL="http://127.0.0.1:3106"
-  [ "${MODULES}" = "true" ] && MOCK_DEVICES=3100 && echo "▸ Fake modules :3100-3106 (Shelly, Hue, Trydan, Renson, Tasmota, ESPHome, Forecast.Solar)"
+  [ "${MODULES}" = "true" ] && MOCK_DEVICES=3100 && echo "▸ Fake modules :3100-3107 (Shelly, Hue, Trydan, Renson, Tasmota, ESPHome, Forecast.Solar, Zigbee bridge)"
   (cd server && MOCK_PORT=3000 MOCK_CLOUD_PORT=3900 MOCK_DEVICES_PORT="${MOCK_DEVICES}" cargo run -q --bin mock-airzone) &
   PIDS+=($!)
   export BREEZONE_AIRZONE_CLOUD_URL="http://127.0.0.1:3900" BREEZONE_SCAN_SUBNET="127.0.0.0/30" BREEZONE_POLL_INTERVAL_SECS=5

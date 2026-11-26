@@ -115,6 +115,12 @@ pub trait Driver: Sized + 'static {
     fn history(_config: Value, _secret: Option<Value>, _reference: &str, _since: i64, _until: i64) -> Result<History> {
         unsupported("history")
     }
+    /// A device was named in Breezone: the hardware takes the name too (`rename` in
+    /// `optional_calls`, interface 1.4: `"requires": {"api": "^1.4"}`). From the source's
+    /// configuration and secret, in an instance of its own.
+    fn rename(_config: Value, _secret: Option<Value>, _reference: &str, _name: &str) -> Result<()> {
+        unsupported("rename")
+    }
     /// Ends the connections it keeps, before the server stops.
     fn close(&self) {}
     /// Whether this address is hardware of this module, and its name (the network scan, by a
@@ -367,6 +373,12 @@ macro_rules! module {
                 let config = $crate::serde_json::from_str(&config).map_err(|e| $crate::Error::Invalid(e.to_string()))?;
                 let secret = secret.map(|s| $crate::serde_json::from_str(&s).unwrap_or($crate::Value::String(s)));
                 Ok(<$driver as $crate::Driver>::history(config, secret, &reference, since, until)?.to_json().to_string())
+            }
+
+            fn rename(config: String, secret: Option<String>, reference: String, name: String) -> $crate::Result<()> {
+                let config = $crate::serde_json::from_str(&config).map_err(|e| $crate::Error::Invalid(e.to_string()))?;
+                let secret = secret.map(|s| $crate::serde_json::from_str(&s).unwrap_or($crate::Value::String(s)));
+                <$driver as $crate::Driver>::rename(config, secret, &reference, &name)
             }
         }
 

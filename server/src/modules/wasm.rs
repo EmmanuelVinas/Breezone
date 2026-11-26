@@ -1037,6 +1037,23 @@ impl WasmModule {
         serde_json::from_str(&answer.map_err(from_wit)?).map_err(|e| DriverError::Invalid(format!("{}: history: {e}", self.id)))
     }
 
+    /// `extras.rename` on an instance of its own: the hardware takes the name given in Breezone.
+    pub async fn rename(&self, config: &serde_json::Value, secret: Option<&str>, reference: &str, name: &str) -> Result<(), DriverError> {
+        let (mut store, _, instance) = self.instantiate_with(self.one_shot()).await?;
+        let missing = || DriverError::Unsupported(format!("{}: no rename", self.id));
+        let extras = instance.get_export_index(&mut store, None, EXTRAS).ok_or_else(missing)?;
+        let index = instance.get_export_index(&mut store, Some(&extras), "rename").ok_or_else(missing)?;
+        let func = instance
+            .get_typed_func::<(String, Option<String>, String, String), (Result<(), WitError>,)>(&mut store, &index)
+            .map_err(|e| DriverError::Invalid(format!("{}: rename: {e}", self.id)))?;
+        let args = (config.to_string(), secret.map(str::to_string), reference.to_string(), name.to_string());
+        let (answer,) = tokio::time::timeout(CALL_TIMEOUT, func.call_async(&mut store, args))
+            .await
+            .map_err(|_| DriverError::Unreachable(format!("{}: no answer", self.id)))?
+            .map_err(|e| DriverError::Invalid(format!("{}: {e}", self.id)))?;
+        answer.map_err(from_wit)
+    }
+
     /// The context of an instance of its own (a probe, a step of an appairage, a query): what its
     /// subscriptions receive goes to its inbox, for `receive`.
     fn one_shot(&self) -> Arc<SourceCtx> {
@@ -1438,6 +1455,14 @@ impl Driver for WasmSource {
             self.has("history")?;
             let config = serde_json::from_str(&self.config).unwrap_or(serde_json::Value::Null);
             self.module.history(&config, self.secret.as_deref(), reference, since, until).await
+        })
+    }
+
+    fn rename<'a>(&'a self, reference: &'a str, name: &'a str) -> DriverFuture<'a, ()> {
+        Box::pin(async move {
+            self.has("rename")?;
+            let config = serde_json::from_str(&self.config).unwrap_or(serde_json::Value::Null);
+            self.module.rename(&config, self.secret.as_deref(), reference, name).await
         })
     }
 

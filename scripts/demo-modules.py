@@ -52,16 +52,19 @@ for _ in range(30):
         break
     time.sleep(1)
 
-existing = {s["driver"] for s in call("GET", "/api/sources") or []}
+sources = call("GET", "/api/sources") or []
+existing = {s["driver"] for s in sources}
+named = {(s["driver"], s["name"]) for s in sources}
 modules = [
     ("shelly", "Tableau électrique", {"host": host(0)}),
     ("trydan", "Borne de recharge", {"host": host(2)}),
     ("renson", "VMC", {"host": host(3)}),
     ("tasmota", "Salon", {"host": host(4)}),
     ("esphome", "Volets et jardin", {"host": host(5)}),
+    ("tasmota", "Pont Zigbee", {"host": host(7)}),
 ]
 for driver, name, config in modules:
-    if driver in existing:
+    if (driver, name) in named:
         continue
     print(f"▸ {name} ({driver})")
     call("POST", "/api/sources", {"driver": driver, "name": name, "config": config})
@@ -95,6 +98,9 @@ plan = {
     ("tasmota", "power2"): ("Télévision", "Salon", None),
     ("tasmota", "energy"): ("Télévision · mesure", "Salon", None),
     ("tasmota", "sensor/BME280"): ("Capteur du salon", "Salon", None),
+    ("tasmota", "zigbee/0x00124B0026B64D1E"): (None, "Chambre", None),
+    ("tasmota", "zigbee/0x7CB03EBB0A0292DD"): (None, "Cuisine", None),
+    ("tasmota", "zigbee/0x0017880102AABBCC"): (None, "Salon", None),
     ("esphome", "cover/volet_salon"): (None, "Salon", None),
     ("esphome", "cover/volet_chambre"): (None, "Chambre", None),
     ("esphome", "cover/volet_bureau"): (None, "Bureau", None),
@@ -165,6 +171,7 @@ if len(sys.argv) > 5:
         ("trydan", "charger"): lambda h, day: {"power": car(h, day)},
         ("tasmota", "energy"): lambda h, day: {"power": 85.0 if 19 <= h < 23 else 0.0},
         ("tasmota", "sensor/BME280"): lambda h, day: {"temperature": round(21.2 + 0.8 * math.cos((h - 15) / 24 * 2 * math.pi), 1), "humidity": 47.0},
+        ("tasmota", "zigbee/0x00124B0026B64D1E"): lambda h, day: {"temperature": round(19.4 + 0.6 * math.cos((h - 16) / 24 * 2 * math.pi), 1), "humidity": round(55 - 4 * math.cos((h - 16) / 24 * 2 * math.pi), 1)},
         ("renson", "room:1"): lambda h, day: {"humidity": round(55 + 25 * math.exp(-((h - 7.3) ** 2) / 0.3), 1), "flow": 40.0 if 6.8 < h < 8 else 18.0},
         ("renson", "room:2"): lambda h, day: {"humidity": round(52 + 6 * math.exp(-((h - 19.5) ** 2) / 0.5), 1), "co2": round(640 + 120 * math.sin(h * 0.8)), "flow": 32.0},
         ("renson", "room:3"): lambda h, day: {"humidity": 49.0, "flow": 10.0},

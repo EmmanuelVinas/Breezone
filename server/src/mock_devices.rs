@@ -7,6 +7,8 @@
 //! * V2C Trydan: a charger, charging in the afternoon;
 //! * Renson Healthbox 3.0: the ventilation and three rooms with their measures;
 //! * Tasmota: a lamp with a dimmer, a plug that measures, a temperature and humidity sensor;
+//! * a SONOFF ZBBridge Pro under Tasmota: a Zigbee sensor, a plug, a lamp, a door sensor Breezone
+//!   does not drive, and a second sensor that joins once the pairing is opened;
 //! * ESPHome (native API, in clear): two shutters, a garden valve and an air sensor (CO₂…);
 //! * Forecast.Solar: the forecast of the day.
 //!
@@ -100,6 +102,7 @@ pub async fn spawn(first_port: u16) -> std::io::Result<Vec<Module>> {
     let esphome = listen(first_port + 5).await?;
     tokio::spawn(esphome_node(esphome));
     serve(first_port + 6, forecast()).await?;
+    serve(first_port + 7, zigbee_bridge()).await?;
     Ok(vec![
         Module { driver: "shelly", name: "Tableau électrique", host: host(0), config: json!({}) },
         Module { driver: "hue", name: "Pont Hue", host: host(1), config: json!({}) },
@@ -107,6 +110,7 @@ pub async fn spawn(first_port: u16) -> std::io::Result<Vec<Module>> {
         Module { driver: "renson", name: "VMC", host: host(3), config: json!({}) },
         Module { driver: "tasmota", name: "Salon", host: host(4), config: json!({}) },
         Module { driver: "esphome", name: "Volets et jardin", host: host(5), config: json!({}) },
+        Module { driver: "tasmota", name: "Pont Zigbee", host: host(7), config: json!({}) },
         Module {
             driver: "forecast_solar",
             name: "Prévision solaire",
@@ -361,6 +365,81 @@ fn tasmota() -> Router {
             }),
         )
         .with_state(state)
+}
+
+// ---------------------------------------------------------------------------------------------
+// SONOFF ZBBridge Pro under Tasmota (Zigbee2Tasmota)
+// ---------------------------------------------------------------------------------------------
+
+/// The devices of the network, by short address; the bathroom sensor joins when the pairing opens.
+fn zigbee_network() -> Vec<Value> {
+    vec![
+        json!({"Device": "0x6769", "Name": "Chambre", "IEEEAddr": "0x00124B0026B64D1E", "ModelId": "SNZB-02D", "Manufacturer": "SONOFF", "BatteryPercentage": 87, "Reachable": true}),
+        json!({"Device": "0x1D8A", "Name": "Prise de la cuisine", "IEEEAddr": "0x7CB03EBB0A0292DD", "ModelId": "S26R2ZB", "Manufacturer": "SONOFF", "Power": 1, "Reachable": true}),
+        json!({"Device": "0x3A10", "Name": "Plafonnier", "IEEEAddr": "0x0017880102AABBCC", "ModelId": "LWB010", "Manufacturer": "Philips", "Power": 0, "Dimmer": 180, "CT": 370, "Reachable": true}),
+        json!({"Device": "0x2E01", "Name": "Porte d'entrée", "IEEEAddr": "0x00124B0022AA0001", "ModelId": "SNZB-04", "Manufacturer": "SONOFF", "Contact": 1, "BatteryPercentage": 64, "Reachable": true}),
+    ]
+}
+
+pub fn zigbee_bridge() -> Router {
+    let network = Arc::new(Mutex::new(zigbee_network()));
+    Router::new()
+        .route(
+            "/cm",
+            get(|State(n): State<Arc<Mutex<Vec<Value>>>>, Query(q): Query<HashMap<String, String>>| async move {
+                let cmnd = q.get("cmnd").cloned().unwrap_or_default();
+                let (name, arg) = cmnd.split_once(' ').unwrap_or((cmnd.as_str(), ""));
+                let mut n = n.lock().unwrap();
+                let h = hour();
+                let now = Local::now().timestamp();
+                for d in n.iter_mut().filter(|d| d["ModelId"] == "SNZB-02D") {
+                    let warm = if d["Name"] == "Chambre" { 19.4 } else { 22.1 };
+                    d["Temperature"] = json!(((warm + 0.6 * ((h - 16.0) / 24.0 * 2.0 * PI).cos()) * 10.0).round() / 10.0);
+                    d["Humidity"] = json!(((55.0 - 4.0 * ((h - 16.0) / 24.0 * 2.0 * PI).cos()) * 10.0).round() / 10.0);
+                    d["LastSeenEpoch"] = json!(now - 90);
+                }
+                let find = |n: &mut Vec<Value>, device: &str| n.iter_mut().position(|d| d["Device"] == device || d["IEEEAddr"] == device || d["Name"] == device);
+                let answer = match name {
+                    "ZbStatus1" => json!({"ZbStatus1": n.iter().map(|d| json!({"Device": d["Device"], "Name": d["Name"]})).collect::<Vec<_>>()}),
+                    "ZbInfo" => {
+                        let all: serde_json::Map<String, Value> =
+                            n.iter().filter(|d| arg.is_empty() || d["Device"] == arg).map(|d| (d["Device"].as_str().unwrap_or_default().to_string(), d.clone())).collect();
+                        json!({"ZbInfo": all})
+                    }
+                    "ZbPermitJoin" => {
+                        if arg == "1" && !n.iter().any(|d| d["Device"] == "0x4B22") {
+                            n.push(json!({"Device": "0x4B22", "IEEEAddr": "0x00124B0026B70011", "ModelId": "SNZB-02D", "Manufacturer": "SONOFF", "BatteryPercentage": 100, "Reachable": true}));
+                        }
+                        json!({"ZbPermitJoin": "Done"})
+                    }
+                    "ZbName" => {
+                        let (device, new) = arg.split_once(',').unwrap_or((arg, ""));
+                        if let Some(i) = find(&mut n, device) {
+                            n[i]["Name"] = json!(new);
+                        }
+                        json!({"ZbName": "Done"})
+                    }
+                    "ZbSend" => {
+                        let v: Value = serde_json::from_str(arg).unwrap_or_default();
+                        if let Some(i) = find(&mut n, v["Device"].as_str().unwrap_or_default()) {
+                            for (k, x) in v["Send"].as_object().into_iter().flatten() {
+                                n[i][k] = x.clone();
+                            }
+                        }
+                        json!({"ZbSend": "Done"})
+                    }
+                    _ => json!({
+                        "Status": {"DeviceName": "Pont Zigbee", "FriendlyName": ["Tasmota"]},
+                        "StatusSTS": {},
+                        "StatusSNS": {"TempUnit": "C"},
+                        "StatusFWR": {"Version": "16.0.0(release-zbbrdgpro)", "Hardware": "ESP32-D0WD-V3"},
+                        "StatusNET": {"Mac": "A0:DD:6C:00:00:08"}
+                    }),
+                };
+                Json(answer)
+            }),
+        )
+        .with_state(network)
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -352,14 +352,27 @@ export type VentilationUnitBoost = {
 /** Ventilation unit (`ventilation.unit@1`): action `stop_boost`, without parameters. */
 export type VentilationUnitStopBoost = Record<string, never>
 
+/** Zigbee bridge (`zigbee.bridge@1`): state. */
+export type ZigbeeBridgeState = {
+  /** Pairing open */
+  pairing: boolean
+  /** Zigbee devices */
+  devices: number
+}
+
+/** Zigbee bridge (`zigbee.bridge@1`): action `pair`. */
+export type ZigbeeBridgePair = {
+  on: boolean
+}
+
 /** Traits described by this version (`trait@version`). */
-export const TRAITS = ["button@1", "camera@1", "climate.zone@1", "cover.position@1", "energy.battery@1", "energy.meter@1", "ev.charger@1", "light@1", "solar.inverter@1", "solar.panel@1", "energy.power@1", "environment.sensor@1", "solar.forecast@1", "switch.relay@1", "ventilation.room@1", "ventilation.unit@1"] as const
+export const TRAITS = ["button@1", "camera@1", "climate.zone@1", "cover.position@1", "energy.battery@1", "energy.meter@1", "ev.charger@1", "light@1", "solar.inverter@1", "solar.panel@1", "energy.power@1", "environment.sensor@1", "solar.forecast@1", "switch.relay@1", "ventilation.room@1", "ventilation.unit@1", "zigbee.bridge@1"] as const
 
 /** Highest revision of each trait known to this version. */
-export const TRAIT_REVISIONS: Record<string, number> = { "button@1": 0, "camera@1": 0, "climate.zone@1": 0, "cover.position@1": 0, "energy.battery@1": 0, "energy.meter@1": 0, "ev.charger@1": 1, "light@1": 0, "solar.inverter@1": 0, "solar.panel@1": 0, "energy.power@1": 0, "environment.sensor@1": 0, "solar.forecast@1": 0, "switch.relay@1": 0, "ventilation.room@1": 0, "ventilation.unit@1": 0 }
+export const TRAIT_REVISIONS: Record<string, number> = { "button@1": 0, "camera@1": 0, "climate.zone@1": 0, "cover.position@1": 0, "energy.battery@1": 0, "energy.meter@1": 0, "ev.charger@1": 1, "light@1": 0, "solar.inverter@1": 0, "solar.panel@1": 0, "energy.power@1": 0, "environment.sensor@1": 0, "solar.forecast@1": 0, "switch.relay@1": 0, "ventilation.room@1": 0, "ventilation.unit@1": 0, "zigbee.bridge@1": 0 }
 
 /** Kind of device each trait makes (its `ui.kind`). */
-export const TRAIT_KINDS: Record<string, string> = { "button": "remote", "camera": "camera", "climate.zone": "climate", "cover.position": "shutter", "energy.battery": "battery", "energy.meter": "energy", "ev.charger": "charger", "light": "light", "solar.inverter": "solar", "solar.panel": "solar", "energy.power": "energy", "environment.sensor": "sensor", "solar.forecast": "solar", "switch.relay": "switch", "ventilation.room": "room-air", "ventilation.unit": "ventilation" }
+export const TRAIT_KINDS: Record<string, string> = { "button": "remote", "camera": "camera", "climate.zone": "climate", "cover.position": "shutter", "energy.battery": "battery", "energy.meter": "energy", "ev.charger": "charger", "light": "light", "solar.inverter": "solar", "solar.panel": "solar", "energy.power": "energy", "environment.sensor": "sensor", "solar.forecast": "solar", "switch.relay": "switch", "ventilation.room": "room-air", "ventilation.unit": "ventilation", "zigbee.bridge": "other" }
 
 /** Kinds of devices, in the order of lists (`contracts/ui.json`). */
 export const KINDS = ["climate", "charger", "light", "shutter", "window", "door", "ventilation", "room-air", "switch", "solar", "battery", "energy", "sensor", "camera", "remote", "other"] as const

@@ -6,6 +6,7 @@ use crate::access::Access;
 use crate::auth::{AdminUser, AuthUser};
 use crate::db::{self, Room};
 use crate::devices::{self, ActionInput, DeviceView, ROLES};
+use crate::drivers::DriverError;
 use crate::error::{ApiError, ApiResult};
 use crate::traits::Trait;
 use crate::AppState;
@@ -108,6 +109,18 @@ pub async fn update_device(State(state): State<AppState>, user: AuthUser, Path(i
         db::room_by_id(&state.db, r).await?.ok_or_else(|| ApiError::bad_request("unknown room"))?;
     }
     db::update_device(&state.db, id, name.as_deref(), room_id, input.position.unwrap_or(device.position)).await?;
+    // The hardware that keeps names (a Zigbee bridge) takes the new one too, without holding the answer.
+    if let (Some(new), Some(source_id)) = (name.clone().filter(|n| Some(n) != device.name.as_ref()), device.source_id) {
+        let reference = devices::get(&state, id).await?.and_then(|v| v.reference.as_str().map(str::to_string));
+        if let (Some(driver), Some(reference)) = (state.drivers.driver(source_id).await, reference) {
+            tokio::spawn(async move {
+                match driver.rename(&reference, &new).await {
+                    Ok(()) | Err(DriverError::Unsupported(_)) => {}
+                    Err(e) => tracing::warn!("{reference} of source {source_id}: the hardware kept its name ({e})"),
+                }
+            });
+        }
+    }
     db::set_device_role(&state.db, id, role, measured_device, measured_room).await?;
     viewed_by(&state, &access, id).await
 }

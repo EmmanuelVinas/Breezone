@@ -113,6 +113,14 @@ provided, types, bounds, required fields). `modules/tasmota/src/lib.rs` has exam
   to be asked the rest (keep each answer short). Only what the hardware measured: Breezone fills
   the gaps of its history with it, the counters counted back from the value after the gap.
   `modules/shelly/` is an example (`EM1Data.GetData`, a record a minute).
+- A bridge whose devices come and go (a Zigbee coordinator): when a reading gives the state of a
+  reference it did not describe, Breezone describes the source again, once for that reference, so
+  that a device just paired shows up by itself. `modules/tasmota/` is an example.
+- Hardware that keeps the names of its devices lists `rename` in `optional_calls` (interface 1.4:
+  `"api": "^1.4"`) and implements `Driver::rename(config, secret, reference, name)`: Breezone calls
+  it, in an instance of its own, when a device is named in Breezone (the answer does not wait for
+  it). `modules/tasmota/` gives the name to a Zigbee device (`ZbName`) and to a relay
+  (`FriendlyName`).
 - The network scan: a module lists `identify` in `optional_calls` and implements
   `Driver::identify(host, announced)`, which gives a `Found` (model, note, device id, firmware,
   MAC, flags for its appairage, whether it is supported). It is asked for an address where one of
