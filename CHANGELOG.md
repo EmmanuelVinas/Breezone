@@ -6,6 +6,13 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- A module installed from Breezone's library is replaced at start by the newer one that comes with
+  Breezone: until now it stayed at its old version (the Tasmota module of 0.13.0-beta.5, which
+  finds Tasmota 16 and the Zigbee bridges, was not taken). A module from another source still
+  takes its updates from there only.
+
 ## [0.13.0-beta.5] - 2026-11-26
 
 ### Added

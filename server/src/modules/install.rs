@@ -43,8 +43,13 @@ pub async fn install_package(db: &Db, data_dir: &Path, package: Package, origin:
     if let Some(installed) = db::module_row(db, &m.id).await?.filter(|r| r.origin != "native") {
         let was = db::module_repository(db, &m.id).await?;
         let now = from.map(|r| r.id);
-        // The same source again, or Breezone's library taking over a module that came with Breezone.
-        let allowed = was == now || (official && installed.origin == "builtin");
+        // The same source again, Breezone's library taking over a module that came with Breezone,
+        // or a newer Breezone bringing one that came from its library.
+        let from_official = match was {
+            Some(r) => db::repository(db, r).await?.is_some_and(|r| r.official),
+            None => false,
+        };
+        let allowed = was == now || (official && installed.origin == "builtin") || (from.is_none() && from_official);
         if !allowed {
             return Err(ApiError::new(
                 StatusCode::CONFLICT,
@@ -350,5 +355,51 @@ mod tests {
         uninstall(&db, &dir, "plugtest").await.unwrap();
         assert!(crate::modules::manifest("plugtest").is_none() && !dir.join("modules/plugtest").exists());
         assert!(uninstall(&db, &dir, "shelly").await.is_err());
+    }
+
+    #[tokio::test]
+    async fn a_newer_breezone_takes_over_a_module_of_its_library_not_one_of_another_source() {
+        let dir = std::env::temp_dir().join(format!("breezone-builtin-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let db = db::connect(&dir.join("t.db")).await.unwrap();
+        let (key, public) = keys();
+        let official = crate::modules::library::Repository { id: 1, name: "Breezone".into(), url: None, public_key: public.clone(), official: true, enabled: true };
+        let other_id = db::insert_repository(&db, "Ailleurs", "https://example.org/modules", &public).await.unwrap();
+        let other = crate::modules::library::Repository {
+            id: other_id,
+            name: "Ailleurs".into(),
+            url: Some("https://example.org/modules".into()),
+            public_key: public.clone(),
+            official: false,
+            enabled: true,
+        };
+        let signed = |id: &str, version: &str| {
+            let bytes = build(&manifest(id, version, "^1.0"), None, &[]).unwrap();
+            let sig = sign(&key, &signed_message(id, version, &bytes));
+            (bytes, sig)
+        };
+        let (b, s) = signed("plugours", "1.0.0");
+        install(&db, &dir, &b, &s, &official, "library", None).await.unwrap();
+        let (b, s) = signed("plugtheirs", "1.0.0");
+        install(&db, &dir, &b, &s, &other, "library", None).await.unwrap();
+
+        // The image of a newer Breezone brings both, newer.
+        let shipped = dir.join("shipped");
+        std::fs::create_dir_all(&shipped).unwrap();
+        for id in ["plugours", "plugtheirs"] {
+            std::fs::write(shipped.join(format!("{id}.bzm")), build(&manifest(id, "1.1.0", "^1.0"), None, &[]).unwrap()).unwrap();
+        }
+        install_builtin(&db, &dir, &shipped, &public).await;
+        let row = |id: &'static str| {
+            let db = db.clone();
+            async move { db::module_row(&db, id).await.unwrap().map(|r| (r.version, r.origin)).unwrap() }
+        };
+        assert_eq!(row("plugours").await, ("1.1.0".to_string(), "builtin".to_string()), "from Breezone's library: the newer one that comes with it");
+        assert_eq!(row("plugtheirs").await, ("1.0.0".to_string(), "library".to_string()), "from another source: its updates come from there");
+        for id in ["plugours", "plugtheirs"] {
+            crate::modules::unregister(id);
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
