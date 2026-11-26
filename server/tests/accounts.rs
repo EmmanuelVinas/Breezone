@@ -13,6 +13,10 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+/// The tests of this file run one at a time: the modules reach the database of the last server
+/// started (one per process), where the accounts of the other test are not.
+static SERIAL: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 async fn serve(router: Router) -> u16 {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
@@ -179,6 +183,7 @@ fn netatmo(used: Arc<Mutex<Vec<String>>>, set: Arc<Mutex<Vec<Value>>>) -> Router
 
 #[tokio::test]
 async fn accounts_are_linked_used_and_removed() {
+    let _serial = SERIAL.lock().await;
     let used = Arc::new(Mutex::new(vec![]));
     let set = Arc::new(Mutex::new(vec![]));
     let dir = std::env::temp_dir().join(format!("breezone-accounts-test-{}", std::process::id()));
@@ -330,6 +335,7 @@ fn deltadore() -> Router {
 
 #[tokio::test]
 async fn the_delta_dore_account_learns_the_passwords_of_its_gateways() {
+    let _serial = SERIAL.lock().await;
     let dir = std::env::temp_dir().join(format!("breezone-deltadore-test-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let cfg = support::config(&dir);
