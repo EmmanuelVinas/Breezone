@@ -131,8 +131,10 @@ pub struct Tasmota {
     base: String,
     password: Option<String>,
     status: RefCell<Value>,
-    /// Whether it is a Zigbee coordinator (found when described).
+    /// Whether it is a Zigbee coordinator (found when described, or by a reading after).
     zigbee: Cell<bool>,
+    /// When a ZBBridge whose Zigbee did not answer was last asked again.
+    zigbee_asked_at: Cell<i64>,
     /// Until when (unix seconds) its Zigbee network is open to new devices.
     pairing_until: Cell<i64>,
 }
@@ -318,14 +320,21 @@ impl Driver for Tasmota {
         let host = config["host"].as_str().map(str::trim).filter(|h| !h.is_empty()).ok_or_else(|| Error::Invalid("l'adresse est requise".into()))?;
         let base = if host.starts_with("http") { host.trim_end_matches('/').to_string() } else { format!("http://{host}") };
         let password = secret.and_then(|v| v["password"].as_str().map(str::to_string)).filter(|p| !p.is_empty());
-        Ok(Tasmota { base, password, status: RefCell::new(Value::Null), zigbee: Cell::new(false), pairing_until: Cell::new(0) })
+        Ok(Tasmota { base, password, status: RefCell::new(Value::Null), zigbee: Cell::new(false), zigbee_asked_at: Cell::new(0), pairing_until: Cell::new(0) })
     }
 
     fn describe(&self) -> Result<Described> {
         let v = self.status()?;
         let mut devices = devices_of(&v);
-        let zigbee = self.zigbee_devices().ok();
+        let zigbee = match self.zigbee_devices() {
+            Ok(list) => Some(list),
+            // A ZBBridge whose Zigbee is starting (just restarted) or slow: described again later,
+            // rather than without its bridge and devices.
+            Err(e) if zigbee_firmware(&v) && !matches!(e, Error::Unsupported(_)) => return Err(e),
+            Err(_) => None,
+        };
         self.zigbee.set(zigbee.is_some());
+        self.zigbee_asked_at.set(host::now());
         if let Some(list) = zigbee {
             let name = v["Status"]["DeviceName"].as_str().filter(|n| !n.is_empty()).unwrap_or("Tasmota");
             devices.push(DeviceInfo { reference: zigbee::BRIDGE.into(), kind: "zigbee.bridge".into(), traits: vec!["zigbee.bridge@1".into()], name: format!("{name} · Zigbee") });
@@ -341,7 +350,15 @@ impl Driver for Tasmota {
     }
 
     fn read(&self) -> Result<Vec<(String, State)>> {
-        let mut out = states_of(&self.status()?);
+        let status = self.status()?;
+        let mut out = states_of(&status);
+        // A ZBBridge whose Zigbee was off when described (no template yet, restarting): once a
+        // minute, until it answers; its bridge then reaches Breezone, which describes it again.
+        let now = host::now();
+        if !self.zigbee.get() && zigbee_firmware(&status) && now - self.zigbee_asked_at.get() >= 60 {
+            self.zigbee_asked_at.set(now);
+            self.zigbee.set(self.zigbee_devices().is_ok());
+        }
         if self.zigbee.get() {
             let devices = self.zigbee_devices()?;
             out.push((zigbee::BRIDGE.into(), self.bridge_state(&devices)));
@@ -633,8 +650,38 @@ mod tests {
         testing::answer_json("GET", "cmnd=Zb", &json!({"Command": "Unknown"}));
         let t: Tasmota = testing::open(json!({"host": "192.168.1.39"}), None);
         assert!(t.describe().unwrap().devices.is_empty());
-        assert!(t.read().unwrap().is_empty(), "no Zigbee asked at each reading");
+        assert!(t.read().unwrap().is_empty());
+        let asked = || testing::requests().iter().filter(|r| r.contains("cmnd=ZbStatus1")).count();
+        assert_eq!(asked(), 1, "no Zigbee asked at each reading");
         assert!(t.diagnostic().unwrap()["Zigbee"]["note"].as_str().unwrap().contains("modèle"));
+    }
+
+    #[test]
+    fn a_zbbridge_whose_zigbee_starts_later_brings_its_bridge_at_a_reading() {
+        testing::reset();
+        let status = json!({"Status": {"DeviceName": "Tasmota"}, "StatusSTS": {}, "StatusSNS": {}, "StatusFWR": {"Version": "16.0.0(release-zbbrdgpro)"}});
+        testing::answer_json("GET", "cmnd=Status%200", &status);
+        testing::answer_json("GET", "cmnd=Zb", &json!({"Command": "Unknown"}));
+        let t: Tasmota = testing::open(json!({"host": "192.168.1.39"}), None);
+        assert!(t.describe().unwrap().devices.is_empty(), "its template not applied yet");
+        // The template applied, the bridge restarted: its Zigbee answers.
+        testing::answer_json("GET", "cmnd=ZbStatus1", &json!({"ZbStatus1": []}));
+        testing::answer_json("GET", "cmnd=ZbInfo", &json!({"ZbInfo": {}}));
+        assert!(t.read().unwrap().is_empty(), "asked again a minute later only");
+        t.zigbee_asked_at.set(host::now() - 61);
+        let s: std::collections::HashMap<String, State> = t.read().unwrap().into_iter().collect();
+        assert_eq!(s["zigbee"]["devices"], 0);
+        assert_eq!(t.describe().unwrap().devices.iter().map(|d| d.name.as_str()).collect::<Vec<_>>(), ["Tasmota · Zigbee"]);
+    }
+
+    #[test]
+    fn a_zbbridge_whose_zigbee_does_not_answer_is_not_described_without_it() {
+        testing::reset();
+        let status = json!({"Status": {"DeviceName": "Tasmota"}, "StatusSTS": {}, "StatusSNS": {}, "StatusFWR": {"Version": "16.0.0(release-zbbrdgpro)"}});
+        testing::answer_json("GET", "cmnd=Status%200", &status);
+        testing::answer("GET", "cmnd=ZbStatus1", 200, "");
+        let t: Tasmota = testing::open(json!({"host": "192.168.1.39"}), None);
+        assert!(t.describe().is_err(), "described again later, its bridge and devices kept");
     }
 
     #[test]

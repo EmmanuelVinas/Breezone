@@ -218,7 +218,9 @@ export function LibraryPanel() {
           ) : (
             found.map((m) => {
               const update =
-                m.installed && m.fits && m.fits !== m.installed ? m.fits : null
+                m.installed && m.fits && newer(m.fits, m.installed)
+                  ? m.fits
+                  : null
               return (
                 <div
                   key={m.id}
@@ -236,9 +238,11 @@ export function LibraryPanel() {
                       )}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {m.fits
-                        ? t("version {version}", { version: m.fits })
-                        : m.reasons.map(reasonText).join(" · ")}
+                      {m.installed && !update
+                        ? t("version {version}", { version: m.installed })
+                        : m.fits
+                          ? t("version {version}", { version: m.fits })
+                          : m.reasons.map(reasonText).join(" · ")}
                     </span>
                   </div>
                   {m.installed && !update ? (
@@ -530,4 +534,14 @@ function RepositoriesCard({ onChange }: { onChange: () => void }) {
       </CardContent>
     </Card>
   )
+}
+
+/** `a` is a higher version than `b` ("1.10.0" > "1.9.2"), by their numbers. */
+function newer(a: string, b: string): boolean {
+  const parts = (v: string) => v.split(/[.+-]/).slice(0, 3).map(Number)
+  const [x, y] = [parts(a), parts(b)]
+  for (let i = 0; i < 3; i++) {
+    if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0)
+  }
+  return false
 }

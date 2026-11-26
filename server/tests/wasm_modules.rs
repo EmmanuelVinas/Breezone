@@ -683,7 +683,7 @@ async fn a_module_that_comes_with_breezone_is_installed_with_it() {
     let mut cfg = breezone_server::config::Config::for_tests(dir.join("data"));
     cfg.web_dir = dir.join("app/web");
     breezone_server::init_state(cfg).await.unwrap();
-    assert_eq!(breezone_server::modules::manifest("tasmota").map(|m| m.version.as_str()), Some("1.1.0"), "shipped with Breezone: installed again");
+    assert_eq!(breezone_server::modules::manifest("tasmota").map(|m| m.version.as_str()), Some("1.1.1"), "shipped with Breezone: installed again");
 }
 
 /// A service module that comes with Breezone, with an account (lot L9): its account is connected

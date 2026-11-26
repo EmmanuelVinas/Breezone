@@ -6,6 +6,22 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- The devices of a module show their type beside their state (« Zigbee bridge », « Ambient
+  sensor »…), to tell which is which before naming them.
+
+### Fixed
+
+- A ZBBridge Pro whose Zigbee did not answer when it was described (its template not applied yet,
+  or just restarted) is described again later, instead of losing its Zigbee bridge (shown
+  unavailable under a name like `11/zigbee`); once its Zigbee answers, the bridge comes back at the
+  next readings by itself.
+- A dialog taller than the screen scrolls (adding a module with many devices found).
+- The library no longer offers an older version of a module as an update: a module that came with
+  Breezone before the library has it (Tasmota 1.1.0, the library at 1.0.1) showed « Update (1.0.1) »,
+  which failed and went back. The server refuses it too, unless a version is asked by its number.
+
 ## [0.13.0-beta.6] - 2026-11-26
 
 ### Fixed

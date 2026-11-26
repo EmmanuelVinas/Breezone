@@ -1,6 +1,6 @@
 {
   "id": "tasmota",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "name": {"fr": "Tasmota", "en": "Tasmota", "es": "Tasmota"},
   "roles": ["driver"],
   "requires": {"api": "^1.4"},

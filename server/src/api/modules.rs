@@ -179,6 +179,24 @@ pub async fn install(State(state): State<AppState>, AdminUser(user): AdminUser, 
             )
         })?,
     };
+    // The newest version of the library may be older than the one installed (one that came with
+    // Breezone before the library has it): never installed in its place unless asked by number.
+    if input.version.is_none() {
+        let installed = crate::modules::manifest(&input.id).and_then(|m| semver::Version::parse(&m.version).ok());
+        if let (Some(installed), Ok(offered)) = (installed, semver::Version::parse(&published.manifest.version)) {
+            if offered <= installed {
+                return Err(ApiError::new(
+                    axum::http::StatusCode::CONFLICT,
+                    crate::text!(
+                        "La version {0} est déjà installée : la bibliothèque n'a pas plus récent.",
+                        "Version {0} is already installed: the library has nothing newer.",
+                        "La versión {0} ya está instalada: la biblioteca no tiene nada más reciente.",
+                        installed.to_string()
+                    ),
+                ));
+            }
+        }
+    }
     let bytes = state.library.fetch(&repo, &published.file, crate::modules::package::MAX_PACKAGE).await.map_err(unreachable)?;
     let signature = state.library.fetch(&repo, &format!("{}.sig", published.file), 1024).await.map_err(unreachable)?;
     let (_, version) = crate::modules::install::install(

@@ -51,6 +51,7 @@ import { cameraEvent, forecastText, sensorText } from "@/lib/sensors"
 import { errorText, kwh, relativeTime, watts } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { lang, t } from "@/lib/i18n"
+import { traitOf } from "@/lib/generic-device"
 import {
   useChosenInstallation,
   useModulesHere,
@@ -200,6 +201,12 @@ function DeviceRow({
   rooms: Room[]
 }) {
   const qc = useQueryClient()
+  const catalog = useQuery({ queryKey: ["traits"], queryFn: api.traits })
+  // What it is (« Pont Zigbee », « Capteur d'ambiance »…): the trait of its kind, else its first.
+  const kindTrait =
+    device.traits.find((x) => x.split("@")[0] === device.kind) ??
+    device.traits[0]
+  const type = kindTrait && traitOf(catalog.data, kindTrait)?.label[lang()]
   // Draft while typing; otherwise the current name (which may change from elsewhere).
   const [draft, setDraft] = useState<string | null>(null)
   const name = draft ?? device.name
@@ -348,7 +355,9 @@ function DeviceRow({
             )}
         </div>
         <div className="tabular text-xs text-muted-foreground">
-          {device.available ? values.join(" · ") : t("Indisponible")}
+          {[type, device.available ? values.join(" · ") : t("Indisponible")]
+            .filter(Boolean)
+            .join(" · ")}
         </div>
       </div>
       {measuresEnergy && counting && (

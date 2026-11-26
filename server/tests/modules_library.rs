@@ -149,6 +149,8 @@ async fn modules_come_from_the_signed_library() {
     let (code, m) = server.call("POST", "/api/modules", Some(json!({"id": "plugdemo"}))).await;
     assert_eq!(code, StatusCode::CREATED, "{m}");
     assert_eq!(m["version"], "1.1.0");
+    let (code, m) = server.call("POST", "/api/modules", Some(json!({"id": "plugdemo"}))).await;
+    assert_eq!(code, StatusCode::CONFLICT, "nothing newer than what is installed: {m}");
     let (code, _) = server.call("POST", "/api/modules", Some(json!({"id": "plugdemo", "version": "2.0.0"}))).await;
     assert_eq!(code, StatusCode::UNPROCESSABLE_ENTITY, "an interface this server does not host");
 
