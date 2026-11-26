@@ -2022,8 +2022,8 @@ const es: Record<string, string> = {
   "toutes les 30 min": "cada 30 min",
   "puissance prévue maintenant, production prévue aujourd'hui, restant à produire et demain":
     "potencia prevista ahora, producción prevista hoy, la que queda y mañana",
-  "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan, clés Wi-Fi Hoymiles, ponts Philips Hue, VMC Renson Healthbox, accessoires HomeKit (Legrand, VELUX…), modules ESPHome et Tasmota, prises Kasa et caméras Reolink. Les prises et ampoules Tapo s'ajoutent par leur adresse.":
-    "Breezone busca en la red los productos que sabe controlar: WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), cargadores V2C Trydan, llaves Wi-Fi Hoymiles, puentes Philips Hue, ventilación Renson Healthbox, accesorios HomeKit (Legrand, VELUX…), módulos ESPHome y Tasmota, enchufes Kasa y cámaras Reolink. Los enchufes y bombillas Tapo se añaden por su dirección.",
+  "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan, clés Wi-Fi Hoymiles, micro-onduleurs Deye, prises et compteurs Anker SOLIX, ponts Philips Hue, VMC Renson Healthbox, accessoires HomeKit (Legrand, VELUX…), modules ESPHome et Tasmota, prises Kasa et caméras Reolink. Les prises et ampoules Tapo s'ajoutent par leur adresse.":
+    "Breezone busca en la red los productos que sabe controlar: WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), cargadores V2C Trydan, llaves Wi-Fi Hoymiles, microinversores Deye, enchufes y contadores Anker SOLIX, puentes Philips Hue, ventilación Renson Healthbox, accesorios HomeKit (Legrand, VELUX…), módulos ESPHome y Tasmota, enchufes Kasa y cámaras Reolink. Los enchufes y bombillas Tapo se añaden por su dirección.",
   Capteurs: "Sensores",
   "Personne détectée": "Persona detectada",
   "Véhicule détecté": "Vehículo detectado",
@@ -2307,6 +2307,47 @@ const es: Record<string, string> = {
     "Los días azules, el cargador carga en horas valle (hasta la potencia de un perfil, o a su máximo). Los días blancos y rojos, y en horas punta, no carga.",
   "charge, jusqu'à": "carga, hasta",
   "Maximum de la borne": "Máximo del cargador",
+  "Modbus TCP en local (port 502), à activer dans l'application Anker : appareil › réglages › « Three-Party Control Settings »":
+    "Modbus TCP en local (puerto 502), a activar en la aplicación Anker: dispositivo › ajustes › «Three-Party Control Settings»",
+  "prise : état, puissance, tension, intensité et énergie ; compteur : puissance (par phase en triphasé), énergie soutirée et injectée, second jeu de pinces s'il est utilisé":
+    "enchufe: estado, potencia, tensión, intensidad y energía; contador: potencia (por fase en trifásico), energía consumida e inyectada, segundo juego de pinzas si se usa",
+  "marche et arrêt de la prise": "encendido y apagado del enchufe",
+  "Smart Plug Gen 2 et Smart Meter Gen 2 seulement. La SolarBank n'a pas d'accès local : elle passe par le cloud d'Anker.":
+    "Solo Smart Plug Gen 2 y Smart Meter Gen 2. La SolarBank no tiene acceso local: pasa por la nube de Anker.",
+  "Protocole local du boîtier Wi-Fi intégré (Solarman, port 8899) : aucun compte Solarman ou Deye Cloud nécessaire":
+    "Protocolo local del registrador Wi-Fi integrado (Solarman, puerto 8899): no se necesita cuenta Solarman ni Deye Cloud",
+  "puissance, tension, intensité, fréquence, température et production du micro-onduleur ; puissance et production de chaque entrée":
+    "potencia, tensión, intensidad, frecuencia, temperatura y producción del microinversor; potencia y producción de cada entrada",
+  "Le numéro de série du boîtier Wi-Fi est lu sur sa page web (identifiant admin). Si le boîtier ferme le port 8899, Breezone lit sa page web : puissance et production seulement, sans les panneaux. Le boîtier s'éteint la nuit avec les panneaux.":
+    "El número de serie del registrador Wi-Fi se lee en su página web (usuario admin). Si el registrador cierra el puerto 8899, Breezone lee su página web: solo potencia y producción, sin los paneles. El registrador se apaga de noche con los paneles.",
+  "Votre SolarBank : sa charge, ce qu'elle charge ou restitue, ce que donnent ses panneaux et ce qu'elle envoie à la maison, toutes les minutes. Anker ne lui donne pas d'accès local : elle passe par le cloud d'Anker, avec le compte de l'application. Les prises et le compteur Anker se lisent en local (module Anker SOLIX Modbus TCP).":
+    "Su SolarBank: su carga, lo que carga o devuelve, lo que dan sus paneles y lo que envía a la casa, cada minuto. Anker no le da acceso local: pasa por la nube de Anker, con la cuenta de la aplicación. Los enchufes y el contador Anker se leen en local (módulo Anker SOLIX Modbus TCP).",
+  "Conseil : créez un second compte Anker et partagez-lui le système depuis l'application (Membres) ; une connexion à votre compte principal pourrait déconnecter l'application.":
+    "Consejo: cree una segunda cuenta Anker y compártale el sistema desde la aplicación (Miembros); una conexión a su cuenta principal podría desconectar la aplicación.",
+  "Si Anker demande un code de vérification, connectez-vous une fois à ce compte dans l'application Anker, puis réessayez ici.":
+    "Si Anker pide un código de verificación, inicie sesión una vez con esta cuenta en la aplicación Anker y vuelva a intentarlo aquí.",
+  "E-mail du compte Anker": "Correo de la cuenta Anker",
+  "Pays du compte (FR par défaut)": "País de la cuenta (FR por defecto)",
+  "Désactivé : le module Anker SOLIX (cloud) s'arrête, la SolarBank n'est plus lue.":
+    "Desactivado: el módulo Anker SOLIX (nube) se detiene, la SolarBank ya no se lee.",
+  "{email} : {n} SolarBank": "{email}: {n} SolarBank",
+  "Cloud d'Anker, par le compte lié (Réglages › Comptes et services) : la SolarBank n'a pas d'accès local":
+    "Nube de Anker, por la cuenta vinculada (Ajustes › Cuentas y servicios): la SolarBank no tiene acceso local",
+  "toutes les minutes": "cada minuto",
+  "charge de la batterie, puissance de charge ou de décharge, puissance des panneaux reliés et puissance envoyée à la maison":
+    "carga de la batería, potencia de carga o descarga, potencia de los paneles conectados y potencia enviada a la casa",
+  "L'API est celle de l'application Anker, sans documentation d'Anker : elle peut changer sans prévenir. Le cloud met à jour une SolarBank 2 toutes les quelques minutes.":
+    "La API es la de la aplicación Anker, sin documentación de Anker: puede cambiar sin aviso. La nube actualiza una SolarBank 2 cada pocos minutos.",
+  "WebSocket local de la passerelle Tydom (adresse MAC et mot de passe de la passerelle) : aucun passage par le cloud Delta Dore":
+    "WebSocket local de la pasarela Tydom (dirección MAC y contraseña de la pasarela): nada pasa por la nube de Delta Dore",
+  "toutes les 30 s, et dès que la passerelle signale un changement":
+    "cada 30 s, y en cuanto la pasarela señala un cambio",
+  "position des volets et stores, état et intensité des lumières":
+    "posición de las persianas y toldos, estado e intensidad de las luces",
+  "ouverture, fermeture et arrêt des volets, marche, arrêt et intensité des lumières":
+    "apertura, cierre y parada de las persianas, encendido, apagado e intensidad de las luces",
+  "Le mot de passe est celui de la passerelle, pas celui du compte Delta Dore : il est parfois sur l'étiquette, sinon l'application Tydom ou le compte Delta Dore le donne. Les autres appareils (alarme, chauffage, capteurs…) apparaissent dans le diagnostic du module, pour être pris en charge ensuite.":
+    "La contraseña es la de la pasarela, no la de la cuenta Delta Dore: a veces está en la etiqueta, si no la da la aplicación Tydom o la cuenta Delta Dore. Los demás aparatos (alarma, calefacción, sensores…) aparecen en el diagnóstico del módulo, para ser compatibles después.",
 }
 
 export default es

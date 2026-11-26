@@ -73,6 +73,11 @@ provided, types, bounds, required fields). `modules/tasmota/src/lib.rs` has exam
   password kept as its MD5, a one-time code removed); once kept, never the fields of its form.
   `permissions.network.hosts` takes `*.example.com` for a service whose regions and pictures live
   on subdomains. `modules/ezviz/` is an example.
+- A WebSocket that wants headers when it opens (an `Authorization` computed from the Digest
+  challenge of a first request), or frames always sent as binary, opens with
+  `host::subscribe_with(url, headers, binary)` (interface 1.3: `"requires": {"api": "^1.3"}`); the
+  headers of the handshake itself (`Host`, `Upgrade`, `Sec-WebSocket-*`) stay the host's.
+  `modules/tydom/` is an example.
 - A protocol of several questions and answers on a connection kept open (a handshake, then a
   listing) reads the answers during the call with `host::receive(subscription, timeout)`; what
   comes between calls still reaches `on_message`, in order. `modules/esphome/` is an example

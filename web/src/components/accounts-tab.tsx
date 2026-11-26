@@ -2,6 +2,7 @@ import { useMemo, useState } from "react"
 import { Link } from "react-router"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
+  BatteryMedium,
   CalendarDays,
   Cctv,
   CloudSun,
@@ -188,6 +189,35 @@ const KINDS: Partial<Record<AccountKind, Kind>> = {
       "Désactivé : le module EZVIZ s'arrête, plus d'images ni de coups de sonnette."
     ),
   },
+  anker_cloud: {
+    title: "Anker SOLIX",
+    icon: BatteryMedium,
+    description: t(
+      "Votre SolarBank : sa charge, ce qu'elle charge ou restitue, ce que donnent ses panneaux et ce qu'elle envoie à la maison, toutes les minutes. Anker ne lui donne pas d'accès local : elle passe par le cloud d'Anker, avec le compte de l'application. Les prises et le compteur Anker se lisent en local (module Anker SOLIX Modbus TCP)."
+    ),
+    steps: [
+      t(
+        "Conseil : créez un second compte Anker et partagez-lui le système depuis l'application (Membres) ; une connexion à votre compte principal pourrait déconnecter l'application."
+      ),
+      t(
+        "Si Anker demande un code de vérification, connectez-vous une fois à ce compte dans l'application Anker, puis réessayez ici."
+      ),
+    ],
+    link: { url: "https://www.ankersolix.com", label: "ankersolix.com" },
+    fields: [
+      { name: "email", label: t("E-mail du compte Anker") },
+      { name: "password", label: t("Mot de passe"), secret: true },
+      {
+        name: "country",
+        label: t("Pays du compte (FR par défaut)"),
+        placeholder: "FR",
+        optional: true,
+      },
+    ],
+    off: t(
+      "Désactivé : le module Anker SOLIX (cloud) s'arrête, la SolarBank n'est plus lue."
+    ),
+  },
   weather: {
     title: t("Météo"),
     icon: CloudSun,
@@ -309,6 +339,11 @@ function summary(a: AccountView): string | null {
     return t("{email} : {n} appareil(s)", {
       email: c.email,
       n: c.devices?.length ?? 0,
+    })
+  if (a.kind === "anker_cloud" && c.email)
+    return t("{email} : {n} SolarBank", {
+      email: c.email,
+      n: c.solarbanks ?? 0,
     })
   if (a.kind === "netatmo" && c.homes)
     return c.homes

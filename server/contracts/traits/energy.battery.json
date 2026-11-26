@@ -1,0 +1,30 @@
+{
+  "trait": "energy.battery",
+  "version": 1,
+  "revision": 0,
+  "label": { "fr": "Batterie", "en": "Battery", "es": "Batería" },
+  "state": [
+    { "name": "soc", "type": "integer", "unit": "%", "min": 0, "max": 100, "label": { "fr": "Charge", "en": "Charge", "es": "Carga" } },
+    { "name": "status", "type": "enum", "values": ["charging", "discharging", "idle"], "value_labels": { "charging": { "fr": "En charge", "en": "Charging", "es": "Cargando" }, "discharging": { "fr": "Se décharge", "en": "Discharging", "es": "Descargando" }, "idle": { "fr": "Au repos", "en": "Idle", "es": "En reposo" } }, "optional": true, "label": { "fr": "État", "en": "Status", "es": "Estado" } },
+    { "name": "capacity", "type": "number", "history": false, "unit": "kWh", "min": 0, "optional": true, "label": { "fr": "Capacité", "en": "Capacity", "es": "Capacidad" } },
+    { "name": "solar_power", "type": "number", "unit": "W", "min": 0, "optional": true, "label": { "fr": "Panneaux reliés", "en": "Panels connected", "es": "Paneles conectados" } },
+    { "name": "output_power", "type": "number", "unit": "W", "min": 0, "optional": true, "label": { "fr": "Vers la maison", "en": "To the home", "es": "Hacia la casa" } }
+  ],
+  "actions": [],
+  "ui": {
+    "kind": "battery",
+    "primary": "soc",
+    "card": [
+      {"widget": "gauge", "field": "soc"},
+      {"widget": "value", "field": "status"}
+    ],
+    "detail": [
+      {"widget": "gauge", "field": "soc"},
+      {"widget": "value", "field": "status"},
+      {"widget": "value", "field": "solar_power"},
+      {"widget": "value", "field": "output_power"},
+      {"widget": "value", "field": "capacity"},
+      {"widget": "chart", "field": "soc"}
+    ]
+  }
+}

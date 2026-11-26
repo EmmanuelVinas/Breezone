@@ -68,6 +68,7 @@ enum class DeviceKind(val id: String, val label: StringResource, val icon: Image
     RoomAir("room-air", Res.string.kind_room_air, FzIcons.Wind, AppPage.Ventilation),
     Switch("switch", Res.string.kind_switches, FzIcons.Power, null),
     Solar("solar", Res.string.house_solar, FzIcons.SolarPanel, AppPage.Solar),
+    Battery("battery", Res.string.kind_battery, FzIcons.BatteryMedium, AppPage.Energy),
     Energy("energy", Res.string.house_energy, FzIcons.Zap, AppPage.Energy),
     Sensor("sensor", Res.string.kind_sensors, FzIcons.Thermometer, null),
     Remote("remote", Res.string.kind_remotes, FzIcons.Gamepad2, null),
@@ -97,7 +98,7 @@ fun DeviceKind.color(): Color = when (this) {
     DeviceKind.Light -> Fz.colors.light
     DeviceKind.Shutter, DeviceKind.Window, DeviceKind.Door -> Fz.colors.shutter
     DeviceKind.Ventilation, DeviceKind.RoomAir, DeviceKind.Sensor -> Fz.colors.air
-    DeviceKind.Solar, DeviceKind.Energy, DeviceKind.Switch -> Fz.colors.warning
+    DeviceKind.Solar, DeviceKind.Battery, DeviceKind.Energy, DeviceKind.Switch -> Fz.colors.warning
     else -> MaterialTheme.colorScheme.primary
 }
 

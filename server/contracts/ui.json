@@ -11,6 +11,7 @@
     { "id": "room-air", "icon": "wind", "page": "ventilation", "label": { "fr": "Ventilation des pièces", "en": "Room ventilation", "es": "Ventilación de las habitaciones" } },
     { "id": "switch", "icon": "power", "label": { "fr": "Prises et relais", "en": "Plugs and relays", "es": "Enchufes y relés" } },
     { "id": "solar", "icon": "solar-panel", "page": "solar", "label": { "fr": "Solaire", "en": "Solar", "es": "Solar" } },
+    { "id": "battery", "icon": "battery", "page": "energy", "label": { "fr": "Batterie", "en": "Battery", "es": "Batería" } },
     { "id": "energy", "icon": "zap", "page": "energy", "label": { "fr": "Énergie", "en": "Energy", "es": "Energía" } },
     { "id": "sensor", "icon": "gauge", "label": { "fr": "Capteurs", "en": "Sensors", "es": "Sensores" } },
     { "id": "camera", "icon": "cctv", "page": "cameras", "label": { "fr": "Caméras", "en": "Cameras", "es": "Cámaras" } },
@@ -29,5 +30,5 @@
     "picture": "The last picture of the device (`GET /api/devices/{id}/picture`).",
     "chart": "The history of a field, or its forecast with `forecast: true`."
   },
-  "icons": ["thermometer", "plug-zap", "lightbulb", "blinds", "app-window", "door-open", "fan", "wind", "power", "solar-panel", "zap", "gauge", "cctv", "gamepad", "box"]
+  "icons": ["thermometer", "plug-zap", "lightbulb", "blinds", "app-window", "door-open", "fan", "wind", "power", "solar-panel", "battery", "zap", "gauge", "cctv", "gamepad", "box"]
 }

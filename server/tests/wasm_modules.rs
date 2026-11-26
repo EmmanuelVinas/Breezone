@@ -908,6 +908,9 @@ async fn the_shipped_modules_load() {
         ("trydan", json!({"host": "192.168.1.37"})),
         ("reolink", json!({"host": "192.168.1.50"})),
         ("hoymiles", json!({"host": "192.168.1.60"})),
+        ("anker", json!({"host": "192.168.1.61"})),
+        ("deye", json!({"host": "192.168.1.63", "serial": "4123456789"})),
+        ("tydom", json!({"host": "192.168.1.64", "mac": "001A25123456"})),
         ("tplink", json!({"host": "192.168.1.31"})),
         ("hue", json!({"host": "192.168.1.20", "device_id": "001788FFFE6DBD26"})),
         ("renson", json!({"host": "192.168.1.70"})),
@@ -918,6 +921,7 @@ async fn the_shipped_modules_load() {
         // Its devices come with its account: nothing reached before a read.
         ("netatmo", json!({})),
         ("ezviz", json!({})),
+        ("anker_cloud", json!({})),
         // The connection is opened at the first description, not before.
         ("esphome", json!({"host": "192.168.1.62"})),
         ("homekit", json!({"host": "192.168.1.25:5001", "device_id": "AA:BB:CC:DD:EE:FF"})),
@@ -939,6 +943,7 @@ async fn the_shipped_modules_load() {
             "hue" => Some("key-1"),
             // A HomeKit accessory with the pairing the driver compiled in kept.
             "homekit" => Some(pairing.as_str()),
+            "tydom" => Some(r#"{"password": "secret"}"#),
             _ => None,
         };
         module.open(None, &config, secret).await.unwrap_or_else(|e| panic!("{id}: {e}"));

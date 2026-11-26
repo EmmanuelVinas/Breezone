@@ -456,6 +456,13 @@ pub mod host {
         imp::subscribe(url).map_err(Error::Unreachable)
     }
 
+    /// The same, for a WebSocket that wants headers when it opens (an `Authorization` computed
+    /// from a challenge), its frames sent as binary when `binary`. Interface 1.3:
+    /// `"requires": {"api": "^1.3"}`.
+    pub fn subscribe_with(url: &str, headers: &[(&str, &str)], binary: bool) -> Result<u32> {
+        imp::subscribe_with(url, headers, binary).map_err(Error::Unreachable)
+    }
+
     pub fn send(subscription: u32, data: &[u8]) -> Result<()> {
         imp::send(subscription, data).map_err(Error::Unreachable)
     }
@@ -543,6 +550,11 @@ pub mod host {
 
         pub fn subscribe(url: &str) -> Result<u32, String> {
             h::subscribe(url)
+        }
+
+        pub fn subscribe_with(url: &str, headers: &[(&str, &str)], binary: bool) -> Result<u32, String> {
+            let headers: Vec<super::Header> = headers.iter().map(|(n, v)| super::Header { name: n.to_string(), value: v.to_string() }).collect();
+            h::subscribe_with(url, &headers, binary)
         }
 
         pub fn send(s: u32, data: &[u8]) -> Result<(), String> {
@@ -842,6 +854,14 @@ pub mod testing {
                 b.subscriptions += 1;
                 b.subscriptions
             }))
+        }
+
+        pub fn subscribe_with(url: &str, headers: &[(&str, &str)], _binary: bool) -> Result<u32, String> {
+            with(|b| {
+                let names: Vec<&str> = headers.iter().map(|(n, _)| *n).collect();
+                b.requests.push(format!("SUBSCRIBE {url} {}", names.join(",")));
+            });
+            subscribe(url)
         }
 
         pub fn send(s: u32, data: &[u8]) -> Result<(), String> {

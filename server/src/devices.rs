@@ -194,6 +194,8 @@ pub fn type_of(kind: &str, traits: &[String]) -> &'static str {
         "room-air"
     } else if has("switch.") {
         "switch"
+    } else if has("energy.battery") {
+        "battery"
     } else if has("solar.") {
         "solar"
     } else if has("energy.") {
@@ -211,7 +213,7 @@ pub fn type_of(kind: &str, traits: &[String]) -> &'static str {
 
 /// The types a grant may name.
 pub const TYPES: &[&str] =
-    &["climate", "charger", "light", "shutter", "window", "door", "ventilation", "room-air", "switch", "solar", "energy", "sensor", "camera", "remote", "other"];
+    &["climate", "charger", "light", "shutter", "window", "door", "ventilation", "room-air", "switch", "solar", "battery", "energy", "sensor", "camera", "remote", "other"];
 
 /// A device of a module, as an access to it is judged.
 pub fn module_device(d: &DeviceView) -> crate::access::ModuleDevice {

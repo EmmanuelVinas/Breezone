@@ -14,7 +14,8 @@
 //   server): a module that uses it requires it (`requires.api` of its manifest, "^1.1"), and an
 //   older server does not offer it.
 // Version 1.1: `host.receive`, `extras.forget`, `extras.identify`. Version 1.2: `extras.history`
-// (an older server refuses a manifest that lists `history` in its `optional_calls`).
+// (an older server refuses a manifest that lists `history` in its `optional_calls`). Version 1.3:
+// `host.subscribe-with` (headers when a WebSocket opens, frames sent as binary).
 package breezone:module@1.0.0;
 
 interface types {
@@ -167,7 +168,7 @@ interface types {
 }
 
 interface host {
-    use types.{request, response, read-until};
+    use types.{request, response, read-until, header};
 
     enum level {
         debug,
@@ -196,6 +197,11 @@ interface host {
     /// the number returned here. A WebSocket (`ws://`, `wss://`) gives its text and binary frames;
     /// a TCP stream (`tcp://host:port`) gives what it reads, in pieces. Same permissions as `http`.
     subscribe: func(url: string) -> result<u32, string>;
+
+    /// The same, for a WebSocket (`ws://`, `wss://`) that wants headers when it opens (an
+    /// `Authorization` its device computed from a challenge), and frames sent as binary when
+    /// `binary` (else text when UTF-8). The headers of the handshake itself are refused (1.3).
+    subscribe-with: func(url: string, headers: list<header>, binary: bool) -> result<u32, string>;
 
     /// The next message of a subscription, waited for during a call (a protocol of several
     /// questions and answers on a connection kept: a handshake, then a listing). What comes between

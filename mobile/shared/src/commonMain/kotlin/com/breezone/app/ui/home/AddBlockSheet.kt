@@ -72,7 +72,7 @@ private enum class Category(val label: StringResource, val kinds: Set<BlockKind>
     Energy(
         Res.string.house_energy,
         setOf(BlockKind.Energy, BlockKind.EnergyNow, BlockKind.EnergyToday, BlockKind.EnergyUses, BlockKind.PriceNow, BlockKind.PriceToday),
-        setOf(DeviceKind.Energy, DeviceKind.Switch),
+        setOf(DeviceKind.Energy, DeviceKind.Battery, DeviceKind.Switch),
     ),
     Lights(Res.string.house_lights, setOf(BlockKind.LightPanel), setOf(DeviceKind.Light)),
     Shutters(Res.string.house_shutters, emptySet(), setOf(DeviceKind.Shutter, DeviceKind.Window, DeviceKind.Door)),

@@ -35,6 +35,7 @@ pub(super) fn type_label(kind: &str) -> Text {
         "room-air" => crate::text!("Ventilation des pièces", "Room ventilation", "Ventilación de las estancias"),
         "switch" => crate::text!("Prises et relais", "Plugs and relays", "Enchufes y relés"),
         "solar" => crate::text!("Solaire", "Solar", "Solar"),
+        "battery" => crate::text!("Batterie", "Battery", "Batería"),
         "energy" => crate::text!("Énergie", "Energy", "Energía"),
         "remote" => crate::text!("Télécommandes", "Remotes", "Mandos"),
         _ => crate::text!("Autres", "Others", "Otros"),

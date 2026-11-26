@@ -1442,6 +1442,7 @@ export type AccountKind =
   | "linky"
   | "netatmo"
   | "ezviz"
+  | "anker_cloud"
   | "weather"
   | "forecast_solar"
   /** The account of a module installed from a library (its form is in its manifest). */
@@ -1466,6 +1467,8 @@ export type AccountView = {
     homes?: { name: string; rooms: number; modules: number }[]
     /** EZVIZ: the names of the devices of the account. */
     devices?: string[]
+    /** Anker SOLIX: the SolarBanks the account reaches. */
+    solarbanks?: number
     /** Forecast.Solar: the panels. */
     kwp?: number
     declination?: number

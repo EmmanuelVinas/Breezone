@@ -1,0 +1,12 @@
+[package]
+name = "breezone-module-deye"
+version = "1.0.0"
+edition.workspace = true
+description = "Deye micro-inverters, through the Solarman logger built in (local protocol V5 on TCP 8899)"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+breezone-module-sdk = { path = "../sdk" }
+base64 = "0.23.1"

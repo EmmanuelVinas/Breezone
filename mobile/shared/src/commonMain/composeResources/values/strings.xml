@@ -577,6 +577,7 @@
     <string name="kind_doors">Portes</string>
     <string name="kind_room_air">Ventilation des pièces</string>
     <string name="kind_switches">Prises et relais</string>
+    <string name="kind_battery">Batterie</string>
     <string name="kind_remotes">Télécommandes</string>
     <string name="kind_sensors">Capteurs</string>
     <string name="kind_other">Autres</string>

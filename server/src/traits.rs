@@ -13,6 +13,7 @@ const FILES: &[(&str, &str)] = &[
     ("camera.json", include_str!("../contracts/traits/camera.json")),
     ("climate.zone.json", include_str!("../contracts/traits/climate.zone.json")),
     ("cover.position.json", include_str!("../contracts/traits/cover.position.json")),
+    ("energy.battery.json", include_str!("../contracts/traits/energy.battery.json")),
     ("energy.meter.json", include_str!("../contracts/traits/energy.meter.json")),
     ("ev.charger.json", include_str!("../contracts/traits/ev.charger.json")),
     ("light.json", include_str!("../contracts/traits/light.json")),

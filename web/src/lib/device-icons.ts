@@ -2,6 +2,7 @@ import { createElement } from "react"
 import type { LucideIcon, LucideProps } from "lucide-react"
 import {
   AppWindow,
+  BatteryMedium,
   Blinds,
   Box,
   Cctv,
@@ -39,6 +40,7 @@ export const TYPES: DeviceType[] = [
   { id: "room-air", label: t("Ventilation des pièces"), icon: Wind },
   { id: "switch", label: t("Prises et relais"), icon: Power },
   { id: "solar", label: t("Solaire"), icon: SolarPanel },
+  { id: "battery", label: t("Batterie"), icon: BatteryMedium },
   { id: "energy", label: t("Énergie"), icon: Zap },
   { id: "sensor", label: t("Capteurs"), icon: Gauge },
   { id: "camera", label: t("Caméras"), icon: Cctv },

@@ -389,5 +389,8 @@ fun brandOf(source: String): String? = when (source) {
     "renson" -> "Renson"
     "trydan" -> "V2C Trydan"
     "hoymiles" -> "Hoymiles"
+    "anker", "anker_cloud" -> "Anker SOLIX"
+    "deye" -> "Deye"
+    "tydom" -> "Delta Dore Tydom"
     else -> null
 }

@@ -19,7 +19,7 @@ WORKDIR /src
 COPY server/contracts/wit server/contracts/wit
 COPY modules/ modules/
 # The modules shipped with Breezone (each replaces the driver compiled in with the same id).
-ARG SHIPPED_MODULES="tasmota shelly trydan forecast_solar reolink hoymiles tplink hue renson rte weather linky netatmo ezviz esphome homekit airzone_local"
+ARG SHIPPED_MODULES="tasmota shelly trydan forecast_solar reolink hoymiles anker deye tplink tydom hue renson rte weather linky netatmo ezviz anker_cloud esphome homekit airzone_local"
 # The registry and the build folder are caches kept by BuildKit (and by the CI, see the workflows):
 # only what changed is compiled again. The crates are downloaded by one build at a time (`locked`:
 # the images of both architectures are built at once, and share the registry), then unpacked by

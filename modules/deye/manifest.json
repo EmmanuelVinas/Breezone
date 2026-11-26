@@ -1,0 +1,73 @@
+{
+  "id": "deye",
+  "version": "1.0.0",
+  "name": {
+    "en": "Deye (micro-inverter)",
+    "es": "Deye (microinversor)",
+    "fr": "Deye (micro-onduleur)"
+  },
+  "roles": [
+    "driver"
+  ],
+  "requires": {
+    "api": "^1.1"
+  },
+  "provides": {
+    "traits": [
+      "energy.power@1.0",
+      "solar.inverter@1.0",
+      "solar.panel@1.0"
+    ]
+  },
+  "models": [
+    "SUN-M200G4, SUN-M225G4",
+    "SUN600 to SUN2000G3 (Wi-Fi built in)"
+  ],
+  "config": [
+    {
+      "name": "host",
+      "type": "string",
+      "label": {
+        "en": "IP address or name",
+        "es": "Dirección IP o nombre",
+        "fr": "Adresse IP ou nom"
+      }
+    },
+    {
+      "name": "serial",
+      "type": "string",
+      "optional": true,
+      "label": {
+        "en": "Serial number of the Wi-Fi logger (read from its web page when empty)",
+        "es": "Número de serie del registrador Wi-Fi (leído en su página web si está vacío)",
+        "fr": "Numéro de série du boîtier Wi-Fi (lu sur sa page web s'il est vide)"
+      }
+    },
+    {
+      "name": "password",
+      "type": "password",
+      "optional": true,
+      "label": {
+        "en": "Password of its web page (admin by default)",
+        "es": "Contraseña de su página web (admin por defecto)",
+        "fr": "Mot de passe de sa page web (admin par défaut)"
+      }
+    }
+  ],
+  "discovery": {
+    "tcp": [
+      8899
+    ]
+  },
+  "permissions": {
+    "network": {
+      "lan": true
+    }
+  },
+  "read_every_s": 30,
+  "optional_calls": [
+    "identify",
+    "probe",
+    "diagnostic"
+  ]
+}

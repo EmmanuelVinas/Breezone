@@ -198,7 +198,7 @@ async fn accounts_are_linked_used_and_removed() {
     let (s, list) = c.call(reqwest::Method::GET, "/api/accounts", None).await;
     assert_eq!(s, StatusCode::OK, "{list}");
     let kinds: Vec<&str> = list.as_array().unwrap().iter().map(|a| a["kind"].as_str().unwrap()).collect();
-    assert_eq!(kinds, ["airzone", "ezviz", "forecast_solar", "linky", "weather", "netatmo", "rte"], "the Airzone account, then the modules by name");
+    assert_eq!(kinds, ["airzone", "anker_cloud", "ezviz", "forecast_solar", "linky", "weather", "netatmo", "rte"], "the Airzone account, then the modules by name");
     let account = |list: &Value, kind: &str| list.as_array().unwrap().iter().find(|a| a["kind"] == kind).cloned().unwrap();
     assert!(["airzone", "ezviz", "linky", "netatmo", "rte"].iter().all(|k| {
         let a = account(&list, k);

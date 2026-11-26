@@ -26,6 +26,7 @@ wasmtime::component::bindgen!({
     imports: {
         "breezone:module/host.http": async,
         "breezone:module/host.subscribe": async,
+        "breezone:module/host.subscribe-with": async,
         "breezone:module/host.store-get": async,
         "breezone:module/host.store-set": async,
         "breezone:module/host.account": async,
@@ -236,6 +237,28 @@ fn context() -> Option<(crate::db::Db, [u8; 32])> {
     CONTEXT.read().unwrap_or_else(|e| e.into_inner()).clone()
 }
 
+impl HostState {
+    async fn open_subscription(&mut self, url: String, headers: Vec<Header>, binary: bool) -> Result<u32, String> {
+        let started = std::time::Instant::now();
+        let r: Result<u32, String> = async {
+            if self.subscriptions.len() >= MAX_SUBSCRIPTIONS {
+                return Err(format!("at most {MAX_SUBSCRIPTIONS} subscriptions"));
+            }
+            self.next_subscription += 1;
+            let id = self.next_subscription;
+            let opening = Opening { headers: &headers, binary };
+            let sub = subscribe(&self.permissions, &url, opening, id, self.ctx.messages.clone())
+                .await
+                .inspect_err(|e| crate::modules::log(&self.ctx.module, "warn", format!("{url}: {e}")))?;
+            self.subscriptions.insert(id, sub);
+            Ok(id)
+        }
+        .await;
+        self.waited += started.elapsed();
+        r
+    }
+}
+
 impl breezone::module::types::Host for HostState {}
 
 impl breezone::module::host::Host for HostState {
@@ -297,21 +320,11 @@ impl breezone::module::host::Host for HostState {
     }
 
     async fn subscribe(&mut self, url: String) -> Result<u32, String> {
-        let started = std::time::Instant::now();
-        let r: Result<u32, String> = async {
-            if self.subscriptions.len() >= MAX_SUBSCRIPTIONS {
-                return Err(format!("at most {MAX_SUBSCRIPTIONS} subscriptions"));
-            }
-            self.next_subscription += 1;
-            let id = self.next_subscription;
-            let sub =
-                subscribe(&self.permissions, &url, id, self.ctx.messages.clone()).await.inspect_err(|e| crate::modules::log(&self.ctx.module, "warn", format!("{url}: {e}")))?;
-            self.subscriptions.insert(id, sub);
-            Ok(id)
-        }
-        .await;
-        self.waited += started.elapsed();
-        r
+        self.open_subscription(url, vec![], false).await
+    }
+
+    async fn subscribe_with(&mut self, url: String, headers: Vec<Header>, binary: bool) -> Result<u32, String> {
+        self.open_subscription(url, headers, binary).await
     }
 
     async fn receive(&mut self, subscription: u32, timeout_ms: u32) -> Result<Vec<u8>, String> {
@@ -537,16 +550,52 @@ impl breezone::module::host::Host for HostState {
     }
 }
 
+/// How a WebSocket opens: the headers its module adds, and whether its frames are sent as binary.
+#[derive(Clone, Copy)]
+struct Opening<'a> {
+    headers: &'a [Header],
+    binary: bool,
+}
+
+/// The headers of the handshake of a WebSocket: its own, never a module's.
+const HANDSHAKE_HEADERS: &[&str] = &["host", "connection", "upgrade", "sec-websocket-key", "sec-websocket-version", "sec-websocket-extensions"];
+
+/// The request that opens a WebSocket, with the headers of its module.
+fn ws_request(url: &str, headers: &[Header]) -> Result<tokio_tungstenite::tungstenite::handshake::client::Request, String> {
+    use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+    use tokio_tungstenite::tungstenite::http::{HeaderName, HeaderValue};
+    let mut request = url.into_client_request().map_err(|e| e.to_string())?;
+    for h in headers {
+        let name = HeaderName::from_bytes(h.name.as_bytes()).map_err(|_| format!("header {:?}: invalid name", h.name))?;
+        if HANDSHAKE_HEADERS.contains(&name.as_str()) {
+            return Err(format!("header {name}: part of the handshake"));
+        }
+        let value = HeaderValue::from_str(&h.value).map_err(|_| format!("header {name}: invalid value"))?;
+        request.headers_mut().append(name, value);
+    }
+    Ok(request)
+}
+
 /// Opens a subscription (`ws://`, `wss://` or `tcp://`) to an allowed address, and the task that hands its
 /// messages to `messages` and writes what is sent on it.
-async fn subscribe(permissions: &Permissions, url: &str, id: u32, messages: tokio::sync::mpsc::UnboundedSender<(u32, Vec<u8>)>) -> Result<Subscription, String> {
+async fn subscribe(
+    permissions: &Permissions,
+    url: &str,
+    opening: Opening<'_>,
+    id: u32,
+    messages: tokio::sync::mpsc::UnboundedSender<(u32, Vec<u8>)>,
+) -> Result<Subscription, String> {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let parsed = reqwest::Url::parse(url).map_err(|e| e.to_string())?;
+    if parsed.scheme() == "tcp" && (!opening.headers.is_empty() || opening.binary) {
+        return Err("headers and binary frames: WebSocket only".into());
+    }
     let addrs = permissions.resolve(&parsed).await?;
     let connect = tokio::time::timeout(Duration::from_secs(10), tokio::net::TcpStream::connect(&addrs[..]));
     let (out, mut outgoing) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
     let task = match parsed.scheme() {
         scheme @ ("ws" | "wss") => {
+            let request = ws_request(url, opening.headers)?;
             let tcp = connect.await.map_err(|_| "no answer".to_string())?.map_err(|e| e.to_string())?;
             if scheme == "wss" {
                 // A device on the local network has its own certificate; a service, a real one.
@@ -554,11 +603,11 @@ async fn subscribe(permissions: &Permissions, url: &str, id: u32, messages: toki
                 let config = crate::tls::client_config(device).ok_or("no TLS")?;
                 let name = rustls::pki_types::ServerName::try_from(parsed.host_str().unwrap_or_default().to_string()).map_err(|e| e.to_string())?;
                 let tls = tokio_rustls::TlsConnector::from(Arc::new(config)).connect(name, tcp).await.map_err(|e| e.to_string())?;
-                let (ws, _) = tokio_tungstenite::client_async(url, tls).await.map_err(|e| e.to_string())?;
-                websocket(ws, id, messages, outgoing)
+                let (ws, _) = tokio_tungstenite::client_async(request, tls).await.map_err(|e| e.to_string())?;
+                websocket(ws, id, opening.binary, messages, outgoing)
             } else {
-                let (ws, _) = tokio_tungstenite::client_async(url, tcp).await.map_err(|e| e.to_string())?;
-                websocket(ws, id, messages, outgoing)
+                let (ws, _) = tokio_tungstenite::client_async(request, tcp).await.map_err(|e| e.to_string())?;
+                websocket(ws, id, opening.binary, messages, outgoing)
             }
         }
         "tcp" => {
@@ -594,10 +643,11 @@ async fn subscribe(permissions: &Permissions, url: &str, id: u32, messages: toki
 }
 
 /// The task of a WebSocket subscription: hands its text and binary frames to `messages`, sends
-/// what comes on `outgoing` (text when it is UTF-8).
+/// what comes on `outgoing` (text when it is UTF-8, unless `binary`).
 fn websocket<S>(
     ws: tokio_tungstenite::WebSocketStream<S>,
     id: u32,
+    binary: bool,
     messages: tokio::sync::mpsc::UnboundedSender<(u32, Vec<u8>)>,
     mut outgoing: tokio::sync::mpsc::UnboundedReceiver<Vec<u8>>,
 ) -> tokio::task::JoinHandle<()>
@@ -623,7 +673,8 @@ where
                 sent = outgoing.recv() => match sent {
                     Some(data) => {
                         let m = match String::from_utf8(data) {
-                            Ok(text) => Message::Text(text.into()),
+                            Ok(text) if !binary => Message::Text(text.into()),
+                            Ok(text) => Message::Binary(text.into_bytes().into()),
                             Err(e) => Message::Binary(e.into_bytes().into()),
                         };
                         if write.send(m).await.is_err() {
@@ -1526,6 +1577,19 @@ pub async fn identify(m: &crate::modules::manifest::Manifest, dir: &Path, host: 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_websocket_opens_with_the_headers_of_its_module_but_not_those_of_the_handshake() {
+        let h = |name: &str, value: &str| Header { name: name.into(), value: value.into() };
+        let r = ws_request("wss://192.168.1.80/mediation/client?mac=001A25123456&appli=1", &[h("Authorization", r#"Digest username="001A25123456""#)]).unwrap();
+        assert_eq!(r.headers()["authorization"], r#"Digest username="001A25123456""#);
+        assert!(r.headers().contains_key("sec-websocket-key"), "its own handshake");
+        for name in ["Host", "Upgrade", "Sec-WebSocket-Key"] {
+            assert!(ws_request("ws://192.168.1.80/", &[h(name, "x")]).is_err(), "{name}");
+        }
+        assert!(ws_request("ws://192.168.1.80/", &[h("Bad Name", "x")]).is_err());
+        assert!(ws_request("ws://192.168.1.80/", &[h("X-Ok", "line\nbreak")]).is_err());
+    }
 
     #[test]
     fn a_declared_host_is_a_name_or_its_subdomains() {

@@ -1,0 +1,71 @@
+{
+  "id": "anker_cloud",
+  "version": "1.0.0",
+  "name": {
+    "en": "Anker SOLIX (cloud)",
+    "es": "Anker SOLIX (cloud)",
+    "fr": "Anker SOLIX (cloud)"
+  },
+  "roles": [
+    "account",
+    "driver"
+  ],
+  "requires": {
+    "api": "^1.1"
+  },
+  "provides": {
+    "traits": [
+      "energy.battery@1.0",
+      "energy.power@1.0"
+    ]
+  },
+  "models": [
+    "Anker SOLIX Solarbank 2 E1600 (AC, Pro, Plus)",
+    "Anker SOLIX Solarbank 3 E2700"
+  ],
+  "permissions": {
+    "network": {
+      "lan": false,
+      "hosts": [
+        "ankerpower-api-eu.anker.com",
+        "ankerpower-api.anker.com"
+      ]
+    }
+  },
+  "fills": {"timezone": "server.timezone"},
+  "read_every_s": 60,
+  "cloud": true,
+  "optional_calls": [
+    "diagnostic"
+  ],
+  "config": [
+    {
+      "name": "email",
+      "type": "string",
+      "label": {
+        "fr": "E-mail du compte Anker",
+        "en": "E-mail of the Anker account",
+        "es": "Correo de la cuenta Anker"
+      }
+    },
+    {
+      "name": "password",
+      "type": "password",
+      "label": {
+        "fr": "Mot de passe",
+        "en": "Password",
+        "es": "Contraseña"
+      }
+    },
+    {
+      "name": "country",
+      "type": "string",
+      "optional": true,
+      "label": {
+        "fr": "Pays du compte (FR par défaut)",
+        "en": "Country of the account (FR by default)",
+        "es": "País de la cuenta (FR por defecto)"
+      }
+    }
+  ]
+}

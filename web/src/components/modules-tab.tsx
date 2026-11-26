@@ -5,6 +5,7 @@ import { LibraryPanel } from "@/components/library-panel"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   AirVent,
+  BatteryMedium,
   Cloud,
   Download,
   Blinds,
@@ -669,6 +670,21 @@ const DRIVER: Record<
     ),
     writes: t("rien : lecture seule"),
   },
+  deye: {
+    icon: Sun,
+    tone: "bg-warning/15 text-warning",
+    connection: t(
+      "Protocole local du boîtier Wi-Fi intégré (Solarman, port 8899) : aucun compte Solarman ou Deye Cloud nécessaire"
+    ),
+    every: t("toutes les 30 s"),
+    reads: t(
+      "puissance, tension, intensité, fréquence, température et production du micro-onduleur ; puissance et production de chaque entrée"
+    ),
+    writes: t("rien : lecture seule"),
+    note: t(
+      "Le numéro de série du boîtier Wi-Fi est lu sur sa page web (identifiant admin). Si le boîtier ferme le port 8899, Breezone lit sa page web : puissance et production seulement, sans les panneaux. Le boîtier s'éteint la nuit avec les panneaux."
+    ),
+  },
   netatmo: {
     icon: Cloud,
     tone: "bg-cool/15 text-cool",
@@ -682,6 +698,21 @@ const DRIVER: Record<
     writes: t("position et arrêt des volets, marche et arrêt, intensité"),
     note: t(
       "Un appareil déjà présent en local (même nom et même type, par HomeKit) n'est pas ajouté une seconde fois : il reste piloté en local, et passe par le cloud seulement pour ce que le local ne sait pas faire (arrêter un volet Legrand en cours de route) ou quand le local ne répond plus."
+    ),
+  },
+  anker_cloud: {
+    icon: BatteryMedium,
+    tone: "bg-warning/15 text-warning",
+    connection: t(
+      "Cloud d'Anker, par le compte lié (Réglages › Comptes et services) : la SolarBank n'a pas d'accès local"
+    ),
+    every: t("toutes les minutes"),
+    reads: t(
+      "charge de la batterie, puissance de charge ou de décharge, puissance des panneaux reliés et puissance envoyée à la maison"
+    ),
+    writes: t("rien pour l'instant"),
+    note: t(
+      "L'API est celle de l'application Anker, sans documentation d'Anker : elle peut changer sans prévenir. Le cloud met à jour une SolarBank 2 toutes les quelques minutes."
     ),
   },
   ezviz: {
@@ -726,6 +757,36 @@ const DRIVER: Record<
     ),
     writes: t(
       "marche et arrêt des relais, intensité, température de blanc et couleur des lumières"
+    ),
+  },
+  anker: {
+    icon: PlugZap,
+    tone: "bg-warning/15 text-warning",
+    connection: t(
+      "Modbus TCP en local (port 502), à activer dans l'application Anker : appareil › réglages › « Three-Party Control Settings »"
+    ),
+    every: t("toutes les 10 s"),
+    reads: t(
+      "prise : état, puissance, tension, intensité et énergie ; compteur : puissance (par phase en triphasé), énergie soutirée et injectée, second jeu de pinces s'il est utilisé"
+    ),
+    writes: t("marche et arrêt de la prise"),
+    note: t(
+      "Smart Plug Gen 2 et Smart Meter Gen 2 seulement. La SolarBank n'a pas d'accès local : elle passe par le cloud d'Anker."
+    ),
+  },
+  tydom: {
+    icon: Blinds,
+    tone: "bg-primary/15 text-primary",
+    connection: t(
+      "WebSocket local de la passerelle Tydom (adresse MAC et mot de passe de la passerelle) : aucun passage par le cloud Delta Dore"
+    ),
+    every: t("toutes les 30 s, et dès que la passerelle signale un changement"),
+    reads: t("position des volets et stores, état et intensité des lumières"),
+    writes: t(
+      "ouverture, fermeture et arrêt des volets, marche, arrêt et intensité des lumières"
+    ),
+    note: t(
+      "Le mot de passe est celui de la passerelle, pas celui du compte Delta Dore : il est parfois sur l'étiquette, sinon l'application Tydom ou le compte Delta Dore le donne. Les autres appareils (alarme, chauffage, capteurs…) apparaissent dans le diagnostic du module, pour être pris en charge ensuite."
     ),
   },
   tplink: {
@@ -1469,7 +1530,7 @@ function AddModuleDialog({
           <DialogTitle>{t("Ajouter un module")}</DialogTitle>
           <DialogDescription>
             {t(
-              "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan, clés Wi-Fi Hoymiles, ponts Philips Hue, VMC Renson Healthbox, accessoires HomeKit (Legrand, VELUX…), modules ESPHome et Tasmota, prises Kasa et caméras Reolink. Les prises et ampoules Tapo s'ajoutent par leur adresse."
+              "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan, clés Wi-Fi Hoymiles, micro-onduleurs Deye, prises et compteurs Anker SOLIX, ponts Philips Hue, VMC Renson Healthbox, accessoires HomeKit (Legrand, VELUX…), modules ESPHome et Tasmota, prises Kasa et caméras Reolink. Les prises et ampoules Tapo s'ajoutent par leur adresse."
             )}
           </DialogDescription>
         </DialogHeader>

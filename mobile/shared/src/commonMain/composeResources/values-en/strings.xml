@@ -563,6 +563,7 @@
     <string name="kind_doors">Doors</string>
     <string name="kind_room_air">Room ventilation</string>
     <string name="kind_switches">Plugs and relays</string>
+    <string name="kind_battery">Battery</string>
     <string name="kind_remotes">Remotes</string>
     <string name="kind_sensors">Sensors</string>
     <string name="kind_other">Others</string>

@@ -559,6 +559,7 @@
     <string name="kind_doors">Puertas</string>
     <string name="kind_room_air">Ventilación de las estancias</string>
     <string name="kind_switches">Enchufes y relés</string>
+    <string name="kind_battery">Batería</string>
     <string name="kind_remotes">Mandos</string>
     <string name="kind_sensors">Sensores</string>
     <string name="kind_other">Otros</string>

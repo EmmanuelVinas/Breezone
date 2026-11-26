@@ -2,7 +2,7 @@
 //! a source or an account uses it.
 
 /// The version of the module interface this server is built against.
-pub const INTERFACE: &str = "1.2";
+pub const INTERFACE: &str = "1.3";
 
 /// Versions of the module interface (`contracts/wit/breezone-module.wit`) this server hosts: none
 /// while the WebAssembly host is not built in (only Airzone then, which is part of the core).
