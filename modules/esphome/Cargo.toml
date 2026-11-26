@@ -1,6 +1,6 @@
 [package]
 name = "breezone-module-esphome"
-version = "1.0.0"
+version = "1.0.1"
 edition.workspace = true
 description = "ESPHome devices, through their native API (a connection kept open, encrypted or not)"
 

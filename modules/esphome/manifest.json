@@ -1,6 +1,6 @@
 {
   "id": "esphome",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "name": {"en": "ESPHome", "es": "ESPHome", "fr": "ESPHome"},
   "roles": ["driver"],
   "requires": {"api": "^1.1"},
