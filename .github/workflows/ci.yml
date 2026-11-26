@@ -37,6 +37,16 @@ jobs:
       - run: cargo clippy --all-targets --locked --manifest-path ../modules/Cargo.toml -- -D warnings
       - run: cargo test --locked --manifest-path ../modules/Cargo.toml
 
+  module-versions:
+    name: Module versions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The tags of the releases and of the modules, to compare with.
+          fetch-depth: 0
+      - run: ./scripts/check-module-versions.sh
+
   web:
     name: Web UI
     runs-on: ubuntu-latest
