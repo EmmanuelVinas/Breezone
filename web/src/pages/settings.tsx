@@ -42,7 +42,7 @@ import {
 } from "@/components/device-access-editor"
 import { ElectricityTab } from "@/components/electricity/electricity-tab"
 import { ModulesTab } from "@/components/modules-tab"
-import { ConnectionDot } from "@/components/connection-badge"
+import { ConnectionBadge, ConnectionDot } from "@/components/connection-badge"
 import { Confirm } from "@/components/confirm"
 import { ServersTab } from "@/components/federation"
 import { ConnectPhoneDialog } from "@/components/connect-phone"
@@ -184,10 +184,11 @@ function InstallationsTab({ openAccess }: { openAccess: string | null }) {
                   key={c.id}
                   className="flex items-center gap-3 rounded-2xl border p-3"
                 >
-                  <ConnectionDot state={live?.connection.state ?? "unknown"} />
+                  {!live && <ConnectionDot state="unknown" />}
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="truncate font-medium">{c.name}</span>
+                      {live && <ConnectionBadge connection={live.connection} />}
                       {!c.enabled && (
                         <Badge variant="secondary">{t("Désactivée")}</Badge>
                       )}

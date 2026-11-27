@@ -36,7 +36,7 @@ import { cn } from "@/lib/utils"
 import { ConfirmDialog } from "@/components/confirm"
 import { PageHeader } from "@/components/app-shell"
 import { WeatherCard } from "@/components/weather-card"
-import { ConnectionBadge, ConnectionDot } from "@/components/connection-badge"
+import { ConnectionDot } from "@/components/connection-badge"
 import { ZoneCard } from "@/components/zone-card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -501,7 +501,6 @@ export function DashboardPage({
                         <MapPin className="size-3.5" /> {selected.location}
                       </span>
                     )}
-                    <ConnectionBadge connection={selected.connection} />
                     {!selected.enabled && (
                       <Badge variant="secondary">{t("Désactivée")}</Badge>
                     )}
