@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.13.0-beta.8] - 2026-11-27
+
 ### Fixed
 
 - A Zigbee device paired to a ZBBridge Pro under Tasmota 16 shows up in Breezone: the word Tasmota
@@ -1694,7 +1696,8 @@ solar surplus for the air conditioning…), and what follows.
 - Project renamed from FreeZone to Breezone (former `FREEZONE_*` variables and `freezone.db` are
   still recognised).
 
-[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.7...HEAD
+[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.8...HEAD
+[0.13.0-beta.8]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.7...v0.13.0-beta.8
 [0.13.0-beta.7]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.6...v0.13.0-beta.7
 [0.13.0-beta.6]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.5...v0.13.0-beta.6
 [0.13.0-beta.5]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.4...v0.13.0-beta.5
