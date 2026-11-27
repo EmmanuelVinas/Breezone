@@ -6,6 +6,34 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.13.0-beta.10] - 2026-11-27
+
+### Added
+
+- Automations have a priority: the order of their list, set by dragging them in « Priorités ». The
+  solar surplus is shared in this order, and when two automations drive the same device at the
+  same time, the higher one wins: the step of the lower one is left, and its history says so.
+- A relay (water heater, pool pump) or a zone of the air conditioning follows the solar surplus
+  through an automation action « Suivre le surplus solaire », with its power, minimum run time and
+  grid tolerance (a zone: heat or cool, to its setpoint), until the automation tells it otherwise;
+  it is then put back as it was. A new lasting trigger « Tant qu'il fait jour » and a recipe
+  « Surplus solaire : chauffe-eau » go with it.
+- The solar page (web and app) lists the devices on the solar surplus, read only, in the order of
+  their priority, with the automation that put each there and what it does now.
+- Each channel of a multi-channel Zigbee module (2- or 4-channel relays, ubisys S2-R) under a
+  ZBBridge is a device of its own, driven alone (Tasmota module 1.2.0).
+- Generic traits (on/off, number, choice, measure, button) for the values and settings no trait
+  fits, shown and driven in the web, the app and the automations.
+- The app reads its data again and reconnects the live channel when a screen is pulled down.
+
+### Changed
+
+- The list of the solar surplus steering becomes automations at the first start, first in
+  priority (a zone: one to heat, one to cool); it is no longer set on its own page. The recipes
+  « chauffer / rafraîchir » use the new action.
+- The connection state and latency of an Airzone installation show in the Airzone module instead
+  of the climate view.
+
 ## [0.13.0-beta.9] - 2026-11-27
 
 ### Added
@@ -1709,7 +1737,8 @@ solar surplus for the air conditioning…), and what follows.
 - Project renamed from FreeZone to Breezone (former `FREEZONE_*` variables and `freezone.db` are
   still recognised).
 
-[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.9...HEAD
+[Unreleased]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.10...HEAD
+[0.13.0-beta.10]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.9...v0.13.0-beta.10
 [0.13.0-beta.9]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.8...v0.13.0-beta.9
 [0.13.0-beta.8]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.7...v0.13.0-beta.8
 [0.13.0-beta.7]: https://github.com/EmmanuelVinas/breezone/compare/v0.13.0-beta.6...v0.13.0-beta.7
