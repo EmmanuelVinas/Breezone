@@ -1358,11 +1358,7 @@ const en: Record<string, string> = {
   "Tout recommencer": "Start over",
   "Surplus solaire : charger la voiture": "Solar surplus: charge the car",
   "Surplus solaire : chauffer une pièce": "Solar surplus: heat a room",
-  "Quand plus de 500 W repartent au réseau, si la climatisation est en mode chaud et la pièce sous 20 °C, chauffer à 21°. Remettre comme avant quand la maison tire plus de 300 W du réseau pendant 10 min, sauf si quelqu'un a changé la zone entre-temps.":
-    "When more than 500 W go back to the grid, if the air conditioning is heating and the room is below 20 °C, heat to 21°. Put it back as before when the home draws more than 300 W from the grid for 10 min, unless someone changed the zone in the meantime.",
   "Surplus solaire : rafraîchir une pièce": "Solar surplus: cool a room",
-  "Quand plus de 500 W repartent au réseau, si la climatisation est en mode froid et la pièce au-dessus de 26 °C, rafraîchir à 25°. Remettre comme avant quand la maison tire plus de 300 W du réseau pendant 10 min, sauf si quelqu'un a changé la zone entre-temps.":
-    "When more than 500 W go back to the grid, if the air conditioning is cooling and the room is above 26 °C, cool to 25°. Put it back as before when the home draws more than 300 W from the grid for 10 min, unless someone changed the zone in the meantime.",
   "Surplus solaire : rafraîchir le salon":
     "Solar surplus: cool the living room",
   "Surplus solaire : chauffer le salon": "Solar surplus: heat the living room",
@@ -1457,8 +1453,6 @@ const en: Record<string, string> = {
     "When Météo-France puts the area on orange or red warning, notify.",
   "Vigilance météo orange ou rouge dans le département.":
     "Orange or red weather warning in the area.",
-  "Peut contredire {names} : {what}, au même moment. Vérifiez qu'elles ne se battent pas.":
-    "May contradict {names}: {what}, at the same time. Check they do not fight.",
   Enregistré: "Saved",
   "Notification de test envoyée": "Test notification sent",
   Notifications: "Notifications",
@@ -1479,33 +1473,11 @@ const en: Record<string, string> = {
   "Pour « et », ajoutez une condition dans Si : la règle part quand le déclencheur et ses conditions sont vrais ensemble.":
     "For “and”, add a condition under If: the rule starts when the trigger and its conditions are true together.",
   "{n} min au moins": "{n} min at least",
-  "{min} à {max} A": "{min} to {max} A",
-  "+{kwh} kWh garantis avant {time}": "+{kwh} kWh guaranteed before {time}",
-  "Breezone règle l'intensité selon le surplus, entre un minimum et un maximum. Sous le minimum, la charge est suspendue.":
-    "Breezone sets the current from the surplus, between a minimum and a maximum. Below the minimum, charging is paused.",
-  "Breezone allume l'appareil quand le surplus couvre sa puissance, et l'éteint quand il manque.":
-    "Breezone switches the device on when the surplus covers its power, and off when it falls short.",
-  "Intensité minimale (A)": "Minimum current (A)",
-  "Intensité maximale (A)": "Maximum current (A)",
-  Garantie: "Guarantee",
-  "kWh avant": "kWh before",
-  "Facultatif. Si le soleil ne suffit pas, Breezone charge au maximum depuis le réseau, juste à temps.":
-    "Optional. If the sun is not enough, Breezone charges at the maximum from the grid, just in time.",
-  "Puissance (W)": "Power (W)",
-  "Marche minimale (min)": "Minimum run (min)",
-  "Tolérance réseau (W)": "Grid tolerance (W)",
-  "Ce que l'appareil peut tirer du réseau avant que Breezone ne réduise ou n'arrête.":
-    "What the device may draw from the grid before Breezone cuts back or stops it.",
-  "Pilotage sur surplus solaire": "Solar surplus steering",
   "Il faut un compteur au tableau (une voie « réseau ») pour connaître le surplus.":
     "A meter at the panel (a “grid” channel) is needed to know the surplus.",
   "Par ordre de priorité · {kw} repartent au réseau en ce moment":
     "In order of priority · {kw} going back to the grid right now",
-  "Par ordre de priorité : le surplus va d'abord au premier appareil.":
-    "In order of priority: the surplus goes to the first device first.",
-  "Ajouter un appareil…": "Add a device…",
   Descendre: "Move down",
-  "Suivre le surplus": "Follow the surplus",
   Manuel: "Manual",
   "Vue d'ensemble": "Overview",
   indisponible: "unavailable",
@@ -1830,10 +1802,6 @@ const en: Record<string, string> = {
     "If the outdoor temperature is below",
   "Rafraîchir quand il fait chaud dehors": "Cool when it is warm outside",
   "Si la température extérieure dépasse": "If the outdoor temperature is above",
-  "À partir d'un surplus de": "From a surplus of",
-  "W rendus au réseau pendant 5 min": "W returned to the grid for 5 min",
-  "Le mode de la climatisation (chaud ou froid) reste celui que vous avez choisi : l'automatisme ne chauffe que si elle est en mode chaud, et ne rafraîchit que si elle est en mode froid. Quand la maison tire de nouveau plus de 300 W du réseau pendant 10 min, chaque pièce revient comme avant, sauf si quelqu'un l'a changée entre-temps.":
-    "The climate mode (heating or cooling) stays the one you chose: the automation only heats in heating mode, and only cools in cooling mode. When the home draws more than 300 W from the grid again for 10 min, each room goes back as it was, unless someone changed it meanwhile.",
   "Créer les {n} automatismes": "Create the {n} automations",
   "Créer l'automatisme": "Create the automation",
   "Retour aux recettes": "Back to the recipes",
@@ -1946,24 +1914,6 @@ const en: Record<string, string> = {
   "Ventilation · {measure}": "Ventilation · {measure}",
   "Graphique des pièces ventilées": "Chart of the ventilated rooms",
   "Pièces ventilées · {measure}": "Ventilated rooms · {measure}",
-  "{names} suit aussi le pilotage sur surplus solaire : les deux se contrediraient. Retirez-le de l'un ou de l'autre.":
-    "{names} also follows the solar surplus steering: the two would contradict each other. Remove it from one or the other.",
-  "chauffe à {sp}° sous {t}° dehors": "heats to {sp}° below {t}° outside",
-  "rafraîchit à {sp}° au-dessus de {t}°": "cools to {sp}° above {t}°",
-  "Quand le surplus couvre sa puissance, Breezone allume la zone : en chauffage s'il fait froid dehors, en froid s'il fait chaud, selon le mode du système. Il la remet comme avant quand le surplus manque. Une zone déjà allumée ou réglée à la main n'est pas touchée.":
-    "When the surplus covers its power, Breezone switches the zone on: heating when it is cold outside, cooling when it is hot, as its system's mode allows. It puts it back as it was when the surplus runs short. A zone already on, or set by hand, is not touched.",
-  "Chauffer à (°C)": "Heat to (°C)",
-  "quand il fait moins de (°C dehors)": "when it is below (°C outside)",
-  "Rafraîchir à (°C)": "Cool to (°C)",
-  "quand il fait plus de (°C dehors)": "when it is above (°C outside)",
-  "Puissance estimée (W)": "Estimated power (W)",
-  "Aucun appareil ne suit le surplus. Ajoutez un chauffe-eau sur une prise pilotée, ou une zone de climatisation ; la borne le suit par un automatisme (recette « Surplus solaire : charger la voiture »).":
-    "No device follows the surplus. Add a water heater on a smart plug, or a zone of the air conditioning; the charger follows it by an automation (recipe “Solar surplus: charge the car”).",
-  "Aussi piloté par {names} : les deux se contrediraient.":
-    "Also driven by {names}: the two would contradict each other.",
-  "Tourne tout seul, par ordre de priorité. Il se règle dans Automatismes ; un automatisme ne doit pas piloter les mêmes appareils.":
-    "Runs on its own, in order of priority. It is set in Automations; an automation must not drive the same devices.",
-  Régler: "Set up",
   inchangé: "unchanged",
   "Réglages enregistrés": "Settings saved",
   "Les mots de passe et clés restent chiffrés sur le serveur : laissés vides, ils ne changent pas.":
@@ -2149,8 +2099,6 @@ const en: Record<string, string> = {
   "Le tarif est en": "The tariff is in",
   "Le tarif de demain est en": "Tomorrow's tariff is in",
   "suit le surplus solaire": "follows the solar surplus",
-  "ne suit plus le surplus solaire": "no longer follows the solar surplus",
-  "Surplus solaire : activer ou couper": "Solar surplus: turn on or off",
   "tout jour": "any day",
   "Type de jour": "Kind of day",
   "toute la journée": "all day",
@@ -2334,6 +2282,48 @@ const en: Record<string, string> = {
   "{email} : {n} passerelle(s)": "{email}: {n} gateway(s)",
   "{email} : ajoutez la passerelle dans Modules par son adresse, mot de passe vide":
     "{email}: add the gateway in Modules by its address, password empty",
+  Priorités: "Priorities",
+  "Par ordre de priorité : le surplus solaire va d'abord au premier ; deux automatismes qui pilotent le même appareil en même temps, le plus haut l'emporte.":
+    "In order of priority: the solar surplus goes to the first one first; when two automations drive the same device at the same time, the higher one wins.",
+  Priorité: "Priority",
+  "Peut piloter les mêmes appareils que {names} au même moment ({what}) : celui de plus haute priorité l'emporte.":
+    "May drive the same devices as {names} at the same time ({what}): the one of higher priority wins.",
+  "Laissé à un automatisme de plus haute priorité tant qu'il le tient sur le surplus solaire : {names}.":
+    "Left to an automation of higher priority while it keeps it on the solar surplus: {names}.",
+  "Déplacer « {name} »": "Move “{name}”",
+  "Faites glisser pour ranger. Le surplus solaire va d'abord au premier ; quand deux automatismes pilotent le même appareil en même temps, le plus haut l'emporte.":
+    "Drag to sort. The solar surplus goes to the first one first; when two automations drive the same device at the same time, the higher one wins.",
+  "Tant qu'il fait moins de 15 °C dehors, la pièce chauffe à 21 °C quand le surplus suffit (si sa climatisation est en mode chaud), puis revient comme avant.":
+    "While it is below 15 °C outside, the room heats to 21 °C when the surplus is enough (if its air conditioning is in heating), then goes back as it was.",
+  "Tant qu'il fait plus de 25 °C dehors, la pièce se rafraîchit à 25 °C quand le surplus suffit (si sa climatisation est en mode froid), puis revient comme avant.":
+    "While it is above 25 °C outside, the room cools to 25 °C when the surplus is enough (if its air conditioning is in cooling), then goes back as it was.",
+  "Surplus solaire : chauffe-eau": "Solar surplus: water heater",
+  "Tant qu'il fait jour, le chauffe-eau (ou une autre prise pilotée) se met en marche quand le surplus suffit à sa puissance, au moins 30 min ; la nuit, il est remis comme avant.":
+    "While it is daytime, the water heater (or another relay) switches on when the surplus covers its power, for 30 min at least; at night, it is put back as it was.",
+  "Chauffe-eau sur le surplus": "Water heater on the surplus",
+  "ne suit plus le surplus (remis comme avant)":
+    "no longer follows the surplus (put back as it was)",
+  chauffer: "heat",
+  rafraîchir: "cool",
+  "Puissance estimée": "Estimated power",
+  "En marche au moins": "On for at least",
+  "Tolérance réseau": "Grid tolerance",
+  "Suivre le surplus solaire": "Follow the solar surplus",
+  "Puissance estimée d'une pièce": "Estimated power of a room",
+  "Chaque pièce démarre quand le surplus suffit depuis 1 min et s'arrête quand il manque depuis 3 min, dans l'ordre des priorités des automatismes. Le mode de la climatisation (chaud ou froid) reste celui que vous avez choisi : une pièce ne chauffe que si son système est en mode chaud. Ensuite, elle revient comme avant, sauf si quelqu'un l'a changée entre-temps.":
+    "Each room starts once the surplus has been enough for 1 min and stops once it has been short for 3 min, in the order of the priorities of the automations. The mode of the air conditioning (heating or cooling) stays the one you chose: a room heats only if its system heats. Then it goes back as it was, unless someone changed it in the meantime.",
+  "Tant qu'il fait jour (ou nuit)": "While it is daytime (or night)",
+  "Du lever au coucher du soleil": "From sunrise to sunset",
+  "Du coucher au lever du soleil": "From sunset to sunrise",
+  "jusqu'à {kw}": "up to {kw}",
+  "dès {kw} de surplus": "from {kw} of surplus",
+  "chauffe à {sp} °C": "heats to {sp} °C",
+  "rafraîchit à {sp} °C": "cools to {sp} °C",
+  "Sur le surplus solaire": "On the solar surplus",
+  "Par ordre de priorité : le surplus va d'abord au premier.":
+    "In order of priority: the surplus goes to the first one first.",
+  "Chaque ligne ouvre son automatisme ; l'ordre se change avec « Priorités » dans Automatismes.":
+    "Each line opens its automation; the order is changed with “Priorities” in Automations.",
 }
 
 export default en

@@ -24,10 +24,24 @@ pub struct AutomationRow {
     pub run_mode: String,
     /// JSON: the actions run when the lasting trigger stops holding.
     pub over_actions: String,
+    /// 1 first: the order of the solar surplus, and who wins on a device two of them drive.
+    pub priority: i64,
 }
 
+/// In the order of their priority.
 pub async fn list_automations(db: &Db) -> sqlx::Result<Vec<AutomationRow>> {
-    sqlx::query_as("SELECT * FROM automations ORDER BY name, id").fetch_all(db).await
+    sqlx::query_as("SELECT * FROM automations ORDER BY priority, id").fetch_all(db).await
+}
+
+/// Ranks the automations in this order (the others after them, as they were).
+pub async fn order_automations(db: &Db, ids: &[i64]) -> sqlx::Result<()> {
+    let mut tx = db.begin().await?;
+    let all: Vec<(i64,)> = sqlx::query_as("SELECT id FROM automations ORDER BY priority, id").fetch_all(&mut *tx).await?;
+    let rest = all.into_iter().map(|(id,)| id).filter(|id| !ids.contains(id));
+    for (i, id) in ids.iter().copied().chain(rest).enumerate() {
+        sqlx::query("UPDATE automations SET priority = ? WHERE id = ?").bind(i as i64 + 1).bind(id).execute(&mut *tx).await?;
+    }
+    tx.commit().await
 }
 
 pub async fn automation_by_id(db: &Db, id: i64) -> sqlx::Result<Option<AutomationRow>> {
@@ -50,20 +64,24 @@ pub struct AutomationFields<'a> {
 
 pub async fn insert_automation(db: &Db, f: &AutomationFields<'_>) -> sqlx::Result<AutomationRow> {
     let t = now();
-    sqlx::query_as("INSERT INTO automations (name, enabled, trigger_def, condition_match, conditions, actions, else_actions, run_mode, over_actions, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *")
-        .bind(f.name)
-        .bind(f.enabled)
-        .bind(f.trigger)
-        .bind(f.joined)
-        .bind(f.conditions)
-        .bind(f.actions)
-        .bind(f.else_actions)
-        .bind(f.run_mode)
-        .bind(f.over_actions)
-        .bind(t)
-        .bind(t)
-        .fetch_one(db)
-        .await
+    // A new one comes last.
+    sqlx::query_as(
+        "INSERT INTO automations (name, enabled, trigger_def, condition_match, conditions, actions, else_actions, run_mode, over_actions, created_at, updated_at, priority) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(priority), 0) + 1 FROM automations)) RETURNING *",
+    )
+    .bind(f.name)
+    .bind(f.enabled)
+    .bind(f.trigger)
+    .bind(f.joined)
+    .bind(f.conditions)
+    .bind(f.actions)
+    .bind(f.else_actions)
+    .bind(f.run_mode)
+    .bind(f.over_actions)
+    .bind(t)
+    .bind(t)
+    .fetch_one(db)
+    .await
 }
 
 pub async fn update_automation(db: &Db, id: i64, f: &AutomationFields<'_>) -> sqlx::Result<()> {
@@ -207,6 +225,9 @@ pub struct SurplusLoadRow {
     pub heat_below: Option<f64>,
     #[serde(default)]
     pub cool_above: Option<f64>,
+    /// The automation that put it on the surplus.
+    #[serde(default)]
+    pub automation_id: Option<i64>,
 }
 
 impl SurplusLoadRow {
@@ -228,14 +249,15 @@ impl SurplusLoadRow {
             cool_setpoint: None,
             heat_below: None,
             cool_above: None,
+            automation_id: None,
         }
     }
 }
 
 pub async fn list_surplus_loads(db: &Db) -> sqlx::Result<Vec<SurplusLoadRow>> {
     sqlx::query_as(
-        "SELECT device_id, position, enabled, min_amps, max_amps, power, guarantee_kwh, guarantee_by, min_on_minutes, tolerance, heat_setpoint, cool_setpoint, heat_below, cool_above \
-         FROM surplus_loads ORDER BY position, device_id",
+        "SELECT device_id, position, enabled, min_amps, max_amps, power, guarantee_kwh, guarantee_by, min_on_minutes, tolerance, heat_setpoint, cool_setpoint, heat_below, cool_above, \
+         automation_id FROM surplus_loads ORDER BY position, device_id",
     )
     .fetch_all(db)
     .await
@@ -244,11 +266,12 @@ pub async fn list_surplus_loads(db: &Db) -> sqlx::Result<Vec<SurplusLoadRow>> {
 pub async fn upsert_surplus_load(db: &Db, l: &SurplusLoadRow) -> sqlx::Result<()> {
     sqlx::query(
         "INSERT INTO surplus_loads (device_id, position, enabled, min_amps, max_amps, power, guarantee_kwh, guarantee_by, min_on_minutes, tolerance, created_at,
-           heat_setpoint, cool_setpoint, heat_below, cool_above)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           heat_setpoint, cool_setpoint, heat_below, cool_above, automation_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (device_id) DO UPDATE SET position = excluded.position, enabled = excluded.enabled, min_amps = excluded.min_amps, max_amps = excluded.max_amps,
            power = excluded.power, guarantee_kwh = excluded.guarantee_kwh, guarantee_by = excluded.guarantee_by, min_on_minutes = excluded.min_on_minutes, tolerance = excluded.tolerance,
-           heat_setpoint = excluded.heat_setpoint, cool_setpoint = excluded.cool_setpoint, heat_below = excluded.heat_below, cool_above = excluded.cool_above",
+           heat_setpoint = excluded.heat_setpoint, cool_setpoint = excluded.cool_setpoint, heat_below = excluded.heat_below, cool_above = excluded.cool_above,
+           automation_id = excluded.automation_id",
     )
     .bind(l.device_id)
     .bind(l.position)
@@ -265,6 +288,7 @@ pub async fn upsert_surplus_load(db: &Db, l: &SurplusLoadRow) -> sqlx::Result<()
     .bind(l.cool_setpoint)
     .bind(l.heat_below)
     .bind(l.cool_above)
+    .bind(l.automation_id)
     .execute(db)
     .await?;
     Ok(())

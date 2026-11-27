@@ -55,6 +55,7 @@ const APPLIED: &[(&str, &str)] = &[
     ("0048_charge_profiles.sql", "3aefe3d5695439982338886e31920031162355adca0e0d0c7017155fa6b6f35d"),
     ("0049_api_tokens.sql", "9c20c19af03169f9dc1bfeaf53f77811036627ad34c14e00a806dc55e4283f23"),
     ("0050_charge_profiles_power.sql", "8f90adad22e4dc106c42099a8028c97f24f51cd83fa771721bba8ba37fbc0d92"),
+    ("0051_automation_priority.sql", "2a1540c2bfc2890c854e7e4d6cf2607f926e7d289053e7ff1da33ca593eff939"),
 ];
 
 #[test]

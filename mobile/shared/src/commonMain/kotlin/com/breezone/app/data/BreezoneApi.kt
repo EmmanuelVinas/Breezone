@@ -206,6 +206,9 @@ class BreezoneApi(
     /** The weather of an installation (servers before 0.11.0-beta.19 give that of the home). */
     suspend fun weather(installationId: Long): WeatherView = call(HttpMethod.Get, "/api/weather?installation_id=$installationId")
     suspend fun energyLive(): EnergyLive = call(HttpMethod.Get, "/api/energy/live")
+
+    /** The devices automations put on the solar surplus, in the order it is shared. */
+    suspend fun surplus(): SurplusView = call(HttpMethod.Get, "/api/surplus")
     /** The energy of a local day ("YYYY-MM-DD"), today by default. */
     suspend fun energyDay(date: String? = null): EnergyDay = call(HttpMethod.Get, "/api/energy/day" + (date?.let { "?date=$it" } ?: ""))
     /** The energy day by day, over the last [days]. */

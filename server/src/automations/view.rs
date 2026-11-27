@@ -54,7 +54,10 @@ pub struct AutomationView {
     pub status: Status,
     /// Enabled rules that may set the same device otherwise at the same time.
     pub conflicts: Vec<Conflict>,
-    /// The devices it drives that the solar surplus steering runs too (their names).
+    /// 1 first: the order of the solar surplus, and who wins on a device two of them drive.
+    pub priority: i64,
+    /// The devices it drives that an automation of a higher priority keeps on the solar surplus:
+    /// "Chauffe-eau (« Chauffe-eau sur le surplus »)". They are left to it meanwhile.
     pub surplus: Vec<Text>,
     pub last_run_at: Option<i64>,
     pub last_reason: Option<Text>,
@@ -104,6 +107,7 @@ pub fn view(row: &AutomationRow, rule: Automation, ctx: &Context, running: bool)
         mode: rule.mode,
         over: rule.over,
         conflicts: vec![],
+        priority: row.priority,
         surplus: vec![],
         last_run_at: row.last_run_at,
         last_reason: row.last_reason.as_deref().map(Text::load),
@@ -271,7 +275,7 @@ impl Context {
                 check_days(days)
             }
             Trigger::Facade { facing } => check_facing(*facing),
-            Trigger::Presence { .. } => Ok(()),
+            Trigger::Presence { .. } | Trigger::Daylight { .. } => Ok(()),
             Trigger::Tariff { profile, slot } => self.check_tariff(TempoDay::Today, profile.as_deref(), slot.as_deref()),
             Trigger::Module { module, field, value, for_minutes } => {
                 check_lasting(*for_minutes)?;
@@ -378,13 +382,46 @@ impl Context {
                 self.check_condition(condition)
             }
             Step::Restore => Ok(()),
+            Step::Surplus { device_id, enabled: true, power: Some(power), min_on_minutes, tolerance, mode, setpoint } => {
+                let device = self.known(*device_id)?;
+                let has = |t: &str| device.traits.iter().any(|x| x.starts_with(&format!("{t}@")));
+                let zone = has("climate.zone");
+                if !zone && !(has("switch.relay") && device.source_id.is_some()) {
+                    return Err(ApiError::bad_request(crate::text!(
+                        "seule une prise pilotée ou une zone de climatisation suit le surplus ainsi (une borne : « charger sur le surplus »)",
+                        "only a relay or a zone of the air conditioning follows the surplus this way (a charger: “charge on the surplus”)",
+                        "solo un relé o una zona de climatización sigue el excedente así (un cargador: «cargar con el excedente»)"
+                    )));
+                }
+                let bad = |t: Text| Err(ApiError::bad_request(t));
+                if !(1..=20_000).contains(power) {
+                    return bad(crate::text!("puissance de 1 à 20 000 W", "power from 1 to 20,000 W", "potencia de 1 a 20 000 W"));
+                }
+                if !(0..=240).contains(min_on_minutes) || !(0..=5000).contains(tolerance) {
+                    return bad(crate::text!(
+                        "marche minimale de 0 à 240 min, tolérance de 0 à 5 000 W",
+                        "minimum run 0 to 240 min, tolerance 0 to 5,000 W",
+                        "marcha mínima de 0 a 240 min, tolerancia de 0 a 5000 W"
+                    ));
+                }
+                match (zone, mode, setpoint) {
+                    (true, Some(_), Some(sp)) if (10.0..=32.0).contains(sp) => Ok(()),
+                    (true, _, _) => bad(crate::text!(
+                        "une zone chauffe ou rafraîchit, à une consigne de 10 à 32 °C",
+                        "a zone heats or cools, to a setpoint from 10 to 32 °C",
+                        "una zona calienta o enfría, a una consigna de 10 a 32 °C"
+                    )),
+                    (false, None, None) => Ok(()),
+                    (false, _, _) => bad(crate::text!("une prise n'a ni mode ni consigne", "a relay has no mode nor setpoint", "un relé no tiene modo ni consigna")),
+                }
+            }
             Step::Surplus { device_id, .. } => {
                 self.known(*device_id)?;
                 if !self.surplus_loads.contains(device_id) {
                     return Err(ApiError::bad_request(crate::text!(
-                        "cet appareil n'est pas dans la liste du surplus solaire",
-                        "this device is not in the list of the solar surplus",
-                        "este dispositivo no está en la lista del excedente solar"
+                        "cet appareil ne suit pas le surplus solaire : donnez sa puissance",
+                        "this device does not follow the solar surplus: give its power",
+                        "este dispositivo no sigue el excedente solar: indique su potencia"
                     )));
                 }
                 Ok(())

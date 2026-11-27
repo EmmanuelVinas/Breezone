@@ -47,6 +47,7 @@ export function TriggerEditor({
     ["time", t("À heure fixe")],
     ["sun", t("Le soleil (lever, coucher…)")],
     ["facade", t("Le soleil arrive sur une façade")],
+    ["daylight", t("Tant qu'il fait jour (ou nuit)")],
     ["presence", t("Quelqu'un arrive ou part")],
     ...(home.tariff
       ? [["tariff", t("Le tarif change de plage")] as Option]
@@ -141,6 +142,17 @@ export function TriggerEditor({
         <FacadePick
           facing={when.facing}
           onChange={(facing) => onChange({ ...when, facing })}
+        />
+      )}
+      {when.kind === "daylight" && (
+        <Pick
+          value={String(when.day)}
+          onChange={(v) => onChange({ ...when, day: v === "true" })}
+          options={[
+            ["true", t("Du lever au coucher du soleil")],
+            ["false", t("Du coucher au lever du soleil")],
+          ]}
+          className="w-full lg:w-64"
         />
       )}
       {when.kind === "presence" && (
@@ -288,6 +300,8 @@ export function newTrigger(kind: string, home: Home): AutomationTrigger | null {
       return { kind: "facade", facing: 180 }
     case "presence":
       return { kind: "presence", home: false }
+    case "daylight":
+      return { kind: "daylight", day: true }
     case "tariff":
       return home.tariff ? { kind: "tariff", ...firstStretch(home) } : null
     case "module": {

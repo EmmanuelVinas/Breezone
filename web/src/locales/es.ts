@@ -1371,12 +1371,8 @@ const es: Record<string, string> = {
   "Surplus solaire : charger la voiture": "Excedente solar: cargar el coche",
   "Surplus solaire : chauffer une pièce":
     "Excedente solar: calentar una habitación",
-  "Quand plus de 500 W repartent au réseau, si la climatisation est en mode chaud et la pièce sous 20 °C, chauffer à 21°. Remettre comme avant quand la maison tire plus de 300 W du réseau pendant 10 min, sauf si quelqu'un a changé la zone entre-temps.":
-    "Cuando más de 500 W vuelven a la red, si la climatización está en modo calor y la habitación por debajo de 20 °C, calentar a 21°. Dejarla como antes cuando la casa consume más de 300 W de la red durante 10 min, salvo si alguien cambió la zona mientras tanto.",
   "Surplus solaire : rafraîchir une pièce":
     "Excedente solar: refrescar una habitación",
-  "Quand plus de 500 W repartent au réseau, si la climatisation est en mode froid et la pièce au-dessus de 26 °C, rafraîchir à 25°. Remettre comme avant quand la maison tire plus de 300 W du réseau pendant 10 min, sauf si quelqu'un a changé la zone entre-temps.":
-    "Cuando más de 500 W vuelven a la red, si la climatización está en modo frío y la habitación por encima de 26 °C, refrescar a 25°. Dejarla como antes cuando la casa consume más de 300 W de la red durante 10 min, salvo si alguien cambió la zona mientras tanto.",
   "Surplus solaire : rafraîchir le salon":
     "Excedente solar: refrescar el salón",
   "Surplus solaire : chauffer le salon": "Excedente solar: calentar el salón",
@@ -1473,8 +1469,6 @@ const es: Record<string, string> = {
     "Cuando Météo-France pone el departamento en aviso naranja o rojo, avisar.",
   "Vigilance météo orange ou rouge dans le département.":
     "Aviso meteorológico naranja o rojo en el departamento.",
-  "Peut contredire {names} : {what}, au même moment. Vérifiez qu'elles ne se battent pas.":
-    "Puede contradecir {names}: {what}, al mismo tiempo. Compruebe que no se contradicen.",
   Enregistré: "Guardado",
   "Notification de test envoyée": "Notificación de prueba enviada",
   Notifications: "Notificaciones",
@@ -1495,34 +1489,11 @@ const es: Record<string, string> = {
   "Pour « et », ajoutez une condition dans Si : la règle part quand le déclencheur et ses conditions sont vrais ensemble.":
     "Para «y», añada una condición en Si: la regla se activa cuando el disparador y sus condiciones se cumplen a la vez.",
   "{n} min au moins": "{n} min como mínimo",
-  "{min} à {max} A": "{min} a {max} A",
-  "+{kwh} kWh garantis avant {time}":
-    "+{kwh} kWh garantizados antes de las {time}",
-  "Breezone règle l'intensité selon le surplus, entre un minimum et un maximum. Sous le minimum, la charge est suspendue.":
-    "Breezone regula la intensidad según el excedente, entre un mínimo y un máximo. Por debajo del mínimo, la carga se suspende.",
-  "Breezone allume l'appareil quand le surplus couvre sa puissance, et l'éteint quand il manque.":
-    "Breezone enciende el aparato cuando el excedente cubre su potencia, y lo apaga cuando falta.",
-  "Intensité minimale (A)": "Intensidad mínima (A)",
-  "Intensité maximale (A)": "Intensidad máxima (A)",
-  Garantie: "Garantía",
-  "kWh avant": "kWh antes de las",
-  "Facultatif. Si le soleil ne suffit pas, Breezone charge au maximum depuis le réseau, juste à temps.":
-    "Opcional. Si el sol no basta, Breezone carga al máximo desde la red, justo a tiempo.",
-  "Puissance (W)": "Potencia (W)",
-  "Marche minimale (min)": "Marcha mínima (min)",
-  "Tolérance réseau (W)": "Tolerancia de red (W)",
-  "Ce que l'appareil peut tirer du réseau avant que Breezone ne réduise ou n'arrête.":
-    "Lo que el aparato puede tomar de la red antes de que Breezone reduzca o pare.",
-  "Pilotage sur surplus solaire": "Pilotaje por excedente solar",
   "Il faut un compteur au tableau (une voie « réseau ») pour connaître le surplus.":
     "Hace falta un contador en el cuadro (un canal «red») para conocer el excedente.",
   "Par ordre de priorité · {kw} repartent au réseau en ce moment":
     "Por orden de prioridad · {kw} vuelven a la red ahora mismo",
-  "Par ordre de priorité : le surplus va d'abord au premier appareil.":
-    "Por orden de prioridad: el excedente va primero al primer aparato.",
-  "Ajouter un appareil…": "Añadir un aparato…",
   Descendre: "Bajar",
-  "Suivre le surplus": "Seguir el excedente",
   Manuel: "Manual",
   "Vue d'ensemble": "Vista general",
   indisponible: "no disponible",
@@ -1852,10 +1823,6 @@ const es: Record<string, string> = {
     "Si la temperatura exterior está por debajo de",
   "Rafraîchir quand il fait chaud dehors": "Refrescar cuando hace calor fuera",
   "Si la température extérieure dépasse": "Si la temperatura exterior supera",
-  "À partir d'un surplus de": "A partir de un excedente de",
-  "W rendus au réseau pendant 5 min": "W devueltos a la red durante 5 min",
-  "Le mode de la climatisation (chaud ou froid) reste celui que vous avez choisi : l'automatisme ne chauffe que si elle est en mode chaud, et ne rafraîchit que si elle est en mode froid. Quand la maison tire de nouveau plus de 300 W du réseau pendant 10 min, chaque pièce revient comme avant, sauf si quelqu'un l'a changée entre-temps.":
-    "El modo de la climatización (calor o frío) sigue siendo el que eligió: la automatización solo calienta en modo calor y solo refresca en modo frío. Cuando la casa vuelve a tomar más de 300 W de la red durante 10 min, cada estancia vuelve a como estaba, salvo si alguien la cambió mientras tanto.",
   "Créer les {n} automatismes": "Crear las {n} automatizaciones",
   "Créer l'automatisme": "Crear la automatización",
   "Retour aux recettes": "Volver a las recetas",
@@ -1969,25 +1936,6 @@ const es: Record<string, string> = {
   "Ventilation · {measure}": "Ventilación · {measure}",
   "Graphique des pièces ventilées": "Gráfico de las estancias ventiladas",
   "Pièces ventilées · {measure}": "Estancias ventiladas · {measure}",
-  "{names} suit aussi le pilotage sur surplus solaire : les deux se contrediraient. Retirez-le de l'un ou de l'autre.":
-    "{names} también sigue el pilotaje por excedente solar: ambos se contradirían. Quítelo de uno o del otro.",
-  "chauffe à {sp}° sous {t}° dehors":
-    "calienta a {sp}° por debajo de {t}° fuera",
-  "rafraîchit à {sp}° au-dessus de {t}°": "enfría a {sp}° por encima de {t}°",
-  "Quand le surplus couvre sa puissance, Breezone allume la zone : en chauffage s'il fait froid dehors, en froid s'il fait chaud, selon le mode du système. Il la remet comme avant quand le surplus manque. Une zone déjà allumée ou réglée à la main n'est pas touchée.":
-    "Cuando el excedente cubre su potencia, Breezone enciende la zona: en calefacción si hace frío fuera, en frío si hace calor, según el modo del sistema. La devuelve como estaba cuando falta excedente. Una zona ya encendida o ajustada a mano no se toca.",
-  "Chauffer à (°C)": "Calentar a (°C)",
-  "quand il fait moins de (°C dehors)": "cuando hace menos de (°C fuera)",
-  "Rafraîchir à (°C)": "Enfriar a (°C)",
-  "quand il fait plus de (°C dehors)": "cuando hace más de (°C fuera)",
-  "Puissance estimée (W)": "Potencia estimada (W)",
-  "Aucun appareil ne suit le surplus. Ajoutez un chauffe-eau sur une prise pilotée, ou une zone de climatisation ; la borne le suit par un automatisme (recette « Surplus solaire : charger la voiture »).":
-    "Ningún dispositivo sigue el excedente. Añada un calentador en un enchufe controlado, o una zona de climatización; el cargador lo sigue con una automatización (receta «Excedente solar: cargar el coche»).",
-  "Aussi piloté par {names} : les deux se contrediraient.":
-    "También pilotado por {names}: ambos se contradirían.",
-  "Tourne tout seul, par ordre de priorité. Il se règle dans Automatismes ; un automatisme ne doit pas piloter les mêmes appareils.":
-    "Funciona solo, por orden de prioridad. Se ajusta en Automatismos; una automatización no debe pilotar los mismos aparatos.",
-  Régler: "Ajustar",
   inchangé: "sin cambios",
   "Réglages enregistrés": "Ajustes guardados",
   "Les mots de passe et clés restent chiffrés sur le serveur : laissés vides, ils ne changent pas.":
@@ -2176,9 +2124,6 @@ const es: Record<string, string> = {
   "Le tarif est en": "La tarifa está en",
   "Le tarif de demain est en": "La tarifa de mañana está en",
   "suit le surplus solaire": "sigue el excedente solar",
-  "ne suit plus le surplus solaire": "deja de seguir el excedente solar",
-  "Surplus solaire : activer ou couper":
-    "Excedente solar: activar o desactivar",
   "tout jour": "cualquier día",
   "Type de jour": "Tipo de día",
   "toute la journée": "todo el día",
@@ -2362,6 +2307,48 @@ const es: Record<string, string> = {
   "{email} : {n} passerelle(s)": "{email}: {n} pasarela(s)",
   "{email} : ajoutez la passerelle dans Modules par son adresse, mot de passe vide":
     "{email}: añada la pasarela en Módulos por su dirección, con la contraseña vacía",
+  Priorités: "Prioridades",
+  "Par ordre de priorité : le surplus solaire va d'abord au premier ; deux automatismes qui pilotent le même appareil en même temps, le plus haut l'emporte.":
+    "Por orden de prioridad: el excedente solar va primero al primero; cuando dos automatizaciones controlan el mismo dispositivo a la vez, gana la más alta.",
+  Priorité: "Prioridad",
+  "Peut piloter les mêmes appareils que {names} au même moment ({what}) : celui de plus haute priorité l'emporte.":
+    "Puede controlar los mismos dispositivos que {names} al mismo tiempo ({what}): gana la de mayor prioridad.",
+  "Laissé à un automatisme de plus haute priorité tant qu'il le tient sur le surplus solaire : {names}.":
+    "Se deja a una automatización de mayor prioridad mientras la mantiene en el excedente solar: {names}.",
+  "Déplacer « {name} »": "Mover «{name}»",
+  "Faites glisser pour ranger. Le surplus solaire va d'abord au premier ; quand deux automatismes pilotent le même appareil en même temps, le plus haut l'emporte.":
+    "Arrastre para ordenar. El excedente solar va primero al primero; cuando dos automatizaciones controlan el mismo dispositivo a la vez, gana la más alta.",
+  "Tant qu'il fait moins de 15 °C dehors, la pièce chauffe à 21 °C quand le surplus suffit (si sa climatisation est en mode chaud), puis revient comme avant.":
+    "Mientras haga menos de 15 °C fuera, la estancia calienta a 21 °C cuando el excedente basta (si su climatización está en calor), y luego vuelve como estaba.",
+  "Tant qu'il fait plus de 25 °C dehors, la pièce se rafraîchit à 25 °C quand le surplus suffit (si sa climatisation est en mode froid), puis revient comme avant.":
+    "Mientras haga más de 25 °C fuera, la estancia se enfría a 25 °C cuando el excedente basta (si su climatización está en frío), y luego vuelve como estaba.",
+  "Surplus solaire : chauffe-eau": "Excedente solar: calentador de agua",
+  "Tant qu'il fait jour, le chauffe-eau (ou une autre prise pilotée) se met en marche quand le surplus suffit à sa puissance, au moins 30 min ; la nuit, il est remis comme avant.":
+    "Mientras es de día, el calentador de agua (u otro relé) se enciende cuando el excedente cubre su potencia, al menos 30 min; por la noche, vuelve como estaba.",
+  "Chauffe-eau sur le surplus": "Calentador de agua con el excedente",
+  "ne suit plus le surplus (remis comme avant)":
+    "deja de seguir el excedente (vuelve como estaba)",
+  chauffer: "calentar",
+  rafraîchir: "enfriar",
+  "Puissance estimée": "Potencia estimada",
+  "En marche au moins": "Encendido al menos",
+  "Tolérance réseau": "Tolerancia de red",
+  "Suivre le surplus solaire": "Seguir el excedente solar",
+  "Puissance estimée d'une pièce": "Potencia estimada de una estancia",
+  "Chaque pièce démarre quand le surplus suffit depuis 1 min et s'arrête quand il manque depuis 3 min, dans l'ordre des priorités des automatismes. Le mode de la climatisation (chaud ou froid) reste celui que vous avez choisi : une pièce ne chauffe que si son système est en mode chaud. Ensuite, elle revient comme avant, sauf si quelqu'un l'a changée entre-temps.":
+    "Cada estancia arranca cuando el excedente basta desde hace 1 min y se detiene cuando falta desde hace 3 min, en el orden de las prioridades de las automatizaciones. El modo de la climatización (calor o frío) sigue siendo el que eligió: una estancia solo calienta si su sistema está en calor. Después, vuelve como estaba, salvo si alguien la cambió mientras tanto.",
+  "Tant qu'il fait jour (ou nuit)": "Mientras es de día (o de noche)",
+  "Du lever au coucher du soleil": "Del amanecer al atardecer",
+  "Du coucher au lever du soleil": "Del atardecer al amanecer",
+  "jusqu'à {kw}": "hasta {kw}",
+  "dès {kw} de surplus": "desde {kw} de excedente",
+  "chauffe à {sp} °C": "calienta a {sp} °C",
+  "rafraîchit à {sp} °C": "enfría a {sp} °C",
+  "Sur le surplus solaire": "Con el excedente solar",
+  "Par ordre de priorité : le surplus va d'abord au premier.":
+    "Por orden de prioridad: el excedente va primero al primero.",
+  "Chaque ligne ouvre son automatisme ; l'ordre se change avec « Priorités » dans Automatismes.":
+    "Cada línea abre su automatización; el orden se cambia con «Prioridades» en Automatizaciones.",
 }
 
 export default es

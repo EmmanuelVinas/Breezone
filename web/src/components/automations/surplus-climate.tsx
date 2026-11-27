@@ -2,12 +2,7 @@ import { useState } from "react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
-import type {
-  AutomationCondition,
-  AutomationInput,
-  AutomationStep,
-  DeviceView,
-} from "@/lib/api"
+import type { AutomationInput, AutomationStep, DeviceView } from "@/lib/api"
 import { api } from "@/lib/api"
 import { errorText } from "@/lib/format"
 import { t } from "@/lib/i18n"
@@ -30,18 +25,15 @@ type Setup = {
   coolTo: number
   /** Cools only when it is warmer outside. */
   coolAbove: number
-  /** Watts returned to the grid for 5 min that start it. */
-  surplus: number
+  /** What a room is reckoned to draw (W): it starts once the surplus is that much. */
+  power: number
 }
 
-/** Room for the wait and the "put back" in a rule: the zones of more rooms make more rules. */
-const ZONES_PER_RULE = MAX_ACTIONS - 2
-
 /**
- * The rules of the recipe: when more than `surplus` W go back to the grid for 5 min, if it is cold
- * (or warm) outside and the climate is in that mode, bring the rooms chosen to their temperature;
- * once the home draws from the grid again for 10 min, put them back as they were. The mode of
- * a system is left as it is (it is the whole system's): a rule follows it.
+ * The rules of the recipe: while it is cold (or warm) outside, the rooms chosen follow the solar
+ * surplus, heating (or cooling) to their temperature when there is enough of it, in the order of
+ * the priorities; once it is no longer so, they are put back as they were. The mode of a system is
+ * left as it is (it is the whole system's): a room heats only while its system heats.
  */
 export function surplusClimateRules(
   home: Home,
@@ -49,22 +41,15 @@ export function surplusClimateRules(
   s: Setup
 ): AutomationInput[] {
   const chosen = zones.filter((z) => s.zones.includes(z.id))
-  // A rule per Airzone system: each checks the mode of its own system, as two systems may be in
-  // different modes (a room of a system in cooling must not get the setpoint to heat).
-  const system = (z: DeviceView) =>
-    `${z.installation_id}/${(z.reference as { system_id?: number } | null)?.system_id ?? ""}`
-  const bySystem = new Map<string, DeviceView[]>()
-  for (const z of chosen)
-    bySystem.set(system(z), [...(bySystem.get(system(z)) ?? []), z])
   const groups: DeviceView[][] = []
-  for (const list of bySystem.values())
-    for (let i = 0; i < list.length; i += ZONES_PER_RULE)
-      groups.push(list.slice(i, i + ZONES_PER_RULE))
+  for (let i = 0; i < chosen.length; i += MAX_ACTIONS)
+    groups.push(chosen.slice(i, i + MAX_ACTIONS))
   const rule = (
     name: string,
     group: DeviceView[],
-    mode: "heating" | "cooling",
-    outdoor: AutomationCondition,
+    mode: "heat" | "cool",
+    op: "below" | "above",
+    outdoor: number,
     setpoint: number
   ): AutomationInput => ({
     ...blank(home),
@@ -72,48 +57,28 @@ export function surplusClimateRules(
     triggers: [
       {
         kind: "measure",
-        measure: { kind: "energy", flow: "export" },
-        op: "above",
-        value: s.surplus,
-        for_minutes: 5,
+        measure: { kind: "outdoor" },
+        op,
+        value: outdoor,
+        for_minutes: 0,
       },
     ],
     match: "all",
-    conditions: [
-      outdoor,
-      { kind: "state", device_id: group[0].id, field: "mode", value: mode },
-      // The car first: no heating or cooling while it is plugged in, it takes the surplus.
-      ...home.devices
-        .filter((d) => d.traits.includes("ev.charger@1"))
-        .map((d): AutomationCondition => ({
-          kind: "state",
-          device_id: d.id,
-          field: "status",
-          value: "available",
-        })),
-    ],
-    actions: [
-      ...group.map((z): AutomationStep => ({
-        kind: "device",
-        device_id: z.id,
-        trait: "climate.zone",
-        action: "set",
-        params: { on: true, setpoint },
-      })),
-      {
-        kind: "wait_until",
-        condition: {
-          kind: "measure",
-          measure: { kind: "energy", flow: "import" },
-          op: "above",
-          value: 300,
-        },
-        for_seconds: 600,
-        timeout_seconds: 10 * 3600,
-        on_timeout: "continue",
-      },
-      { kind: "restore" },
-    ],
+    conditions: [],
+    actions: group.map((z): AutomationStep => ({
+      kind: "surplus",
+      device_id: z.id,
+      enabled: true,
+      power: s.power,
+      min_on_minutes: 30,
+      mode,
+      setpoint,
+    })),
+    over: group.map((z): AutomationStep => ({
+      kind: "surplus",
+      device_id: z.id,
+      enabled: false,
+    })),
   })
   // Several rules: each says which rooms it heats.
   const part = (name: string, i: number) =>
@@ -126,13 +91,9 @@ export function surplusClimateRules(
           rule(
             part(t("Surplus solaire : chauffer la maison"), i),
             group,
-            "heating",
-            {
-              kind: "measure",
-              measure: { kind: "outdoor" },
-              op: "below",
-              value: s.heatBelow,
-            },
+            "heat",
+            "below",
+            s.heatBelow,
             s.heatTo
           ),
         ]
@@ -142,13 +103,9 @@ export function surplusClimateRules(
           rule(
             part(t("Surplus solaire : rafraîchir la maison"), i),
             group,
-            "cooling",
-            {
-              kind: "measure",
-              measure: { kind: "outdoor" },
-              op: "above",
-              value: s.coolAbove,
-            },
+            "cool",
+            "above",
+            s.coolAbove,
             s.coolTo
           ),
         ]
@@ -210,7 +167,7 @@ export function SurplusClimateSetup({
     cool: true,
     coolTo: 25,
     coolAbove: 25,
-    surplus: 500,
+    power: 1500,
   })
   const set = (patch: Partial<Setup>) => setS({ ...s, ...patch })
   const rules = surplusClimateRules(home, zones, s)
@@ -306,16 +263,16 @@ export function SurplusClimateSetup({
         )}
       </div>
       <Degrees
-        id="surplus"
-        label={t("À partir d'un surplus de")}
-        value={s.surplus}
+        id="power"
+        label={t("Puissance estimée d'une pièce")}
+        value={s.power}
         step={100}
-        unit={t("W rendus au réseau pendant 5 min")}
-        onChange={(v) => set({ surplus: v })}
+        unit="W"
+        onChange={(v) => set({ power: v })}
       />
       <p className="text-sm text-muted-foreground">
         {t(
-          "Le mode de la climatisation (chaud ou froid) reste celui que vous avez choisi : l'automatisme ne chauffe que si elle est en mode chaud, et ne rafraîchit que si elle est en mode froid. Quand la maison tire de nouveau plus de 300 W du réseau pendant 10 min, chaque pièce revient comme avant, sauf si quelqu'un l'a changée entre-temps."
+          "Chaque pièce démarre quand le surplus suffit depuis 1 min et s'arrête quand il manque depuis 3 min, dans l'ordre des priorités des automatismes. Le mode de la climatisation (chaud ou froid) reste celui que vous avez choisi : une pièce ne chauffe que si son système est en mode chaud. Ensuite, elle revient comme avant, sauf si quelqu'un l'a changée entre-temps."
         )}
       </p>
       <div className="flex flex-wrap gap-2">

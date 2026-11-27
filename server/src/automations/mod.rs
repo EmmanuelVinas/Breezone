@@ -258,6 +258,8 @@ pub enum Trigger {
     },
     /// The first one arrives home (`home`), or the last one leaves.
     Presence { home: bool },
+    /// The sun rises (`day`) and it holds until it sets ("tant qu'il fait jour"), or the other way.
+    Daylight { day: bool },
     /// A yes/no or a choice a module tells (a field of the `conditions` of its manifest) becomes
     /// `value`, and stays so `for_minutes`.
     Module {
@@ -454,11 +456,26 @@ pub enum Step {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         solar: Option<crate::charging::Solar>,
     },
-    /// A device of the list of the solar surplus follows it (`enabled`), or no longer does (it is
-    /// then left as it is).
+    /// A relay or a zone follows the solar surplus (`enabled`), in the order of the priority of this
+    /// automation, until an automation tells it otherwise; or no longer does (it is then put back
+    /// as it was). Without `power`, a device already on the surplus follows it again as it was set.
     Surplus {
         device_id: i64,
         enabled: bool,
+        /// Its power when on (W).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        power: Option<i64>,
+        /// It stays on at least this long once started.
+        #[serde(default, skip_serializing_if = "is_zero")]
+        min_on_minutes: i64,
+        /// What it may draw from the grid before Breezone cuts back (W).
+        #[serde(default, skip_serializing_if = "is_zero")]
+        tolerance: i64,
+        /// A zone: heat or cool, to `setpoint`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        mode: Option<crate::surplus::ClimateMode>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        setpoint: Option<f64>,
     },
     /// A charger charges now, without a break: up to `kw` (its maximum without), until "HH:MM" or
     /// `kwh` more, else until it is unplugged.
@@ -471,6 +488,10 @@ pub enum Step {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         kwh: Option<f64>,
     },
+}
+
+fn is_zero(n: &i64) -> bool {
+    *n == 0
 }
 
 /// What a rule does when it is started again while it still runs.
@@ -1014,7 +1035,16 @@ impl Trigger {
     /// It holds for a while (a measure, a state, the sun on a façade, presence): it can tell when
     /// it is over.
     pub fn lasts(&self) -> bool {
-        matches!(self, Trigger::Measure { .. } | Trigger::State { .. } | Trigger::Facade { .. } | Trigger::Presence { .. } | Trigger::Tariff { .. } | Trigger::Module { .. })
+        matches!(
+            self,
+            Trigger::Measure { .. }
+                | Trigger::State { .. }
+                | Trigger::Facade { .. }
+                | Trigger::Presence { .. }
+                | Trigger::Daylight { .. }
+                | Trigger::Tariff { .. }
+                | Trigger::Module { .. }
+        )
     }
 
     /// `None`: cannot be told now (a device that does not answer).
@@ -1031,6 +1061,10 @@ impl Trigger {
             }
             Trigger::Facade { facing } => {
                 let holds = ctx.on_facade(*facing)?;
+                Look::Holds { holds, released: !holds, edge: true, for_minutes: 0 }
+            }
+            Trigger::Daylight { day } => {
+                let holds = Condition::Daylight { day: *day }.met(ctx)?;
                 Look::Holds { holds, released: !holds, edge: true, for_minutes: 0 }
             }
             Trigger::Presence { home } => {
@@ -1174,6 +1208,7 @@ mod tests {
             last_reason: None,
             created_at: 0,
             updated_at: 0,
+            priority: id,
         }
     }
 
@@ -1754,7 +1789,8 @@ mod tests {
         let now = Step::ChargerNow { device_id: 2, kw: Some(7.4), until: Some("06:00".into()), kwh: None };
         assert_eq!(c.describe_step(&now).fr, "Borne : charger maintenant jusqu'à 7,4 kW, jusqu'à 06:00");
         assert_eq!(c.describe_step(&now).en, "Borne: charge now up to 7.4 kW, until 06:00");
-        assert_eq!(c.describe_step(&Step::Surplus { device_id: 1, enabled: false }).fr, "Salon : ne plus suivre le surplus solaire");
+        let stop = Step::Surplus { device_id: 1, enabled: false, power: None, min_on_minutes: 0, tolerance: 0, mode: None, setpoint: None };
+        assert_eq!(c.describe_step(&stop).fr, "Salon : ne plus suivre le surplus solaire");
         let full = Step::ChargerNow { device_id: 2, kw: None, until: None, kwh: Some(10.0) };
         assert_eq!(c.describe_step(&full).fr, "Borne : charger maintenant au maximum, +10 kWh");
     }

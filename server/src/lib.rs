@@ -302,6 +302,9 @@ pub fn spawn_background(state: &AppState) {
             if let Err(e) = charging::adopt_surplus_chargers(&state).await {
                 tracing::error!("chargers of the surplus not moved to a charging profile: {e:#}");
             }
+            if let Err(e) = surplus::adopt_list(&state).await {
+                tracing::error!("list of the surplus not made into automations: {e:#}");
+            }
             surplus::run_loop(state).await
         });
     }

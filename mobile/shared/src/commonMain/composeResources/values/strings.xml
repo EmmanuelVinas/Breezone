@@ -842,4 +842,11 @@
         <item quantity="one">%1$d appareil</item>
         <item quantity="other">%1$d appareils</item>
     </plurals>
+    <string name="surplus_title">Sur le surplus solaire</string>
+    <string name="surplus_export">Par ordre de priorité · %1$s repartent au réseau</string>
+    <string name="surplus_order">Par ordre de priorité : le surplus va d’abord au premier.</string>
+    <string name="surplus_note">Se règle dans Automatismes (web).</string>
+    <string name="surplus_heats">chauffe à %1$s °C</string>
+    <string name="surplus_cools">rafraîchit à %1$s °C</string>
+    <string name="surplus_rule">« %1$s »</string>
 </resources>

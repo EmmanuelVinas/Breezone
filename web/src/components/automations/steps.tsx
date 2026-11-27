@@ -567,13 +567,37 @@ export function StepEditor({
           />
         </>
       )
-    case "surplus":
+    case "surplus": {
+      const target = (home.surplusTargets ?? []).find(
+        (x) => x.device_id === step.device_id
+      )
+      const zone = target?.zone ?? step.mode !== undefined
+      // Following it with its settings (a step of before has none: it followed as it was set).
+      const follow = (device_id: number) => {
+        const x = (home.surplusTargets ?? []).find(
+          (d) => d.device_id === device_id
+        )
+        return {
+          kind: "surplus" as const,
+          device_id,
+          enabled: true,
+          power: x?.power ? Math.round(x.power) : x?.zone ? 1500 : 1000,
+          min_on_minutes: 30,
+          ...(x?.zone ? { mode: "heat" as const, setpoint: 20 } : {}),
+        }
+      }
       return (
         <>
           <Pick
             value={String(step.device_id)}
-            onChange={(v) => onChange({ ...step, device_id: Number(v) })}
-            options={(home.surplusLoads ?? []).map((l) => [
+            onChange={(v) =>
+              onChange(
+                step.enabled
+                  ? follow(Number(v))
+                  : { ...step, device_id: Number(v) }
+              )
+            }
+            options={(home.surplusTargets ?? []).map((l) => [
               String(l.device_id),
               l.name,
             ])}
@@ -581,15 +605,95 @@ export function StepEditor({
           />
           <Pick
             value={String(step.enabled)}
-            onChange={(v) => onChange({ ...step, enabled: v === "true" })}
+            onChange={(v) =>
+              onChange(
+                v === "true"
+                  ? follow(step.device_id)
+                  : {
+                      kind: "surplus",
+                      device_id: step.device_id,
+                      enabled: false,
+                    }
+              )
+            }
             options={[
               ["true", t("suit le surplus solaire")],
-              ["false", t("ne suit plus le surplus solaire")],
+              ["false", t("ne suit plus le surplus (remis comme avant)")],
             ]}
-            className="w-full lg:w-64"
+            className="w-full lg:w-72"
           />
+          {step.enabled && step.power !== undefined && (
+            <>
+              {zone && (
+                <>
+                  <Pick
+                    value={step.mode ?? "heat"}
+                    onChange={(v) =>
+                      onChange({ ...step, mode: v as "heat" | "cool" })
+                    }
+                    options={[
+                      ["heat", t("chauffer")],
+                      ["cool", t("rafraîchir")],
+                    ]}
+                    className="w-full lg:w-36"
+                  />
+                  <label className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">
+                      {t("à")}
+                    </span>
+                    <NumberInput
+                      value={step.setpoint}
+                      onChange={(v) => onChange({ ...step, setpoint: v })}
+                      unit="°C"
+                      min={10}
+                      max={32}
+                    />
+                  </label>
+                </>
+              )}
+              <label className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">
+                  {zone ? t("Puissance estimée") : t("Puissance")}
+                </span>
+                <NumberInput
+                  value={step.power}
+                  onChange={(v) => onChange({ ...step, power: v })}
+                  unit="W"
+                  min={1}
+                  max={20000}
+                />
+              </label>
+              <label className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">
+                  {t("En marche au moins")}
+                </span>
+                <NumberInput
+                  value={step.min_on_minutes ?? 0}
+                  onChange={(v) =>
+                    onChange({ ...step, min_on_minutes: v ?? 0 })
+                  }
+                  unit="min"
+                  min={0}
+                  max={240}
+                />
+              </label>
+              <label className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">
+                  {t("Tolérance réseau")}
+                </span>
+                <NumberInput
+                  value={step.tolerance ?? 0}
+                  onChange={(v) => onChange({ ...step, tolerance: v ?? 0 })}
+                  unit="W"
+                  min={0}
+                  max={5000}
+                />
+              </label>
+            </>
+          )}
         </>
       )
+    }
     case "charger_profile": {
       const mode = step.mode ?? (step.profile_id != null ? "profile" : "free")
       const solar = step.solar ?? {}
@@ -794,8 +898,8 @@ export function StepList({
       ? [["charger_profile", t("Recharge de la borne")] as Option]
       : []),
     ...(charger ? [["charger_now", t("Charger maintenant")] as Option] : []),
-    ...(home.surplusLoads?.length
-      ? [["surplus", t("Surplus solaire : activer ou couper")] as Option]
+    ...(home.surplusTargets?.length
+      ? [["surplus", t("Suivre le surplus solaire")] as Option]
       : []),
     ...(drivesDevice ? [["restore", t("Remettre comme avant")] as Option] : []),
   ]
@@ -814,13 +918,17 @@ export function StepList({
         mode: "profile",
         profile_id: home.chargeProfiles?.[0]?.id ?? null,
       }
-    else if (k === "surplus" && home.surplusLoads?.[0])
+    else if (k === "surplus" && home.surplusTargets?.[0]) {
+      const x = home.surplusTargets[0]
       step = {
         kind: "surplus",
-        device_id: home.surplusLoads[0].device_id,
-        enabled: false,
+        device_id: x.device_id,
+        enabled: true,
+        power: x.power ? Math.round(x.power) : x.zone ? 1500 : 1000,
+        min_on_minutes: 30,
+        ...(x.zone ? { mode: "heat" as const, setpoint: 20 } : {}),
       }
-    else if (k === "charger_now" && charger)
+    } else if (k === "charger_now" && charger)
       step = { kind: "charger_now", device_id: charger.id, kw: 7 }
     else if (k === "wait_until") {
       const condition = newCondition("measure", home)!

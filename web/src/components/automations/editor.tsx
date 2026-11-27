@@ -95,6 +95,7 @@ export const lasts = (w: AutomationTrigger) =>
   w.kind === "state" ||
   w.kind === "facade" ||
   w.kind === "presence" ||
+  w.kind === "daylight" ||
   w.kind === "tariff" ||
   w.kind === "module"
 

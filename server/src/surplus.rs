@@ -59,6 +59,14 @@ pub enum Kind {
     Climate,
 }
 
+/// What a zone does on the surplus, when its automation tells it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ClimateMode {
+    Heat,
+    Cool,
+}
+
 /// When a zone of the air conditioning runs on the surplus, and to which setpoint.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ClimatePlan {
@@ -68,11 +76,14 @@ pub struct ClimatePlan {
     pub heat_below: f64,
     /// …and cools while it is above this.
     pub cool_above: f64,
+    /// Heats or cools whatever the outdoor temperature (the conditions of its automation decide
+    /// when); `None`: by the outdoor temperatures above (the list of before).
+    pub mode: Option<ClimateMode>,
 }
 
 impl Default for ClimatePlan {
     fn default() -> Self {
-        Self { heat_setpoint: 20.0, cool_setpoint: 24.0, heat_below: 14.0, cool_above: 25.0 }
+        Self { heat_setpoint: 20.0, cool_setpoint: 24.0, heat_below: 14.0, cool_above: 25.0, mode: None }
     }
 }
 
@@ -163,6 +174,7 @@ pub enum Command {
 /// What a load does, for the pages.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Status {
+    /// "held" (an automation of a higher priority drives it now) |
     /// "solar" (runs on the surplus) | "guarantee" (runs from the grid to keep the guarantee) |
     /// "waiting" (not enough surplus) | "no_car" | "unavailable" | "no_meter" | "off" (not steered) |
     /// "idle" (a zone: no need now) | "manual" (set by hand, left alone) | "no_charge" (its
@@ -206,6 +218,8 @@ struct Memory {
 #[derive(Debug, Default)]
 pub struct Regulator {
     memory: HashMap<i64, Memory>,
+    /// What each load is, to put it back once it no longer follows the surplus.
+    kinds: HashMap<i64, Kind>,
 }
 
 impl Regulator {
@@ -310,7 +324,18 @@ impl Regulator {
     /// [`Regulator::step`], with or without a grid meter (`None`): without one, only a charger
     /// whose plan says no charge, or charge whatever the sun, is run.
     pub fn step_with(&mut self, now: i64, tz: Tz, export: Option<f64>, loads: &[(Load, Reading)]) -> (Vec<(i64, Command)>, HashMap<i64, Status>) {
+        // A load that no longer follows the surplus is put back as it was: a relay Breezone
+        // switched on is switched off, a zone gets its setpoint back.
+        let mut commands = vec![];
+        for (id, m) in self.memory.iter().filter(|(id, _)| !loads.iter().any(|(l, _)| l.device_id == **id)) {
+            match self.kinds.get(id) {
+                Some(Kind::Relay) if m.on_since.is_some() => commands.push((*id, Command::Off)),
+                Some(Kind::Climate) if m.ours => commands.push((*id, Command::ClimateOff(m.before))),
+                _ => {}
+            }
+        }
         self.memory.retain(|id, _| loads.iter().any(|(l, _)| l.device_id == *id));
+        self.kinds = loads.iter().map(|(l, _)| (l.device_id, l.kind)).collect();
         let meter = export.is_some();
         let export = export.unwrap_or(0.0);
         // What the loads Breezone runs use is part of the surplus.
@@ -319,7 +344,6 @@ impl Regulator {
         // A zone counts only when Breezone runs it (one on by hand is not part of the surplus).
         let ours = |l: &Load| l.kind != Kind::Climate || self.memory.get(&l.device_id).is_some_and(|m| m.ours);
         let mut budget = export + loads.iter().filter(|(l, r)| r.online && r.running && ours(l)).map(|(l, r)| used(l, r)).sum::<f64>();
-        let mut commands = vec![];
         let mut statuses = HashMap::new();
         for (load, r) in loads {
             let m = self.memory.entry(load.device_id).or_default();
@@ -548,26 +572,36 @@ impl Regulator {
                     let plan = load.climate;
                     let need = load.power.max(1.0);
                     // What it should do now: heat, cool, or nothing (and why).
-                    let want: Result<f64, Text> = match r.outdoor {
-                        None => Err(crate::text!("Température extérieure inconnue", "Outdoor temperature unknown", "Temperatura exterior desconocida")),
-                        Some(t) if t < plan.heat_below && r.heats => Ok(plan.heat_setpoint),
-                        Some(t) if t > plan.cool_above && r.cools => Ok(plan.cool_setpoint),
-                        Some(t) if t < plan.heat_below => Err(crate::text!(
-                            "Froid dehors ({0}°), mais le système n'est pas en chauffage",
-                            "Cold outside ({0}°), but the system does not heat",
-                            "Frío fuera ({0}°), pero el sistema no está en calefacción",
-                            t.round()
-                        )),
-                        Some(t) if t > plan.cool_above => Err(crate::text!(
-                            "Chaud dehors ({0}°), mais le système n'est pas en froid",
-                            "Hot outside ({0}°), but the system does not cool",
-                            "Calor fuera ({0}°), pero el sistema no está en frío",
-                            t.round()
-                        )),
-                        Some(t) => Err(crate::text!("Pas besoin : {0}° dehors", "No need: {0}° outside", "Sin necesidad: {0}° fuera", t.round())),
+                    let want: Result<f64, Text> = match (plan.mode, r.outdoor) {
+                        (Some(ClimateMode::Heat), _) if r.heats => Ok(plan.heat_setpoint),
+                        (Some(ClimateMode::Cool), _) if r.cools => Ok(plan.cool_setpoint),
+                        (Some(ClimateMode::Heat), _) => Err(crate::text!("Le système n'est pas en chauffage", "The system does not heat", "El sistema no está en calefacción")),
+                        (Some(ClimateMode::Cool), _) => Err(crate::text!("Le système n'est pas en froid", "The system does not cool", "El sistema no está en frío")),
+                        (None, outdoor) => match outdoor {
+                            None => Err(crate::text!("Température extérieure inconnue", "Outdoor temperature unknown", "Temperatura exterior desconocida")),
+                            Some(t) if t < plan.heat_below && r.heats => Ok(plan.heat_setpoint),
+                            Some(t) if t > plan.cool_above && r.cools => Ok(plan.cool_setpoint),
+                            Some(t) if t < plan.heat_below => Err(crate::text!(
+                                "Froid dehors ({0}°), mais le système n'est pas en chauffage",
+                                "Cold outside ({0}°), but the system does not heat",
+                                "Frío fuera ({0}°), pero el sistema no está en calefacción",
+                                t.round()
+                            )),
+                            Some(t) if t > plan.cool_above => Err(crate::text!(
+                                "Chaud dehors ({0}°), mais le système n'est pas en froid",
+                                "Hot outside ({0}°), but the system does not cool",
+                                "Calor fuera ({0}°), pero el sistema no está en frío",
+                                t.round()
+                            )),
+                            Some(t) => Err(crate::text!("Pas besoin : {0}° dehors", "No need: {0}° outside", "Sin necesidad: {0}° fuera", t.round())),
+                        },
+                    };
+                    let heats = match plan.mode {
+                        Some(mode) => mode == ClimateMode::Heat,
+                        None => r.outdoor.is_some_and(|t| t < plan.heat_below),
                     };
                     let running_text = |sp: f64| {
-                        if r.outdoor.is_some_and(|t| t < plan.heat_below) {
+                        if heats {
                             crate::text!("Chauffe à {0}° sur le surplus", "Heating to {0}° on the surplus", "Calienta a {0}° con el excedente", sp)
                         } else {
                             crate::text!("Rafraîchit à {0}° sur le surplus", "Cooling to {0}° on the surplus", "Enfría a {0}° con el excedente", sp)
@@ -697,6 +731,16 @@ fn num(state: &Value, field: &str) -> Option<f64> {
     state.get(field).and_then(Value::as_f64)
 }
 
+/// What an automation told a zone: one setpoint, to heat or to cool to (both: the outdoor
+/// temperatures of the list of before decide).
+pub fn climate_mode(row: &SurplusLoadRow) -> Option<ClimateMode> {
+    match (row.heat_setpoint, row.cool_setpoint, row.heat_below, row.cool_above) {
+        (Some(_), None, None, None) => Some(ClimateMode::Heat),
+        (None, Some(_), None, None) => Some(ClimateMode::Cool),
+        _ => None,
+    }
+}
+
 /// A load as configured, with what its device says of itself.
 pub fn load_of(row: &SurplusLoadRow, d: &DeviceView, kind: Kind) -> Load {
     let (lo, hi) = (num(&d.state, "limit_min").unwrap_or(6.0) as i64, num(&d.state, "limit_max").unwrap_or(32.0) as i64);
@@ -720,6 +764,7 @@ pub fn load_of(row: &SurplusLoadRow, d: &DeviceView, kind: Kind) -> Load {
                 cool_setpoint: row.cool_setpoint.unwrap_or(d.cool_setpoint),
                 heat_below: row.heat_below.unwrap_or(d.heat_below),
                 cool_above: row.cool_above.unwrap_or(d.cool_above),
+                mode: climate_mode(row),
             }
         },
         plan: None,
@@ -806,6 +851,11 @@ async fn send(state: &AppState, d: &DeviceView, c: Command) -> Result<(), String
     state.drivers.act(source, reference, trait_name, action, &p).await.map_err(|e| e.to_string())
 }
 
+/// The priority of each automation, by id.
+pub async fn priorities(state: &AppState) -> HashMap<i64, i64> {
+    db::list_automations(&state.db).await.unwrap_or_default().into_iter().map(|r| (r.id, r.priority)).collect()
+}
+
 /// Looks at the surplus once (at `now`): sends what the loads must do, keeps their status.
 pub async fn tick(state: &AppState, now: i64) {
     let rows = match db::list_surplus_loads(&state.db).await {
@@ -832,14 +882,24 @@ pub async fn tick(state: &AppState, now: i64) {
             }
         }
     }
-    let mut loads: Vec<(Load, Reading)> =
-        steered.iter().map(|(r, d, k)| (load_of(r, d, *k), reading_of(d, *k, d.installation_id.and_then(|i| outdoor.get(&i).copied().flatten())))).collect();
+    // The priority of the automation that put each device on the surplus (or told a charger what to
+    // do); the list of before, until it is made into automations, after them.
+    let priorities = priorities(state).await;
+    let by_rule = |rule: Option<i64>| rule.and_then(|id| priorities.get(&id).copied()).unwrap_or(i64::MAX);
+    let mut loads: Vec<(i64, Option<i64>, Load, Reading)> = steered
+        .iter()
+        .map(|(r, d, k)| (by_rule(r.automation_id), r.automation_id, load_of(r, d, *k), reading_of(d, *k, d.installation_id.and_then(|i| outdoor.get(&i).copied().flatten()))))
+        .collect();
     // The chargers that follow a plan, steered on the surplus or not.
+    let plan_rules: HashMap<i64, Option<i64>> = db::list_charger_plans(&state.db).await.unwrap_or_default().into_iter().map(|p| (p.device_id, p.automation_id)).collect();
     for (id, (plan, profile)) in crate::charging::plans(state, &devices, now).await {
-        match loads.iter_mut().find(|(l, _)| l.device_id == id) {
-            Some((l, _)) if l.kind == Kind::Charger => {
+        let owner = plan_rules.get(&id).copied().flatten();
+        let priority = by_rule(owner);
+        match loads.iter_mut().find(|(_, _, l, _)| l.device_id == id) {
+            Some((p, _, l, _)) if l.kind == Kind::Charger => {
                 l.plan = Some(plan);
                 l.profile = profile;
+                *p = (*p).min(priority);
             }
             Some(_) => {}
             None => {
@@ -847,19 +907,43 @@ pub async fn tick(state: &AppState, now: i64) {
                 let mut l = load_of(&SurplusLoadRow::charger(id), d, Kind::Charger);
                 l.plan = Some(plan);
                 l.profile = profile;
-                // A charger on its profile takes the surplus before the loads of the list.
-                loads.insert(0, (l, reading_of(d, Kind::Charger, None)));
+                loads.push((priority, owner, l, reading_of(d, Kind::Charger, None)));
             }
         }
     }
-    // What runs whatever the sun first: what is left is the surplus of the others.
-    loads.sort_by_key(|(l, _)| !matches!(l.plan, Some(Plan::Off { .. } | Plan::Max { .. })));
+    // What runs whatever the sun first (what is left is the surplus of the others), then by priority.
+    loads.sort_by_key(|(p, _, l, _)| (!matches!(l.plan, Some(Plan::Off { .. } | Plan::Max { .. })), *p));
+    // A device a running automation of a higher priority drives is left to it, as it is.
+    let mut held: HashMap<i64, Status> = HashMap::new();
+    loads.retain(|(p, owner, l, r)| match state.automations.holder(l.device_id, *p, owner.unwrap_or(0)) {
+        Some((_, name)) => {
+            let text = crate::text!("Piloté par « {0} », de priorité plus haute", "Driven by “{0}”, of a higher priority", "Pilotado por «{0}», de prioridad más alta", name);
+            held.insert(l.device_id, Status { state: "held", amps: None, power: r.power, text });
+            false
+        }
+        None => true,
+    });
+    let loads: Vec<(Load, Reading)> = loads.into_iter().map(|(_, _, l, r)| (l, r)).collect();
     let export = grid.map(|g| -g);
-    let (commands, statuses) = state.surplus.regulator.lock().await.step_with(now, state.cfg.timezone, export, &loads);
+    let (commands, mut statuses) = {
+        let mut regulator = state.surplus.regulator.lock().await;
+        for id in held.keys() {
+            regulator.memory.remove(id);
+        }
+        regulator.step_with(now, state.cfg.timezone, export, &loads)
+    };
+    statuses.extend(held);
     for (id, c) in commands {
         let Some(d) = devices.iter().find(|d| d.id == id) else { continue };
         let name = d.name.clone();
+        let left = !loads.iter().any(|(l, _)| l.device_id == id);
         let message = match c {
+            Command::Off | Command::ClimateOff(_) if left => crate::text!(
+                "{0} : remis comme avant, ne suit plus le surplus solaire",
+                "{0}: put back as it was, no longer follows the solar surplus",
+                "{0}: devuelto como estaba, ya no sigue el excedente solar",
+                name
+            ),
             Command::Start(a) if statuses.get(&id).is_some_and(|s| s.state == "guarantee") => {
                 crate::text!("{0} : charge à {1} A pour tenir la garantie", "{0}: charging at {1} A to keep the guarantee", "{0}: carga a {1} A para cumplir la garantía", name, a)
             }
@@ -933,6 +1017,106 @@ pub async fn tick(state: &AppState, now: i64) {
     *state.surplus.snapshot.write().await = Snapshot { meter: export.is_some(), export, statuses };
 }
 
+/// The list of the surplus of before (no automation put its devices there) becomes automations,
+/// first in priority, in its order: a relay follows the surplus while it is daytime; a zone heats
+/// while it is cold outside, cools while it is hot (two automations). The activity feed says so.
+pub async fn adopt_list(state: &AppState) -> anyhow::Result<()> {
+    use crate::automations::{Automation, Match, Measure, Op, RunMode, Step, Trigger};
+    let rows: Vec<SurplusLoadRow> = db::list_surplus_loads(&state.db).await?.into_iter().filter(|r| r.automation_id.is_none()).collect();
+    if rows.is_empty() {
+        return Ok(());
+    }
+    let devices = db::list_devices(&state.db).await?;
+    let views = devices::list(state).await.unwrap_or_default();
+    let follow = |r: &SurplusLoadRow, mode: Option<ClimateMode>, setpoint: Option<f64>| Step::Surplus {
+        device_id: r.device_id,
+        enabled: true,
+        power: Some(r.power.unwrap_or(1000)),
+        min_on_minutes: r.min_on_minutes,
+        tolerance: r.tolerance,
+        mode,
+        setpoint,
+    };
+    let stop = |r: &SurplusLoadRow| Step::Surplus { device_id: r.device_id, enabled: false, power: None, min_on_minutes: 0, tolerance: 0, mode: None, setpoint: None };
+    let rule = |trigger: Trigger, then: Step, over: Step| Automation {
+        triggers: vec![trigger],
+        joined: Match::All,
+        conditions: vec![],
+        actions: vec![then],
+        otherwise: vec![],
+        mode: RunMode::Single,
+        over: vec![over],
+    };
+    let mut made: Vec<(i64, String)> = vec![];
+    for r in &rows {
+        let Some(d) = devices.iter().find(|d| d.id == r.device_id) else { continue };
+        let name = views.iter().find(|v| v.id == d.id).map(|v| v.name.clone()).or_else(|| d.name.clone()).unwrap_or_else(|| format!("#{}", d.id));
+        let zone = d.installation_id.is_some();
+        let rules: Vec<(String, Automation)> = if zone {
+            let plan = ClimatePlan::default();
+            vec![
+                (
+                    format!("{name} : chauffer sur le surplus"),
+                    rule(
+                        Trigger::Measure { measure: Measure::Outdoor, op: Op::Below, value: r.heat_below.unwrap_or(plan.heat_below), for_minutes: 0 },
+                        follow(r, Some(ClimateMode::Heat), Some(r.heat_setpoint.unwrap_or(plan.heat_setpoint))),
+                        stop(r),
+                    ),
+                ),
+                (
+                    format!("{name} : rafraîchir sur le surplus"),
+                    rule(
+                        Trigger::Measure { measure: Measure::Outdoor, op: Op::Above, value: r.cool_above.unwrap_or(plan.cool_above), for_minutes: 0 },
+                        follow(r, Some(ClimateMode::Cool), Some(r.cool_setpoint.unwrap_or(plan.cool_setpoint))),
+                        stop(r),
+                    ),
+                ),
+            ]
+        } else {
+            vec![(format!("{name} sur le surplus"), rule(Trigger::Daylight { day: true }, follow(r, None, None), stop(r)))]
+        };
+        let mut first = None;
+        for (title, a) in rules {
+            let json = [
+                serde_json::to_string(&a.triggers)?,
+                serde_json::to_string(&a.conditions)?,
+                serde_json::to_string(&a.actions)?,
+                serde_json::to_string(&a.otherwise)?,
+                serde_json::to_string(&a.over)?,
+            ];
+            let row = db::insert_automation(
+                &state.db,
+                &db::AutomationFields {
+                    name: &title,
+                    enabled: r.enabled,
+                    trigger: &json[0],
+                    joined: a.joined.as_str(),
+                    conditions: &json[1],
+                    actions: &json[2],
+                    else_actions: &json[3],
+                    run_mode: a.mode.as_str(),
+                    over_actions: &json[4],
+                },
+            )
+            .await?;
+            first.get_or_insert(row.id);
+            made.push((row.id, title));
+        }
+        // Until its automations run, the device follows the surplus as it was set.
+        db::upsert_surplus_load(&state.db, &SurplusLoadRow { automation_id: first, ..r.clone() }).await?;
+    }
+    db::order_automations(&state.db, &made.iter().map(|(id, _)| *id).collect::<Vec<_>>()).await?;
+    let names = made.iter().map(|(_, n)| format!("« {n} »")).collect::<Vec<_>>().join(", ");
+    let text = crate::text!(
+        "La liste du pilotage sur surplus solaire devient des automatismes, en tête des priorités : {0}",
+        "The list of the solar surplus steering becomes automations, first in priority: {0}",
+        "La lista del pilotaje por excedente solar se convierte en automatizaciones, primeras en prioridad: {0}",
+        names
+    );
+    state.hub.log("automation", "info", None, Some("Breezone"), text, None).await;
+    Ok(())
+}
+
 pub async fn run_loop(state: AppState) {
     let mut ticker = tokio::time::interval(EVERY);
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -1000,6 +1184,41 @@ mod tests {
     /// The zone: on or off, its system heating, its setpoint, the outdoor temperature.
     fn salon(on: bool, setpoint: f64, outdoor: f64) -> Reading {
         Reading { online: true, plugged: true, running: on, heats: true, setpoint: Some(setpoint), outdoor: Some(outdoor), ..Reading::default() }
+    }
+
+    #[test]
+    fn a_zone_told_to_heat_heats_whatever_the_weather_and_is_put_back_once_it_leaves() {
+        let mut reg = Regulator::default();
+        let tz: Tz = "Europe/Paris".parse().unwrap();
+        let zone = Load { climate: ClimatePlan { heat_setpoint: 21.0, mode: Some(ClimateMode::Heat), ..ClimatePlan::default() }, ..zone() };
+        // 18 °C outside: above the threshold of before, but its automation says heat.
+        let t0 = at(12, 0);
+        reg.step(t0, tz, 2000.0, &[(zone.clone(), salon(false, 19.0, 18.0))]);
+        let (c, _) = reg.step(t0 + START_DELAY, tz, 2000.0, &[(zone.clone(), salon(false, 19.0, 18.0))]);
+        assert_eq!(c, vec![(3, Command::ClimateOn(21.0))]);
+        reg.step(t0 + START_DELAY + 10, tz, 500.0, &[(zone.clone(), salon(true, 21.0, 18.0))]);
+        // No longer on the surplus: off, its setpoint back.
+        let (c, _) = reg.step(t0 + START_DELAY + 20, tz, 500.0, &[]);
+        assert_eq!(c, vec![(3, Command::ClimateOff(Some(19.0)))]);
+        let (c, _) = reg.step(t0 + START_DELAY + 30, tz, 500.0, &[]);
+        assert!(c.is_empty(), "once");
+    }
+
+    #[test]
+    fn a_relay_that_leaves_the_surplus_is_switched_off_if_breezone_switched_it_on() {
+        let mut reg = Regulator::default();
+        let tz: Tz = "Europe/Paris".parse().unwrap();
+        let t0 = at(12, 0);
+        reg.step(t0, tz, 2500.0, &[(heater(), relay(false))]);
+        let (c, _) = reg.step(t0 + START_DELAY, tz, 2500.0, &[(heater(), relay(false))]);
+        assert_eq!(c, vec![(2, Command::On)]);
+        let (c, _) = reg.step(t0 + START_DELAY + 10, tz, 500.0, &[]);
+        assert_eq!(c, vec![(2, Command::Off)]);
+        // One never switched on is left as it is.
+        let mut reg = Regulator::default();
+        reg.step(t0, tz, 0.0, &[(heater(), relay(true))]);
+        let (c, _) = reg.step(t0 + 10, tz, 0.0, &[]);
+        assert!(c.is_empty());
     }
 
     fn car(running: bool, amps: i64, energy: f64) -> Reading {

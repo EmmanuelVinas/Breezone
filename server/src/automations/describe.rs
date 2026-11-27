@@ -283,6 +283,8 @@ impl Context {
                 let f = facing(*f);
                 crate::text!("quand le soleil arrive sur la façade {0}", "when the sun reaches the {0} façade", "cuando el sol llega a la fachada {0}", f.arg())
             }
+            Trigger::Daylight { day: true } => crate::text!("tant qu'il fait jour", "while it is daytime", "mientras es de día"),
+            Trigger::Daylight { day: false } => crate::text!("tant qu'il fait nuit", "while it is night", "mientras es de noche"),
             Trigger::Presence { home: true } => crate::text!("quand le premier arrive à la maison", "when the first one gets home", "cuando llega el primero a casa"),
             Trigger::Presence { home: false } => crate::text!("quand le dernier part de la maison", "when the last one leaves home", "cuando se va el último de casa"),
             Trigger::Module { module, field, value, for_minutes } => {
@@ -404,10 +406,27 @@ impl Context {
             }
             Step::Restore => crate::text!("remettre comme avant", "put back as before", "dejar como antes"),
             Step::Notify { message } => crate::text!("prévenir : « {0} »", "notify: “{0}”", "avisar: «{0}»", message),
-            Step::Surplus { device_id, enabled } => {
+            Step::Surplus { device_id, enabled, power, min_on_minutes, mode, setpoint, .. } => {
+                use crate::surplus::ClimateMode;
                 let name = self.device_name(*device_id);
                 if *enabled {
-                    crate::text!("{0} : suivre le surplus solaire", "{0}: follow the solar surplus", "{0}: seguir el excedente solar", name.arg())
+                    let head = crate::text!("{0} : suivre le surplus solaire", "{0}: follow the solar surplus", "{0}: seguir el excedente solar", name.arg());
+                    let mut parts: Vec<Text> = vec![];
+                    match (mode, setpoint) {
+                        (Some(ClimateMode::Heat), Some(sp)) => parts.push(crate::text!("chauffer à {0} °C", "heat to {0} °C", "calentar a {0} °C", sp)),
+                        (Some(ClimateMode::Cool), Some(sp)) => parts.push(crate::text!("rafraîchir à {0} °C", "cool to {0} °C", "enfriar a {0} °C", sp)),
+                        _ => {}
+                    }
+                    if let Some(w) = power {
+                        parts.push(crate::text!("{0} W", "{0} W", "{0} W", w));
+                    }
+                    if *min_on_minutes > 0 {
+                        parts.push(crate::text!("{0} min au moins", "{0} min at least", "{0} min como mínimo", min_on_minutes));
+                    }
+                    match parts.into_iter().reduce(|a, b| crate::text!("{0}, {1}", "{0}, {1}", "{0}, {1}", a.arg(), b.arg())) {
+                        Some(p) => crate::text!("{0} ({1})", "{0} ({1})", "{0} ({1})", head.arg(), p.arg()),
+                        None => head,
+                    }
                 } else {
                     crate::text!("{0} : ne plus suivre le surplus solaire", "{0}: no longer follow the solar surplus", "{0}: dejar de seguir el excedente solar", name.arg())
                 }

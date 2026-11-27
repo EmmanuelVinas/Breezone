@@ -1,6 +1,5 @@
 import { useState } from "react"
 import type {
-  AutomationCondition,
   AutomationInput,
   AutomationStep,
   AutomationTrigger,
@@ -78,19 +77,6 @@ export function recipes(home: Home): Recipe[] {
     trait,
     action,
     params,
-  })
-  const exportAbove = (w: number): AutomationTrigger => ({
-    kind: "measure",
-    measure: { kind: "energy", flow: "export" },
-    op: "above",
-    value: w,
-    for_minutes: 5,
-  })
-  const importAbove = (w: number): AutomationCondition => ({
-    kind: "measure",
-    measure: { kind: "energy", flow: "import" },
-    op: "above",
-    value: w,
   })
   const base = (name: string, triggers: AutomationTrigger[]) => ({
     ...blank(home),
@@ -180,69 +166,94 @@ export function recipes(home: Home): Recipe[] {
       rule: blank(home),
       setup: "surplus_climate",
     })
-  // The mode belongs to the system (its master zone): a surplus rule follows it, never sets it.
+  // While it is cold (or warm) outside, a room follows the surplus; then it is put back. The mode
+  // belongs to the system (its master zone): the room heats only while its system heats.
   const onSurplus = (
     zone: DeviceView,
     name: string,
-    mode: "heating" | "cooling",
-    temp: AutomationCondition,
+    mode: "heat" | "cool",
+    op: "below" | "above",
+    outdoor: number,
     setpoint: number
-  ) => ({
-    ...base(name, [exportAbove(500)]),
-    conditions: [
-      { kind: "state", device_id: zone.id, field: "mode", value: mode },
-      temp,
-    ] as AutomationCondition[],
-    actions: [
-      step(zone, "climate.zone", "set", { on: true, setpoint }),
+  ): AutomationInput => ({
+    ...base(name, [
       {
-        kind: "wait_until",
-        condition: importAbove(300),
-        for_seconds: 600,
-        timeout_seconds: 8 * 3600,
-        on_timeout: "continue",
+        kind: "measure",
+        measure: { kind: "outdoor" },
+        op,
+        value: outdoor,
+        for_minutes: 0,
       },
-      { kind: "restore" },
-    ] as AutomationStep[],
-  })
-  const roomTemp = (
-    zone: DeviceView,
-    op: "above" | "below",
-    value: number
-  ): AutomationCondition => ({
-    kind: "measure",
-    measure: { kind: "device", device_id: zone.id, field: "room_temp" },
-    op,
-    value,
+    ]),
+    actions: [
+      {
+        kind: "surplus",
+        device_id: zone.id,
+        enabled: true,
+        power: 1500,
+        min_on_minutes: 30,
+        mode,
+        setpoint,
+      },
+    ],
+    over: [{ kind: "surplus", device_id: zone.id, enabled: false }],
   })
   if (home.roles.grid && zones[0]) {
     out.push({
       title: t("Surplus solaire : chauffer une pièce"),
       description: t(
-        "Quand plus de 500 W repartent au réseau, si la climatisation est en mode chaud et la pièce sous 20 °C, chauffer à 21°. Remettre comme avant quand la maison tire plus de 300 W du réseau pendant 10 min, sauf si quelqu'un a changé la zone entre-temps."
+        "Tant qu'il fait moins de 15 °C dehors, la pièce chauffe à 21 °C quand le surplus suffit (si sa climatisation est en mode chaud), puis revient comme avant."
       ),
       rule: onSurplus(
         zones[0],
         t("Surplus solaire : chauffer le salon"),
-        "heating",
-        roomTemp(zones[0], "below", 20),
+        "heat",
+        "below",
+        15,
         21
       ),
     })
     out.push({
       title: t("Surplus solaire : rafraîchir une pièce"),
       description: t(
-        "Quand plus de 500 W repartent au réseau, si la climatisation est en mode froid et la pièce au-dessus de 26 °C, rafraîchir à 25°. Remettre comme avant quand la maison tire plus de 300 W du réseau pendant 10 min, sauf si quelqu'un a changé la zone entre-temps."
+        "Tant qu'il fait plus de 25 °C dehors, la pièce se rafraîchit à 25 °C quand le surplus suffit (si sa climatisation est en mode froid), puis revient comme avant."
       ),
       rule: onSurplus(
         zones[0],
         t("Surplus solaire : rafraîchir le salon"),
-        "cooling",
-        roomTemp(zones[0], "above", 26),
+        "cool",
+        "above",
+        25,
         25
       ),
     })
   }
+  const heater = (home.surplusTargets ?? []).find((x) => !x.zone)
+  if (home.roles.grid && heater)
+    out.push({
+      id: "heater-solar",
+      title: t("Surplus solaire : chauffe-eau"),
+      description: t(
+        "Tant qu'il fait jour, le chauffe-eau (ou une autre prise pilotée) se met en marche quand le surplus suffit à sa puissance, au moins 30 min ; la nuit, il est remis comme avant."
+      ),
+      rule: {
+        ...base(t("Chauffe-eau sur le surplus"), [
+          { kind: "daylight", day: true },
+        ]),
+        actions: [
+          {
+            kind: "surplus",
+            device_id: heater.device_id,
+            enabled: true,
+            power: heater.power ? Math.round(heater.power) : 2000,
+            min_on_minutes: 30,
+          },
+        ],
+        over: [
+          { kind: "surplus", device_id: heater.device_id, enabled: false },
+        ],
+      },
+    })
   if (shutters.length) {
     const some = shutters.slice(0, MAX_ACTIONS)
     out.push({

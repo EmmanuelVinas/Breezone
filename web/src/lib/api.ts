@@ -1166,6 +1166,8 @@ export type AutomationTrigger =
     }
   /** The first one arrives home (`home`), or the last one leaves. */
   | { kind: "presence"; home: boolean }
+  /** The sun rises (`day`) and it holds until it sets, or the other way. */
+  | { kind: "daylight"; day: boolean }
   /** A yes/no or a choice a module tells becomes `value`. */
   | {
       kind: "module"
@@ -1241,8 +1243,21 @@ export type AutomationStep =
   | { kind: "restore" }
   /** The activity feed, the open apps and, when set, an ntfy topic. */
   | { kind: "notify"; message: string }
-  /** A device of the list of the solar surplus follows it, or no longer does. */
-  | { kind: "surplus"; device_id: number; enabled: boolean }
+  /** A relay or a zone follows the solar surplus (in the order of the priority of its automation),
+   * or no longer does (put back as it was). Without `power`: as it was set before. */
+  | {
+      kind: "surplus"
+      device_id: number
+      enabled: boolean
+      /** Its power when on (W). */
+      power?: number
+      min_on_minutes?: number
+      /** What may be drawn from the grid before cutting back (W). */
+      tolerance?: number
+      /** A zone: heat or cool, to `setpoint`. */
+      mode?: "heat" | "cool"
+      setpoint?: number
+    }
   /** What a charger does: follow a profile, no charge, the solar surplus, or its own app. */
   | {
       kind: "charger_profile"
@@ -1341,7 +1356,10 @@ export type Automation = AutomationInput & {
   }
   /** Enabled rules that may set the same device otherwise at the same time. */
   conflicts: { id: number; name: string; what: string }[]
-  /** The devices it drives that the solar surplus steering runs too. */
+  /** 1 first: the order of the solar surplus, and who wins on a device two of them drive. */
+  priority: number
+  /** The devices it drives that an automation of a higher priority keeps on the solar surplus
+   * (with its name): left to it meanwhile. */
   surplus?: string[]
   last_run_at: number | null
   last_reason: string | null
@@ -1393,53 +1411,46 @@ export type SurplusStatus = {
     | "idle"
     /** A zone: set by hand, left alone. */
     | "manual"
+    /** An automation of a higher priority drives it now. */
+    | "held"
+    | "no_charge"
+    | "charging"
+    | "now"
   amps: number | null
   power: number
   text: string
 }
 
-/** How a load is run on the solar surplus. */
-export type SurplusLoadInput = {
-  enabled: boolean
-  min_amps?: number | null
-  max_amps?: number | null
-  /** A relay: its power when on (W). */
-  power?: number | null
-  guarantee_kwh?: number | null
-  /** "HH:MM". */
-  guarantee_by?: string | null
-  min_on_minutes?: number
-  /** What may be drawn from the grid before cutting back (W). */
-  tolerance?: number
-  /** A zone of the air conditioning: its setpoints, and the outdoor temperatures below which it
-   * heats, above which it cools. */
-  heat_setpoint?: number | null
-  cool_setpoint?: number | null
-  heat_below?: number | null
-  cool_above?: number | null
-}
+export type SurplusKind = "charger" | "relay" | "climate"
 
-export type SurplusLoad = Required<SurplusLoadInput> & {
+/** A device an automation put on the solar surplus. */
+export type SurplusLoad = {
   device_id: number
   name: string
   kind: SurplusKind
-  position: number
-  limit_min: number | null
-  limit_max: number | null
+  /** The automation that put it there (null: the list of before), its priority (1 first). */
+  automation_id: number | null
+  automation: string | null
+  priority: number | null
+  /** A relay or a zone. */
+  power: number | null
+  min_on_minutes: number
+  tolerance: number
+  /** A zone: heat or cool, to this setpoint. */
+  mode: "heat" | "cool" | null
+  setpoint: number | null
+  /** A charger: how it charges on the surplus. */
+  solar: ChargeSolar | null
   status: SurplusStatus | null
-  /** The enabled automations that drive it too: they would contradict the steering. */
-  automations: string[]
 }
-export type SurplusKind = "charger" | "relay" | "climate"
 
 export type SurplusView = {
   /** The home has a grid meter (null: not looked at yet). */
   meter: boolean | null
   /** What goes back to the grid now (W; negative: drawn from it). */
   export: number | null
-  /** In order of priority. */
+  /** In the order the surplus is shared. */
   loads: SurplusLoad[]
-  candidates: { device_id: number; name: string; kind: SurplusKind }[]
 }
 
 /** A linked account (Settings › Accounts): never its secrets. */
@@ -1578,14 +1589,6 @@ export const api = {
   cancelChargeNow: (deviceId: number) =>
     request<ChargingView>("DELETE", `/api/devices/${deviceId}/charging/now`),
   surplus: () => request<SurplusView>("GET", "/api/surplus"),
-  saveSurplusLoad: (deviceId: number, input: SurplusLoadInput) =>
-    request<SurplusView>("PUT", `/api/surplus/loads/${deviceId}`, input),
-  removeSurplusLoad: (deviceId: number) =>
-    request<void>("DELETE", `/api/surplus/loads/${deviceId}`),
-  orderSurplus: (deviceIds: number[]) =>
-    request<SurplusView>("PUT", "/api/surplus/order", {
-      device_ids: deviceIds,
-    }),
   traits: () => request<TraitInfo[]>("GET", "/api/traits"),
   charted: () => request<Charted[]>("GET", "/api/devices/charted"),
   /** The layout of a page of an installation ("overview", "energy"…). */
@@ -1636,6 +1639,9 @@ export const api = {
     request<Automation>("PUT", `/api/automations/${id}/enabled`, { enabled }),
   deleteAutomation: (id: number) =>
     request<void>("DELETE", `/api/automations/${id}`),
+  /** The automations, the first in priority first. */
+  orderAutomations: (ids: number[]) =>
+    request<void>("PUT", "/api/automations/order", { ids }),
   runAutomation: (id: number) =>
     request<{ results: ActionResult[]; running: boolean }>(
       "POST",

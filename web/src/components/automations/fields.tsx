@@ -128,8 +128,14 @@ export type Home = {
     profiles: { id: string; name: string; color: string | null }[]
     slots: string[]
   }
-  /** The devices of the list of the solar surplus. */
-  surplusLoads?: { device_id: number; name: string }[]
+  /** The devices that can follow the solar surplus: a relay of a module, a zone. */
+  surplusTargets?: {
+    device_id: number
+    name: string
+    zone: boolean
+    /** What it draws now (W), as a first guess of its power. */
+    power: number | null
+  }[]
   /** What the modules bring to the rules (`conditions` of their manifests). */
   moduleConditions?: ModuleConditions[]
 }

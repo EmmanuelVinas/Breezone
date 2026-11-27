@@ -2,8 +2,7 @@ import { useEffect, useState } from "react"
 import { useSearchParams } from "react-router"
 import { useQuery } from "@tanstack/react-query"
 import { usePrice, useTariff } from "@/components/electricity/hooks"
-import { useSurplus } from "@/components/surplus"
-import { BookOpen, Plus } from "lucide-react"
+import { ArrowUpDown, BookOpen, Plus } from "lucide-react"
 import type {
   Automation,
   AutomationCondition,
@@ -11,7 +10,6 @@ import type {
 } from "@/lib/api"
 import { api, currentUser, isDeviceAction } from "@/lib/api"
 import { t } from "@/lib/i18n"
-import { SurplusCard } from "@/components/surplus"
 import {
   useChosenInstallations,
   useModulesHere,
@@ -23,6 +21,7 @@ import type { Home } from "./fields"
 import { AutomationCard, AutomationsBar, UnreadableAutomations } from "./list"
 import { RecipesDialog, blank, recipes } from "./recipes"
 import { groupMembers } from "./steps"
+import { PrioritiesDialog } from "./priorities"
 
 export function AutomationsSection() {
   const automations = useQuery({
@@ -42,7 +41,6 @@ export function AutomationsSection() {
   const live = useQuery({ queryKey: ["energy-live"], queryFn: api.energyLive })
   const price = usePrice()
   const tariffView = useTariff()
-  const surplus = useSurplus()
   // The tariff in force: the last one started (the versions come oldest first).
   const today = new Date().toLocaleDateString("sv")
   const tariff = (tariffView.data?.versions ?? [])
@@ -68,6 +66,7 @@ export function AutomationsSection() {
     nonce: number
   } | null>(null)
   const [choosing, setChoosing] = useState(false)
+  const [ranking, setRanking] = useState(false)
 
   const editable = new Set(
     installations
@@ -123,10 +122,23 @@ export function AutomationsSection() {
       ].sort(),
     },
     moduleConditions: moduleConditions.data ?? [],
-    surplusLoads: (surplus.data?.loads ?? []).map((l) => ({
-      device_id: l.device_id,
-      name: l.name,
-    })),
+    surplusTargets: shown
+      .filter(
+        (d) =>
+          drivable.has(d.id) &&
+          (d.traits.some((x) => x.startsWith("climate.zone@")) ||
+            (d.source_id !== null &&
+              d.traits.some((x) => x.startsWith("switch.relay@"))))
+      )
+      .map((d) => {
+        const power = (d.state as Record<string, unknown> | null)?.power
+        return {
+          device_id: d.id,
+          name: d.name,
+          zone: d.traits.some((x) => x.startsWith("climate.zone@")),
+          power: typeof power === "number" && power > 0 ? power : null,
+        }
+      }),
     chargeProfiles: (chargeProfiles.data ?? []).map((p) => ({
       id: p.id,
       name: p.name,
@@ -213,6 +225,11 @@ export function AutomationsSection() {
         </div>
         {canCreate && (
           <div className="flex flex-wrap gap-2">
+            {admin && list.length > 1 && (
+              <Button variant="outline" onClick={() => setRanking(true)}>
+                <ArrowUpDown /> {t("Priorités")}
+              </Button>
+            )}
             <Button variant="outline" onClick={() => setChoosing(true)}>
               <BookOpen /> {t("Recettes")}
             </Button>
@@ -222,9 +239,21 @@ export function AutomationsSection() {
           </div>
         )}
       </div>
+      {ranking && (
+        <PrioritiesDialog
+          automations={list}
+          onClose={() => setRanking(false)}
+        />
+      )}
+      {list.length > 1 && (
+        <p className="text-sm text-muted-foreground">
+          {t(
+            "Par ordre de priorité : le surplus solaire va d'abord au premier ; deux automatismes qui pilotent le même appareil en même temps, le plus haut l'emporte."
+          )}
+        </p>
+      )}
       <AutomationsBar admin={admin} />
       {admin && <UnreadableAutomations />}
-      {here && <SurplusCard />}
       {automations.isLoading ? (
         <div className="grid gap-4 md:grid-cols-2">
           <Skeleton className="h-40 rounded-3xl" />

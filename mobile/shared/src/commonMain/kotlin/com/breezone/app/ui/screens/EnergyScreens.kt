@@ -58,6 +58,7 @@ import com.breezone.app.data.ServerDevices
 import com.breezone.app.data.SolarForecastState
 import com.breezone.app.data.SolarInverterState
 import com.breezone.app.data.SolarPanelState
+import com.breezone.app.data.SurplusView
 import com.breezone.app.data.TraitIds
 import com.breezone.app.data.shown
 import com.breezone.app.resources.*
@@ -207,6 +208,7 @@ fun SolarScreen(serverId: String, onBack: (() -> Unit)? = null) {
     val panels = data.withTrait(TraitIds.PANEL)
     val sun = data.withTrait(TraitIds.FORECAST).firstOrNull()
     val forecast = rememberSolarForecast(hub, serverId, sun?.id)
+    val surplus = rememberSurplus(hub, serverId)
     Scaffold(topBar = { FzTopBar(stringResource(Res.string.house_solar), null, onBack) }) { padding ->
         FzPullRefresh({ hub.reload(serverId) }, Modifier.fillMaxSize(), top = padding.calculateTopPadding()) {
             LazyColumn(
@@ -219,6 +221,7 @@ fun SolarScreen(serverId: String, onBack: (() -> Unit)? = null) {
                 inverters.forEach { inv ->
                     item(key = "inv-${inv.id}", contentType = "inverter") { InverterCard(inv, panels) }
                 }
+                if (surplus != null && surplus.loads.isNotEmpty()) item(key = "surplus", contentType = "surplus") { SurplusCard(surplus) }
             }
         }
     }
@@ -282,6 +285,60 @@ internal fun SolarForecastCard(device: DeviceView, forecast: List<Pair<Long, Dou
         if (today.size >= 2) {
             PowerDayChart(listOf(PowerSeries(today, sun, area = true, dashed = true)), start, Modifier.fillMaxWidth().height(130.dp))
         }
+    }
+}
+
+/** The devices on the solar surplus, read again every 10 s while the screen shows. */
+@Composable
+internal fun rememberSurplus(hub: Hub, serverId: String): SurplusView? {
+    var view by remember { mutableStateOf<SurplusView?>(null) }
+    LaunchedEffect(serverId) {
+        while (true) {
+            runCatching { hub.api(serverId)?.surplus() }.getOrNull()?.let { view = it }
+            delay(10_000)
+        }
+    }
+    return view
+}
+
+/** The devices automations put on the solar surplus, in the order it is shared: read only. */
+@Composable
+internal fun SurplusCard(view: SurplusView) {
+    val sun = Fz.colors.warning
+    SectionCard {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(FzIcons.Sun, null, Modifier.size(18.dp), tint = sun)
+            Text(stringResource(Res.string.surplus_title), fontWeight = FontWeight.SemiBold)
+        }
+        val export = view.export?.takeIf { it > 0 }
+        Caption(if (export != null) stringResource(Res.string.surplus_export, formatPower(export)) else stringResource(Res.string.surplus_order))
+        view.loads.forEachIndexed { i, l ->
+            val icon = when (l.kind) {
+                "charger" -> FzIcons.PlugZap
+                "climate" -> FzIcons.Thermometer
+                else -> FzIcons.Power
+            }
+            val active = l.status?.state == "solar" || l.status?.state == "guarantee"
+            val setpoint = l.setpoint?.let { if (it % 1.0 == 0.0) it.roundToInt().toString() else it.toString().replace('.', decimalSeparator()) }
+            val details = listOfNotNull(
+                l.automation?.let { stringResource(Res.string.surplus_rule, it) },
+                setpoint?.takeIf { l.mode == "heat" }?.let { stringResource(Res.string.surplus_heats, it) },
+                setpoint?.takeIf { l.mode == "cool" }?.let { stringResource(Res.string.surplus_cools, it) },
+                l.power?.takeIf { it > 0 }?.let(::formatPower),
+            ).joinToString(" · ")
+            Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(Modifier.size(24.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(7.dp)), contentAlignment = Alignment.Center) {
+                    Text("${l.priority ?: (i + 1)}", fontSize = 11.sp, color = Fz.colors.muted)
+                }
+                Icon(icon, null, Modifier.size(16.dp), tint = if (active) sun else Fz.colors.muted)
+                Column(Modifier.weight(1f)) {
+                    Text(l.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    if (details.isNotEmpty()) Caption(details)
+                    l.status?.text?.takeIf { it.isNotEmpty() }?.let { Caption(it, color = if (active) sun else Fz.colors.muted) }
+                }
+            }
+        }
+        Caption(stringResource(Res.string.surplus_note), Modifier.padding(top = 10.dp))
     }
 }
 

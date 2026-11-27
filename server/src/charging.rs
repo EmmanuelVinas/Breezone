@@ -118,7 +118,7 @@ impl Solar {
         Ok(())
     }
 
-    fn of(row: &ChargerPlanRow) -> Solar {
+    pub fn of(row: &ChargerPlanRow) -> Solar {
         row.solar.as_deref().and_then(|s| serde_json::from_str(s).ok()).unwrap_or_default()
     }
 

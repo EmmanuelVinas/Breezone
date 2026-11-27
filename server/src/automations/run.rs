@@ -55,14 +55,35 @@ impl RunView {
     }
 }
 
+/// What a run under way holds: the priority and name of its rule, the devices it drove.
+type Held = (i64, String, std::collections::HashSet<i64>);
+
 /// The runs under way, by rule.
 #[derive(Default)]
 pub struct Runs {
     running: Mutex<HashMap<i64, (u64, tokio::task::AbortHandle, i64)>>,
     next: AtomicU64,
+    /// The devices each run under way drove, by rule (with its priority and name): while it runs,
+    /// an automation of a lower priority leaves them to it.
+    holding: Mutex<HashMap<i64, Held>>,
 }
 
 impl Runs {
+    fn hold(&self, row: &AutomationRow, device_id: i64) {
+        let mut holding = self.holding.lock().unwrap_or_else(|e| e.into_inner());
+        holding.entry(row.id).or_insert_with(|| (row.priority, row.name.clone(), std::collections::HashSet::new())).2.insert(device_id);
+    }
+
+    fn let_go(&self, rule: i64) {
+        self.holding.lock().unwrap_or_else(|e| e.into_inner()).remove(&rule);
+    }
+
+    /// The run of a higher priority than `priority` (another rule) that holds a device: its name.
+    pub fn holder(&self, device_id: i64, priority: i64, rule: i64) -> Option<(i64, String)> {
+        let holding = self.holding.lock().unwrap_or_else(|e| e.into_inner());
+        holding.iter().filter(|(id, (p, _, devices))| **id != rule && *p < priority && devices.contains(&device_id)).map(|(_, (p, n, _))| (*p, n.clone())).min()
+    }
+
     pub fn is_running(&self, id: i64) -> bool {
         self.running.lock().unwrap_or_else(|e| e.into_inner()).contains_key(&id)
     }
@@ -70,6 +91,7 @@ impl Runs {
     /// Ends the run of a rule (changed, switched off, deleted); its history says it was cancelled.
     pub async fn cancel(&self, db: &db::Db, id: i64) {
         let taken = self.running.lock().unwrap_or_else(|e| e.into_inner()).remove(&id);
+        self.let_go(id);
         if let Some((_, handle, run_id)) = taken {
             handle.abort();
             if let Err(e) = db::finish_automation_run_ended(db, run_id, "cancelled").await {
@@ -168,6 +190,7 @@ pub async fn start(state: &AppState, row: &AutomationRow, rule: &Automation, due
             let mut running = state2.automations.running.lock().unwrap_or_else(|e| e.into_inner());
             if running.get(&row2.id).is_some_and(|(g, _, _)| *g == generation) {
                 running.remove(&row2.id);
+                state2.automations.let_go(row2.id);
             }
         }
         log_run(&state2, &row2, branch, &reason, &done, ended, &actor2).await;
@@ -335,6 +358,37 @@ pub(super) struct Progress {
     touched: Vec<Touched>,
 }
 
+/// Why a device is left to another automation, of a higher priority, which holds it now: a run of
+/// it under way drove the device, or it put the device on the solar surplus (a charger: told to
+/// charge on the surplus). `None`: this one may drive it.
+pub(super) async fn yields_to(state: &AppState, row: &AutomationRow, device_id: i64) -> Option<String> {
+    if let Some((_, name)) = state.automations.holder(device_id, row.priority, row.id) {
+        return Some(name);
+    }
+    let rules = db::list_automations(&state.db).await.ok()?;
+    let higher = |owner: Option<i64>| {
+        let owner = owner.filter(|o| *o != row.id)?;
+        rules.iter().find(|r| r.id == owner && r.enabled && r.priority < row.priority).map(|r| r.name.clone())
+    };
+    let on_surplus = db::list_surplus_loads(&state.db).await.ok()?.into_iter().find(|l| l.device_id == device_id && l.enabled);
+    if let Some(name) = on_surplus.and_then(|l| higher(l.automation_id)) {
+        return Some(name);
+    }
+    let plan = db::charger_plan(&state.db, device_id).await.ok()??;
+    if crate::charging::Mode::of_row(&plan) == crate::charging::Mode::Solar {
+        return higher(plan.automation_id);
+    }
+    None
+}
+
+/// A step left to an automation of a higher priority, in words.
+fn yielded(ctx: &Context, device_id: i64, to: &str) -> StepDone {
+    let name = ctx.device_name(device_id);
+    let what =
+        crate::text!("{0} laissé à « {1} », de priorité plus haute", "{0} left to “{1}”, of a higher priority", "{0} se deja a «{1}», de prioridad más alta", name.arg(), to);
+    StepDone { what, ok: true, error: None }
+}
+
 /// Runs the steps one after the other. Returns how it ended.
 pub(super) async fn execute(state: &AppState, row: &AutomationRow, steps: &[Step], mut ctx: Context, actor: &str, p: &mut Progress) -> &'static str {
     let (run_id, place) = (p.run_id, p.place);
@@ -344,6 +398,11 @@ pub(super) async fn execute(state: &AppState, row: &AutomationRow, steps: &[Step
         let what = ctx.describe_step(step);
         match step {
             Step::Device { device_id, trait_name, action, params } => {
+                if let Some(to) = yields_to(state, row, *device_id).await {
+                    p.out.push(yielded(&ctx, *device_id, &to));
+                    continue;
+                }
+                state.automations.hold(row, *device_id);
                 let r = drive(state, &ctx, p, *device_id, trait_name, action, params, &who).await;
                 p.out.push(done(what, r));
             }
@@ -356,6 +415,11 @@ pub(super) async fn execute(state: &AppState, row: &AutomationRow, steps: &[Step
                 };
                 // Every device is driven, even after one fails; the first failure is told.
                 for id in members {
+                    if let Some(to) = yields_to(state, row, id).await {
+                        p.out.push(yielded(&ctx, id, &to));
+                        continue;
+                    }
+                    state.automations.hold(row, id);
                     let one = drive(state, &ctx, p, id, trait_name, action, params, &who).await;
                     if r.is_ok() {
                         r = one;
@@ -415,6 +479,11 @@ pub(super) async fn execute(state: &AppState, row: &AutomationRow, steps: &[Step
                 p.out.push(done(what, notify(state, &row.name, message.trim(), actor).await));
             }
             Step::ChargerProfile { device_id, profile_id, mode, solar } => {
+                if let Some(to) = yields_to(state, row, *device_id).await {
+                    p.out.push(yielded(&ctx, *device_id, &to));
+                    continue;
+                }
+                state.automations.hold(row, *device_id);
                 let mode = crate::charging::Mode::of_step(*mode, *profile_id);
                 let r = match ctx.device(*device_id) {
                     // Its own app decides: the automations of Breezone wait.
@@ -428,7 +497,39 @@ pub(super) async fn execute(state: &AppState, row: &AutomationRow, steps: &[Step
                 };
                 p.out.push(done(what, r));
             }
-            Step::Surplus { device_id, enabled } => {
+            Step::Surplus { device_id, enabled: true, power: Some(power), min_on_minutes, tolerance, mode, setpoint } => {
+                if let Some(to) = yields_to(state, row, *device_id).await {
+                    p.out.push(yielded(&ctx, *device_id, &to));
+                    continue;
+                }
+                state.automations.hold(row, *device_id);
+                use crate::surplus::ClimateMode;
+                let r = async {
+                    let rows = db::list_surplus_loads(&state.db).await?;
+                    let position = rows.iter().find(|r| r.device_id == *device_id).map(|r| r.position).unwrap_or_else(|| rows.iter().map(|r| r.position + 1).max().unwrap_or(0));
+                    let row = db::SurplusLoadRow {
+                        position,
+                        power: Some(*power),
+                        min_on_minutes: *min_on_minutes,
+                        tolerance: *tolerance,
+                        heat_setpoint: setpoint.filter(|_| *mode == Some(ClimateMode::Heat)),
+                        cool_setpoint: setpoint.filter(|_| *mode == Some(ClimateMode::Cool)),
+                        automation_id: Some(row.id),
+                        ..db::SurplusLoadRow::charger(*device_id)
+                    };
+                    db::upsert_surplus_load(&state.db, &row).await?;
+                    state.surplus.release(*device_id).await;
+                    Ok(())
+                }
+                .await;
+                p.out.push(done(what, r));
+            }
+            Step::Surplus { device_id, enabled, .. } => {
+                if let Some(to) = yields_to(state, row, *device_id).await {
+                    p.out.push(yielded(&ctx, *device_id, &to));
+                    continue;
+                }
+                state.automations.hold(row, *device_id);
                 let r = async {
                     if !db::set_surplus_load_enabled(&state.db, *device_id, *enabled).await? {
                         return Err(ApiError::not_found(crate::text!(
@@ -447,6 +548,11 @@ pub(super) async fn execute(state: &AppState, row: &AutomationRow, steps: &[Step
                 p.out.push(done(what, r));
             }
             Step::ChargerNow { device_id, kw, until, kwh } => {
+                if let Some(to) = yields_to(state, row, *device_id).await {
+                    p.out.push(yielded(&ctx, *device_id, &to));
+                    continue;
+                }
+                state.automations.hold(row, *device_id);
                 let r = match ctx.device(*device_id) {
                     Some(d) => {
                         let until = until.as_deref().and_then(crate::price::clock).and_then(|t| next_clock(ctx.now, t, ctx.tz));

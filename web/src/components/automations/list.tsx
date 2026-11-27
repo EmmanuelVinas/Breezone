@@ -194,6 +194,12 @@ export function AutomationCard({
       <CardContent className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
+            <span
+              className="grid size-6 shrink-0 place-items-center rounded-md bg-muted text-xs text-muted-foreground"
+              title={t("Priorité")}
+            >
+              {a.priority}
+            </span>
             <Workflow className="size-4 shrink-0 text-fan" />
             <h3 className="truncate font-semibold">{a.name}</h3>
             {a.status.running && (
@@ -256,7 +262,7 @@ export function AutomationCard({
           {(a.conflicts ?? []).length > 0 && (
             <p className="rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-xs">
               {t(
-                "Peut contredire {names} : {what}, au même moment. Vérifiez qu'elles ne se battent pas.",
+                "Peut piloter les mêmes appareils que {names} au même moment ({what}) : celui de plus haute priorité l'emporte.",
                 {
                   names: a.conflicts
                     .map((c) => t("« {name} »", { name: c.name }))
@@ -269,7 +275,7 @@ export function AutomationCard({
           {(a.surplus ?? []).length > 0 && (
             <p className="rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-xs">
               {t(
-                "{names} suit aussi le pilotage sur surplus solaire : les deux se contrediraient. Retirez-le de l'un ou de l'autre.",
+                "Laissé à un automatisme de plus haute priorité tant qu'il le tient sur le surplus solaire : {names}.",
                 { names: a.surplus!.join(", ") }
               )}
             </p>

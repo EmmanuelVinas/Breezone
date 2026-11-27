@@ -16,6 +16,7 @@ import { CalendarDays, CloudSun, Leaf, Sun, UtilityPole } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { api } from "@/lib/api"
 import { forecastAt, useSolarForecast } from "@/lib/forecast"
+import { SurplusProgramme } from "@/components/surplus"
 import { kwh, percent, stateNumber, time, watts } from "@/lib/format"
 import { locale, t, tn } from "@/lib/i18n"
 import { PageHeader } from "@/components/app-shell"
@@ -540,6 +541,7 @@ export function SolarPage() {
         <div className="grid gap-6">
           <ForecastCard />
           <TodayCurve />
+          <SurplusProgramme />
         </div>
       ) : inverters.length === 0 ? (
         <Card className="rounded-3xl">
@@ -598,6 +600,7 @@ export function SolarPage() {
             <DaysCard />
           </div>
           {forecast.device && <ForecastCard />}
+          <SurplusProgramme />
         </div>
       )}
     </>

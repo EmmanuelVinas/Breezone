@@ -130,14 +130,28 @@ pub async fn list(State(state): State<AppState>, user: AuthUser) -> ApiResult<Js
     let ctx = Context::load(&state).await?;
     let rules: Vec<(AutomationRow, Automation)> = rows.into_iter().filter_map(|row| Automation::of(&row).map(|rule| (row, rule))).collect();
     let mut conflicts = automations::conflicts(&rules, &ctx);
-    // The devices the surplus steering runs: a rule that drives them too would fight it.
-    let steered: Vec<i64> = db::list_surplus_loads(&state.db).await?.into_iter().filter(|l| l.enabled).map(|l| l.device_id).collect();
+    // The devices automations keep on the surplus (a charger: told to charge on it), and by which.
+    let mut steered: Vec<(i64, i64)> = db::list_surplus_loads(&state.db).await?.into_iter().filter(|l| l.enabled).filter_map(|l| Some((l.device_id, l.automation_id?))).collect();
+    for plan in db::list_charger_plans(&state.db).await? {
+        if let (crate::charging::Mode::Solar, Some(by)) = (crate::charging::Mode::of_row(&plan), plan.automation_id) {
+            steered.push((plan.device_id, by));
+        }
+    }
+    let ranks: std::collections::HashMap<i64, (i64, String)> = rules.iter().map(|(r, _)| (r.id, (r.priority, r.name.clone()))).collect();
     let mut out = vec![];
     for (row, rule) in rules {
         if sees(&state, &access, &rule, &ctx).await? {
             let running = state.automations.is_running(row.id);
             let here = ctx.at(rule.place(&ctx));
-            let surplus = rule.expanded_devices(&ctx).into_iter().filter(|id| steered.contains(id)).map(|id| ctx.device_name(id)).collect();
+            let drives = rule.expanded_devices(&ctx);
+            let surplus = steered
+                .iter()
+                .filter(|(d, by)| *by != row.id && drives.contains(d) && ranks.get(by).is_some_and(|(p, _)| *p < row.priority))
+                .map(|(d, by)| {
+                    let name = ctx.device_name(*d);
+                    crate::text!("{0} (« {1} »)", "{0} (“{1}”)", "{0} («{1}»)", name.arg(), ranks[by].1.clone())
+                })
+                .collect();
             let mut view = automations::view(&row, rule, &here, running);
             view.conflicts = conflicts.remove(&row.id).unwrap_or_default();
             view.surplus = surplus;
@@ -276,6 +290,20 @@ pub async fn delete(State(state): State<AppState>, user: AuthUser, Path(id): Pat
 }
 
 /// Runs the actions now, whatever the trigger and the conditions say (to try a rule).
+#[derive(Deserialize)]
+pub struct OrderInput {
+    /// The automations, the first in priority first (those left out after them, as they were).
+    pub ids: Vec<i64>,
+}
+
+/// Ranks the automations: the solar surplus goes to them in this order, and the higher one wins a
+/// device two of them drive at the same time.
+pub async fn order(State(state): State<AppState>, _admin: AdminUser, Json(input): Json<OrderInput>) -> ApiResult<StatusCode> {
+    db::order_automations(&state.db, &input.ids).await?;
+    state.hub.routines_changed();
+    Ok(StatusCode::NO_CONTENT)
+}
+
 pub async fn run(State(state): State<AppState>, user: AuthUser, Path(id): Path<i64>) -> ApiResult<Json<Value>> {
     let access = Access::of(&state.db, &user).await?;
     let ctx = Context::load(&state).await?;

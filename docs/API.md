@@ -497,40 +497,41 @@ scènes qui pilotent des appareils de modules sont visibles de tous, comme `/api
 
 ## Pilotage sur surplus solaire (fonction `surplus@1`)
 
-Ce qui repartirait au réseau fait tourner des appareils de la maison, par ordre de priorité : une
-borne (`ev.charger`, intensité réglée entre un minimum et un maximum) ou une prise pilotée
-(`switch.relay`, chauffe-eau, pompe… allumée quand sa puissance tient dans le surplus), ou une zone
-de climatisation (`climate.zone` d'une installation de ce serveur). Il faut un compteur avec le rôle
-`grid`. Seuls les appareils de ce serveur peuvent suivre le surplus (le surplus est celui de ce
-site). Le serveur regarde toutes les 10 s. Une borne ne s'inscrit plus dans cette liste (400) : un
-automatisme lui dit de charger sur le surplus (action `charger_profile`, `mode: "solar"`), et elle
-passe avant les appareils de la liste ; une borne qui y était charge au démarrage sur le surplus à
-ses intensités.
+Ce qui repartirait au réseau fait tourner des appareils de la maison. Ce sont les **automatismes**
+qui les y mettent : une prise pilotée (`switch.relay`, chauffe-eau, pompe… allumée quand sa
+puissance tient dans le surplus) ou une zone de climatisation (`climate.zone` d'une installation de
+ce serveur) par l'action `surplus` ; une borne par l'action `charger_profile` (`mode: "solar"`). Le
+surplus est partagé dans l'ordre de la **priorité** des automatismes qui les y ont mis (ce qui
+charge quoi qu'il arrive au soleil d'abord). Il faut un compteur avec le rôle `grid`. Seuls les
+appareils de ce serveur peuvent suivre le surplus (le surplus est celui de ce site). Le serveur
+regarde toutes les 10 s.
 
-Une zone chauffe à `heat_setpoint` quand il fait moins de `heat_below` dehors et que son système est
-en chauffage (ou auto), rafraîchit à `cool_setpoint` au-dessus de `cool_above` en mode froid (ou
-auto) ; elle compte pour `power` (W estimés, requis). Breezone ne l'allume que si elle était éteinte,
-et la remet comme avant (éteinte, sa consigne d'avant) quand le surplus manque ; une zone allumée,
-éteinte ou réglée autrement à la main est laissée telle quelle (`manual`). Un automatisme qui pilote
-aussi un appareil suivi le contredirait : `Load.automations` les nomme, et `GET /api/automations`
-donne pour chaque règle `surplus` (les appareils qu'elle partage avec le pilotage).
+Un appareil démarre après 1 min de surplus suffisant, s'arrête après 3 min de manque, reste en
+marche au moins `min_on_minutes`. Une zone chauffe (ou rafraîchit) à sa consigne quand son système
+est en chauffage (ou en froid) ; Breezone ne l'allume que si elle était éteinte, et la remet comme
+avant quand le surplus manque. Un appareil allumé, éteint ou réglé autrement à la main est laissé
+tel quel (`manual`). Un appareil qui ne suit plus le surplus est remis comme avant (une prise que
+Breezone avait allumée est éteinte, une zone retrouve son état). Tant qu'un automatisme de plus
+haute priorité en cours pilote un appareil, le surplus le lui laisse (`held`).
+
+La liste d'avant (réglée sur cette page) devient au démarrage des automatismes, en tête des
+priorités : une prise suit le surplus tant qu'il fait jour, une zone chauffe sous sa température
+extérieure et rafraîchit au-dessus (deux automatismes) ; le journal le dit.
 
 | Méthode | Chemin | Description |
 |---------|--------|-------------|
-| GET 🔒 | `/api/surplus` | `{meter, export, loads:[Load], candidates:[{device_id, name, kind}]}` |
-| PUT 👑 | `/api/surplus/loads/{device_id}` | `{enabled?, min_amps?, max_amps?, power?, guarantee_kwh?, guarantee_by?, min_on_minutes?, tolerance?, heat_setpoint?, cool_setpoint?, heat_below?, cool_above?}` : ajoute l'appareil (en dernier) ou change ses réglages → la vue |
-| DELETE 👑 | `/api/surplus/loads/{device_id}` | Il ne suit plus le surplus (laissé tel quel) |
-| PUT 👑 | `/api/surplus/order` | `{device_ids}` : les priorités, la première d'abord → la vue |
+| GET 🔒 | `/api/surplus` | `{meter, export, loads:[Load]}` (lecture seule ; dans l'ordre où le surplus est partagé) |
 
 `meter` : la maison a un compteur réseau (`null` : pas encore regardé) ; `export` : ce qui part au
-réseau (W, négatif : tiré). `Load` : `{device_id, name, kind: "charger"|"relay"|"climate", position,
-enabled, min_amps, max_amps, power, guarantee_kwh, guarantee_by, min_on_minutes, tolerance,
-heat_setpoint, cool_setpoint, heat_below, cool_above, limit_min, limit_max, automations: [nom],
-status: {state, amps, power, text} | null}` ; `state` ∈ `solar` (tourne sur le surplus),
-`guarantee` (tourne sur le réseau pour tenir la garantie), `waiting`, `no_car`, `unavailable`,
-`no_meter`, `idle` (une zone : pas besoin, ou mode du système contraire), `manual` (réglée à la
-main, laissée ; une borne jusqu'au débranchement), `no_charge`, `charging`, `now` (une borne que
-les automatismes pilotent, voir ci-dessous).
+réseau (W, négatif : tiré). `Load` : `{device_id, name, kind: "charger"|"relay"|"climate",
+automation_id, automation, priority, power, min_on_minutes, tolerance, mode: "heat"|"cool"|null,
+setpoint, solar: {kw?, fixed?, start_kw?} | null, status: {state, amps, power, text} | null}`
+(`automation` : le nom de l'automatisme qui l'y a mis, `null` pour la liste d'avant pas encore
+convertie ; `solar` : une borne) ; `state` ∈ `solar` (tourne sur le surplus), `guarantee` (tourne
+sur le réseau pour tenir la garantie), `waiting`, `no_car`, `unavailable`, `no_meter`, `idle` (une
+zone : pas besoin, ou mode du système contraire), `manual` (réglée à la main, laissée ; une borne
+jusqu'au débranchement), `held` (un automatisme de plus haute priorité la pilote), `no_charge`,
+`charging`, `now` (une borne que les automatismes pilotent, voir ci-dessous).
 
 ## Profils de recharge
 
@@ -603,6 +604,7 @@ Fonction `automations@1`. Une règle : 1 à 3 déclencheurs (un seul suffit), ju
 | POST 🔒 | `/api/automations/{id}/run` | Lance les étapes « alors » maintenant, sans regarder déclencheurs ni conditions → `{results, running}` (`running` : elle attend encore après 10 s ; `409` si elle tourne déjà en mode `single`) |
 | GET 🔒 | `/api/automations/{id}/runs` | Les 20 derniers passages : `[{started_at, finished_at, branch, reason, ended, steps:[{what, ok, error}]}]` |
 | GET 🔒 | `/api/automations/settings` | `{paused_until, ntfy_url?}` : pause vacances (`null` : pas de pause ; `0` : jusqu'à la reprise ; sinon un instant) ; `ntfy_url` aux administrateurs seulement |
+| PUT 👑 | `/api/automations/order` | `{ids}` : les priorités, la première d'abord (celles qui manquent après, dans leur ordre) → 204 |
 | GET 👑 | `/api/automations/unreadable` | `[{id, name, enabled, updated_at}]` : les règles écrites par une version plus récente, que celle-ci ne sait pas lire (elles ne s'exécutent pas ; un administrateur peut les supprimer par `DELETE /api/automations/{id}`) |
 | PUT 👑 | `/api/automations/settings` | `{paused_until?, ntfy_url?}` (seuls les champs donnés changent ; `null` efface) |
 | POST 👑 | `/api/automations/notify-test` | Envoie une notification de test (journal et ntfy) |
@@ -629,6 +631,8 @@ marge, aussi longtemps que `for_minutes`. Les étapes de « alors » encore en c
 - `{kind:"button", device_id, button?, press?: "single"|"double"|"long"}` : un bouton d'une
   télécommande (`button@1`) ; tout bouton, tout appui quand ils manquent ;
 - `{kind:"presence", home}` : le premier arrive à la maison (`true`) ou le dernier part (`false`) ;
+- `{kind:"daylight", day}` : le soleil se lève (`true`) et cela dure jusqu'à son coucher (« tant
+  qu'il fait jour »), ou l'inverse ;
 - `{kind:"module", module, field, value, for_minutes?}` : un oui/non ou un choix qu'un module dit
   prend cette valeur (et la garde `for_minutes`) ;
 - `{kind:"tariff", profile?, slot?}` : le tarif de la maison passe dans un type de jour (`profile`,
@@ -675,8 +679,12 @@ boost ; vient après une action sur un appareil ; un appareil dont quelqu'un a c
 réglages entre-temps est laissé tel quel, et l'historique le dit) | `{kind:"notify", message}` (1 à 200 caractères : écrit dans
 le journal, `kind: "notification"`, que les applis ouvertes affichent aussitôt ; envoyé aussi au
 sujet ntfy réglé, avec le titre « Breezone · nom de la règle ») |
-`{kind:"surplus", device_id, enabled}` (un appareil de la liste du surplus solaire le suit, ou plus :
-il est alors laissé tel quel) | `{kind:"charger_profile", device_id, mode, profile_id?, solar?}` (ce que fait la borne : `profile`
+`{kind:"surplus", device_id, enabled, power?, min_on_minutes?, tolerance?, mode?, setpoint?}` (une
+prise pilotée ou une zone suit le surplus solaire, dans l'ordre de la priorité de cet automatisme,
+jusqu'à ce qu'un automatisme lui dise autre chose : `power` en W, 1 … 20 000, requis pour la
+mettre sur le surplus ; `min_on_minutes` 0 … 240 ; `tolerance` 0 … 5 000 W ; une zone : `mode`
+`heat`|`cool` et `setpoint` 10 … 32 °C ; sans `power`, un appareil déjà sur le surplus le suit de
+nouveau comme il était réglé. `enabled: false` : il ne le suit plus, et il est remis comme avant) | `{kind:"charger_profile", device_id, mode, profile_id?, solar?}` (ce que fait la borne : `profile`
 suit le profil `profile_id`, `off` ne charge pas, `solar` charge sur le surplus avec `solar: {kw?,
 fixed?, start_kw?}`, `free` laisse la borne faire ; sans `mode`, l'ancienne forme : un profil, ou
 `free` ; refusé quand la programmation de l'appli de la borne est allumée) | `{kind:"charger_now", device_id, kw?, until?, kwh?}` (charger maintenant : jusqu'à `kw`,
@@ -691,8 +699,16 @@ valeurs toutes les 5 minutes (`query read`) et écarte ce qui n'est pas déclar�
 `Automation` ajoute `{id, when` (le premier déclencheur)`, summary:{when, triggers, conditions,
 joined, actions, else, over}` (la règle en phrases, dans la langue de la requête ; `joined` = « et » ou
 « ou »)`, status:{value, unit, holds, conditions:[true|false|null], next_at, running}, last_run_at,
-last_reason, conflicts:[{id, name, what}], created_at, updated_at}` (`conflicts` : les règles activées
-qui peuvent donner au même appareil un autre réglage au même moment).
+last_reason, conflicts:[{id, name, what}], priority, surplus:[texte], created_at, updated_at}`
+(`conflicts` : les règles activées qui peuvent donner au même appareil un autre réglage au même
+moment ; `priority` : 1 d'abord, une nouvelle règle vient en dernier ; `surplus` : les appareils
+qu'elle pilote et qu'un automatisme de plus haute priorité tient sur le surplus, avec son nom).
+
+**Priorité** : l'ordre des automatismes (`PUT /api/automations/order`) partage le surplus solaire,
+et départage deux automatismes qui pilotent le même appareil en même temps. Une étape sur un appareil
+qu'un automatisme de plus haute priorité tient (une exécution en cours de lui l'a piloté, ou il
+l'a mis sur le surplus ; une borne : il lui a dit de charger sur le surplus) n'est pas faite : le
+passage le dit (« … laissé à « Nom », de priorité plus haute »).
 
 `branch` d'un passage : `then`, `else`, `skipped` (déclenchée, conditions fausses, pas de « sinon » :
 `reason` dit lesquelles et ce qu'elles valaient) ou `busy` (elle tournait déjà). `ended` : `done`,
