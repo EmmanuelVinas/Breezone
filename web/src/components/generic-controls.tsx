@@ -5,7 +5,7 @@ import { toast } from "sonner"
 import type { DeviceView, TraitField, TraitInfo, TraitWidget } from "@/lib/api"
 import { api } from "@/lib/api"
 import { errorText } from "@/lib/format"
-import { fieldText, traitOf } from "@/lib/generic-device"
+import { fieldOf, fieldText, traitOf } from "@/lib/generic-device"
 import { lang, t } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -59,8 +59,9 @@ function label(field: TraitField | undefined, fallback: string) {
 /** One piece: a value to read, or a control that sends the action of its trait. */
 function PieceControl({ d, piece }: { d: DeviceView; piece: Piece }) {
   const qc = useQueryClient()
-  const { trait, widget, field } = piece
+  const { trait, widget } = piece
   const state = (d.state ?? {}) as Record<string, unknown>
+  const field = piece.field && fieldOf(piece.field, state)
   const value = widget.field ? state[widget.field] : undefined
   const act = useMutation({
     mutationFn: (params: Record<string, unknown>) =>
@@ -103,7 +104,9 @@ function PieceControl({ d, piece }: { d: DeviceView; piece: Piece }) {
           <Slider
             min={min}
             max={max}
-            step={field?.type === "integer" ? 1 : (max - min) / 100}
+            step={
+              field?.step || (field?.type === "integer" ? 1 : (max - min) / 100)
+            }
             value={[shown]}
             disabled={disabled}
             onValueChange={([v]) => setDraft(v)}
@@ -117,7 +120,7 @@ function PieceControl({ d, piece }: { d: DeviceView; piece: Piece }) {
       )
     }
     case "stepper": {
-      const step = field?.type === "integer" ? 1 : 0.5
+      const step = field?.step || (field?.type === "integer" ? 1 : 0.5)
       const current = typeof value === "number" ? value : (field?.min ?? 0)
       const clamp = (v: number) =>
         Math.min(field?.max ?? Infinity, Math.max(field?.min ?? -Infinity, v))

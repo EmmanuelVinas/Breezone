@@ -14,6 +14,7 @@ import type {
 import { MODE_LABEL } from "@/lib/format"
 import { lang, locale, t } from "@/lib/i18n"
 import type { DeviceType } from "@/lib/device-icons"
+import { fieldOf } from "@/lib/generic-device"
 import {
   DeviceTypeIcon,
   HOME_TYPE,
@@ -282,7 +283,14 @@ export function stateOptions(home: Home): StateOption[] {
   return byType(home.devices).flatMap(({ d, type }) =>
     traitsOf(home, d).flatMap((trait) =>
       trait.state
-        .filter((f) => f.type === "bool" || f.type === "enum")
+        // A choice of a generic trait takes its values from the device's state.
+        .map((f) => fieldOf(f, d.state as Record<string, unknown> | null))
+        .filter(
+          (f) =>
+            f.type === "bool" ||
+            f.type === "enum" ||
+            (f.values_from && f.values?.length)
+        )
         .map((f) => ({
           key: `${d.id}:${f.name}`,
           label: `${d.name} · ${tl(f.label)}`,
@@ -368,7 +376,7 @@ export function ModuleStatePick({
           onChange({
             module,
             field,
-            value: chosen?.field.type === "enum" ? v : v === "true",
+            value: chosen && chosen.field.type !== "bool" ? v : v === "true",
           })
         }
         className="flex-wrap justify-start"
@@ -718,7 +726,7 @@ export function StatePick({
   const options = stateOptions(home)
   const chosen = options.find((o) => o.key === `${device_id}:${field}`)
   const values: Option[] =
-    chosen?.field.type === "enum"
+    chosen && chosen.field.type !== "bool"
       ? chosen.field.values!.map((v): Option => [
           v,
           valueLabel(chosen.field, v),
@@ -748,7 +756,7 @@ export function StatePick({
           onChange({
             device_id,
             field,
-            value: chosen?.field.type === "enum" ? v : v === "true",
+            value: chosen && chosen.field.type !== "bool" ? v : v === "true",
           })
         }
         options={values}

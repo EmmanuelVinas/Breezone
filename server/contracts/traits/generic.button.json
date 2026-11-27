@@ -1,0 +1,16 @@
+{
+  "trait": "generic.button",
+  "version": 1,
+  "revision": 0,
+  "label": { "fr": "Bouton", "en": "Button", "es": "Botón" },
+  "state": [],
+  "actions": [
+    { "name": "press", "label": { "fr": "Appuyer", "en": "Press", "es": "Pulsar" }, "params": [] }
+  ],
+  "ui": {
+    "kind": "other",
+    "card": [
+      {"widget": "button", "action": "press"}
+    ]
+  }
+}

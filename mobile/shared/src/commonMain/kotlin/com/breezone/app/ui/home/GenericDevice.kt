@@ -37,6 +37,7 @@ import com.breezone.app.data.CatalogField
 import com.breezone.app.data.CatalogTrait
 import com.breezone.app.data.CatalogWidget
 import com.breezone.app.data.DeviceView
+import com.breezone.app.data.resolvedBy
 import com.breezone.app.data.traitOf
 import com.breezone.app.resources.Res
 import com.breezone.app.resources.common_minus
@@ -101,7 +102,7 @@ fun GenericEntry(d: DeviceView, ctx: HomeContext) {
     val state = d.state ?: JsonObject(emptyMap())
     val primary = d.traits.firstNotNullOfOrNull { id ->
         val t = list.traitOf(id) ?: return@firstNotNullOfOrNull null
-        val field = t.state.firstOrNull { it.name == t.ui?.primary } ?: return@firstNotNullOfOrNull null
+        val field = t.state.firstOrNull { it.name == t.ui?.primary }?.resolvedBy(state) ?: return@firstNotNullOfOrNull null
         fieldText(field, state[field.name])
     }
     val kind = DeviceKind.Other
@@ -118,7 +119,8 @@ fun GenericEntry(d: DeviceView, ctx: HomeContext) {
 
 @Composable
 private fun PieceControl(d: DeviceView, piece: Piece, state: JsonObject, ctx: HomeContext) {
-    val (trait, w, field) = piece
+    val (trait, w) = piece
+    val field = piece.field?.resolvedBy(state)
     val value = w.field?.let { state[it] }
     val name = field?.label?.text()?.ifEmpty { null } ?: w.field ?: w.action.orEmpty()
     val enabled = d.usable
@@ -144,7 +146,11 @@ private fun PieceControl(d: DeviceView, piece: Piece, state: JsonObject, ctx: Ho
                 }
                 FzSlider(
                     value = current,
-                    onCommit = { v -> send(if (field?.type == "integer") JsonPrimitive(v.roundToInt()) else JsonPrimitive(v.toDouble())) },
+                    onCommit = { raw ->
+                        val step = field?.step?.takeIf { it > 0 }
+                        val v = step?.let { (min + ((raw - min) / it).roundToInt() * it).coerceIn(min.toDouble(), max.toDouble()) } ?: raw.toDouble()
+                        send(if (field?.type == "integer") JsonPrimitive(v.roundToInt()) else JsonPrimitive(v))
+                    },
                     range = min..max,
                     colors = SliderDefaults.colors(),
                     enabled = enabled,
@@ -152,7 +158,7 @@ private fun PieceControl(d: DeviceView, piece: Piece, state: JsonObject, ctx: Ho
             }
         }
         "stepper" -> {
-            val step = if (field?.type == "integer") 1.0 else 0.5
+            val step = field?.step?.takeIf { it > 0 } ?: if (field?.type == "integer") 1.0 else 0.5
             val current = (value as? JsonPrimitive)?.doubleOrNull ?: field?.min ?: 0.0
             val clamp = { v: Double -> v.coerceIn(field?.min ?: Double.NEGATIVE_INFINITY, field?.max ?: Double.POSITIVE_INFINITY) }
             val emit = { v: Double -> send(if (field?.type == "integer") JsonPrimitive(v.roundToInt()) else JsonPrimitive(v)) }

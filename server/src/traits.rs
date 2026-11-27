@@ -21,6 +21,11 @@ const FILES: &[(&str, &str)] = &[
     ("solar.panel.json", include_str!("../contracts/traits/solar.panel.json")),
     ("energy.power.json", include_str!("../contracts/traits/energy.power.json")),
     ("environment.sensor.json", include_str!("../contracts/traits/environment.sensor.json")),
+    ("generic.button.json", include_str!("../contracts/traits/generic.button.json")),
+    ("generic.number.json", include_str!("../contracts/traits/generic.number.json")),
+    ("generic.select.json", include_str!("../contracts/traits/generic.select.json")),
+    ("generic.sensor.json", include_str!("../contracts/traits/generic.sensor.json")),
+    ("generic.switch.json", include_str!("../contracts/traits/generic.switch.json")),
     ("solar.forecast.json", include_str!("../contracts/traits/solar.forecast.json")),
     ("switch.relay.json", include_str!("../contracts/traits/switch.relay.json")),
     ("ventilation.room.json", include_str!("../contracts/traits/ventilation.room.json")),
@@ -39,7 +44,7 @@ pub struct Label {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Field {
     pub name: String,
-    /// "bool" | "integer" | "number" | "string" | "enum"
+    /// "bool" | "integer" | "number" | "string" | "enum" | "list" (of strings)
     #[serde(rename = "type")]
     pub kind: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -53,6 +58,18 @@ pub struct Field {
     pub min: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max: Option<f64>,
+    /// The fields of the device's state that hold, for this one, what only the hardware knows (a
+    /// setting of a generic trait): its unit, its bounds, its step, the values it may take.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unit_from: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min_from: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_from: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub step_from: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub values_from: Option<String>,
     #[serde(default)]
     pub optional: bool,
     /// Worth a history (a measure): false for a setting or a fixed value (`"history": false`),
@@ -196,7 +213,7 @@ pub fn is_counter(field: &str) -> bool {
 }
 
 #[cfg(test)]
-const KINDS: &[&str] = &["bool", "integer", "number", "string", "enum"];
+const KINDS: &[&str] = &["bool", "integer", "number", "string", "enum", "list"];
 
 /// Checks a field of a contract (traits and services), for the tests.
 #[cfg(test)]
@@ -216,6 +233,16 @@ pub(crate) fn check_field(t: &str, f: &Field) {
     if let (Some(min), Some(max)) = (f.min, f.max) {
         assert!(min <= max, "{t}.{}: min > max", f.name);
     }
+    assert!(f.kind != "list" || !f.history, "{t}.{}: a list has no history", f.name);
+}
+
+/// The fields a field takes its unit, bounds, step or values from: (which, the field named).
+#[cfg(test)]
+fn sources(f: &Field) -> Vec<(&'static str, &String)> {
+    [("unit_from", &f.unit_from), ("min_from", &f.min_from), ("max_from", &f.max_from), ("step_from", &f.step_from), ("values_from", &f.values_from)]
+        .into_iter()
+        .filter_map(|(k, v)| Some((k, v.as_ref()?)))
+        .collect()
 }
 
 #[cfg(test)]
@@ -250,6 +277,19 @@ mod tests {
                 assert!(actions.insert(&a.name), "{}.{} twice", t.name, a.name);
                 for p in &a.params {
                     check_field(&format!("{}.{}", t.name, a.name), p);
+                }
+            }
+            // What a field takes from the state is a field of the state, of the right type.
+            let params = t.actions.iter().flat_map(|a| &a.params);
+            for f in t.state.iter().chain(params) {
+                for (which, from) in sources(f) {
+                    let source = t.state.iter().find(|x| &x.name == from).unwrap_or_else(|| panic!("{}.{}: {which} {from} is not a field", t.name, f.name));
+                    let kind = match which {
+                        "unit_from" => "string",
+                        "values_from" => "list",
+                        _ => "number",
+                    };
+                    assert_eq!(source.kind, kind, "{}.{}: {which} {from} is not a {kind}", t.name, f.name);
                 }
             }
             for (what, rev) in &t.since {

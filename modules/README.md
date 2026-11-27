@@ -147,7 +147,12 @@ provided, types, bounds, required fields). `modules/tasmota/src/lib.rs` has exam
   1.0 interface, kept as it was, and must keep loading.
 - `server/contracts/module.schema.json`: the manifest (`manifest.json`), with
   `server/contracts/module.example.json` as an example. The traits a module provides are those
-  of `server/contracts/traits/`.
+  of `server/contracts/traits/`. A value or a setting no trait fits (a mode, a level of the
+  hardware) is a device of its own, of kind `other`, with a generic trait: `generic.switch`
+  (on/off), `generic.number` (its `unit`, `min`, `max`, `step` in its state), `generic.select`
+  (its `options` in its state), `generic.sensor` (a `value` and its `unit`, or a `text`) or
+  `generic.button`. Its name is its label. They never replace a trait that fits (a light, a
+  shutter, a battery).
 - The tests of the server run the modules shipped with Breezone (`server/tests/support`): built
   once, packed as in the image, their requests to a service of the Internet sent to a local fake
   (`breezone_server::modules::wasm::redirect_for_tests("api.netatmo.com", "127.0.0.1:port")`,

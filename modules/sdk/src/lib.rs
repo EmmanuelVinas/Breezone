@@ -763,6 +763,7 @@ pub mod testing {
             "number" => value.is_number(),
             "string" => value.is_string(),
             "enum" => value.as_str().is_some_and(|v| field["values"].as_array().is_some_and(|vs| vs.iter().any(|x| x == v))),
+            "list" => value.as_array().is_some_and(|vs| vs.iter().all(Value::is_string)),
             _ => false,
         }
     }

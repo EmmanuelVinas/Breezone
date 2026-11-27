@@ -262,6 +262,65 @@ export type EnvironmentSensorState = {
   battery: number | null
 }
 
+/** Button (`generic.button@1`): state, without values. */
+export type GenericButtonState = Record<string, never>
+
+/** Button (`generic.button@1`): action `press`, without parameters. */
+export type GenericButtonPress = Record<string, never>
+
+/** Number setting (`generic.number@1`): state. */
+export type GenericNumberState = {
+  /** Value */
+  value: number
+  /** Minimum */
+  min: number | null
+  /** Maximum */
+  max: number | null
+  /** Step */
+  step: number | null
+  /** Unit */
+  unit: string | null
+}
+
+/** Number setting (`generic.number@1`): action `set`. */
+export type GenericNumberSet = {
+  value: number
+}
+
+/** Choice from a list (`generic.select@1`): state. */
+export type GenericSelectState = {
+  /** Choice */
+  value: string
+  /** Possible choices */
+  options: string[]
+}
+
+/** Choice from a list (`generic.select@1`): action `set`. */
+export type GenericSelectSet = {
+  value: string
+}
+
+/** Measure (`generic.sensor@1`): state. */
+export type GenericSensorState = {
+  /** Value */
+  value: number | null
+  /** Value */
+  text: string | null
+  /** Unit */
+  unit: string | null
+}
+
+/** On / off (`generic.switch@1`): state. */
+export type GenericSwitchState = {
+  /** On */
+  on: boolean
+}
+
+/** On / off (`generic.switch@1`): action `set`. */
+export type GenericSwitchSet = {
+  on: boolean
+}
+
 /** Solar forecast (`solar.forecast@1`): state. */
 export type SolarForecastState = {
   /** Power expected now (W) */
@@ -366,13 +425,13 @@ export type ZigbeeBridgePair = {
 }
 
 /** Traits described by this version (`trait@version`). */
-export const TRAITS = ["button@1", "camera@1", "climate.zone@1", "cover.position@1", "energy.battery@1", "energy.meter@1", "ev.charger@1", "light@1", "solar.inverter@1", "solar.panel@1", "energy.power@1", "environment.sensor@1", "solar.forecast@1", "switch.relay@1", "ventilation.room@1", "ventilation.unit@1", "zigbee.bridge@1"] as const
+export const TRAITS = ["button@1", "camera@1", "climate.zone@1", "cover.position@1", "energy.battery@1", "energy.meter@1", "ev.charger@1", "light@1", "solar.inverter@1", "solar.panel@1", "energy.power@1", "environment.sensor@1", "generic.button@1", "generic.number@1", "generic.select@1", "generic.sensor@1", "generic.switch@1", "solar.forecast@1", "switch.relay@1", "ventilation.room@1", "ventilation.unit@1", "zigbee.bridge@1"] as const
 
 /** Highest revision of each trait known to this version. */
-export const TRAIT_REVISIONS: Record<string, number> = { "button@1": 0, "camera@1": 0, "climate.zone@1": 0, "cover.position@1": 0, "energy.battery@1": 0, "energy.meter@1": 0, "ev.charger@1": 1, "light@1": 0, "solar.inverter@1": 0, "solar.panel@1": 0, "energy.power@1": 0, "environment.sensor@1": 0, "solar.forecast@1": 0, "switch.relay@1": 0, "ventilation.room@1": 0, "ventilation.unit@1": 0, "zigbee.bridge@1": 0 }
+export const TRAIT_REVISIONS: Record<string, number> = { "button@1": 0, "camera@1": 0, "climate.zone@1": 0, "cover.position@1": 0, "energy.battery@1": 0, "energy.meter@1": 0, "ev.charger@1": 1, "light@1": 0, "solar.inverter@1": 0, "solar.panel@1": 0, "energy.power@1": 0, "environment.sensor@1": 0, "generic.button@1": 0, "generic.number@1": 0, "generic.select@1": 0, "generic.sensor@1": 0, "generic.switch@1": 0, "solar.forecast@1": 0, "switch.relay@1": 0, "ventilation.room@1": 0, "ventilation.unit@1": 0, "zigbee.bridge@1": 0 }
 
 /** Kind of device each trait makes (its `ui.kind`). */
-export const TRAIT_KINDS: Record<string, string> = { "button": "remote", "camera": "camera", "climate.zone": "climate", "cover.position": "shutter", "energy.battery": "battery", "energy.meter": "energy", "ev.charger": "charger", "light": "light", "solar.inverter": "solar", "solar.panel": "solar", "energy.power": "energy", "environment.sensor": "sensor", "solar.forecast": "solar", "switch.relay": "switch", "ventilation.room": "room-air", "ventilation.unit": "ventilation", "zigbee.bridge": "other" }
+export const TRAIT_KINDS: Record<string, string> = { "button": "remote", "camera": "camera", "climate.zone": "climate", "cover.position": "shutter", "energy.battery": "battery", "energy.meter": "energy", "ev.charger": "charger", "light": "light", "solar.inverter": "solar", "solar.panel": "solar", "energy.power": "energy", "environment.sensor": "sensor", "generic.button": "other", "generic.number": "other", "generic.select": "other", "generic.sensor": "other", "generic.switch": "other", "solar.forecast": "solar", "switch.relay": "switch", "ventilation.room": "room-air", "ventilation.unit": "ventilation", "zigbee.bridge": "other" }
 
 /** Kinds of devices, in the order of lists (`contracts/ui.json`). */
 export const KINDS = ["climate", "charger", "light", "shutter", "window", "door", "ventilation", "room-air", "switch", "solar", "battery", "energy", "sensor", "camera", "remote", "other"] as const

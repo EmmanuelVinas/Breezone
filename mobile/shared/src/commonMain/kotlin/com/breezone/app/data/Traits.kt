@@ -274,6 +274,63 @@ data class EnvironmentSensorState(
     val battery: Double? = null,
 )
 
+/** Button (`generic.button@1`): state, without values. */
+@Serializable
+class GenericButtonState
+
+/** Button (`generic.button@1`): action `press`, without parameters. */
+@Serializable
+class GenericButtonPress
+
+/** Number setting (`generic.number@1`): state. */
+@Serializable
+data class GenericNumberState(
+    val value: Double = 0.0,
+    val min: Double? = null,
+    val max: Double? = null,
+    val step: Double? = null,
+    val unit: String? = null,
+)
+
+/** Number setting (`generic.number@1`): action `set`. */
+@Serializable
+data class GenericNumberSet(
+    val value: Double? = null,
+)
+
+/** Choice from a list (`generic.select@1`): state. */
+@Serializable
+data class GenericSelectState(
+    val value: String? = null,
+    val options: List<String>? = null,
+)
+
+/** Choice from a list (`generic.select@1`): action `set`. */
+@Serializable
+data class GenericSelectSet(
+    val value: String? = null,
+)
+
+/** Measure (`generic.sensor@1`): state. */
+@Serializable
+data class GenericSensorState(
+    val value: Double? = null,
+    val text: String? = null,
+    val unit: String? = null,
+)
+
+/** On / off (`generic.switch@1`): state. */
+@Serializable
+data class GenericSwitchState(
+    val on: Boolean = false,
+)
+
+/** On / off (`generic.switch@1`): action `set`. */
+@Serializable
+data class GenericSwitchSet(
+    val on: Boolean? = null,
+)
+
 /** Solar forecast (`solar.forecast@1`): state. */
 @Serializable
 data class SolarForecastState(
@@ -387,13 +444,13 @@ data class ZigbeeBridgePair(
 )
 
 /** Traits described by this version (`trait@version`). */
-val TRAITS = listOf("button@1", "camera@1", "climate.zone@1", "cover.position@1", "energy.battery@1", "energy.meter@1", "ev.charger@1", "light@1", "solar.inverter@1", "solar.panel@1", "energy.power@1", "environment.sensor@1", "solar.forecast@1", "switch.relay@1", "ventilation.room@1", "ventilation.unit@1", "zigbee.bridge@1")
+val TRAITS = listOf("button@1", "camera@1", "climate.zone@1", "cover.position@1", "energy.battery@1", "energy.meter@1", "ev.charger@1", "light@1", "solar.inverter@1", "solar.panel@1", "energy.power@1", "environment.sensor@1", "generic.button@1", "generic.number@1", "generic.select@1", "generic.sensor@1", "generic.switch@1", "solar.forecast@1", "switch.relay@1", "ventilation.room@1", "ventilation.unit@1", "zigbee.bridge@1")
 
 /** Highest revision of each trait known to this version. */
-val TRAIT_REVISIONS = mapOf("button@1" to 0, "camera@1" to 0, "climate.zone@1" to 0, "cover.position@1" to 0, "energy.battery@1" to 0, "energy.meter@1" to 0, "ev.charger@1" to 1, "light@1" to 0, "solar.inverter@1" to 0, "solar.panel@1" to 0, "energy.power@1" to 0, "environment.sensor@1" to 0, "solar.forecast@1" to 0, "switch.relay@1" to 0, "ventilation.room@1" to 0, "ventilation.unit@1" to 0, "zigbee.bridge@1" to 0)
+val TRAIT_REVISIONS = mapOf("button@1" to 0, "camera@1" to 0, "climate.zone@1" to 0, "cover.position@1" to 0, "energy.battery@1" to 0, "energy.meter@1" to 0, "ev.charger@1" to 1, "light@1" to 0, "solar.inverter@1" to 0, "solar.panel@1" to 0, "energy.power@1" to 0, "environment.sensor@1" to 0, "generic.button@1" to 0, "generic.number@1" to 0, "generic.select@1" to 0, "generic.sensor@1" to 0, "generic.switch@1" to 0, "solar.forecast@1" to 0, "switch.relay@1" to 0, "ventilation.room@1" to 0, "ventilation.unit@1" to 0, "zigbee.bridge@1" to 0)
 
 /** Kind of device each trait makes (its `ui.kind`). */
-val TRAIT_KINDS = mapOf("button" to "remote", "camera" to "camera", "climate.zone" to "climate", "cover.position" to "shutter", "energy.battery" to "battery", "energy.meter" to "energy", "ev.charger" to "charger", "light" to "light", "solar.inverter" to "solar", "solar.panel" to "solar", "energy.power" to "energy", "environment.sensor" to "sensor", "solar.forecast" to "solar", "switch.relay" to "switch", "ventilation.room" to "room-air", "ventilation.unit" to "ventilation", "zigbee.bridge" to "other")
+val TRAIT_KINDS = mapOf("button" to "remote", "camera" to "camera", "climate.zone" to "climate", "cover.position" to "shutter", "energy.battery" to "battery", "energy.meter" to "energy", "ev.charger" to "charger", "light" to "light", "solar.inverter" to "solar", "solar.panel" to "solar", "energy.power" to "energy", "environment.sensor" to "sensor", "generic.button" to "other", "generic.number" to "other", "generic.select" to "other", "generic.sensor" to "other", "generic.switch" to "other", "solar.forecast" to "solar", "switch.relay" to "switch", "ventilation.room" to "room-air", "ventilation.unit" to "ventilation", "zigbee.bridge" to "other")
 
 /** Kinds of devices, in the order of lists (`contracts/ui.json`). */
 val KIND_IDS = listOf("climate", "charger", "light", "shutter", "window", "door", "ventilation", "room-air", "switch", "solar", "battery", "energy", "sensor", "camera", "remote", "other")

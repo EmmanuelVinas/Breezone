@@ -234,6 +234,8 @@ impl Context {
         let ok = self.field(device_id, field).is_some_and(|f| match f.kind.as_str() {
             "bool" => value.is_boolean(),
             "enum" => value.as_str().is_some_and(|v| f.values.iter().any(|x| x == v)),
+            // A choice of a generic trait: its values are the device's, told in its state.
+            "string" => f.values_from.is_some() && value.is_string(),
             _ => false,
         });
         if ok {

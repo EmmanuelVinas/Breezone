@@ -1,0 +1,20 @@
+{
+  "trait": "generic.sensor",
+  "version": 1,
+  "revision": 0,
+  "label": { "fr": "Mesure", "en": "Measure", "es": "Medida" },
+  "state": [
+    { "name": "value", "type": "number", "optional": true, "unit_from": "unit", "label": { "fr": "Valeur", "en": "Value", "es": "Valor" } },
+    { "name": "text", "type": "string", "optional": true, "history": false, "label": { "fr": "Valeur", "en": "Value", "es": "Valor" } },
+    { "name": "unit", "type": "string", "history": false, "optional": true, "label": { "fr": "Unité", "en": "Unit", "es": "Unidad" } }
+  ],
+  "actions": [],
+  "ui": {
+    "kind": "other",
+    "primary": "value",
+    "card": [
+      {"widget": "value", "field": "value"},
+      {"widget": "value", "field": "text"}
+    ]
+  }
+}

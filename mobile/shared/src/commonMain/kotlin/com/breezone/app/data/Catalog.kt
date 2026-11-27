@@ -1,22 +1,48 @@
 package com.breezone.app.data
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
 
 /** A value of a trait, or a parameter of one of its actions (`GET /api/traits`). */
 @Serializable
 data class CatalogField(
     val name: String,
-    /** "bool" | "integer" | "number" | "string" | "enum" */
+    /** "bool" | "integer" | "number" | "string" | "enum" | "list" */
     val type: String = "string",
     val unit: String? = null,
     val values: List<String> = emptyList(),
     val valueLabels: Map<String, ModuleLabel> = emptyMap(),
     val min: Double? = null,
     val max: Double? = null,
+    val unitFrom: String? = null,
+    val minFrom: String? = null,
+    val maxFrom: String? = null,
+    val stepFrom: String? = null,
+    val valuesFrom: String? = null,
     val optional: Boolean = false,
     val label: ModuleLabel = ModuleLabel(),
+    /** Not in the catalog: the step a device tells in its state ([resolvedBy]). */
+    val step: Double? = null,
 )
+
+/** This field as a device has it: the unit, bounds, step and values it tells in its state (a generic trait). */
+fun CatalogField.resolvedBy(state: JsonObject?): CatalogField {
+    fun told(name: String?) = name?.let { state?.get(it) }
+    fun number(name: String?) = (told(name) as? JsonPrimitive)?.doubleOrNull
+    val unit = (told(unitFrom) as? JsonPrimitive)?.contentOrNull?.ifEmpty { null }
+    val values = (told(valuesFrom) as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+    return copy(
+        unit = unit ?: this.unit,
+        min = number(minFrom) ?: min,
+        max = number(maxFrom) ?: max,
+        step = number(stepFrom),
+        values = values ?: this.values,
+    )
+}
 
 @Serializable
 data class CatalogAction(val name: String, val label: ModuleLabel = ModuleLabel(), val params: List<CatalogField> = emptyList())

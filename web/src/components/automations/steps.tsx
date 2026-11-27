@@ -9,6 +9,7 @@ import type { ChargeMode, DeviceAction } from "@/lib/api"
 import { number } from "@/lib/format"
 import { t } from "@/lib/i18n"
 import { deviceType, SCENE_TYPE } from "@/lib/device-icons"
+import { fieldOf } from "@/lib/generic-device"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -46,14 +47,21 @@ export function shownParams(trait: string, params: TraitField[]) {
     : params
 }
 
-export function defaultParams(trait: string, params: TraitField[]) {
+export function defaultParams(
+  trait: string,
+  params: TraitField[],
+  state?: DeviceView["state"]
+) {
   if (trait === "climate.zone") return { on: true }
   const out: Record<string, unknown> = {}
-  for (const p of params.filter((p) => !p.optional))
+  const told = state as Record<string, unknown> | null | undefined
+  for (const p of params
+    .filter((p) => !p.optional)
+    .map((p) => fieldOf(p, told)))
     out[p.name] =
       p.type === "bool"
         ? true
-        : p.type === "enum"
+        : p.type === "enum" || p.values?.length
           ? p.values![0]
           : p.name === "minutes"
             ? 30
@@ -69,7 +77,7 @@ export function deviceStep(home: Home, d: DeviceView): AutomationStep | null {
     device_id: d.id,
     trait: first.trait,
     action: first.action.name,
-    params: defaultParams(first.trait, first.action.params),
+    params: defaultParams(first.trait, first.action.params, d.state),
   }
 }
 
@@ -195,7 +203,8 @@ export function ParamInput({
         className="w-full lg:w-52"
       />
     )
-  if (field.type === "enum")
+  // An enum, or a choice among the values the device tells (a generic trait).
+  if (field.type === "enum" || field.values?.length)
     return (
       <Pick
         value={value === undefined ? "keep" : String(value)}
@@ -305,7 +314,13 @@ export function TargetEditor({
               ...step,
               trait: a.trait,
               action: a.action.name,
-              params: defaultParams(a.trait, a.action.params),
+              params: defaultParams(
+                a.trait,
+                a.action.params,
+                step.kind === "device"
+                  ? home.devices.find((d) => d.id === step.device_id)?.state
+                  : undefined
+              ),
             })
           }}
           options={actions.map((a) => [a.key, tl(a.action.label)])}
@@ -317,7 +332,13 @@ export function TargetEditor({
         shownParams(chosen.trait, chosen.action.params).map((p) => (
           <ParamInput
             key={p.name}
-            field={p}
+            field={fieldOf(
+              p,
+              step.kind === "device"
+                ? (home.devices.find((d) => d.id === step.device_id)
+                    ?.state as Record<string, unknown> | null)
+                : null
+            )}
             value={step.params[p.name]}
             onChange={(v) => {
               const params = { ...step.params }

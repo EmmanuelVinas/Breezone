@@ -1,0 +1,25 @@
+{
+  "trait": "generic.switch",
+  "version": 1,
+  "revision": 0,
+  "label": { "fr": "Marche / arrêt", "en": "On / off", "es": "Encendido / apagado" },
+  "state": [
+    { "name": "on", "type": "bool", "label": { "fr": "Activé", "en": "On", "es": "Activado" } }
+  ],
+  "actions": [
+    {
+      "name": "set",
+      "label": { "fr": "Activer ou désactiver", "en": "Turn on or off", "es": "Activar o desactivar" },
+      "params": [
+        { "name": "on", "type": "bool", "label": { "fr": "Activé", "en": "On", "es": "Activado" } }
+      ]
+    }
+  ],
+  "ui": {
+    "kind": "other",
+    "primary": "on",
+    "card": [
+      {"widget": "toggle", "field": "on", "action": "set", "param": "on"}
+    ]
+  }
+}

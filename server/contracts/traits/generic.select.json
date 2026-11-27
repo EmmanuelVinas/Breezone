@@ -1,0 +1,26 @@
+{
+  "trait": "generic.select",
+  "version": 1,
+  "revision": 0,
+  "label": { "fr": "Choix dans une liste", "en": "Choice from a list", "es": "Elección en una lista" },
+  "state": [
+    { "name": "value", "type": "string", "values_from": "options", "label": { "fr": "Choix", "en": "Choice", "es": "Elección" } },
+    { "name": "options", "type": "list", "history": false, "label": { "fr": "Choix possibles", "en": "Possible choices", "es": "Opciones posibles" } }
+  ],
+  "actions": [
+    {
+      "name": "set",
+      "label": { "fr": "Choisir", "en": "Choose", "es": "Elegir" },
+      "params": [
+        { "name": "value", "type": "string", "values_from": "options", "label": { "fr": "Choix", "en": "Choice", "es": "Elección" } }
+      ]
+    }
+  ],
+  "ui": {
+    "kind": "other",
+    "primary": "value",
+    "card": [
+      {"widget": "enum", "field": "value", "action": "set", "param": "value"}
+    ]
+  }
+}

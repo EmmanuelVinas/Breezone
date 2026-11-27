@@ -254,8 +254,9 @@ pub struct ActionInput {
 }
 
 /// Checks parameters against the catalog: an unknown one is refused (422, ADR 0012), a missing or
-/// mistyped one too (400).
-fn check_params(action: &crate::traits::Action, params: &Map<String, Value>) -> ApiResult<()> {
+/// mistyped one too (400), and one outside the bounds or the choices the device tells in its
+/// state (a generic trait), when it tells them.
+fn check_params(action: &crate::traits::Action, params: &Map<String, Value>, state: &Value) -> ApiResult<()> {
     let unknown: Vec<String> = params.keys().filter(|k| !action.params.iter().any(|p| &p.name == *k)).cloned().collect();
     if !unknown.is_empty() {
         return Err(ApiError::new(
@@ -283,8 +284,12 @@ fn check_params(action: &crate::traits::Action, params: &Map<String, Value>) -> 
                     "enum" => v.as_str().is_some_and(|s| p.values.iter().any(|x| x == s)),
                     _ => v.is_string(),
                 };
-                let in_range = v.as_f64().is_none_or(|x| p.min.is_none_or(|m| x >= m) && p.max.is_none_or(|m| x <= m));
-                if !ok || !in_range {
+                let told = |from: &Option<String>| from.as_ref().and_then(|f| state.get(f)).filter(|v| !v.is_null());
+                let min = told(&p.min_from).and_then(Value::as_f64).or(p.min);
+                let max = told(&p.max_from).and_then(Value::as_f64).or(p.max);
+                let in_range = v.as_f64().is_none_or(|x| min.is_none_or(|m| x >= m) && max.is_none_or(|m| x <= m));
+                let a_choice = told(&p.values_from).and_then(Value::as_array).is_none_or(|choices| choices.contains(v));
+                if !ok || !in_range || !a_choice {
                     return Err(ApiError::bad_request(format!("invalid `{}`", p.name)));
                 }
             }
@@ -299,7 +304,7 @@ pub fn check_action(view: &DeviceView, input: &ActionInput) -> ApiResult<()> {
     let action = version.and_then(|v| crate::traits::get(&input.trait_name, v)).and_then(|t| t.action(&input.action)).ok_or_else(|| {
         ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, format!("{}.{} is not an action of this device", input.trait_name, input.action)).with_detail("code", "unsupported")
     })?;
-    check_params(action, &input.params)
+    check_params(action, &input.params, &view.state)
 }
 
 /// Applies a checked action to a device, whatever its source. The rights of `actor` were checked
@@ -332,4 +337,28 @@ pub async fn act(state: &AppState, id: i64, input: &ActionInput, actor: &str) ->
     let view = get(state, id).await?.ok_or_else(|| ApiError::not_found("device not found"))?;
     check_action(&view, input)?;
     apply(state, &view, input, actor).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn params(v: Value) -> Map<String, Value> {
+        v.as_object().unwrap().clone()
+    }
+
+    #[test]
+    fn a_generic_setting_stays_within_what_the_device_tells() {
+        let number = crate::traits::get("generic.number", 1).unwrap().action("set").unwrap();
+        let state = json!({"value": 20, "min": 10, "max": 30, "unit": "°C"});
+        assert!(check_params(number, &params(json!({"value": 25})), &state).is_ok());
+        assert!(check_params(number, &params(json!({"value": 31})), &state).is_err());
+        assert!(check_params(number, &params(json!({"value": 99})), &json!({})).is_ok(), "no bounds told: any number");
+
+        let select = crate::traits::get("generic.select", 1).unwrap().action("set").unwrap();
+        let state = json!({"value": "eco", "options": ["eco", "confort"]});
+        assert!(check_params(select, &params(json!({"value": "confort"})), &state).is_ok());
+        assert!(check_params(select, &params(json!({"value": "turbo"})), &state).is_err());
+    }
 }

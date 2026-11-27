@@ -28,6 +28,7 @@ fn ts_type(f: &Field) -> String {
         "bool" => "boolean".to_string(),
         "integer" | "number" => "number".to_string(),
         "enum" => f.values.iter().map(|v| format!("\"{v}\"")).collect::<Vec<_>>().join(" | "),
+        "list" => "string[]".to_string(),
         _ => "string".to_string(),
     }
 }
@@ -38,13 +39,17 @@ fn typescript() -> String {
     for t in catalog() {
         ids.push(format!("\"{}\"", t.id()));
         let name = pascal(&t.name);
-        out += &format!("/** {} (`{}`): state. */\nexport type {name}State = {{\n", t.label.en, t.id());
-        for f in &t.state {
-            let ty = ts_type(f);
-            let ty = if f.optional { format!("{ty} | null") } else { ty };
-            out += &format!("  /** {}{} */\n  {}: {ty}\n", f.label.en, f.unit.as_deref().map(|u| format!(" ({u})")).unwrap_or_default(), f.name);
+        if t.state.is_empty() {
+            out += &format!("/** {} (`{}`): state, without values. */\nexport type {name}State = Record<string, never>\n\n", t.label.en, t.id());
+        } else {
+            out += &format!("/** {} (`{}`): state. */\nexport type {name}State = {{\n", t.label.en, t.id());
+            for f in &t.state {
+                let ty = ts_type(f);
+                let ty = if f.optional { format!("{ty} | null") } else { ty };
+                out += &format!("  /** {}{} */\n  {}: {ty}\n", f.label.en, f.unit.as_deref().map(|u| format!(" ({u})")).unwrap_or_default(), f.name);
+            }
+            out += "}\n\n";
         }
-        out += "}\n\n";
         for a in &t.actions {
             if a.params.is_empty() {
                 out +=
@@ -93,6 +98,7 @@ fn kotlin_type(t: &Trait, f: &Field) -> String {
         // `ButtonPress` is the class of the action `press`: its enum is `ButtonPressValue`.
         "enum" if t.actions.iter().any(|a| pascal(&a.name) == pascal(&f.name)) => format!("{}{}Value", pascal(&t.name), pascal(&f.name)),
         "enum" => format!("{}{}", pascal(&t.name), pascal(&f.name)),
+        "list" => "List<String>".into(),
         _ => "String".into(),
     }
 }
@@ -129,22 +135,27 @@ fn kotlin() -> String {
             }
             out += "}\n";
         }
-        out += &format!("\n/** {} (`{}`): state. */\n@Serializable\ndata class {name}State(\n", t.label.en, t.id());
-        for f in &t.state {
-            let ty = kotlin_type(t, f);
-            let decl = if f.optional {
-                format!("{ty}? = null")
-            } else {
-                match f.kind.as_str() {
-                    "bool" => format!("{ty} = false"),
-                    "integer" => format!("{ty} = 0"),
-                    "number" => format!("{ty} = 0.0"),
-                    _ => format!("{ty}? = null"),
-                }
-            };
-            out += &format!("    val {}: {decl},\n", camel(&f.name));
+        if t.state.is_empty() {
+            // Kotlin has no data class without a property.
+            out += &format!("\n/** {} (`{}`): state, without values. */\n@Serializable\nclass {name}State\n", t.label.en, t.id());
+        } else {
+            out += &format!("\n/** {} (`{}`): state. */\n@Serializable\ndata class {name}State(\n", t.label.en, t.id());
+            for f in &t.state {
+                let ty = kotlin_type(t, f);
+                let decl = if f.optional {
+                    format!("{ty}? = null")
+                } else {
+                    match f.kind.as_str() {
+                        "bool" => format!("{ty} = false"),
+                        "integer" => format!("{ty} = 0"),
+                        "number" => format!("{ty} = 0.0"),
+                        _ => format!("{ty}? = null"),
+                    }
+                };
+                out += &format!("    val {}: {decl},\n", camel(&f.name));
+            }
+            out += ")\n";
         }
-        out += ")\n";
         for a in &t.actions {
             if a.params.is_empty() {
                 out += &format!("\n/** {} (`{}`): action `{}`, without parameters. */\n@Serializable\nclass {name}{}\n", t.label.en, t.id(), a.name, pascal(&a.name));

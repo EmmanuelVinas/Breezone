@@ -941,13 +941,19 @@ export type TraitLabel = { fr: string; en: string; es: string }
 /** A value of the state of a trait, or a parameter of one of its actions. */
 export type TraitField = {
   name: string
-  type: "bool" | "integer" | "number" | "string" | "enum"
+  type: "bool" | "integer" | "number" | "string" | "enum" | "list"
   unit?: string
   values?: string[]
   /** The words for each value of an enum. */
   value_labels?: Record<string, TraitLabel>
   min?: number
   max?: number
+  /** Fields of the device's state that hold its unit, bounds, step or values (a generic trait). */
+  unit_from?: string
+  min_from?: string
+  max_from?: string
+  step_from?: string
+  values_from?: string
   optional?: boolean
   /** False for a setting or a fixed value of the hardware (not a measure). */
   history?: boolean

@@ -1,0 +1,29 @@
+{
+  "trait": "generic.number",
+  "version": 1,
+  "revision": 0,
+  "label": { "fr": "Réglage numérique", "en": "Number setting", "es": "Ajuste numérico" },
+  "state": [
+    { "name": "value", "type": "number", "unit_from": "unit", "min_from": "min", "max_from": "max", "step_from": "step", "label": { "fr": "Valeur", "en": "Value", "es": "Valor" } },
+    { "name": "min", "type": "number", "history": false, "optional": true, "label": { "fr": "Minimum", "en": "Minimum", "es": "Mínimo" } },
+    { "name": "max", "type": "number", "history": false, "optional": true, "label": { "fr": "Maximum", "en": "Maximum", "es": "Máximo" } },
+    { "name": "step", "type": "number", "history": false, "optional": true, "min": 0, "label": { "fr": "Pas", "en": "Step", "es": "Paso" } },
+    { "name": "unit", "type": "string", "history": false, "optional": true, "label": { "fr": "Unité", "en": "Unit", "es": "Unidad" } }
+  ],
+  "actions": [
+    {
+      "name": "set",
+      "label": { "fr": "Régler", "en": "Set", "es": "Ajustar" },
+      "params": [
+        { "name": "value", "type": "number", "unit_from": "unit", "min_from": "min", "max_from": "max", "step_from": "step", "label": { "fr": "Valeur", "en": "Value", "es": "Valor" } }
+      ]
+    }
+  ],
+  "ui": {
+    "kind": "other",
+    "primary": "value",
+    "card": [
+      {"widget": "slider", "field": "value", "action": "set", "param": "value"}
+    ]
+  }
+}
