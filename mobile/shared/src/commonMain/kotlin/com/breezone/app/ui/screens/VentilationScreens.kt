@@ -144,19 +144,21 @@ fun VentilationScreen(serverId: String, onBack: (() -> Unit)?, onOpen: (Long) ->
             unit?.let { CommandIndicator(status["$serverId/${it.id}"], Modifier.padding(end = 16.dp)) }
         }
     }) { padding ->
-        LazyColumn(
-            Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            if (data.loaded && unit == null) {
-                item(key = "empty", contentType = "note") { SectionCard { Muted(stringResource(Res.string.ventilation_empty)) } }
-            }
-            if (unit != null) {
-                item(key = "house", contentType = "house") { VentilationHouseCard(serverId, unit, valves) }
-                item(key = "rooms", contentType = "rooms") {
-                    DeviceGroupCard(stringResource(Res.string.ventilation_rooms), null) {
-                        valves.forEach { d -> ValveRow(d, demanding = u.worstRoom == d.name, cause = causeText(u.mainPollutant)) { onOpen(d.id) } }
+        FzPullRefresh({ hub.reload(serverId) }, Modifier.fillMaxSize(), top = padding.calculateTopPadding()) {
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (data.loaded && unit == null) {
+                    item(key = "empty", contentType = "note") { SectionCard { Muted(stringResource(Res.string.ventilation_empty)) } }
+                }
+                if (unit != null) {
+                    item(key = "house", contentType = "house") { VentilationHouseCard(serverId, unit, valves) }
+                    item(key = "rooms", contentType = "rooms") {
+                        DeviceGroupCard(stringResource(Res.string.ventilation_rooms), null) {
+                            valves.forEach { d -> ValveRow(d, demanding = u.worstRoom == d.name, cause = causeText(u.mainPollutant)) { onOpen(d.id) } }
+                        }
                     }
                 }
             }
@@ -223,90 +225,92 @@ fun VentilationRoomScreen(serverId: String, deviceId: Long, onBack: () -> Unit) 
             s.co2?.let { co2 to "${it.toInt()} ppm" },
             s.voc?.let { voc to (if (it < 10) "${(it * 10).roundToInt() / 10.0} ppm" else "${it.roundToInt()} ppm") },
         )
-        LazyColumn(
-            Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            item(key = "sentence", contentType = "sentence") {
-                SectionCard { Text(sentence, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, lineHeight = 26.sp) }
-            }
-            item(key = "periods", contentType = "periods") {
-                PeriodChips(hours, history?.oldest) { hours = it }
-            }
-            item(key = "flow", contentType = "measure") {
-                SectionCard {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(FzIcons.Fan, null, Modifier.size(18.dp), tint = Fz.colors.air)
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(Res.string.ventilation_air_flow), fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                        Text(s.level?.let { stringResource(Res.string.common_percent, it.toInt()) } ?: "–", fontWeight = FontWeight.SemiBold)
-                    }
-                    Caption(
-                        if (s.nominal != null) stringResource(Res.string.ventilation_flow_of, s.flow.toInt(), s.nominal.toInt())
-                        else stringResource(Res.string.ventilation_flow, s.flow.toInt()),
-                    )
-                    history?.series?.get("flow")?.takeIf { it.size > 1 }?.let { Sparkline(it, Fz.colors.air, Modifier.fillMaxWidth().height(72.dp)) }
+        FzPullRefresh({ hub.reload(serverId) }, Modifier.fillMaxSize(), top = padding.calculateTopPadding()) {
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item(key = "sentence", contentType = "sentence") {
+                    SectionCard { Text(sentence, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, lineHeight = 26.sp) }
                 }
-            }
-            if (s.humidity != null) {
-                item(key = "humidity", contentType = "measure") {
+                item(key = "periods", contentType = "periods") {
+                    PeriodChips(hours, history?.oldest) { hours = it }
+                }
+                item(key = "flow", contentType = "measure") {
                     SectionCard {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(FzIcons.Droplet, null, Modifier.size(18.dp), tint = Fz.colors.cool)
+                            Icon(FzIcons.Fan, null, Modifier.size(18.dp), tint = Fz.colors.air)
                             Spacer(Modifier.width(8.dp))
-                            Text(stringResource(Res.string.ventilation_humidity), fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                            Text(stringResource(Res.string.common_percent, s.humidity.toInt()), fontWeight = FontWeight.SemiBold, color = q?.color() ?: MaterialTheme.colorScheme.onSurface)
+                            Text(stringResource(Res.string.ventilation_air_flow), fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                            Text(s.level?.let { stringResource(Res.string.common_percent, it.toInt()) } ?: "–", fontWeight = FontWeight.SemiBold)
                         }
-                        history?.series?.get("humidity")?.takeIf { it.size > 1 }?.let { Sparkline(it, Fz.colors.cool, Modifier.fillMaxWidth().height(72.dp)) }
+                        Caption(
+                            if (s.nominal != null) stringResource(Res.string.ventilation_flow_of, s.flow.toInt(), s.nominal.toInt())
+                            else stringResource(Res.string.ventilation_flow, s.flow.toInt()),
+                        )
+                        history?.series?.get("flow")?.takeIf { it.size > 1 }?.let { Sparkline(it, Fz.colors.air, Modifier.fillMaxWidth().height(72.dp)) }
                     }
                 }
-            }
-            if (others.isNotEmpty()) {
-                item(key = "others", contentType = "measure") {
+                if (s.humidity != null) {
+                    item(key = "humidity", contentType = "measure") {
+                        SectionCard {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(FzIcons.Droplet, null, Modifier.size(18.dp), tint = Fz.colors.cool)
+                                Spacer(Modifier.width(8.dp))
+                                Text(stringResource(Res.string.ventilation_humidity), fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                                Text(stringResource(Res.string.common_percent, s.humidity.toInt()), fontWeight = FontWeight.SemiBold, color = q?.color() ?: MaterialTheme.colorScheme.onSurface)
+                            }
+                            history?.series?.get("humidity")?.takeIf { it.size > 1 }?.let { Sparkline(it, Fz.colors.cool, Modifier.fillMaxWidth().height(72.dp)) }
+                        }
+                    }
+                }
+                if (others.isNotEmpty()) {
+                    item(key = "others", contentType = "measure") {
+                        SectionCard {
+                            others.forEach { (k, v) ->
+                                Row(Modifier.fillMaxWidth()) {
+                                    Muted(k, Modifier.weight(1f))
+                                    Text(v, fontWeight = FontWeight.Medium)
+                                }
+                            }
+                        }
+                    }
+                }
+                item(key = "actions", contentType = "actions") {
                     SectionCard {
-                        others.forEach { (k, v) ->
-                            Row(Modifier.fillMaxWidth()) {
-                                Muted(k, Modifier.weight(1f))
-                                Text(v, fontWeight = FontWeight.Medium)
-                            }
-                        }
-                    }
-                }
-            }
-            item(key = "actions", contentType = "actions") {
-                SectionCard {
-                    if (s.boost) {
-                        OutlinedButton(onClick = { hub.stopBoost(serverId, d, "ventilation.room") }, enabled = d.usable, shape = Fz.shapes.button, modifier = Modifier.fillMaxWidth()) {
-                            Icon(FzIcons.Square, null, Modifier.size(14.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text(stringResource(Res.string.ventilation_stop_boost))
-                        }
-                    } else {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { hub.boost(serverId, d, "ventilation.room", 30) }, enabled = d.usable, shape = Fz.shapes.button, modifier = Modifier.weight(1f)) {
-                                Icon(FzIcons.Fan, null, Modifier.size(18.dp))
+                        if (s.boost) {
+                            OutlinedButton(onClick = { hub.stopBoost(serverId, d, "ventilation.room") }, enabled = d.usable, shape = Fz.shapes.button, modifier = Modifier.fillMaxWidth()) {
+                                Icon(FzIcons.Square, null, Modifier.size(14.dp))
                                 Spacer(Modifier.width(6.dp))
-                                Text(stringResource(Res.string.ventilation_boost_30))
+                                Text(stringResource(Res.string.ventilation_stop_boost))
                             }
-                            OutlinedButton(onClick = { hub.boost(serverId, d, "ventilation.room", 60) }, enabled = d.usable, shape = Fz.shapes.button) { Text(stringResource(Res.string.ventilation_1h)) }
-                            OutlinedButton(onClick = { hub.boost(serverId, d, "ventilation.room", 120) }, enabled = d.usable, shape = Fz.shapes.button) { Text(stringResource(Res.string.ventilation_2h)) }
+                        } else {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(onClick = { hub.boost(serverId, d, "ventilation.room", 30) }, enabled = d.usable, shape = Fz.shapes.button, modifier = Modifier.weight(1f)) {
+                                    Icon(FzIcons.Fan, null, Modifier.size(18.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(stringResource(Res.string.ventilation_boost_30))
+                                }
+                                OutlinedButton(onClick = { hub.boost(serverId, d, "ventilation.room", 60) }, enabled = d.usable, shape = Fz.shapes.button) { Text(stringResource(Res.string.ventilation_1h)) }
+                                OutlinedButton(onClick = { hub.boost(serverId, d, "ventilation.room", 120) }, enabled = d.usable, shape = Fz.shapes.button) { Text(stringResource(Res.string.ventilation_2h)) }
+                            }
                         }
-                    }
-                    Caption(stringResource(Res.string.ventilation_profile))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        VentilationRoomProfile.entries.forEach { p ->
-                            FilterChip(
-                                selected = s.profile == p,
-                                enabled = d.usable,
-                                onClick = {
-                                    if (s.profile != p) {
-                                        val value = p.name.lowercase()
-                                        hub.act(serverId, d, "ventilation.room", "set_profile", buildJsonObject { put("profile", value) }, optimistic = buildJsonObject { put("profile", value) })
-                                    }
-                                },
-                                label = { Text(profileLabel(p)) },
-                            )
+                        Caption(stringResource(Res.string.ventilation_profile))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            VentilationRoomProfile.entries.forEach { p ->
+                                FilterChip(
+                                    selected = s.profile == p,
+                                    enabled = d.usable,
+                                    onClick = {
+                                        if (s.profile != p) {
+                                            val value = p.name.lowercase()
+                                            hub.act(serverId, d, "ventilation.room", "set_profile", buildJsonObject { put("profile", value) }, optimistic = buildJsonObject { put("profile", value) })
+                                        }
+                                    },
+                                    label = { Text(profileLabel(p)) },
+                                )
+                            }
                         }
                     }
                 }

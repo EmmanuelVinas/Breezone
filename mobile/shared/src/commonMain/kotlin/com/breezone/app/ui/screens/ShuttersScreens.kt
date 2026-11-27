@@ -185,33 +185,35 @@ fun ShuttersScreen(serverId: String, onBack: (() -> Unit)?, onOpen: (Long) -> Un
     Scaffold(topBar = {
         FzTopBar(stringResource(Res.string.house_shutters), pluralStringResource(Res.plurals.shutters_open_of, covers.count { it.isOpen() }, covers.count { it.isOpen() }, covers.size), onBack)
     }) { padding ->
-        LazyColumn(
-            Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            item(key = "all", contentType = "all") {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AssistChip(
-                        onClick = { usable.forEach { hub.setCover(serverId, it, 100) } },
-                        enabled = usable.isNotEmpty(),
-                        label = { Text(stringResource(Res.string.shutters_open_all)) },
-                        leadingIcon = { Icon(FzIcons.ChevronUp, null, Modifier.size(16.dp)) },
-                    )
-                    AssistChip(
-                        onClick = { usable.forEach { hub.setCover(serverId, it, 0) } },
-                        enabled = usable.isNotEmpty(),
-                        label = { Text(stringResource(Res.string.shutters_close_all)) },
-                        leadingIcon = { Icon(FzIcons.ChevronDown, null, Modifier.size(16.dp)) },
-                    )
+        FzPullRefresh({ hub.reload(serverId) }, Modifier.fillMaxSize(), top = padding.calculateTopPadding()) {
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item(key = "all", contentType = "all") {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        AssistChip(
+                            onClick = { usable.forEach { hub.setCover(serverId, it, 100) } },
+                            enabled = usable.isNotEmpty(),
+                            label = { Text(stringResource(Res.string.shutters_open_all)) },
+                            leadingIcon = { Icon(FzIcons.ChevronUp, null, Modifier.size(16.dp)) },
+                        )
+                        AssistChip(
+                            onClick = { usable.forEach { hub.setCover(serverId, it, 0) } },
+                            enabled = usable.isNotEmpty(),
+                            label = { Text(stringResource(Res.string.shutters_close_all)) },
+                            leadingIcon = { Icon(FzIcons.ChevronDown, null, Modifier.size(16.dp)) },
+                        )
+                    }
                 }
-            }
-            if (data.loaded && covers.isEmpty()) {
-                item(key = "empty", contentType = "note") { SectionCard { Muted(stringResource(Res.string.shutters_empty)) } }
-            }
-            items(groupByRoom(covers, data.rooms), key = { it.first?.id ?: -1L }, contentType = { "room" }) { (room, list) ->
-                DeviceGroupCard(room?.name ?: noRoom, pluralStringResource(Res.plurals.shutters_open_of, list.count { it.isOpen() }, list.count { it.isOpen() }, list.size)) {
-                    list.forEach { d -> ShutterRow(d, status["$serverId/${d.id}"], onOpen = { onOpen(d.id) }, hub = hub, serverId = serverId) }
+                if (data.loaded && covers.isEmpty()) {
+                    item(key = "empty", contentType = "note") { SectionCard { Muted(stringResource(Res.string.shutters_empty)) } }
+                }
+                items(groupByRoom(covers, data.rooms), key = { it.first?.id ?: -1L }, contentType = { "room" }) { (room, list) ->
+                    DeviceGroupCard(room?.name ?: noRoom, pluralStringResource(Res.plurals.shutters_open_of, list.count { it.isOpen() }, list.count { it.isOpen() }, list.size)) {
+                        list.forEach { d -> ShutterRow(d, status["$serverId/${d.id}"], onOpen = { onOpen(d.id) }, hub = hub, serverId = serverId) }
+                    }
                 }
             }
         }
@@ -275,38 +277,40 @@ fun ShutterScreen(serverId: String, deviceId: Long, onBack: () -> Unit) {
         val s = hub.movingCover(serverId, d)
         var draft by remember { mutableStateOf<Int?>(null) }
         val open by animatedOpen(s)
-        LazyColumn(
-            Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            item(key = "main", contentType = "main") {
-                SectionCard {
-                    ShutterControl(
-                        open = { draft?.let { it / 100f } ?: open },
-                        label = shutterLabel(draft, s, d.available),
-                        moving = draft == null && s.moving(),
-                        enabled = d.usable,
-                        onDraft = { draft = it },
-                    ) { v ->
-                        draft = null
-                        hub.setCover(serverId, d, v)
-                    }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { hub.setCover(serverId, d, 100) }, enabled = d.usable, modifier = Modifier.weight(1f), shape = Fz.shapes.button, contentPadding = PaddingValues(horizontal = 8.dp)) {
-                            Icon(FzIcons.ChevronUp, null, Modifier.size(18.dp))
-                            Text(stringResource(Res.string.shutter_up), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        FzPullRefresh({ hub.reload(serverId) }, Modifier.fillMaxSize(), top = padding.calculateTopPadding()) {
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item(key = "main", contentType = "main") {
+                    SectionCard {
+                        ShutterControl(
+                            open = { draft?.let { it / 100f } ?: open },
+                            label = shutterLabel(draft, s, d.available),
+                            moving = draft == null && s.moving(),
+                            enabled = d.usable,
+                            onDraft = { draft = it },
+                        ) { v ->
+                            draft = null
+                            hub.setCover(serverId, d, v)
                         }
-                        if (s.stoppable()) {
-                            OutlinedButton(onClick = { hub.stopCover(serverId, d) }, enabled = d.usable, modifier = Modifier.weight(1f), shape = Fz.shapes.button, contentPadding = PaddingValues(horizontal = 8.dp)) {
-                                Icon(FzIcons.Square, null, Modifier.size(14.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text(stringResource(Res.string.shutter_stop), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = { hub.setCover(serverId, d, 100) }, enabled = d.usable, modifier = Modifier.weight(1f), shape = Fz.shapes.button, contentPadding = PaddingValues(horizontal = 8.dp)) {
+                                Icon(FzIcons.ChevronUp, null, Modifier.size(18.dp))
+                                Text(stringResource(Res.string.shutter_up), maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
-                        }
-                        OutlinedButton(onClick = { hub.setCover(serverId, d, 0) }, enabled = d.usable, modifier = Modifier.weight(1f), shape = Fz.shapes.button, contentPadding = PaddingValues(horizontal = 8.dp)) {
-                            Icon(FzIcons.ChevronDown, null, Modifier.size(18.dp))
-                            Text(stringResource(Res.string.shutter_down), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (s.stoppable()) {
+                                OutlinedButton(onClick = { hub.stopCover(serverId, d) }, enabled = d.usable, modifier = Modifier.weight(1f), shape = Fz.shapes.button, contentPadding = PaddingValues(horizontal = 8.dp)) {
+                                    Icon(FzIcons.Square, null, Modifier.size(14.dp))
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(stringResource(Res.string.shutter_stop), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                            }
+                            OutlinedButton(onClick = { hub.setCover(serverId, d, 0) }, enabled = d.usable, modifier = Modifier.weight(1f), shape = Fz.shapes.button, contentPadding = PaddingValues(horizontal = 8.dp)) {
+                                Icon(FzIcons.ChevronDown, null, Modifier.size(18.dp))
+                                Text(stringResource(Res.string.shutter_down), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
                         }
                     }
                 }

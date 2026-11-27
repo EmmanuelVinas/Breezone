@@ -2,6 +2,8 @@ package com.breezone.app.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -26,10 +28,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.pullToRefresh
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -42,6 +48,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.breezone.app.resources.Res
@@ -55,6 +62,7 @@ import com.breezone.app.data.Mode
 import com.breezone.app.ui.label
 import com.breezone.app.ui.icons.FzIcons
 import com.breezone.app.ui.theme.Fz
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -193,4 +201,37 @@ fun fzNavigationColors() = NavigationBarItemDefaults.colors(
 @Composable
 fun LoadingWave(modifier: Modifier = Modifier) {
     CircularWavyProgressIndicator(modifier)
+}
+
+/**
+ * Pulling the content down reads it again ([onRefresh]); [top] puts the indicator below a bar the
+ * content scrolls under.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FzPullRefresh(
+    onRefresh: suspend () -> Unit,
+    modifier: Modifier = Modifier,
+    top: Dp = 0.dp,
+    enabled: Boolean = true,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    val state = rememberPullToRefreshState()
+    val scope = rememberCoroutineScope()
+    var refreshing by remember { mutableStateOf(false) }
+    Box(
+        modifier.pullToRefresh(isRefreshing = refreshing, state = state, enabled = enabled) {
+            refreshing = true
+            scope.launch {
+                try {
+                    onRefresh()
+                } finally {
+                    refreshing = false
+                }
+            }
+        },
+    ) {
+        content()
+        PullToRefreshDefaults.Indicator(state = state, isRefreshing = refreshing, modifier = Modifier.align(Alignment.TopCenter).padding(top = top))
+    }
 }

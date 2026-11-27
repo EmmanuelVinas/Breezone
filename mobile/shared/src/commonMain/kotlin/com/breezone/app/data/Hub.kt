@@ -4,6 +4,7 @@ import io.ktor.client.HttpClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -270,6 +271,20 @@ class Hub(
             if (s.live != Live.Live && !s.authRequired) {
                 jobs.remove(s.account.id)?.cancel()
                 jobs[s.account.id] = scope.launch { follow(s.account.id, api) }
+            }
+        }
+    }
+
+    /**
+     * Reads everything again now (pull to refresh): the installations, the devices of the modules
+     * and their scenes, of one server or of all, and the live channel where it was lost.
+     */
+    suspend fun reload(serverId: String? = null) {
+        refresh()
+        coroutineScope {
+            _servers.value.filter { (serverId == null || it.account.id == serverId) && !it.authRequired }.forEach { s ->
+                launch { resync(s.account.id) }
+                launch { refreshDevices(s.account.id, withScenes = true) }
             }
         }
     }

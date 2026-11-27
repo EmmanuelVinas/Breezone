@@ -75,96 +75,98 @@ fun HomeScreen(onOpenInstallation: (serverId: String, installationId: Long) -> U
     val outdated = servers.filter { it.update != null }
     val empty = servers.isEmpty() || (!loading && servers.all { it.loaded && it.installations.isEmpty() } && remote.isEmpty())
 
-    LazyColumn(
-        Modifier.fillMaxSize().statusBarsPadding(),
-        contentPadding = PaddingValues(20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        item(key = TYPE_HEADER, contentType = TYPE_HEADER) {
-            Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (onBack != null) {
-                    androidx.compose.material3.IconButton(onClick = onBack, modifier = Modifier.padding(end = 4.dp)) {
-                        Icon(FzIcons.ChevronLeft, stringResource(Res.string.common_back))
+    FzPullRefresh({ hub.reload() }, Modifier.fillMaxSize().statusBarsPadding()) {
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            item(key = TYPE_HEADER, contentType = TYPE_HEADER) {
+                Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (onBack != null) {
+                        androidx.compose.material3.IconButton(onClick = onBack, modifier = Modifier.padding(end = 4.dp)) {
+                            Icon(FzIcons.ChevronLeft, stringResource(Res.string.common_back))
+                        }
+                    }
+                    Text(stringResource(Res.string.home_title), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
+                    if (servers.isNotEmpty()) {
+                        // Installations loaded but no live channel: say why instead of "connecting…".
+                        val blocked = !live && liveProblem != null
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable(enabled = blocked) { showLiveProblem = true },
+                        ) {
+                            StatusDot(online = live, unknown = !live && !blocked && servers.any { it.live == Live.Connecting })
+                            Spacer(Modifier.size(6.dp))
+                            Text(
+                                stringResource(
+                                    when {
+                                        live -> Res.string.live_on
+                                        blocked -> Res.string.live_unavailable
+                                        else -> Res.string.live_connecting
+                                    },
+                                ),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Fz.colors.muted,
+                            )
+                        }
                     }
                 }
-                Text(stringResource(Res.string.home_title), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
-                if (servers.isNotEmpty()) {
-                    // Installations loaded but no live channel: say why instead of "connecting…".
-                    val blocked = !live && liveProblem != null
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable(enabled = blocked) { showLiveProblem = true },
-                    ) {
-                        StatusDot(online = live, unknown = !live && !blocked && servers.any { it.live == Live.Connecting })
-                        Spacer(Modifier.size(6.dp))
+            }
+            items(expired, key = { "reauth-${it.account.id}" }, contentType = { TYPE_REAUTH }) { s ->
+                SectionCard {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(FzIcons.TriangleAlert, null, tint = Fz.colors.warning, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.size(8.dp))
+                        Text(stringResource(Res.string.home_reauth_title, s.account.label), style = MaterialTheme.typography.titleSmall)
+                    }
+                    Muted(stringResource(Res.string.home_reauth_text))
+                    Button(onClick = { onReauth(s.account.id) }, shape = Fz.shapes.button) {
+                        Text(stringResource(Res.string.home_reauth_button))
+                    }
+                }
+            }
+            items(outdated, key = { "update-${it.account.id}" }, contentType = { TYPE_UPDATE }) { s ->
+                SectionCard {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(FzIcons.TriangleAlert, null, tint = Fz.colors.warning, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.size(8.dp))
                         Text(
-                            stringResource(
-                                when {
-                                    live -> Res.string.live_on
-                                    blocked -> Res.string.live_unavailable
-                                    else -> Res.string.live_connecting
-                                },
-                            ),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Fz.colors.muted,
+                            stringResource(if (s.update == UpdateNeeded.App) Res.string.update_app_title else Res.string.update_server_title, s.account.label),
+                            style = MaterialTheme.typography.titleSmall,
                         )
                     }
-                }
-            }
-        }
-        items(expired, key = { "reauth-${it.account.id}" }, contentType = { TYPE_REAUTH }) { s ->
-            SectionCard {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(FzIcons.TriangleAlert, null, tint = Fz.colors.warning, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.size(8.dp))
-                    Text(stringResource(Res.string.home_reauth_title, s.account.label), style = MaterialTheme.typography.titleSmall)
-                }
-                Muted(stringResource(Res.string.home_reauth_text))
-                Button(onClick = { onReauth(s.account.id) }, shape = Fz.shapes.button) {
-                    Text(stringResource(Res.string.home_reauth_button))
-                }
-            }
-        }
-        items(outdated, key = { "update-${it.account.id}" }, contentType = { TYPE_UPDATE }) { s ->
-            SectionCard {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(FzIcons.TriangleAlert, null, tint = Fz.colors.warning, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.size(8.dp))
-                    Text(
-                        stringResource(if (s.update == UpdateNeeded.App) Res.string.update_app_title else Res.string.update_server_title, s.account.label),
-                        style = MaterialTheme.typography.titleSmall,
+                    Muted(
+                        if (s.update == UpdateNeeded.App) stringResource(Res.string.update_app_text)
+                        else stringResource(Res.string.update_server_text, s.serverVersion ?: "?"),
                     )
                 }
-                Muted(
-                    if (s.update == UpdateNeeded.App) stringResource(Res.string.update_app_text)
-                    else stringResource(Res.string.update_server_text, s.serverVersion ?: "?"),
-                )
             }
-        }
-        if (loading) {
-            item(key = TYPE_LOADING, contentType = TYPE_LOADING) {
-                Row(Modifier.fillMaxWidth().padding(40.dp), horizontalArrangement = Arrangement.Center) { LoadingWave() }
-            }
-        }
-        servers.forEach { s ->
-            items(s.installations, key = { "${s.account.id}-${it.id}" }, contentType = { TYPE_INSTALLATION }) { inst ->
-                InstallationCard(inst, if (multi) s.account.label else null) { onOpenInstallation(s.account.id, inst.id) }
-            }
-        }
-        items(remote, key = { "remote-${it.cloudId}" }, contentType = { TYPE_REMOTE }) { r ->
-            RemoteInstallationCard(r) { remoteInfo = r }
-        }
-        if (empty) {
-            item(key = TYPE_EMPTY, contentType = TYPE_EMPTY) {
-                SectionCard {
-                    Icon(FzIcons.House, null, tint = Fz.colors.muted, modifier = Modifier.size(32.dp))
-                    Text(stringResource(Res.string.home_empty_title), style = MaterialTheme.typography.titleMedium)
-                    Muted(stringResource(if (servers.isEmpty()) Res.string.home_empty_no_server else Res.string.home_empty_text))
-                    if (servers.isEmpty()) Button(onClick = onAddServer) { Text(stringResource(Res.string.home_add_server)) }
+            if (loading) {
+                item(key = TYPE_LOADING, contentType = TYPE_LOADING) {
+                    Row(Modifier.fillMaxWidth().padding(40.dp), horizontalArrangement = Arrangement.Center) { LoadingWave() }
                 }
             }
+            servers.forEach { s ->
+                items(s.installations, key = { "${s.account.id}-${it.id}" }, contentType = { TYPE_INSTALLATION }) { inst ->
+                    InstallationCard(inst, if (multi) s.account.label else null) { onOpenInstallation(s.account.id, inst.id) }
+                }
+            }
+            items(remote, key = { "remote-${it.cloudId}" }, contentType = { TYPE_REMOTE }) { r ->
+                RemoteInstallationCard(r) { remoteInfo = r }
+            }
+            if (empty) {
+                item(key = TYPE_EMPTY, contentType = TYPE_EMPTY) {
+                    SectionCard {
+                        Icon(FzIcons.House, null, tint = Fz.colors.muted, modifier = Modifier.size(32.dp))
+                        Text(stringResource(Res.string.home_empty_title), style = MaterialTheme.typography.titleMedium)
+                        Muted(stringResource(if (servers.isEmpty()) Res.string.home_empty_no_server else Res.string.home_empty_text))
+                        if (servers.isEmpty()) Button(onClick = onAddServer) { Text(stringResource(Res.string.home_add_server)) }
+                    }
+                }
+            }
+            item(key = "bottom-space", contentType = "space") { Spacer(Modifier.height(12.dp)) }
         }
-        item(key = "bottom-space", contentType = "space") { Spacer(Modifier.height(12.dp)) }
     }
 
     remoteInfo?.let { r ->

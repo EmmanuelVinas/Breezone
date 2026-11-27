@@ -96,47 +96,49 @@ fun ZoneScreen(serverId: String, installationId: Long, systemId: Long, zoneId: L
             Muted(stringResource(Res.string.zone_not_found), Modifier.padding(padding).padding(24.dp))
             return@Scaffold
         }
-        Column(
-            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            ZoneControls(zone) { cmd -> hub.control(serverId, zone, cmd) }
-            if (zone.modes.isNotEmpty()) {
-                var pendingMode by remember { mutableStateOf<Mode?>(null) }
-                ModeCard(zone) { pendingMode = it }
-                pendingMode?.let { mode ->
-                    ModeConfirmation(mode, onConfirm = { hub.control(serverId, zone, ZoneCommand(mode = mode)) }, onDismiss = { pendingMode = null })
-                }
-            }
-            if (zone.speeds.isNotEmpty()) {
-                val auto = stringResource(Res.string.common_auto)
-                SectionCard {
-                    SectionTitle(stringResource(Res.string.zone_fan_title), FzIcons.Fan)
-                    Segments(zone.speeds.map { it to (if (it == 0L) auto else "$it") }, zone.speed) {
-                        hub.control(serverId, zone, ZoneCommand(speed = it))
+        FzPullRefresh({ hub.reload(serverId) }, Modifier.fillMaxSize(), top = padding.calculateTopPadding()) {
+            Column(
+                Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                ZoneControls(zone) { cmd -> hub.control(serverId, zone, cmd) }
+                if (zone.modes.isNotEmpty()) {
+                    var pendingMode by remember { mutableStateOf<Mode?>(null) }
+                    ModeCard(zone) { pendingMode = it }
+                    pendingMode?.let { mode ->
+                        ModeConfirmation(mode, onConfirm = { hub.control(serverId, zone, ZoneCommand(mode = mode)) }, onDismiss = { pendingMode = null })
                     }
                 }
-            }
-            if (zone.sleep != null) {
-                val off = stringResource(Res.string.zone_sleep_off)
-                val minutes = listOf(30L, 60L, 90L).map { it to stringResource(Res.string.zone_sleep_minutes, it.toInt()) }
-                SectionCard {
-                    SectionTitle(stringResource(Res.string.zone_sleep_title), FzIcons.Moon)
-                    Segments(listOf(0L to off) + minutes, zone.sleep) {
-                        hub.control(serverId, zone, ZoneCommand(sleep = it))
+                if (zone.speeds.isNotEmpty()) {
+                    val auto = stringResource(Res.string.common_auto)
+                    SectionCard {
+                        SectionTitle(stringResource(Res.string.zone_fan_title), FzIcons.Fan)
+                        Segments(zone.speeds.map { it to (if (it == 0L) auto else "$it") }, zone.speed) {
+                            hub.control(serverId, zone, ZoneCommand(speed = it))
+                        }
                     }
                 }
-            }
-            if (zone.errors.isNotEmpty()) {
-                SectionCard {
-                    SectionTitle(stringResource(Res.string.zone_alerts_title), FzIcons.TriangleAlert)
-                    Muted(zone.errors.joinToString(" · "))
+                if (zone.sleep != null) {
+                    val off = stringResource(Res.string.zone_sleep_off)
+                    val minutes = listOf(30L, 60L, 90L).map { it to stringResource(Res.string.zone_sleep_minutes, it.toInt()) }
+                    SectionCard {
+                        SectionTitle(stringResource(Res.string.zone_sleep_title), FzIcons.Moon)
+                        Segments(listOf(0L to off) + minutes, zone.sleep) {
+                            hub.control(serverId, zone, ZoneCommand(sleep = it))
+                        }
+                    }
                 }
+                if (zone.errors.isNotEmpty()) {
+                    SectionCard {
+                        SectionTitle(stringResource(Res.string.zone_alerts_title), FzIcons.TriangleAlert)
+                        Muted(zone.errors.joinToString(" · "))
+                    }
+                }
+                ZoneHistorySection(hub, serverId, zone)
+                ZoneComfortSection(hub, serverId, zone)
+                zone.airQuality?.let { AirQualitySection(hub, serverId, zone, it) }
+                Spacer(Modifier.height(24.dp))
             }
-            ZoneHistorySection(hub, serverId, zone)
-            ZoneComfortSection(hub, serverId, zone)
-            zone.airQuality?.let { AirQualitySection(hub, serverId, zone, it) }
-            Spacer(Modifier.height(24.dp))
         }
     }
 }

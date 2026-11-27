@@ -59,6 +59,7 @@ import com.breezone.app.data.modulesHere
 import com.breezone.app.resources.*
 import com.breezone.app.ui.icons.FzIcons
 import com.breezone.app.ui.screens.ConfirmDialog
+import com.breezone.app.ui.screens.FzPullRefresh
 import com.breezone.app.ui.screens.LocalCardFillsHeight
 import com.breezone.app.ui.screens.LoadingWave
 import com.breezone.app.ui.screens.Muted
@@ -204,49 +205,51 @@ fun HomeBoard(serverId: String, installationId: Long, nav: HomeNav, onInstallati
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) { LoadingWave() }
             return@Scaffold
         }
-        LazyColumn(
-            Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            if (inst == null) {
-                item(key = "missing", contentType = "note") {
-                    Muted(server?.error?.takeIf { !server.loaded } ?: stringResource(Res.string.installation_not_found))
-                }
-            } else if (editing) {
-                item(key = "hint", contentType = "note") { Muted(stringResource(Res.string.home_arrange_hint)) }
-                val list = draft.orEmpty()
-                items(list, key = { "edit-${it.id}" }, contentType = { "edit" }) { b ->
-                    val i = list.indexOf(b)
-                    EditFrame(
-                        b = b,
-                        ctx = ctx,
-                        first = i == 0,
-                        last = i == list.lastIndex,
-                        onMove = { by -> draft = list.toMutableList().apply { add((i + by).coerceIn(0, lastIndex), removeAt(i)) } },
-                        onSize = { size -> draft = list.map { if (it.id == b.id) it.copy(size = size.wire) else it } },
-                        onRemove = { draft = list.filterNot { it.id == b.id } },
-                        onSettings = { settingsOf = b.id },
-                    )
-                }
-                item(key = "add", contentType = "add") {
-                    OutlinedButton(onClick = { adding = true }, modifier = Modifier.fillMaxWidth()) {
-                        Icon(FzIcons.Plus, null, Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(Res.string.home_add_card))
+        FzPullRefresh({ hub.reload(serverId) }, Modifier.fillMaxSize(), top = padding.calculateTopPadding(), enabled = !editing) {
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (inst == null) {
+                    item(key = "missing", contentType = "note") {
+                        Muted(server?.error?.takeIf { !server.loaded } ?: stringResource(Res.string.installation_not_found))
                     }
-                }
-            } else {
-                if (!here && server?.installations?.any { it.access == "local" } == true) {
-                    item(key = "elsewhere", contentType = "note") { SectionCard { Muted(stringResource(Res.string.house_other_server, inst.name)) } }
-                }
-                // Two half cards side by side; a full card, or a half one alone, takes the row.
-                items(rows(blocks), key = { row -> row.first().id }, contentType = { row -> if (row.size == 2) "pair" else row.first().type }) { row ->
-                    if (row.size == 1) {
-                        BlockContent(row.first(), ctx, editing = false)
-                    } else {
-                        CompositionLocalProvider(LocalCardFillsHeight provides true) {
-                            EqualPair(12.dp, { BlockContent(row[0], ctx, editing = false) }, { BlockContent(row[1], ctx, editing = false) })
+                } else if (editing) {
+                    item(key = "hint", contentType = "note") { Muted(stringResource(Res.string.home_arrange_hint)) }
+                    val list = draft.orEmpty()
+                    items(list, key = { "edit-${it.id}" }, contentType = { "edit" }) { b ->
+                        val i = list.indexOf(b)
+                        EditFrame(
+                            b = b,
+                            ctx = ctx,
+                            first = i == 0,
+                            last = i == list.lastIndex,
+                            onMove = { by -> draft = list.toMutableList().apply { add((i + by).coerceIn(0, lastIndex), removeAt(i)) } },
+                            onSize = { size -> draft = list.map { if (it.id == b.id) it.copy(size = size.wire) else it } },
+                            onRemove = { draft = list.filterNot { it.id == b.id } },
+                            onSettings = { settingsOf = b.id },
+                        )
+                    }
+                    item(key = "add", contentType = "add") {
+                        OutlinedButton(onClick = { adding = true }, modifier = Modifier.fillMaxWidth()) {
+                            Icon(FzIcons.Plus, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(Res.string.home_add_card))
+                        }
+                    }
+                } else {
+                    if (!here && server?.installations?.any { it.access == "local" } == true) {
+                        item(key = "elsewhere", contentType = "note") { SectionCard { Muted(stringResource(Res.string.house_other_server, inst.name)) } }
+                    }
+                    // Two half cards side by side; a full card, or a half one alone, takes the row.
+                    items(rows(blocks), key = { row -> row.first().id }, contentType = { row -> if (row.size == 2) "pair" else row.first().type }) { row ->
+                        if (row.size == 1) {
+                            BlockContent(row.first(), ctx, editing = false)
+                        } else {
+                            CompositionLocalProvider(LocalCardFillsHeight provides true) {
+                                EqualPair(12.dp, { BlockContent(row[0], ctx, editing = false) }, { BlockContent(row[1], ctx, editing = false) })
+                            }
                         }
                     }
                 }

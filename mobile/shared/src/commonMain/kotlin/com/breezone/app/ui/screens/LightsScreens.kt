@@ -118,50 +118,52 @@ fun LightsScreen(serverId: String, onBack: (() -> Unit)?, onOpen: (Long) -> Unit
     val noRoom = stringResource(Res.string.room_none)
 
     Scaffold(topBar = { FzTopBar(stringResource(Res.string.house_lights), pluralStringResource(Res.plurals.lights_on_of, on.size, on.size, lights.size), onBack) }) { padding ->
-        LazyColumn(
-            Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            item(key = "scenes", contentType = "scenes") {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(data.scenes, key = { "${it.sourceId}/${it.id}" }) { scene ->
-                        AssistChip(
-                            onClick = { hub.activateScene(serverId, scene) },
-                            label = { Text(scene.name) },
-                            leadingIcon = { Icon(FzIcons.Palette, null, Modifier.size(16.dp)) },
-                        )
-                    }
-                    item(key = "all-off") {
-                        AssistChip(
-                            onClick = { on.filter { it.usable }.forEach { hub.setLight(serverId, it, buildJsonObject { put("on", false) }) } },
-                            enabled = on.any { it.usable },
-                            label = { Text(stringResource(Res.string.lights_all_off)) },
-                            leadingIcon = { Icon(FzIcons.Power, null, Modifier.size(16.dp)) },
-                        )
+        FzPullRefresh({ hub.reload(serverId) }, Modifier.fillMaxSize(), top = padding.calculateTopPadding()) {
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item(key = "scenes", contentType = "scenes") {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(data.scenes, key = { "${it.sourceId}/${it.id}" }) { scene ->
+                            AssistChip(
+                                onClick = { hub.activateScene(serverId, scene) },
+                                label = { Text(scene.name) },
+                                leadingIcon = { Icon(FzIcons.Palette, null, Modifier.size(16.dp)) },
+                            )
+                        }
+                        item(key = "all-off") {
+                            AssistChip(
+                                onClick = { on.filter { it.usable }.forEach { hub.setLight(serverId, it, buildJsonObject { put("on", false) }) } },
+                                enabled = on.any { it.usable },
+                                label = { Text(stringResource(Res.string.lights_all_off)) },
+                                leadingIcon = { Icon(FzIcons.Power, null, Modifier.size(16.dp)) },
+                            )
+                        }
                     }
                 }
-            }
-            if (data.loaded && lights.isEmpty()) {
-                item(key = "empty", contentType = "note") { SectionCard { Muted(stringResource(Res.string.lights_empty)) } }
-            }
-            items(groups, key = { it.first?.id ?: -1L }, contentType = { "room" }) { (room, list) ->
-                val lit = list.count { it.available && it.stateAs(LightState.serializer())?.on == true }
-                // The whole room at once: on when any of its lights is.
-                val reachable = list.filter { it.usable && it.stateAs(LightState.serializer())?.reachable != false }
-                DeviceGroupCard(
-                    room?.name ?: noRoom,
-                    pluralStringResource(Res.plurals.lights_on_of, lit, lit, list.size),
-                    trailing = {
-                        Switch(
-                            checked = lit > 0,
-                            enabled = reachable.isNotEmpty(),
-                            onCheckedChange = { on -> reachable.forEach { hub.setLight(serverId, it, buildJsonObject { put("on", on) }) } },
-                            modifier = Modifier.padding(start = 10.dp),
-                        )
-                    },
-                ) {
-                    list.forEach { d -> LightRow(d, status["$serverId/${d.id}"], onOpen = { onOpen(d.id) }, onSet = { hub.setLight(serverId, d, it) }) }
+                if (data.loaded && lights.isEmpty()) {
+                    item(key = "empty", contentType = "note") { SectionCard { Muted(stringResource(Res.string.lights_empty)) } }
+                }
+                items(groups, key = { it.first?.id ?: -1L }, contentType = { "room" }) { (room, list) ->
+                    val lit = list.count { it.available && it.stateAs(LightState.serializer())?.on == true }
+                    // The whole room at once: on when any of its lights is.
+                    val reachable = list.filter { it.usable && it.stateAs(LightState.serializer())?.reachable != false }
+                    DeviceGroupCard(
+                        room?.name ?: noRoom,
+                        pluralStringResource(Res.plurals.lights_on_of, lit, lit, list.size),
+                        trailing = {
+                            Switch(
+                                checked = lit > 0,
+                                enabled = reachable.isNotEmpty(),
+                                onCheckedChange = { on -> reachable.forEach { hub.setLight(serverId, it, buildJsonObject { put("on", on) }) } },
+                                modifier = Modifier.padding(start = 10.dp),
+                            )
+                        },
+                    ) {
+                        list.forEach { d -> LightRow(d, status["$serverId/${d.id}"], onOpen = { onOpen(d.id) }, onSet = { hub.setLight(serverId, d, it) }) }
+                    }
                 }
             }
         }
@@ -214,44 +216,46 @@ fun LightScreen(serverId: String, deviceId: Long, onBack: () -> Unit) {
         val s = d.stateAs(LightState.serializer()) ?: LightState()
         val set: (JsonObject) -> Unit = { hub.setLight(serverId, d, it) }
         val glow = s.glow(Fz.colors.light)
-        LazyColumn(
-            Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            item(key = "main", contentType = "main") {
-                SectionCard {
-                    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        if (s.brightness != null) BrightnessBar(s.brightness.toInt(), s.on, glow, enabled = d.usable) { v ->
-                            set(buildJsonObject { put("on", true); put("brightness", v) })
-                        }
-                        Button(
-                            onClick = { set(buildJsonObject { put("on", !s.on) }) },
-                            enabled = d.usable && s.reachable != false,
-                            shape = Fz.shapes.button,
-                            colors = if (s.on) ButtonDefaults.buttonColors() else ButtonDefaults.outlinedButtonColors(),
-                            modifier = Modifier.width(200.dp),
-                        ) {
-                            Icon(FzIcons.Power, null, Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(stringResource(if (s.on) Res.string.light_on else Res.string.light_off))
+        FzPullRefresh({ hub.reload(serverId) }, Modifier.fillMaxSize(), top = padding.calculateTopPadding()) {
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item(key = "main", contentType = "main") {
+                    SectionCard {
+                        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            if (s.brightness != null) BrightnessBar(s.brightness.toInt(), s.on, glow, enabled = d.usable) { v ->
+                                set(buildJsonObject { put("on", true); put("brightness", v) })
+                            }
+                            Button(
+                                onClick = { set(buildJsonObject { put("on", !s.on) }) },
+                                enabled = d.usable && s.reachable != false,
+                                shape = Fz.shapes.button,
+                                colors = if (s.on) ButtonDefaults.buttonColors() else ButtonDefaults.outlinedButtonColors(),
+                                modifier = Modifier.width(200.dp),
+                            ) {
+                                Icon(FzIcons.Power, null, Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text(stringResource(if (s.on) Res.string.light_on else Res.string.light_off))
+                            }
                         }
                     }
                 }
-            }
-            if (s.colorTemp != null || s.colorTempMin != null) {
-                item(key = "white", contentType = "white") {
-                    SectionCard {
-                        SectionTitle(stringResource(Res.string.light_white))
-                        WhiteSlider(s, d.usable) { k -> set(buildJsonObject { put("on", true); put("color_temp", k) }) }
+                if (s.colorTemp != null || s.colorTempMin != null) {
+                    item(key = "white", contentType = "white") {
+                        SectionCard {
+                            SectionTitle(stringResource(Res.string.light_white))
+                            WhiteSlider(s, d.usable) { k -> set(buildJsonObject { put("on", true); put("color_temp", k) }) }
+                        }
                     }
                 }
-            }
-            if (s.color != null) {
-                item(key = "colors", contentType = "colors") {
-                    SectionCard {
-                        SectionTitle(stringResource(Res.string.light_colors))
-                        ColorSwatches(s, d.usable, 40.dp) { hex -> hub.setLightColor(serverId, d, hex) }
+                if (s.color != null) {
+                    item(key = "colors", contentType = "colors") {
+                        SectionCard {
+                            SectionTitle(stringResource(Res.string.light_colors))
+                            ColorSwatches(s, d.usable, 40.dp) { hex -> hub.setLightColor(serverId, d, hex) }
+                        }
                     }
                 }
             }

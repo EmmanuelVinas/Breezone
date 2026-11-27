@@ -132,18 +132,20 @@ fun EnergyScreen(serverId: String, onBack: (() -> Unit)? = null) {
     val (live, day) = rememberEnergy(hub, serverId)
     val roles = live?.roles
     Scaffold(topBar = { FzTopBar(stringResource(Res.string.house_energy), null, onBack) }) { padding ->
-        LazyColumn(
-            Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            if (live != null && roles?.any == false) {
-                item(key = "empty", contentType = "note") { SectionCard { Muted(stringResource(Res.string.energy_empty)) } }
-            }
-            if (live != null && roles?.any == true) {
-                item(key = "now", contentType = "now") { EnergyNowCard(live) }
-                item(key = "history", contentType = "history") { EnergyHistoryCard(hub, serverId, live.roles) }
-                if (live.hasUses()) item(key = "uses", contentType = "uses") { EnergyUsesCard(live) }
+        FzPullRefresh({ hub.reload(serverId) }, Modifier.fillMaxSize(), top = padding.calculateTopPadding()) {
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (live != null && roles?.any == false) {
+                    item(key = "empty", contentType = "note") { SectionCard { Muted(stringResource(Res.string.energy_empty)) } }
+                }
+                if (live != null && roles?.any == true) {
+                    item(key = "now", contentType = "now") { EnergyNowCard(live) }
+                    item(key = "history", contentType = "history") { EnergyHistoryCard(hub, serverId, live.roles) }
+                    if (live.hasUses()) item(key = "uses", contentType = "uses") { EnergyUsesCard(live) }
+                }
             }
         }
     }
@@ -206,15 +208,17 @@ fun SolarScreen(serverId: String, onBack: (() -> Unit)? = null) {
     val sun = data.withTrait(TraitIds.FORECAST).firstOrNull()
     val forecast = rememberSolarForecast(hub, serverId, sun?.id)
     Scaffold(topBar = { FzTopBar(stringResource(Res.string.house_solar), null, onBack) }) { padding ->
-        LazyColumn(
-            Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            if (inverters.isNotEmpty() || sun == null) item(key = "now", contentType = "now") { SolarNowCard(live, day, inverters, forecast) }
-            if (sun != null) item(key = "forecast", contentType = "forecast") { SolarForecastCard(sun, forecast, day) }
-            inverters.forEach { inv ->
-                item(key = "inv-${inv.id}", contentType = "inverter") { InverterCard(inv, panels) }
+        FzPullRefresh({ hub.reload(serverId) }, Modifier.fillMaxSize(), top = padding.calculateTopPadding()) {
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (inverters.isNotEmpty() || sun == null) item(key = "now", contentType = "now") { SolarNowCard(live, day, inverters, forecast) }
+                if (sun != null) item(key = "forecast", contentType = "forecast") { SolarForecastCard(sun, forecast, day) }
+                inverters.forEach { inv ->
+                    item(key = "inv-${inv.id}", contentType = "inverter") { InverterCard(inv, panels) }
+                }
             }
         }
     }
@@ -348,77 +352,79 @@ fun ChargingScreen(serverId: String, onBack: (() -> Unit)? = null, onProfiles: (
             charger?.let { CommandIndicator(status["$serverId/${it.id}"], Modifier.padding(end = 16.dp)) }
         }
     }) { padding ->
-        LazyColumn(
-            Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            if (data.loaded && charger == null) {
-                item(key = "empty", contentType = "note") { SectionCard { Muted(stringResource(Res.string.charging_empty)) } }
-            }
-            if (charger != null) {
-                val s = charger.stateAs(EvChargerState.serializer()) ?: EvChargerState()
-                val act: (String, JsonObject, JsonObject?) -> Unit = { action, params, optimistic -> hub.act(serverId, charger, "ev.charger", action, params, optimistic) }
-                val view = plan?.value
-                item(key = "hero", contentType = "hero") {
-                    ChargerHero(
-                        serverId,
-                        charger,
-                        onChargeNow = { chargeNow = true }.takeIf { view?.canControl == true && view.now == null },
-                        planned = view?.now != null,
-                    )
+        FzPullRefresh({ hub.reload(serverId) }, Modifier.fillMaxSize(), top = padding.calculateTopPadding()) {
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (data.loaded && charger == null) {
+                    item(key = "empty", contentType = "note") { SectionCard { Muted(stringResource(Res.string.charging_empty)) } }
                 }
-                if (view != null) {
-                    item(key = "plan", contentType = "plan") { PlanCard(view) { change { cancelChargeNow(charger.id) } } }
-                    item(key = "profile", contentType = "profile") {
-                        val admin = hub.api(serverId)?.user?.isAdmin == true
-                        ProfileCard(view, onManage = onProfiles.takeIf { admin })
+                if (charger != null) {
+                    val s = charger.stateAs(EvChargerState.serializer()) ?: EvChargerState()
+                    val act: (String, JsonObject, JsonObject?) -> Unit = { action, params, optimistic -> hub.act(serverId, charger, "ev.charger", action, params, optimistic) }
+                    val view = plan?.value
+                    item(key = "hero", contentType = "hero") {
+                        ChargerHero(
+                            serverId,
+                            charger,
+                            onChargeNow = { chargeNow = true }.takeIf { view?.canControl == true && view.now == null },
+                            planned = view?.now != null,
+                        )
                     }
-                }
-                item(key = "history", contentType = "history") { ChargerPowerCard(serverId, charger) }
-                item(key = "settings", contentType = "settings") {
-                    SectionCard {
-                        SectionTitle(stringResource(Res.string.charger_settings))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text(stringResource(Res.string.charger_auto_limit))
-                                Caption(stringResource(Res.string.charger_auto_limit_hint))
-                            }
-                            Switch(checked = s.autoLimit == true, enabled = charger.usable, onCheckedChange = { on ->
-                                act("set_auto_limit", buildJsonObject { put("on", on) }, buildJsonObject { put("auto_limit", on) })
-                            })
+                    if (view != null) {
+                        item(key = "plan", contentType = "plan") { PlanCard(view) { change { cancelChargeNow(charger.id) } } }
+                        item(key = "profile", contentType = "profile") {
+                            val admin = hub.api(serverId)?.user?.isAdmin == true
+                            ProfileCard(view, onManage = onProfiles.takeIf { admin })
                         }
-                        val min = (s.limitMin ?: 6).toFloat()
-                        val max = (s.limitMax ?: 32).toFloat().coerceAtLeast(min + 1)
-                        if (s.autoLimit != true) {
-                            Row {
-                                Text(stringResource(Res.string.charger_limit), modifier = Modifier.weight(1f))
-                                Text(stringResource(Res.string.charger_amps, (s.limit ?: min.toLong()).toInt()), fontWeight = FontWeight.Medium)
-                            }
-                            FzSlider(
-                                value = (s.limit ?: min.toLong()).toFloat(),
-                                onCommit = { v -> act("set_limit", buildJsonObject { put("limit", v.roundToInt()) }, buildJsonObject { put("limit", v.roundToInt()) }) },
-                                range = min..max,
-                                enabled = charger.usable,
-                                colors = SliderDefaults.colors(),
-                            )
-                        }
-                        if (s.timer != null) {
+                    }
+                    item(key = "history", contentType = "history") { ChargerPowerCard(serverId, charger) }
+                    item(key = "settings", contentType = "settings") {
+                        SectionCard {
+                            SectionTitle(stringResource(Res.string.charger_settings))
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
-                                    Text(stringResource(Res.string.charger_timer))
-                                    Caption(stringResource(Res.string.charger_timer_hint))
+                                    Text(stringResource(Res.string.charger_auto_limit))
+                                    Caption(stringResource(Res.string.charger_auto_limit_hint))
                                 }
-                                Switch(checked = s.timer == true, enabled = charger.usable, onCheckedChange = { on ->
-                                    act("set_timer", buildJsonObject { put("on", on) }, buildJsonObject { put("timer", on) })
+                                Switch(checked = s.autoLimit == true, enabled = charger.usable, onCheckedChange = { on ->
+                                    act("set_auto_limit", buildJsonObject { put("on", on) }, buildJsonObject { put("auto_limit", on) })
                                 })
                             }
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(stringResource(Res.string.charger_locked), modifier = Modifier.weight(1f))
-                            Switch(checked = s.locked, enabled = charger.usable, onCheckedChange = { locked ->
-                                act("lock", buildJsonObject { put("locked", locked) }, buildJsonObject { put("locked", locked) })
-                            })
+                            val min = (s.limitMin ?: 6).toFloat()
+                            val max = (s.limitMax ?: 32).toFloat().coerceAtLeast(min + 1)
+                            if (s.autoLimit != true) {
+                                Row {
+                                    Text(stringResource(Res.string.charger_limit), modifier = Modifier.weight(1f))
+                                    Text(stringResource(Res.string.charger_amps, (s.limit ?: min.toLong()).toInt()), fontWeight = FontWeight.Medium)
+                                }
+                                FzSlider(
+                                    value = (s.limit ?: min.toLong()).toFloat(),
+                                    onCommit = { v -> act("set_limit", buildJsonObject { put("limit", v.roundToInt()) }, buildJsonObject { put("limit", v.roundToInt()) }) },
+                                    range = min..max,
+                                    enabled = charger.usable,
+                                    colors = SliderDefaults.colors(),
+                                )
+                            }
+                            if (s.timer != null) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(stringResource(Res.string.charger_timer))
+                                        Caption(stringResource(Res.string.charger_timer_hint))
+                                    }
+                                    Switch(checked = s.timer == true, enabled = charger.usable, onCheckedChange = { on ->
+                                        act("set_timer", buildJsonObject { put("on", on) }, buildJsonObject { put("timer", on) })
+                                    })
+                                }
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(stringResource(Res.string.charger_locked), modifier = Modifier.weight(1f))
+                                Switch(checked = s.locked, enabled = charger.usable, onCheckedChange = { locked ->
+                                    act("lock", buildJsonObject { put("locked", locked) }, buildJsonObject { put("locked", locked) })
+                                })
+                            }
                         }
                     }
                 }

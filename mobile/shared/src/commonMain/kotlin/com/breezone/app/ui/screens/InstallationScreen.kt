@@ -103,10 +103,12 @@ fun InstallationScreen(
             return@Scaffold
         }
         val content = Modifier.fillMaxSize().padding(padding)
-        when (section) {
-            0 -> InstallationZones(serverId, inst, commandStatus, onOpenZone, content)
-            1 -> InstallationRoutines(serverId, inst, canEdit = inst.controllable && inst.rights.routines, content)
-            else -> InstallationSchedules(serverId, inst, canEdit = inst.controllable && inst.rights.schedules, content)
+        FzPullRefresh({ hub.reload(serverId) }, Modifier.fillMaxSize(), top = padding.calculateTopPadding()) {
+            when (section) {
+                0 -> InstallationZones(serverId, inst, commandStatus, onOpenZone, content)
+                1 -> InstallationRoutines(serverId, inst, canEdit = inst.controllable && inst.rights.routines, content)
+                else -> InstallationSchedules(serverId, inst, canEdit = inst.controllable && inst.rights.schedules, content)
+            }
         }
     }
 }
