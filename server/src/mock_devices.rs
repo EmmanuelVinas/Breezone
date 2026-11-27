@@ -7,7 +7,7 @@
 //! * V2C Trydan: a charger, charging in the afternoon;
 //! * Renson Healthbox 3.0: the ventilation and three rooms with their measures;
 //! * Tasmota: a lamp with a dimmer, a plug that measures, a temperature and humidity sensor;
-//! * a SONOFF ZBBridge Pro under Tasmota: a Zigbee sensor, a plug, a lamp, a door sensor Breezone
+//! * a SONOFF ZBBridge Pro under Tasmota: a Zigbee sensor, a plug, a lamp, a 2-channel relay, a door sensor Breezone
 //!   does not drive, and a second sensor that joins once the pairing is opened;
 //! * ESPHome (native API, in clear): two shutters, a garden valve and an air sensor (CO₂…);
 //! * Forecast.Solar: the forecast of the day.
@@ -377,6 +377,7 @@ fn zigbee_network() -> Vec<Value> {
         json!({"Device": "0x6769", "Name": "Chambre", "IEEEAddr": "0x00124B0026B64D1E", "ModelId": "SNZB-02D", "Manufacturer": "SONOFF", "BatteryPercentage": 87, "Reachable": true}),
         json!({"Device": "0x1D8A", "Name": "Prise de la cuisine", "IEEEAddr": "0x7CB03EBB0A0292DD", "ModelId": "S26R2ZB", "Manufacturer": "SONOFF", "Power": 1, "Reachable": true}),
         json!({"Device": "0x3A10", "Name": "Plafonnier", "IEEEAddr": "0x0017880102AABBCC", "ModelId": "LWB010", "Manufacturer": "Philips", "Power": 0, "Dimmer": 180, "CT": 370, "Reachable": true}),
+        json!({"Device": "0x5A01", "Name": "Tableau", "IEEEAddr": "0x001FEE00000052A1", "ModelId": "S2-R", "Manufacturer": "ubisys", "Endpoints": [1, 2, 3], "Power": 1, "Power2": 0, "Reachable": true}),
         json!({"Device": "0x2E01", "Name": "Porte d'entrée", "IEEEAddr": "0x00124B0022AA0001", "ModelId": "SNZB-04", "Manufacturer": "SONOFF", "Contact": 1, "BatteryPercentage": 64, "Reachable": true}),
     ]
 }
@@ -421,9 +422,11 @@ pub fn zigbee_bridge() -> Router {
                     }
                     "ZbSend" => {
                         let v: Value = serde_json::from_str(arg).unwrap_or_default();
+                        // The attributes of a second endpoint are suffixed: Power2.
+                        let suffix = v["Endpoint"].as_u64().filter(|e| *e > 1).map(|e| e.to_string()).unwrap_or_default();
                         if let Some(i) = find(&mut n, v["Device"].as_str().unwrap_or_default()) {
                             for (k, x) in v["Send"].as_object().into_iter().flatten() {
-                                n[i][k] = x.clone();
+                                n[i][format!("{k}{suffix}")] = x.clone();
                             }
                         }
                         json!({"ZbSend": "Done"})

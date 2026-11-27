@@ -127,11 +127,23 @@ async fn the_tasmota_module_pairs_names_and_drives_zigbee_devices() {
     let kinds: Vec<(&str, &str)> = d.devices.iter().map(|x| (x.reference.as_str(), x.kind.as_str())).collect();
     assert_eq!(
         kinds,
-        [("zigbee", "zigbee.bridge"), ("zigbee/0x00124B0026B64D1E", "sensor"), ("zigbee/0x7CB03EBB0A0292DD", "switch.relay"), ("zigbee/0x0017880102AABBCC", "light")]
+        [
+            ("zigbee", "zigbee.bridge"),
+            ("zigbee/0x00124B0026B64D1E", "sensor"),
+            ("zigbee/0x7CB03EBB0A0292DD", "switch.relay"),
+            ("zigbee/0x0017880102AABBCC", "light"),
+            ("zigbee/0x001FEE00000052A1/1", "switch.relay"),
+            ("zigbee/0x001FEE00000052A1/2", "switch.relay")
+        ]
     );
     let s = source.read().await.unwrap();
     assert!(s["zigbee/0x00124B0026B64D1E"]["temperature"].is_number());
-    assert_eq!(s["zigbee"]["devices"], 4);
+    assert_eq!(s["zigbee"]["devices"], 5);
+
+    // One channel of the 2-channel relay, the other untouched.
+    source.act("zigbee/0x001FEE00000052A1/2", "switch.relay", "set", json!({"on": true}).as_object().unwrap()).await.unwrap();
+    let s = source.read().await.unwrap();
+    assert_eq!((s["zigbee/0x001FEE00000052A1/1"]["on"].clone(), s["zigbee/0x001FEE00000052A1/2"]["on"].clone()), (json!(true), json!(true)));
 
     // Paired: a new sensor is read, which the host then describes.
     source.act("zigbee", "zigbee.bridge", "pair", json!({"on": true}).as_object().unwrap()).await.unwrap();
@@ -683,7 +695,7 @@ async fn a_module_that_comes_with_breezone_is_installed_with_it() {
     let mut cfg = breezone_server::config::Config::for_tests(dir.join("data"));
     cfg.web_dir = dir.join("app/web");
     breezone_server::init_state(cfg).await.unwrap();
-    assert_eq!(breezone_server::modules::manifest("tasmota").map(|m| m.version.as_str()), Some("1.1.2"), "shipped with Breezone: installed again");
+    assert_eq!(breezone_server::modules::manifest("tasmota").map(|m| m.version.as_str()), Some("1.2.0"), "shipped with Breezone: installed again");
 }
 
 /// A service module that comes with Breezone, with an account (lot L9): its account is connected

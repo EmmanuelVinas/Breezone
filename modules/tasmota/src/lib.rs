@@ -340,7 +340,7 @@ impl Driver for Tasmota {
         if let Some(list) = zigbee {
             let name = v["Status"]["DeviceName"].as_str().filter(|n| !n.is_empty()).unwrap_or("Tasmota");
             devices.push(DeviceInfo { reference: zigbee::BRIDGE.into(), kind: "zigbee.bridge".into(), traits: vec!["zigbee.bridge@1".into()], name: format!("{name} · Zigbee") });
-            devices.extend(list.iter().filter_map(zigbee::device_of));
+            devices.extend(list.iter().flat_map(zigbee::devices_of));
         }
         let hardware = if zigbee_firmware(&v) { Some("SONOFF ZBBridge Pro") } else { v["StatusFWR"]["Hardware"].as_str() };
         Ok(Described {
@@ -365,7 +365,7 @@ impl Driver for Tasmota {
             let devices = self.zigbee_devices()?;
             out.push((zigbee::BRIDGE.into(), self.bridge_state(&devices)));
             let now = host::now();
-            out.extend(devices.iter().filter(|i| zigbee::device_of(i).is_some()).filter_map(|i| Some((zigbee::reference(i)?, zigbee::state_of(i, now)))));
+            out.extend(devices.iter().flat_map(|i| zigbee::states_of(i, now)));
         }
         Ok(out)
     }
@@ -377,12 +377,17 @@ impl Driver for Tasmota {
             self.pairing_until.set(if on { host::now() + zigbee::PAIRING_S } else { 0 });
             return Ok(());
         }
-        if let Some(address) = reference.strip_prefix(&format!("{}/", zigbee::BRIDGE)) {
+        if let Some(device) = reference.strip_prefix(&format!("{}/", zigbee::BRIDGE)) {
             if !matches!((trait_name, action), ("switch.relay" | "light", "set")) {
                 return Err(Error::Unsupported(format!("{reference}: {trait_name}.{action}")));
             }
+            let (address, endpoint) = zigbee::target(device);
             for send in zigbee::sends(trait_name, params).map_err(Error::Unsupported)? {
-                self.command(&format!("ZbSend {}", json!({"Device": address, "Send": send})))?;
+                let mut zb = json!({"Device": address, "Send": send});
+                if let Some(ep) = endpoint {
+                    zb["Endpoint"] = json!(ep);
+                }
+                self.command(&format!("ZbSend {zb}"))?;
             }
             return Ok(());
         }
@@ -428,7 +433,9 @@ impl Driver for Tasmota {
     fn rename(config: Value, secret: Option<Value>, reference: &str, name: &str) -> Result<()> {
         let t = Self::open(config, secret)?;
         let name: String = name.trim().chars().take(32).collect();
-        if let Some(address) = reference.strip_prefix(&format!("{}/", zigbee::BRIDGE)) {
+        if let Some(device) = reference.strip_prefix(&format!("{}/", zigbee::BRIDGE)) {
+            // One channel of a device of several: its name is Breezone's only.
+            let (address, None) = zigbee::target(device) else { return Err(Error::Unsupported(format!("{reference}: pas de nom par voie sur le pont"))) };
             t.command(&format!("ZbName {address},{name}"))?;
             return Ok(());
         }
@@ -748,6 +755,50 @@ mod tests {
             }
         }
         String::from_utf8(out).unwrap()
+    }
+
+    /// A bridge with a 2-channel module (the ubisys S2-R: endpoints 1 and 2, the second suffixed).
+    fn two_channels() {
+        testing::reset();
+        testing::answer_json(
+            "GET",
+            "cmnd=Status%200",
+            &json!({"Status": {"DeviceName": "Pont"}, "StatusSTS": {}, "StatusSNS": {}, "StatusFWR": {"Version": "16.0.0(release-zbbrdgpro)"}}),
+        );
+        testing::answer_json("GET", "cmnd=ZbStatus1", &json!({"ZbStatus1": [{"Device": "0x5A01", "Name": "Tableau"}]}));
+        testing::answer_json(
+            "GET",
+            "cmnd=ZbInfo",
+            &json!({"ZbInfo": {"0x5A01": {"Device": "0x5A01", "Name": "Tableau", "IEEEAddr": "0x001FEE00000052A1", "ModelId": "S2-R", "Manufacturer": "ubisys", "Endpoints": [1, 2, 3], "Power": 1, "Power2": 0, "Reachable": true}}}),
+        );
+        testing::answer_json("GET", "cmnd=ZbSend", &json!({"ZbSend": "Done"}));
+    }
+
+    #[test]
+    fn each_channel_of_a_zigbee_module_is_a_device_driven_alone() {
+        two_channels();
+        let t: Tasmota = testing::open(json!({"host": "192.168.1.39"}), None);
+        let s = testing::check(&t, MANIFEST);
+        let d = t.describe().unwrap();
+        let names: Vec<(&str, &str, &str)> = d.devices.iter().skip(1).map(|x| (x.reference.as_str(), x.kind.as_str(), x.name.as_str())).collect();
+        assert_eq!(names, [("zigbee/0x001FEE00000052A1/1", "switch.relay", "Tableau 1"), ("zigbee/0x001FEE00000052A1/2", "switch.relay", "Tableau 2")]);
+        assert_eq!((s["zigbee/0x001FEE00000052A1/1"]["on"].clone(), s["zigbee/0x001FEE00000052A1/2"]["on"].clone()), (json!(true), json!(false)));
+        let on = json!({"on": true});
+        t.act("zigbee/0x001FEE00000052A1/2", "switch.relay", "set", on.as_object().unwrap()).unwrap();
+        let sent: Vec<Value> = testing::requests().into_iter().filter_map(|r| r.split("ZbSend%20").nth(1).map(|s| serde_json::from_str::<Value>(&decode(s)).unwrap())).collect();
+        assert_eq!(sent, [json!({"Device": "0x001FEE00000052A1", "Endpoint": 2, "Send": {"Power": 1}})]);
+        assert!(matches!(Tasmota::rename(json!({"host": "192.168.1.39"}), None, "zigbee/0x001FEE00000052A1/2", "Cumulus"), Err(Error::Unsupported(_))));
+    }
+
+    #[test]
+    fn a_dimming_channel_is_a_light_and_a_lone_relay_keeps_its_reference() {
+        let info = json!({"IEEEAddr": "0xAA", "Name": "Double", "Power": 1, "Dimmer": 254, "Power2": 0});
+        let d = zigbee::devices_of(&info);
+        assert_eq!(d.iter().map(|x| (x.reference.as_str(), x.kind.as_str())).collect::<Vec<_>>(), [("zigbee/0xAA/1", "light"), ("zigbee/0xAA/2", "switch.relay")]);
+        let s = zigbee::states_of(&info, 0);
+        assert_eq!(s[0].1["brightness"], 100);
+        let lone = json!({"IEEEAddr": "0xBB", "Power": 0, "PowerOnState": 1});
+        assert_eq!(zigbee::devices_of(&lone).iter().map(|x| x.reference.as_str()).collect::<Vec<_>>(), ["zigbee/0xBB"]);
     }
 
     #[test]
