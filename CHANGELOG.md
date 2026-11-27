@@ -6,6 +6,16 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- A Zigbee device paired to a ZBBridge Pro under Tasmota 16 shows up in Breezone: the word Tasmota
+  adds after the data of its devices (`"ZbInfo":"Done"`) replaced them, so no device was ever
+  found.
+- A device read but not yet described (just paired, not ready the first time) has its source
+  described again 5 minutes later, instead of never until Breezone restarts.
+- The Zigbee bridge can search for devices from the page of its module: « Search for Zigbee
+  devices (60 s) », shown with the bridge in its list of devices.
+
 ## [0.13.0-beta.7] - 2026-11-26
 
 ### Added

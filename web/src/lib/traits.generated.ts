@@ -354,7 +354,7 @@ export type VentilationUnitStopBoost = Record<string, never>
 
 /** Zigbee bridge (`zigbee.bridge@1`): state. */
 export type ZigbeeBridgeState = {
-  /** Pairing open */
+  /** Searching for Zigbee devices (60 s) */
   pairing: boolean
   /** Zigbee devices */
   devices: number

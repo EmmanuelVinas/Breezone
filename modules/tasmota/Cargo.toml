@@ -1,6 +1,6 @@
 [package]
 name = "breezone-module-tasmota"
-version = "1.1.1"
+version = "1.1.2"
 edition.workspace = true
 description = "Tasmota (Sonoff and others flashed with it, a Zigbee bridge too), through its local HTTP API"
 

@@ -52,6 +52,8 @@ import { errorText, kwh, relativeTime, watts } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { lang, t } from "@/lib/i18n"
 import { traitOf } from "@/lib/generic-device"
+import { deviceType } from "@/lib/device-icons"
+import { GenericControls } from "@/components/generic-controls"
 import {
   useChosenInstallation,
   useModulesHere,
@@ -359,6 +361,12 @@ function DeviceRow({
             .filter(Boolean)
             .join(" · ")}
         </div>
+        {/* A kind without a page of its own (a Zigbee bridge): its controls are here. */}
+        {device.available && deviceType(device).id === "other" && (
+          <div className="pt-2">
+            <GenericControls d={device} />
+          </div>
+        )}
       </div>
       {measuresEnergy && counting && (
         <div className="flex flex-wrap items-center justify-end gap-2">

@@ -9,7 +9,7 @@
 use crate::db::{self, Db};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -327,9 +327,13 @@ struct Running {
     cloud_view: Vec<CloudDevice>,
     /// Every device it described, its twins and those ignored included (sorted out at each reading).
     described: Vec<DeviceInfo>,
-    /// The devices it read but did not describe even when asked again: not asked again for them.
-    undescribed: BTreeSet<String>,
+    /// The devices it read but did not describe even when asked again, and when: not asked again
+    /// for them before [`DESCRIBE_AGAIN`] (a device just paired may not be ready the first time).
+    undescribed: BTreeMap<String, Instant>,
 }
+
+/// How long a device read but not described waits before the source is described again for it.
+const DESCRIBE_AGAIN: Duration = Duration::from_secs(300);
 
 /// A device's name (normalised) and family.
 type TwinKey = (String, String);
@@ -661,7 +665,7 @@ impl Runtime {
                         failures: 0,
                         twins: HashMap::new(),
                         described: vec![],
-                        undescribed: BTreeSet::new(),
+                        undescribed: BTreeMap::new(),
                         cloud_view: vec![],
                     }
                 }
@@ -706,7 +710,7 @@ impl Runtime {
             (None, Ok(states)) => {
                 let sources = self.sources.read().await;
                 let r = sources.get(&id);
-                let known = |k: &String| r.is_some_and(|r| r.described.iter().any(|d| &d.reference == k) || r.undescribed.contains(k));
+                let known = |k: &String| r.is_some_and(|r| r.described.iter().any(|d| &d.reference == k) || r.undescribed.get(k).is_some_and(|at| at.elapsed() < DESCRIBE_AGAIN));
                 states.keys().filter(|k| !known(k)).cloned().collect()
             }
             _ => BTreeSet::new(),
@@ -731,8 +735,9 @@ impl Runtime {
             let mut sources = self.sources.write().await;
             let Some(r) = sources.get_mut(&id) else { return };
             if let Some(Ok(d)) = described {
-                r.undescribed.extend(unknown);
-                r.undescribed.retain(|k| !d.devices.iter().any(|x| &x.reference == k));
+                let now = Instant::now();
+                r.undescribed.extend(unknown.into_iter().map(|k| (k, now)));
+                r.undescribed.retain(|k, _| !d.devices.iter().any(|x| &x.reference == k));
                 r.status.model = Some(d.model);
                 r.status.firmware = d.firmware;
                 identity = d.identity.filter(|_| config_identity(&r.source).is_none()).map(|i| (r.source.clone(), i));
@@ -1368,7 +1373,7 @@ mod tests {
                 failures: 0,
                 twins: HashMap::new(),
                 described: vec![],
-                undescribed: BTreeSet::new(),
+                undescribed: BTreeMap::new(),
                 cloud_view: vec![],
             };
             rt.sources.write().await.insert(id, running);
@@ -1437,7 +1442,7 @@ mod tests {
             failures: 0,
             twins: HashMap::new(),
             described: vec![],
-            undescribed: BTreeSet::new(),
+            undescribed: BTreeMap::new(),
             cloud_view: vec![],
         };
         rt.sources.write().await.insert(id, running);
@@ -1452,11 +1457,17 @@ mod tests {
         bridge.described.lock().unwrap().push("zigbee/0x01");
         rt.poll(id).await;
         assert_eq!((count(), devices().await), (2, vec!["zigbee".to_string(), "zigbee/0x01".to_string()]));
-        // One it reads but never describes is not asked about at each reading.
+        // One it reads but never describes is not asked about at each reading...
         bridge.read.lock().unwrap().push("other");
         rt.poll(id).await;
         rt.poll(id).await;
         assert_eq!(count(), 3);
+        // ...but again a while later: a device just paired may not have been ready.
+        rt.sources.write().await.get_mut(&id).unwrap().undescribed.values_mut().for_each(|at| *at -= DESCRIBE_AGAIN);
+        rt.poll(id).await;
+        assert_eq!(count(), 4);
+        rt.poll(id).await;
+        assert_eq!(count(), 4, "then not before the next while");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

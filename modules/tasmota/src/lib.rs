@@ -40,6 +40,8 @@ fn merge(into: &mut Map<String, Value>, key: String, value: Value) {
                 merge(a, k, v);
             }
         }
+        // `{"ZbInfo": {…the devices…}, "ZbInfo": "Done"}`: the word after the data keeps the data.
+        (Some(Value::Object(_)), _) => {}
         (_, v) => {
             into.insert(key, v);
         }
@@ -682,6 +684,32 @@ mod tests {
         testing::answer("GET", "cmnd=ZbStatus1", 200, "");
         let t: Tasmota = testing::open(json!({"host": "192.168.1.39"}), None);
         assert!(t.describe().is_err(), "described again later, its bridge and devices kept");
+    }
+
+    #[test]
+    fn a_word_after_the_data_under_the_same_key_keeps_the_data() {
+        let v = parse(br#"{"ZbInfo":{"0x9B58":{"Device":"0x9B58","ModelId":"SNZB-02D","Temperature":17.9}},"ZbInfo":"Done"}"#).unwrap();
+        assert_eq!(v["ZbInfo"]["0x9B58"]["Temperature"], 17.9);
+    }
+
+    #[test]
+    fn a_sensor_paired_on_tasmota_16_is_described() {
+        testing::reset();
+        let status = json!({"Status": {"DeviceName": "Tasmota"}, "StatusSTS": {}, "StatusSNS": {}, "StatusFWR": {"Version": "16.0.0(release-zbbrdgpro)"}});
+        testing::answer_json("GET", "cmnd=Status%200", &status);
+        testing::answer_json("GET", "cmnd=ZbStatus1", &json!({"ZbStatus1": [{"Device": "0x9B58"}]}));
+        // As Tasmota 16 answers it, word for word.
+        testing::answer(
+            "GET",
+            "cmnd=ZbInfo",
+            200,
+            r#"{"ZbInfo":{"0x9B58":{"Device":"0x9B58","IEEEAddr":"0x18690AFFFE1E5ED9","ModelId":"SNZB-02D","Manufacturer":"SONOFF","Endpoints":[1],"Config":["T01"],"Temperature":17.9,"Humidity":57.4,"Reachable":true,"BatteryPercentage":100,"BatteryLastSeenEpoch":1795764526,"LastSeen":29,"LastSeenEpoch":1795764547,"LinkQuality":72}},"ZbInfo":"Done"}"#,
+        );
+        let t: Tasmota = testing::open(json!({"host": "192.168.1.39"}), None);
+        let d = t.describe().unwrap();
+        let sensor = d.devices.iter().find(|x| x.reference == "zigbee/0x18690AFFFE1E5ED9").expect("the sensor is described");
+        assert_eq!((sensor.name.as_str(), sensor.kind.as_str()), ("SONOFF SNZB-02D", "sensor"));
+        assert!(sensor.traits.iter().any(|t| t.starts_with("environment.sensor@")));
     }
 
     #[test]
