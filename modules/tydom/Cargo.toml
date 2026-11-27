@@ -1,6 +1,6 @@
 [package]
 name = "breezone-module-tydom"
-version = "1.1.0"
+version = "1.2.0"
 edition.workspace = true
 description = "Delta Dore Tydom gateways (1.0, Home…), through their local WebSocket"
 

@@ -2022,8 +2022,8 @@ const es: Record<string, string> = {
   "toutes les 30 min": "cada 30 min",
   "puissance prévue maintenant, production prévue aujourd'hui, restant à produire et demain":
     "potencia prevista ahora, producción prevista hoy, la que queda y mañana",
-  "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan, clés Wi-Fi Hoymiles, micro-onduleurs Deye, prises et compteurs Anker SOLIX, ponts Philips Hue, VMC Renson Healthbox, accessoires HomeKit (Legrand, VELUX…), modules ESPHome et Tasmota, prises Kasa et caméras Reolink. Les prises et ampoules Tapo s'ajoutent par leur adresse.":
-    "Breezone busca en la red los productos que sabe controlar: WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), cargadores V2C Trydan, llaves Wi-Fi Hoymiles, microinversores Deye, enchufes y contadores Anker SOLIX, puentes Philips Hue, ventilación Renson Healthbox, accesorios HomeKit (Legrand, VELUX…), módulos ESPHome y Tasmota, enchufes Kasa y cámaras Reolink. Los enchufes y bombillas Tapo se añaden por su dirección.",
+  "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan, clés Wi-Fi Hoymiles, micro-onduleurs Deye, prises et compteurs Anker SOLIX, ponts Philips Hue, passerelles Delta Dore Tydom, VMC Renson Healthbox, accessoires HomeKit (Legrand, VELUX…), modules ESPHome et Tasmota, prises Kasa et caméras Reolink. Les prises et ampoules Tapo s'ajoutent par leur adresse.":
+    "Breezone busca en la red los productos que sabe controlar: WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), cargadores V2C Trydan, llaves Wi-Fi Hoymiles, microinversores Deye, enchufes y contadores Anker SOLIX, puentes Philips Hue, pasarelas Delta Dore Tydom, ventilación Renson Healthbox, accesorios HomeKit (Legrand, VELUX…), módulos ESPHome y Tasmota, enchufes Kasa y cámaras Reolink. Los enchufes y bombillas Tapo se añaden por su dirección.",
   Capteurs: "Sensores",
   "Personne détectée": "Persona detectada",
   "Véhicule détecté": "Vehículo detectado",
@@ -2360,6 +2360,8 @@ const es: Record<string, string> = {
   "Désactivé : les passerelles déjà ajoutées gardent leur connexion locale tant que Breezone tourne ; au prochain démarrage, celles sans mot de passe saisi ne se connectent plus.":
     "Desactivada: las pasarelas ya añadidas mantienen su conexión local mientras Breezone funciona; en el próximo arranque, las que no tienen contraseña escrita ya no se conectan.",
   "{email} : {n} passerelle(s)": "{email}: {n} pasarela(s)",
+  "{email} : ajoutez la passerelle dans Modules par son adresse, mot de passe vide":
+    "{email}: añada la pasarela en Módulos por su dirección, con la contraseña vacía",
 }
 
 export default es

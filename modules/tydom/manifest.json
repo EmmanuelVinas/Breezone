@@ -1,6 +1,6 @@
 {
   "id": "tydom",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "name": {
     "en": "Delta Dore Tydom",
     "es": "Delta Dore Tydom",
@@ -66,6 +66,12 @@
   },
   "read_every_s": 30,
   "optional_calls": [
+    "identify",
     "diagnostic"
-  ]
+  ],
+  "discovery": {
+    "tcp": [
+      443
+    ]
+  }
 }

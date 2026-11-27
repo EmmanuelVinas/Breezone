@@ -6,6 +6,17 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- The network scan finds the Delta Dore Tydom gateways, with their MAC address filled in: the scan
+  now gives the MAC of the hardware it finds from the server's network when the hardware does not
+  tell it (Linux).
+
+### Changed
+
+- A Delta Dore account that lists no gateway says to add the gateway in Modules by its address,
+  password empty, instead of « 0 gateway(s) ».
+
 ## [0.13.0-beta.8] - 2026-11-27
 
 ### Fixed

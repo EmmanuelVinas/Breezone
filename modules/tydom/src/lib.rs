@@ -17,7 +17,7 @@
 //! Shutters (`position`, 100 open; `positionCmd` STOP) and lights (`level`; `levelCmd` ON, OFF) are
 //! driven; every other endpoint is listed in the diagnostic, so that its kind may be supported next.
 
-use breezone_module_sdk::{device, host, json, module, Described, DeviceInfo, Driver, Error, Map, Result, State, Value};
+use breezone_module_sdk::{device, host, json, module, Described, DeviceInfo, Driver, Error, Found, Map, Result, State, Value};
 use md5::{Digest, Md5};
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -511,6 +511,24 @@ impl Driver for Tydom {
 
     /// Every endpoint of the gateway, by kind and with the names of its values (not the names its
     /// owner gave), so that what is not supported yet shows.
+    /// A Tydom found by the network scan: its port 443 asks the Digest of the gateways (realm
+    /// « protected area ») on the path of their WebSocket. Its MAC is not told there: the server
+    /// gives the one its network knows.
+    fn identify(host_: &str, announced: Option<&Value>) -> Option<Found> {
+        if announced.is_some() || !valid_host(host_) {
+            return None;
+        }
+        let headers = [("Connection", "Upgrade"), ("Upgrade", "websocket"), ("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ=="), ("Sec-WebSocket-Version", "13")];
+        let a = host::request_insecure("GET", &format!("https://{host_}:443/mediation/client?mac=001A25000000&appli=1"), &headers, None, 3000).ok()?;
+        let header = a.headers.iter().find(|h| h.name.eq_ignore_ascii_case("www-authenticate"))?;
+        (a.status == 401 && challenge(&header.value).get("realm").is_some_and(|r| r == REALM)).then(|| Found {
+            model: "Delta Dore Tydom".into(),
+            note: Some("mot de passe : laissez-le vide si le compte Delta Dore est connecté".into()),
+            port: Some(443),
+            ..Found::default()
+        })
+    }
+
     fn diagnostic(&self) -> Result<Value> {
         let info = self.ask("GET", "/info", None)?.json().unwrap_or(Value::Null);
         let endpoints = self.load_endpoints()?;
@@ -646,6 +664,21 @@ mod tests {
         assert!(testing::sent().last().is_some_and(|(_, d)| String::from_utf8_lossy(d).contains(r#"[{"name":"position","value":"75"}]"#)));
         t.act("1700000001_1", "cover.position", "stop", &State::new()).unwrap();
         assert!(t.act("1700000003_1", "light", "set", &p).is_err(), "the alarm is not driven");
+    }
+
+    #[test]
+    fn a_tydom_is_found_by_its_digest() {
+        testing::reset();
+        testing::respond("GET", "https://192.168.1.80:443/mediation/client", |_, _| breezone_module_sdk::host::Answer {
+            status: 401,
+            headers: vec![breezone_module_sdk::Header { name: "WWW-Authenticate".into(), value: r#"Digest realm="protected area", qop="auth", nonce="abc", opaque="x""#.into() }],
+            body: vec![],
+        });
+        let found = Tydom::identify("192.168.1.80", None).expect("a Tydom");
+        assert_eq!((found.model.as_str(), found.port), ("Delta Dore Tydom", Some(443)));
+        // Another HTTPS server (a NAS, a box) is not one.
+        testing::respond("GET", "https://192.168.1.81:443/", |_, _| breezone_module_sdk::host::Answer { status: 404, headers: vec![], body: vec![] });
+        assert!(Tydom::identify("192.168.1.81", None).is_none());
     }
 
     #[test]

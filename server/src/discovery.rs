@@ -301,7 +301,26 @@ pub async fn scan_products(subnet: &str, airzone_port: u16, quiet: &[std::net::I
     found.extend(by_mdns);
     found.extend(announced_products(&announced, &candidates, &found));
     found.sort_by_key(|p| (p.host.split(':').next().and_then(|h| h.parse::<Ipv4Addr>().ok()).map(u32::from).unwrap_or(0), p.brand));
+    // The MAC its hardware does not tell (a Tydom asks for it): the one the network knows, now that
+    // the scan has reached it.
+    let macs = parse_arp(&std::fs::read_to_string("/proc/net/arp").unwrap_or_default());
+    for p in found.iter_mut().filter(|p| p.mac.is_none()) {
+        p.mac = macs.get(ip_of(&p.host)).cloned();
+    }
     Ok(found)
+}
+
+/// The addresses of the neighbours and their MAC, from Linux's `/proc/net/arp` (empty elsewhere):
+/// `IP address  HW type  Flags  HW address  Mask  Device`, incomplete entries left out.
+fn parse_arp(text: &str) -> std::collections::HashMap<String, String> {
+    text.lines()
+        .skip(1)
+        .filter_map(|l| {
+            let f: Vec<&str> = l.split_whitespace().collect();
+            let (ip, flags, mac) = (*f.first()?, *f.get(2)?, *f.get(3)?);
+            (flags != "0x0" && mac != "00:00:00:00:00:00" && mac.len() == 17).then(|| (ip.to_string(), mac.to_uppercase()))
+        })
+        .collect()
 }
 
 /// The products of the modules of the library that announced themselves by mDNS, at addresses
@@ -405,6 +424,18 @@ pub async fn save_global_subnet(db: &crate::db::Db, subnet: Option<&str>) -> Res
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn the_mac_of_a_neighbour_comes_from_the_arp_table() {
+        let table = "IP address       HW type     Flags       HW address            Mask     Device
+192.168.86.64    0x1         0x2         00:1a:25:12:34:56     *        eth0
+192.168.86.70    0x1         0x0         00:00:00:00:00:00     *        eth0
+";
+        let macs = super::parse_arp(table);
+        assert_eq!(macs.get("192.168.86.64").map(String::as_str), Some("00:1A:25:12:34:56"));
+        assert!(!macs.contains_key("192.168.86.70"), "an incomplete entry");
+    }
+
     use super::*;
 
     /// A module of the library whose hardware announces `_hue._tcp`, and what the network said.

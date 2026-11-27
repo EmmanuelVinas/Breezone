@@ -1364,6 +1364,7 @@ function AddModuleDialog({
     name: string
     host?: string
     device_id?: string | null
+    mac?: string | null
     note?: string | null
   } | null>(null)
   const needsMore = (driver: string) =>
@@ -1525,6 +1526,7 @@ function AddModuleDialog({
                 name: p.model,
                 host: p.host,
                 device_id: p.device_id,
+                mac: p.mac,
                 note: p.note,
               })
             : add.mutate({
@@ -1547,7 +1549,7 @@ function AddModuleDialog({
           <DialogTitle>{t("Ajouter un module")}</DialogTitle>
           <DialogDescription>
             {t(
-              "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan, clés Wi-Fi Hoymiles, micro-onduleurs Deye, prises et compteurs Anker SOLIX, ponts Philips Hue, VMC Renson Healthbox, accessoires HomeKit (Legrand, VELUX…), modules ESPHome et Tasmota, prises Kasa et caméras Reolink. Les prises et ampoules Tapo s'ajoutent par leur adresse."
+              "Breezone cherche sur le réseau les produits qu'il sait piloter : WebServers Airzone, Shelly (Plus, Pro, Gen3, Gen4), bornes V2C Trydan, clés Wi-Fi Hoymiles, micro-onduleurs Deye, prises et compteurs Anker SOLIX, ponts Philips Hue, passerelles Delta Dore Tydom, VMC Renson Healthbox, accessoires HomeKit (Legrand, VELUX…), modules ESPHome et Tasmota, prises Kasa et caméras Reolink. Les prises et ampoules Tapo s'ajoutent par leur adresse."
             )}
           </DialogDescription>
         </DialogHeader>
@@ -1601,6 +1603,7 @@ function AddModuleDialog({
               name={configuring.name}
               host={configuring.host}
               deviceId={configuring.device_id}
+              mac={configuring.mac}
               note={configuring.note}
               onCancel={() => setConfiguring(null)}
               onDone={(s) => {

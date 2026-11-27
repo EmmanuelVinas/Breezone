@@ -106,6 +106,7 @@ export function AddWithConfig({
   name,
   host,
   deviceId,
+  mac,
   note,
   onDone,
   onCancel,
@@ -114,13 +115,16 @@ export function AddWithConfig({
   name: string
   host?: string
   deviceId?: string | null
+  /** The MAC the scan found, for a module that asks for it (a Tydom). */
+  mac?: string | null
   note?: string | null
   onDone: (s: SourceView) => void
   onCancel: () => void
 }) {
-  const [values, setValues] = useState<Record<string, string>>(
-    host ? { host } : {}
-  )
+  const [values, setValues] = useState<Record<string, string>>(() => ({
+    ...(host ? { host } : {}),
+    ...(mac && info.config.some((f) => f.name === "mac") ? { mac } : {}),
+  }))
   const fields = info.config.filter((f) => f.name !== "device_id")
   const add = useMutation({
     mutationFn: () =>

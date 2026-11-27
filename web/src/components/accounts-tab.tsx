@@ -368,10 +368,16 @@ function summary(a: AccountView): string | null {
       n: c.devices?.length ?? 0,
     })
   if (a.kind === "deltadore" && c.email)
-    return t("{email} : {n} passerelle(s)", {
-      email: c.email,
-      n: c.gateways?.length ?? 0,
-    })
+    return c.gateways?.length
+      ? t("{email} : {n} passerelle(s)", {
+          email: c.email,
+          n: c.gateways.length,
+        })
+      : // Delta Dore does not always list them: each gateway asks for its own when added.
+        t(
+          "{email} : ajoutez la passerelle dans Modules par son adresse, mot de passe vide",
+          { email: c.email }
+        )
   if (a.kind === "anker_cloud" && c.email)
     return t("{email} : {n} SolarBank", {
       email: c.email,
