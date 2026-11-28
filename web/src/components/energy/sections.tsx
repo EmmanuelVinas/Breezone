@@ -984,7 +984,13 @@ export function DayBars({
       </CardHeader>
       <CardContent className="space-y-3">
         <ChartContainer config={barsConfig} className="aspect-auto h-64 w-full">
-          <BarChart data={data} margin={{ left: 0, right: 8 }}>
+          {/* Recharts stacks the bars in the order they appear: a series that comes with the
+              data (after the first render) would go on top. Built again when they change. */}
+          <BarChart
+            key={[...keys, withExport].join()}
+            data={data}
+            margin={{ left: 0, right: 8 }}
+          >
             <CartesianGrid vertical={false} />
             <XAxis
               dataKey="day"
