@@ -12,6 +12,14 @@ All notable changes are documented here. The format follows
   cloud: the power drawn from the grid or returned to it, for the role « Réseau ». The panels of a
   SolarBank tell what they produced since the start (Anker SOLIX cloud module 1.2.0).
 
+### Fixed
+
+- The Delta Dore Tydom 1.0 gateway was still refused: its RSA key has 512 bits, below even the
+  legacy minimum of the TLS library. The signatures of the local hardware are now checked whatever
+  the size of their RSA key.
+- The daily bars of the energy page could stack what was returned to the grid under what was used
+  on the spot, depending on what loaded first.
+
 ## [0.13.0-beta.12] - 2026-11-28
 
 ### Fixed

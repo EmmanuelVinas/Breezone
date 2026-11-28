@@ -450,6 +450,7 @@ dependencies = [
  "reqwest",
  "ring",
  "rs-matter",
+ "rsa",
  "rustls",
  "semver",
  "serde",

@@ -189,9 +189,10 @@ mod tests {
 }
 
 /// Accepts the certificate a device makes for itself (its handshake signatures still checked): for
-/// hardware on the local network only. Old devices sign with RSA keys of 1024 bits (Delta Dore's
-/// Tydom 1.0), which ring refuses as too short ("invalid peer certificate: BadSignature"): those
-/// signatures are checked with ring's legacy algorithms. The certificate itself is not trusted
+/// hardware on the local network only. Old devices sign with short RSA keys, which ring refuses
+/// below 2048 bits, 1024 in its legacy algorithms ("invalid peer certificate: BadSignature"): the
+/// Delta Dore Tydom 1.0 has a key of 512 bits (seen on a real one, 2026-11-28). Those signatures
+/// are checked by `rsa`, whatever the size of the key. The certificate itself is not trusted
 /// anyway, so a short key weakens nothing here.
 #[cfg(feature = "wasm")]
 #[derive(Debug)]
@@ -226,20 +227,26 @@ impl ServerCertVerifier for Device {
 }
 
 #[cfg(feature = "wasm")]
-const LEGACY_RSA: [SignatureScheme; 3] = [SignatureScheme::RSA_PKCS1_SHA512, SignatureScheme::RSA_PKCS1_SHA256, SignatureScheme::RSA_PKCS1_SHA1];
+const LEGACY_RSA: [SignatureScheme; 4] = [SignatureScheme::RSA_PKCS1_SHA512, SignatureScheme::RSA_PKCS1_SHA384, SignatureScheme::RSA_PKCS1_SHA256, SignatureScheme::RSA_PKCS1_SHA1];
 
-/// A TLS 1.2 signature by an RSA key from 1024 bits on (PKCS#1), checked by the device's certificate.
+/// A TLS 1.2 signature by an RSA key of any size (PKCS#1 v1.5), checked by the device's certificate.
 #[cfg(feature = "wasm")]
 fn legacy_rsa(message: &[u8], cert: &CertificateDer<'_>, scheme: SignatureScheme, sig: &[u8]) -> bool {
-    use ring::signature;
-    let algorithm: &dyn signature::VerificationAlgorithm = match scheme {
-        SignatureScheme::RSA_PKCS1_SHA512 => &signature::RSA_PKCS1_1024_8192_SHA512_FOR_LEGACY_USE_ONLY,
-        SignatureScheme::RSA_PKCS1_SHA256 => &signature::RSA_PKCS1_1024_8192_SHA256_FOR_LEGACY_USE_ONLY,
-        SignatureScheme::RSA_PKCS1_SHA1 => &signature::RSA_PKCS1_1024_8192_SHA1_FOR_LEGACY_USE_ONLY,
+    use ring::digest;
+    use x509_parser::public_key::PublicKey;
+    // The hash, and the DigestInfo that names it in the signature (RFC 8017 § 9.2, note 1).
+    let (algorithm, prefix): (&digest::Algorithm, &[u8]) = match scheme {
+        SignatureScheme::RSA_PKCS1_SHA1 => (&digest::SHA1_FOR_LEGACY_USE_ONLY, &[0x30, 0x21, 0x30, 0x09, 0x06, 0x05, 0x2b, 0x0e, 0x03, 0x02, 0x1a, 0x05, 0x00, 0x04, 0x14]),
+        SignatureScheme::RSA_PKCS1_SHA256 => (&digest::SHA256, &[0x30, 0x31, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01, 0x05, 0x00, 0x04, 0x20]),
+        SignatureScheme::RSA_PKCS1_SHA384 => (&digest::SHA384, &[0x30, 0x41, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x02, 0x05, 0x00, 0x04, 0x30]),
+        SignatureScheme::RSA_PKCS1_SHA512 => (&digest::SHA512, &[0x30, 0x51, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x03, 0x05, 0x00, 0x04, 0x40]),
         _ => return false,
     };
     let Ok((_, parsed)) = x509_parser::parse_x509_certificate(cert) else { return false };
-    signature::UnparsedPublicKey::new(algorithm, parsed.public_key().subject_public_key.data.as_ref()).verify(message, sig).is_ok()
+    let Ok(PublicKey::RSA(key)) = parsed.public_key().parsed() else { return false };
+    let Ok(key) = rsa::RsaPublicKey::new(rsa::BigUint::from_bytes_be(key.modulus), rsa::BigUint::from_bytes_be(key.exponent)) else { return false };
+    let hashed = digest::digest(algorithm, message);
+    key.verify(rsa::Pkcs1v15Sign { hash_len: Some(hashed.as_ref().len()), prefix: prefix.into() }, hashed.as_ref(), sig).is_ok()
 }
 
 /// TLS towards hardware or a service: the usual checks, or (`device`) the device's own certificate.
@@ -256,23 +263,33 @@ pub fn client_config(device: bool) -> Option<rustls::ClientConfig> {
 mod device_tests {
     use super::*;
 
-    /// A device certificate with an RSA key of 1024 bits, and "handshake" signed by it (openssl).
-    const CERT: &[u8] = include_bytes!("testdata/rsa1024.der");
+    /// Device certificates with RSA keys of 512 (as the Tydom 1.0) and 1024 bits, and "handshake"
+    /// signed by each (openssl).
+    const CERT_512: &[u8] = include_bytes!("testdata/rsa512.der");
+    const CERT_1024: &[u8] = include_bytes!("testdata/rsa1024.der");
+
+    /// What ring says of a signature, with its usual algorithm or its legacy one.
+    fn ring_accepts(algorithm: &'static dyn ring::signature::VerificationAlgorithm, cert: &[u8], sig: &[u8]) -> bool {
+        let key = x509_parser::parse_x509_certificate(cert).unwrap().1.public_key().subject_public_key.data.to_vec();
+        ring::signature::UnparsedPublicKey::new(algorithm, key).verify(b"handshake", sig).is_ok()
+    }
 
     #[test]
     fn an_old_device_signs_with_a_short_rsa_key() {
-        let cert = CertificateDer::from(CERT);
-        let sha256: &[u8] = include_bytes!("testdata/rsa1024.sha256.sig");
-        // What ring's usual algorithm says of it: the error behind "BadSignature".
-        let usual = ring::signature::UnparsedPublicKey::new(
-            &ring::signature::RSA_PKCS1_2048_8192_SHA256,
-            x509_parser::parse_x509_certificate(CERT).unwrap().1.public_key().subject_public_key.data.to_vec(),
-        );
-        assert!(usual.verify(b"handshake", sha256).is_err(), "too short for ring");
-        assert!(legacy_rsa(b"handshake", &cert, SignatureScheme::RSA_PKCS1_SHA256, sha256));
-        assert!(legacy_rsa(b"handshake", &cert, SignatureScheme::RSA_PKCS1_SHA1, include_bytes!("testdata/rsa1024.sha1.sig")));
-        assert!(!legacy_rsa(b"something else", &cert, SignatureScheme::RSA_PKCS1_SHA256, sha256), "a wrong signature stays refused");
-        assert!(!legacy_rsa(b"handshake", &cert, SignatureScheme::RSA_PSS_SHA256, sha256));
+        for (der, sha256, sha1) in [
+            (CERT_512, &include_bytes!("testdata/rsa512.sha256.sig")[..], &include_bytes!("testdata/rsa512.sha1.sig")[..]),
+            (CERT_1024, &include_bytes!("testdata/rsa1024.sha256.sig")[..], &include_bytes!("testdata/rsa1024.sha1.sig")[..]),
+        ] {
+            let cert = CertificateDer::from(der);
+            assert!(!ring_accepts(&ring::signature::RSA_PKCS1_2048_8192_SHA256, der, sha256), "too short for ring: the error behind BadSignature");
+            assert!(legacy_rsa(b"handshake", &cert, SignatureScheme::RSA_PKCS1_SHA256, sha256));
+            assert!(legacy_rsa(b"handshake", &cert, SignatureScheme::RSA_PKCS1_SHA1, sha1));
+            assert!(!legacy_rsa(b"something else", &cert, SignatureScheme::RSA_PKCS1_SHA256, sha256), "a wrong signature stays refused");
+            assert!(!legacy_rsa(b"handshake", &cert, SignatureScheme::RSA_PKCS1_SHA512, sha256), "another hash stays refused");
+            assert!(!legacy_rsa(b"handshake", &cert, SignatureScheme::RSA_PSS_SHA256, sha256));
+        }
+        // 512 bits: even ring's legacy algorithms refuse it (the Tydom 1.0, beta.12).
+        assert!(!ring_accepts(&ring::signature::RSA_PKCS1_1024_8192_SHA256_FOR_LEGACY_USE_ONLY, CERT_512, include_bytes!("testdata/rsa512.sha256.sig")));
         let schemes = Device { provider: provider() }.supported_verify_schemes();
         assert_eq!((schemes.first(), schemes.last()), (Some(&SignatureScheme::RSA_PKCS1_SHA512), Some(&SignatureScheme::RSA_PKCS1_SHA1)));
     }
