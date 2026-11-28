@@ -6,6 +6,29 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.13.0-beta.11] - 2026-11-28
+
+### Added
+
+- The climate, lights, shutters, ventilation, charging and solar pages are arranged as dashboards,
+  on the web and in the app, each in its own layout; the app shows the blocks of the web it lacked.
+- The panels wired to an Anker SolarBank show on the solar page, as an inverter and its inputs,
+  with what they gave today (counted by the module from each read: the cloud does not tell it).
+  The diagnostic of the Anker SOLIX (cloud) module also lists the Smart Meter, the plugs and the
+  totals of the site (Anker SOLIX cloud module 1.1.0).
+
+### Changed
+
+- Airzone is one integration among others: the server always has a home of its own, created at
+  start when it has none, whose devices come from the modules. An Airzone WebServer, added by hand
+  or from the Airzone account, joins that home and keeps its rooms, devices and settings; deleting
+  the last home only removes its WebServer. « Climatisation » only shows when there is Airzone.
+- The total production of an inverter or a panel may be unknown (a cloud that does not tell it).
+
+### Fixed
+
+- The overview and energy pages were empty on a server without an Airzone installation.
+
 ## [0.13.0-beta.10] - 2026-11-27
 
 ### Added
