@@ -6,6 +6,12 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- The Anker Smart Meter of a SolarBank (the first one, without local access) is read from Anker's
+  cloud: the power drawn from the grid or returned to it, for the role « Réseau ». The panels of a
+  SolarBank tell what they produced since the start (Anker SOLIX cloud module 1.2.0).
+
 ## [0.13.0-beta.12] - 2026-11-28
 
 ### Fixed

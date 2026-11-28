@@ -1,6 +1,6 @@
 {
   "id": "anker_cloud",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "name": {
     "en": "Anker SOLIX (cloud)",
     "es": "Anker SOLIX (cloud)",
@@ -23,7 +23,8 @@
   },
   "models": [
     "Anker SOLIX Solarbank 2 E1600 (AC, Pro, Plus)",
-    "Anker SOLIX Solarbank 3 E2700"
+    "Anker SOLIX Solarbank 3 E2700",
+    "Anker SOLIX Smart Meter"
   ],
   "permissions": {
     "network": {

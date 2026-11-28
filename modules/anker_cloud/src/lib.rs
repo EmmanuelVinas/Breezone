@@ -8,7 +8,9 @@
 //!   POST power_service/v1/site/get_site_list {} → {data: {site_list: [{site_id, site_name}]}}
 //!   POST power_service/v1/site/get_scen_info {site_id} → {data: {solarbank_info: {solarbank_list: [
 //!        {device_pn, device_sn, device_name, battery_power (%), bat_charge_power, photovoltaic_power,
-//!        solar_power_1…4 (each input), output_power}], battery_discharge_power}}}
+//!        solar_power_1…4 (each input), output_power}], battery_discharge_power},
+//!        grid_info: {grid_list: [{device_sn, device_pn}], grid_to_home_power, photovoltaic_to_grid_power},
+//!        statistics: [{type: "1" (energy produced since the start), total}]}}
 //!
 //! An account logged in here may log the Anker app out: a second account, with which the system is
 //! shared, avoids it. Read only, every minute (the cloud refreshes a SolarBank 2 every few minutes).
@@ -288,8 +290,41 @@ fn banks_of(site: &str, scene: &Value) -> Vec<Bank> {
         .collect()
 }
 
-fn devices_of(banks: &[Bank]) -> Vec<DeviceInfo> {
-    let mut out = vec![];
+/// A Smart Meter of a site (the first one, `A17X7`, has no local access): the grid of the home.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Meter {
+    pub site: String,
+    pub reference: String,
+    pub pn: String,
+}
+
+fn meters_of(site: &str, scene: &Value) -> Vec<Meter> {
+    scene["grid_info"]["grid_list"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|m| {
+            let sn = m["device_sn"].as_str().filter(|s| !s.is_empty()).unwrap_or(site);
+            Meter { site: site.to_string(), reference: format!("meter:{sn}"), pn: m["device_pn"].as_str().unwrap_or_default().to_string() }
+        })
+        .collect()
+}
+
+/// The power at the meter: positive drawn from the grid, negative returned to it.
+fn meter_state(scene: &Value) -> Option<State> {
+    let grid = &scene["grid_info"];
+    let drawn = num(&grid["grid_to_home_power"]);
+    let returned = num(&grid["photovoltaic_to_grid_power"]);
+    if drawn.is_none() && returned.is_none() {
+        return None;
+    }
+    let mut s = State::new();
+    s.insert("power".into(), json!(drawn.unwrap_or(0.0) - returned.unwrap_or(0.0)));
+    Some(s)
+}
+
+fn devices_of(banks: &[Bank], meters: &[Meter]) -> Vec<DeviceInfo> {
+    let mut out: Vec<DeviceInfo> = meters.iter().map(|m| device(m.reference.clone(), "energy.power", &["energy.power@1"], "Smart Meter Anker")).collect();
     for b in banks {
         out.push(device(format!("sb:{}", b.sn), "energy.battery", &["energy.battery@1", "energy.power@1"], b.name.clone()));
         out.push(device(format!("pv:{}", b.sn), "solar.inverter", &["energy.power@1", "solar.inverter@1"], format!("{} · panneaux", b.name)));
@@ -361,6 +396,11 @@ fn states_of(bank: &Bank, scene: &Value, today: &mut dyn FnMut(&str, f64) -> f64
     panels.insert("power".into(), json!(solar));
     panels.insert("energy_today".into(), json!(today(&inverter, solar)));
     panels.insert("panels".into(), json!(bank.ports.len()));
+    // What the site produced since its start: this battery's panels when it is alone there.
+    let produced = scene["statistics"].as_array().into_iter().flatten().find(|s| s["type"].as_str() == Some("1")).and_then(|s| num(&s["total"]));
+    if let Some(kwh) = produced.filter(|_| single) {
+        panels.insert("energy_total".into(), json!(kwh));
+    }
     let mut out = vec![(format!("sb:{}", bank.sn), battery), (inverter, panels)];
     for port in &bank.ports {
         let reference = format!("pv:{}:{port}", bank.sn);
@@ -395,24 +435,28 @@ fn scene(tz: chrono_tz::Tz, site: &str) -> Result<Value> {
 
 pub struct AnkerCloud {
     tz: chrono_tz::Tz,
-    banks: RefCell<(Vec<Bank>, Option<i64>)>,
+    banks: RefCell<(Vec<Bank>, Vec<Meter>, Option<i64>)>,
     today: RefCell<std::collections::HashMap<String, Counter>>,
 }
 
 impl AnkerCloud {
-    fn load(&self) -> Result<Vec<Bank>> {
-        let mut banks = vec![];
+    fn load(&self) -> Result<(Vec<Bank>, Vec<Meter>)> {
+        let (mut banks, mut meters) = (vec![], vec![]);
         for (site, _) in sites(self.tz)? {
-            banks.extend(banks_of(&site, &scene(self.tz, &site)?));
+            let s = scene(self.tz, &site)?;
+            banks.extend(banks_of(&site, &s));
+            meters.extend(meters_of(&site, &s));
         }
-        *self.banks.borrow_mut() = (banks.clone(), Some(host::now()));
-        Ok(banks)
+        *self.banks.borrow_mut() = (banks.clone(), meters.clone(), Some(host::now()));
+        Ok((banks, meters))
     }
 
-    fn banks(&self) -> Result<Vec<Bank>> {
-        if self.banks.borrow().1.is_some_and(|t| host::now() - t < LIST_EVERY) {
-            return Ok(self.banks.borrow().0.clone());
+    fn banks(&self) -> Result<(Vec<Bank>, Vec<Meter>)> {
+        let cached = self.banks.borrow();
+        if cached.2.is_some_and(|t| host::now() - t < LIST_EVERY) {
+            return Ok((cached.0.clone(), cached.1.clone()));
         }
+        drop(cached);
         self.load()
     }
 }
@@ -423,22 +467,23 @@ fn tz_of(config: &Value) -> chrono_tz::Tz {
 
 impl Driver for AnkerCloud {
     fn open(config: Value, _secret: Option<Value>) -> Result<Self> {
-        Ok(AnkerCloud { tz: tz_of(&config), banks: RefCell::new((vec![], None)), today: RefCell::new(Default::default()) })
+        Ok(AnkerCloud { tz: tz_of(&config), banks: RefCell::new((vec![], vec![], None)), today: RefCell::new(Default::default()) })
     }
 
     fn describe(&self) -> Result<Described> {
-        let banks = self.load()?;
+        let (banks, meters) = self.load()?;
         let model = match banks.first() {
             Some(b) if banks.iter().all(|x| x.pn == b.pn) => format!("Anker SOLIX {}", model_of(&b.pn)),
             _ => "Anker SOLIX".into(),
         };
-        Ok(Described { model, firmware: None, devices: devices_of(&banks), identity: None })
+        Ok(Described { model, firmware: None, devices: devices_of(&banks, &meters), identity: None })
     }
 
     fn read(&self) -> Result<Vec<(String, State)>> {
-        let banks = self.banks()?;
+        let (banks, meters) = self.banks()?;
         let mut out = vec![];
-        let mut sites: Vec<&str> = banks.iter().map(|b| b.site.as_str()).collect();
+        let mut sites: Vec<&str> = banks.iter().map(|b| b.site.as_str()).chain(meters.iter().map(|m| m.site.as_str())).collect();
+        sites.sort_unstable();
         sites.dedup();
         for site in sites {
             let s = scene(self.tz, site)?;
@@ -447,6 +492,9 @@ impl Driver for AnkerCloud {
             let mut today = |reference: &str, w: f64| counters.entry(reference.to_string()).or_default().add(self.tz, now, w);
             for b in banks.iter().filter(|b| b.site == site) {
                 out.extend(states_of(b, &s, &mut today));
+            }
+            if let Some(state) = meter_state(&s) {
+                out.extend(meters.iter().filter(|m| m.site == site).map(|m| (m.reference.clone(), state.clone())));
             }
         }
         Ok(out)
@@ -547,7 +595,9 @@ mod tests {
             "solarbank_list": [{"device_pn": "A17C2", "device_sn": "SB2AC0001", "device_name": "Garage", "battery_power": "75",
                                 "bat_charge_power": "120", "charging_power": "120", "photovoltaic_power": "300", "output_power": "180",
                                 "solar_power_1": "170", "solar_power_2": "130", "solar_power_3": "0", "solar_power_4": ""}],
-            "battery_discharge_power": "0", "to_home_load": "180"}, "scene_mode": 1}})
+            "battery_discharge_power": "0", "to_home_load": "180"},
+            "grid_info": {"grid_list": [{"device_pn": "A17X7", "device_sn": "SM0001"}], "grid_to_home_power": "0", "photovoltaic_to_grid_power": "40"},
+            "statistics": [{"type": "1", "total": "2390.29", "unit": "kWh"}], "scene_mode": 1}})
     }
 
     fn cloud() {
@@ -571,7 +621,10 @@ mod tests {
     fn a_solarbank_and_its_panels() {
         let banks = banks_of("s1", &scene_json()["data"]);
         assert_eq!(banks, vec![Bank { site: "s1".into(), sn: "SB2AC0001".into(), pn: "A17C2".into(), name: "Garage".into(), ports: vec![1, 2] }], "an AC has two inputs");
-        assert_eq!(devices_of(&banks).len(), 4);
+        let meters = meters_of("s1", &scene_json()["data"]);
+        assert_eq!(meters, vec![Meter { site: "s1".into(), reference: "meter:SM0001".into(), pn: "A17X7".into() }]);
+        assert_eq!(devices_of(&banks, &meters).len(), 5);
+        assert_eq!(meter_state(&scene_json()["data"]).unwrap()["power"], -40.0, "returned to the grid");
         let states: std::collections::HashMap<String, State> = states_of(&banks[0], &scene_json()["data"], &mut |_, _| 0.0).into_iter().collect();
         let b = &states["sb:SB2AC0001"];
         assert_eq!((b["soc"].clone(), b["power"].clone(), b["status"].clone()), (json!(75), json!(120.0), json!("charging")));
@@ -580,6 +633,7 @@ mod tests {
         let panel = &states["pv:SB2AC0001:1"];
         assert_eq!((panel["power"].clone(), panel["port"].clone(), panel["inverter"].clone()), (json!(170.0), json!(1), json!("SB2AC0001")));
         assert_eq!(states["pv:SB2AC0001:2"]["power"], 130.0);
+        assert_eq!(states["pv:SB2AC0001"]["energy_total"], 2390.29);
     }
 
     #[test]
