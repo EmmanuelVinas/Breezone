@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.13.0-beta.12] - 2026-11-28
+
 ### Fixed
 
 - The Delta Dore Tydom 1.0 gateway could not be reached (« invalid peer certificate:
