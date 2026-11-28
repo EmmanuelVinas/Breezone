@@ -448,6 +448,7 @@ dependencies = [
  "rand 0.10.3",
  "rcgen",
  "reqwest",
+ "ring",
  "rs-matter",
  "rustls",
  "semver",

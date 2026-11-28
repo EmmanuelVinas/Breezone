@@ -6,6 +6,12 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The Delta Dore Tydom 1.0 gateway could not be reached (« invalid peer certificate:
+  BadSignature »): it signs with an RSA key of 1024 bits, now accepted for the hardware of the
+  local network, whose own certificate is already accepted.
+
 ## [0.13.0-beta.11] - 2026-11-28
 
 ### Added

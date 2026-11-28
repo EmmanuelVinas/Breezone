@@ -189,7 +189,10 @@ mod tests {
 }
 
 /// Accepts the certificate a device makes for itself (its handshake signatures still checked): for
-/// hardware on the local network only.
+/// hardware on the local network only. Old devices sign with RSA keys of 1024 bits (Delta Dore's
+/// Tydom 1.0), which ring refuses as too short ("invalid peer certificate: BadSignature"): those
+/// signatures are checked with ring's legacy algorithms. The certificate itself is not trusted
+/// anyway, so a short key weakens nothing here.
 #[cfg(feature = "wasm")]
 #[derive(Debug)]
 struct Device {
@@ -202,14 +205,41 @@ impl ServerCertVerifier for Device {
         Ok(ServerCertVerified::assertion())
     }
     fn verify_tls12_signature(&self, message: &[u8], cert: &CertificateDer<'_>, dss: &DigitallySignedStruct) -> Result<HandshakeSignatureValid, rustls::Error> {
-        rustls::crypto::verify_tls12_signature(message, cert, dss, &self.provider.signature_verification_algorithms)
+        rustls::crypto::verify_tls12_signature(message, cert, dss, &self.provider.signature_verification_algorithms).or_else(|e| {
+            if legacy_rsa(message, cert, dss.scheme, dss.signature()) {
+                Ok(HandshakeSignatureValid::assertion())
+            } else {
+                Err(e)
+            }
+        })
     }
     fn verify_tls13_signature(&self, message: &[u8], cert: &CertificateDer<'_>, dss: &DigitallySignedStruct) -> Result<HandshakeSignatureValid, rustls::Error> {
         rustls::crypto::verify_tls13_signature(message, cert, dss, &self.provider.signature_verification_algorithms)
     }
     fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-        self.provider.signature_verification_algorithms.supported_schemes()
+        // PKCS#1 first, which a short key can be checked with, then SHA-1 for the oldest devices.
+        let mut schemes = self.provider.signature_verification_algorithms.supported_schemes();
+        schemes.sort_by_key(|s| !LEGACY_RSA.contains(s));
+        schemes.push(SignatureScheme::RSA_PKCS1_SHA1);
+        schemes
     }
+}
+
+#[cfg(feature = "wasm")]
+const LEGACY_RSA: [SignatureScheme; 3] = [SignatureScheme::RSA_PKCS1_SHA512, SignatureScheme::RSA_PKCS1_SHA256, SignatureScheme::RSA_PKCS1_SHA1];
+
+/// A TLS 1.2 signature by an RSA key from 1024 bits on (PKCS#1), checked by the device's certificate.
+#[cfg(feature = "wasm")]
+fn legacy_rsa(message: &[u8], cert: &CertificateDer<'_>, scheme: SignatureScheme, sig: &[u8]) -> bool {
+    use ring::signature;
+    let algorithm: &dyn signature::VerificationAlgorithm = match scheme {
+        SignatureScheme::RSA_PKCS1_SHA512 => &signature::RSA_PKCS1_1024_8192_SHA512_FOR_LEGACY_USE_ONLY,
+        SignatureScheme::RSA_PKCS1_SHA256 => &signature::RSA_PKCS1_1024_8192_SHA256_FOR_LEGACY_USE_ONLY,
+        SignatureScheme::RSA_PKCS1_SHA1 => &signature::RSA_PKCS1_1024_8192_SHA1_FOR_LEGACY_USE_ONLY,
+        _ => return false,
+    };
+    let Ok((_, parsed)) = x509_parser::parse_x509_certificate(cert) else { return false };
+    signature::UnparsedPublicKey::new(algorithm, parsed.public_key().subject_public_key.data.as_ref()).verify(message, sig).is_ok()
 }
 
 /// TLS towards hardware or a service: the usual checks, or (`device`) the device's own certificate.
@@ -220,4 +250,30 @@ pub fn client_config(device: bool) -> Option<rustls::ClientConfig> {
     }
     let roots = rustls::RootCertStore { roots: webpki_roots::TLS_SERVER_ROOTS.to_vec() };
     Some(rustls::ClientConfig::builder_with_provider(provider()).with_safe_default_protocol_versions().ok()?.with_root_certificates(roots).with_no_client_auth())
+}
+
+#[cfg(all(test, feature = "wasm"))]
+mod device_tests {
+    use super::*;
+
+    /// A device certificate with an RSA key of 1024 bits, and "handshake" signed by it (openssl).
+    const CERT: &[u8] = include_bytes!("testdata/rsa1024.der");
+
+    #[test]
+    fn an_old_device_signs_with_a_short_rsa_key() {
+        let cert = CertificateDer::from(CERT);
+        let sha256: &[u8] = include_bytes!("testdata/rsa1024.sha256.sig");
+        // What ring's usual algorithm says of it: the error behind "BadSignature".
+        let usual = ring::signature::UnparsedPublicKey::new(
+            &ring::signature::RSA_PKCS1_2048_8192_SHA256,
+            x509_parser::parse_x509_certificate(CERT).unwrap().1.public_key().subject_public_key.data.to_vec(),
+        );
+        assert!(usual.verify(b"handshake", sha256).is_err(), "too short for ring");
+        assert!(legacy_rsa(b"handshake", &cert, SignatureScheme::RSA_PKCS1_SHA256, sha256));
+        assert!(legacy_rsa(b"handshake", &cert, SignatureScheme::RSA_PKCS1_SHA1, include_bytes!("testdata/rsa1024.sha1.sig")));
+        assert!(!legacy_rsa(b"something else", &cert, SignatureScheme::RSA_PKCS1_SHA256, sha256), "a wrong signature stays refused");
+        assert!(!legacy_rsa(b"handshake", &cert, SignatureScheme::RSA_PSS_SHA256, sha256));
+        let schemes = Device { provider: provider() }.supported_verify_schemes();
+        assert_eq!((schemes.first(), schemes.last()), (Some(&SignatureScheme::RSA_PKCS1_SHA512), Some(&SignatureScheme::RSA_PKCS1_SHA1)));
+    }
 }
