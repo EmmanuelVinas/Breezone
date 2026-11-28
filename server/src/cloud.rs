@@ -583,7 +583,7 @@ async fn reconcile(state: &AppState, cloud: &[CloudInstallation], opts: SyncOpti
                         }
                     }
                     None => {
-                        let inst = db::insert_installation(&state.db, &c.name, &host, a.port, true).await?;
+                        let inst = db::add_webserver(&state.db, &c.name, &host, a.port, true).await?;
                         if let Some(m) = &found.mac {
                             db::set_installation_mac(&state.db, inst.id, m).await?;
                         }
@@ -632,7 +632,7 @@ async fn reconcile(state: &AppState, cloud: &[CloudInstallation], opts: SyncOpti
                             .find(|f| f.mac.as_deref().map(normalize_mac).is_some_and(|m| cloud_macs[i].contains(&m)) && !known_hosts.contains(&(f.host.clone(), f.port as i64)));
                         match hit {
                             Some(f) => {
-                                let inst = db::insert_installation(&state.db, &c.name, &f.host, f.port as i64, true).await?;
+                                let inst = db::add_webserver(&state.db, &c.name, &f.host, f.port as i64, true).await?;
                                 if let Some(mac) = &f.mac {
                                     db::set_installation_mac(&state.db, inst.id, mac).await?;
                                 }

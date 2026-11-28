@@ -203,7 +203,7 @@ export type SolarInverterState = {
   /** Production today (kWh) */
   energy_today: number
   /** Total production (kWh) */
-  energy_total: number
+  energy_total: number | null
   /** Temperature (°C) */
   temperature: number | null
   /** Grid frequency (Hz) */
@@ -223,7 +223,7 @@ export type SolarPanelState = {
   /** Production today (kWh) */
   energy_today: number
   /** Total production (kWh) */
-  energy_total: number
+  energy_total: number | null
   /** Inverter */
   inverter: string
   /** Input */

@@ -143,7 +143,7 @@ de l'utilisateur ; les clients relisent alors `/api/me`.
 | POST 👑 | `/api/installations` | `{name, host, port?=3000, enabled?=true, record_demand?=false, location?, country?}` : `location` la ville (« Annecy, Haute-Savoie »), `country` son code ISO à deux lettres ; une ville saisie n'est plus remplacée par celle du compte Airzone (vide : retour à celle du compte). La météo de la maison s'en sert |
 | PUT 🛠 | `/api/installations/{id}` | Idem, `record_demand`, `location` et `country` inchangés s'ils sont absents (installation via un nœud : seuls `name` et `enabled` changent) |
 | PUT 🛠 | `/api/installations/{id}/cloud` | `{cloud_id: string\|null}` : installation du compte Airzone à laquelle elle correspond (refusé si la MAC du WebServer prouve le contraire) → `Installation` |
-| DELETE 🛠 | `/api/installations/{id}` | Supprime (historique et réglages Breezone compris) |
+| DELETE 🛠 | `/api/installations/{id}` | Supprime (historique et réglages Breezone compris) ; la dernière maison du serveur reste, seul son WebServer est retiré |
 | POST 🛠 | `/api/installations/test` | `{host, port}` → `{ok, zones, webserver}` ou `{ok:false, error}` |
 | POST 👑 | `/api/discovery/scan` | `{subnet?}` → `{subnet, found:[{host, port, mac, firmware, zones}]}` (seules les réponses portant la signature Airzone comptent) |
 | GET 🔒 / PUT 👑 | `/api/discovery/settings` | Réseau local du serveur : `{subnet}` → `{subnet, effective, in_container}` |
@@ -155,9 +155,15 @@ de l'utilisateur ; les clients relisent alors `/api/me`.
 | POST 🔒 | `/api/control/batch` | `{actions:[Action]}` → `{results:[{ok, error}]}` |
 
 `Installation` : `{id, name, location, host, port, enabled, access:"local"|"node", node?:{id, name, state},
-controllable, rights:{zones, routines, schedules, admin}, record_demand, connection:{state:"online"|"offline"|"unknown", last_seen, last_error, latency_ms}, zones:[Zone]}`.
+controllable, rights:{zones, routines, schedules, admin}, record_demand, airzone, connection:{state:"online"|"offline"|"unknown", last_seen, last_error, latency_ms}, zones:[Zone]}`.
 `access: "node"` : installation jointe via un autre serveur Breezone (`host` = son adresse) ;
 `controllable: false` si ce serveur la partage en lecture seule.
+
+`airzone` : Airzone est une intégration parmi d'autres. Le serveur a toujours une maison à lui
+(« Maison », créée au démarrage s'il n'en a pas) ; `airzone: false` quand elle n'a pas de WebServer
+(`host` vide, pas de zones) : ses appareils viennent des modules. Ajouter un WebServer
+(`POST /api/installations`, import du compte Airzone) le rattache à cette maison tant qu'elle n'en a
+pas ; un `host` vide dans `PUT` le retire.
 
 `record_demand` : le temps que chaque zone passe en demande (chaud ou froid) est enregistré avec
 l'historique, dans `demand_secs` (secondes en demande depuis le point précédent ; `null` quand il

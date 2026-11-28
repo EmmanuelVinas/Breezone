@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react"
 import { t, tn } from "@/lib/i18n"
-import { PageHeader } from "@/components/app-shell"
 import { Board } from "@/components/overview/board"
 import { useHomeData } from "@/components/overview/home-data"
 import {
@@ -27,27 +26,18 @@ export function OverviewPage() {
     [by, mine, home.data?.rooms, roles, surplusHere, scenes, priced]
   )
 
-  if (!home.installation || !home.data)
-    return (
-      <PageHeader
-        title={t("Vue d'ensemble")}
-        description={t(
-          "Ajoutez une installation pour composer sa vue d'ensemble."
-        )}
-      />
-    )
-
-  const { installation } = home
+  // Without an installation (one shared by another server only, say), the home of the modules.
+  const { installation, page } = home
   return (
     <Board
       page="overview"
-      title={installation.name}
+      title={installation?.name ?? t("Maison")}
       description={[
-        installation.location,
-        tn(home.data.rooms.length, "{n} pièce", "{n} pièces"),
+        installation?.location,
+        tn(page.rooms.length, "{n} pièce", "{n} pièces"),
         tn(mine.length, "{n} appareil", "{n} appareils"),
       ]}
-      data={home.data}
+      data={page}
       generated={generated}
       loading={home.loading}
       // The blocks with nothing to show here are left out.

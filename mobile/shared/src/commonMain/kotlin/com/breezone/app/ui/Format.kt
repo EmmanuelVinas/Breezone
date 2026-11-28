@@ -14,6 +14,7 @@ import com.breezone.app.resources.air_quality_none
 import com.breezone.app.resources.air_quality_regular
 import com.breezone.app.resources.days_names
 import com.breezone.app.resources.installation_via
+import com.breezone.app.resources.installation_without_airzone
 import com.breezone.app.resources.mode_aux_heating
 import com.breezone.app.resources.mode_auto
 import com.breezone.app.resources.mode_cooling
@@ -224,5 +225,6 @@ fun hueOf(seed: String): Float {
 @Composable
 fun installationPlace(inst: Installation): String {
     val via = inst.node?.let { stringResource(Res.string.installation_via, it.name) }
-    return listOfNotNull(inst.location, via).joinToString(" · ").ifEmpty { "${inst.host}:${inst.port}" }
+    val address = if (inst.airzone) "${inst.host}:${inst.port}" else stringResource(Res.string.installation_without_airzone)
+    return listOfNotNull(inst.location, via).joinToString(" · ").ifEmpty { address }
 }

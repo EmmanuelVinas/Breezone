@@ -74,6 +74,8 @@ pub async fn import_config(State(state): State<AppState>, AdminUser(admin): Admi
         )),
         ImportError::Db(e) => e.into(),
     })?;
+    // A configuration without a home of its own still leaves one to the modules.
+    crate::db::ensure_home(&state.db).await?;
     state.hub.reload_installations().await?;
     state.drivers.reload().await?;
     state.updater.set_beta(crate::db::get_setting(&state.db, crate::update::CHANNEL_SETTING).await?.as_deref() == Some("beta"));

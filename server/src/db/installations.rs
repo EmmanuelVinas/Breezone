@@ -43,9 +43,17 @@ pub struct Installation {
     pub geo_key: Option<String>,
 }
 
+/// The name of the home this server creates when it has none of its own.
+pub const HOME_NAME: &str = "Maison";
+
 impl Installation {
     pub fn is_local(&self) -> bool {
         self.node_id.is_none()
+    }
+
+    /// Airzone is one integration among others: a home of this server may have no WebServer.
+    pub fn has_airzone(&self) -> bool {
+        !self.is_local() || !self.host.trim().is_empty()
     }
 }
 
@@ -66,6 +74,39 @@ pub async fn insert_installation(db: &Db, name: &str, host: &str, port: i64, ena
         .bind(now())
         .fetch_one(db)
         .await
+}
+
+/// A home of this server, so that its modules have one even without an Airzone WebServer.
+pub async fn ensure_home(db: &Db) -> sqlx::Result<Option<Installation>> {
+    if list_installations(db).await?.iter().any(Installation::is_local) {
+        return Ok(None);
+    }
+    insert_installation(db, HOME_NAME, "", 3000, true).await.map(Some)
+}
+
+/// Adds an Airzone WebServer: to the first home of this server that has none (it keeps its rooms,
+/// devices and settings, and takes the WebServer's name while it has the default one), else as
+/// another installation.
+pub async fn add_webserver(db: &Db, name: &str, host: &str, port: i64, enabled: bool) -> sqlx::Result<Installation> {
+    let home: Option<Installation> = sqlx::query_as("SELECT * FROM installations WHERE node_id IS NULL AND trim(host) = '' ORDER BY id LIMIT 1").fetch_optional(db).await?;
+    let Some(home) = home else { return insert_installation(db, name, host, port, enabled).await };
+    let name = if home.name == HOME_NAME { name } else { home.name.as_str() };
+    sqlx::query_as("UPDATE installations SET name = ?, host = ?, port = ?, enabled = ?, mac = NULL WHERE id = ? RETURNING *")
+        .bind(name)
+        .bind(host)
+        .bind(port)
+        .bind(enabled)
+        .bind(home.id)
+        .fetch_one(db)
+        .await
+}
+
+/// The home loses its WebServer: its zones and their history go, the home stays with its rooms,
+/// devices and settings.
+pub async fn remove_webserver(db: &Db, id: i64) -> sqlx::Result<()> {
+    reset_installation_for_new_webserver(db, id).await?;
+    sqlx::query("UPDATE installations SET host = '', port = 3000, mac = NULL WHERE id = ?").bind(id).execute(db).await?;
+    Ok(())
 }
 
 pub async fn update_installation(db: &Db, id: i64, name: &str, host: &str, port: i64, enabled: bool) -> sqlx::Result<()> {

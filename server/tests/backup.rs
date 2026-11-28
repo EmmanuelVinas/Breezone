@@ -127,7 +127,7 @@ async fn configuration_moves_without_secrets_and_restores_in_place() {
 #[tokio::test]
 async fn refuses_what_is_not_a_configuration() {
     let a = Server::start().await;
-    a.sql("INSERT INTO installations (id, name, host, port, enabled, created_at) VALUES (1, 'Maison', '10.0.0.9', 3000, 1, 1)").await;
+    a.sql("INSERT INTO installations (id, name, host, port, enabled, created_at) VALUES (2, 'Chalet', '10.0.0.9', 3000, 1, 1)").await;
     let (s, _) = a.call("POST", "/api/system/config", Some(json!({"hello": "world"}))).await;
     assert_eq!(s, 400);
     let (s, _) = a.call("POST", "/api/system/config", Some(json!({"format": "breezone-config", "version": 1, "schema": 9999, "tables": {}}))).await;
@@ -135,7 +135,7 @@ async fn refuses_what_is_not_a_configuration() {
     // A broken file changes nothing.
     let (s, _) = a.call("POST", "/api/system/config", Some(json!({"format": "breezone-config", "version": 1, "schema": 1, "tables": {"devices": [{"id": 1, "source": "x", "source_ref": "y", "kind": "light", "created_at": 1, "room_id": 99}]}}))).await;
     assert_eq!(s, 400);
-    assert_eq!(a.count("SELECT COUNT(*) FROM installations").await, 1);
+    assert_eq!(a.count("SELECT COUNT(*) FROM installations").await, 2);
     let (s, _) = a.call("POST", "/api/system/config", None).await;
     assert!(s.is_client_error());
 }

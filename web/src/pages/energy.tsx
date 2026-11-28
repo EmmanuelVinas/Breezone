@@ -95,13 +95,11 @@ export function EnergyPage() {
       ])
   }
 
-  if (!e.live || !home.data)
+  if (!e.live)
     return (
       <>
         <PageHeader title={t("Énergie")} />
-        {home.data || !home.installation ? (
-          <Skeleton className="h-96 w-full rounded-3xl" />
-        ) : null}
+        <Skeleton className="h-96 w-full rounded-3xl" />
       </>
     )
   if (!anyRole)
@@ -118,8 +116,8 @@ export function EnergyPage() {
         page="energy"
         title={t("Énergie")}
         description={description}
-        // The parts of the page show this server's energy, whatever the installation.
-        data={{ ...home.data, live: e.live, energy: true }}
+        // The parts of the page show this server's energy, whatever the installation (or none).
+        data={{ ...home.page, live: e.live, energy: true }}
         generated={generated}
         shows={(b) => b.type !== "price" || home.priced}
         actions={() => (

@@ -173,7 +173,8 @@ export function installationAddress(i: {
   port: number
   node?: { name: string }
 }) {
-  return i.node ? t("via {name}", { name: i.node.name }) : `${i.host}:${i.port}`
+  if (i.node) return t("via {name}", { name: i.node.name })
+  return i.host ? `${i.host}:${i.port}` : t("sans WebServer Airzone")
 }
 
 /** A duration in seconds: "45 min", "6 h 05". */

@@ -314,6 +314,32 @@ async fn offline_installation_is_reported() {
 }
 
 #[tokio::test]
+async fn airzone_is_added_to_the_home_and_removed_from_it() {
+    let env = start().await;
+    let (_, v) = env.call("POST", "/api/setup", None, Some(json!({"username":"admin","password":"motdepasse1"}))).await;
+    let token = v["access_token"].as_str().unwrap().to_string();
+    let t = Some(token.as_str());
+
+    // A new server has a home, without Airzone: its devices come from the modules.
+    let (_, list) = env.call("GET", "/api/status", t, None).await;
+    let home = &list.as_array().unwrap()[0];
+    assert_eq!((list.as_array().unwrap().len(), home["name"].clone(), home["airzone"].clone()), (1, json!("Maison"), json!(false)), "{list}");
+    let id = home["id"].as_i64().unwrap();
+
+    // The WebServer joins that home, with its name.
+    let (s, v) = env.call("POST", "/api/installations", t, Some(json!({"name":"Chalet","host":"127.0.0.1","port":env.mock_port}))).await;
+    assert_eq!(s, StatusCode::CREATED, "{v}");
+    assert_eq!((v["id"].as_i64(), v["name"].clone(), v["airzone"].clone(), v["zones"].as_array().map(Vec::len)), (Some(id), json!("Chalet"), json!(true), Some(5)));
+
+    // Deleting the last home only removes its WebServer.
+    let (s, _) = env.call("DELETE", &format!("/api/installations/{id}"), t, None).await;
+    assert_eq!(s, StatusCode::NO_CONTENT);
+    let (_, list) = env.call("GET", "/api/status", t, None).await;
+    let home = &list.as_array().unwrap()[0];
+    assert_eq!((home["id"].as_i64(), home["airzone"].clone(), home["zones"].as_array().map(Vec::len)), (Some(id), json!(false), Some(0)), "{list}");
+}
+
+#[tokio::test]
 async fn trends_daily_comfort_and_demand_recording() {
     let env = start().await;
     let (_, v) = env.call("POST", "/api/setup", None, Some(json!({"username":"admin","password":"motdepasse1"}))).await;

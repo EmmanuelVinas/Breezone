@@ -88,6 +88,8 @@ export function InstallationDialog({
   })
   // Set on the server that owns the installation: a shared one follows it.
   const owned = !editing || editing.node_id === null
+  // A home of this server may have no Airzone WebServer: its address is then left empty.
+  const optionalHost = !!editing && owned
   const [test, setTest] = useState<{ ok: boolean; text: string } | null>(null)
   const set = (p: Partial<InstallationForm>) => setForm((f) => ({ ...f, ...p }))
 
@@ -163,7 +165,11 @@ export function InstallationDialog({
           </div>
           <div className="grid grid-cols-[1fr_6rem] gap-3">
             <div className="grid gap-2">
-              <Label htmlFor="ih">{t("Adresse IP")}</Label>
+              <Label htmlFor="ih">
+                {optionalHost
+                  ? t("WebServer Airzone (facultatif)")
+                  : t("Adresse IP")}
+              </Label>
               <Input
                 id="ih"
                 value={form.host}
@@ -262,7 +268,9 @@ export function InstallationDialog({
           </Button>
           <Button
             onClick={() => save.mutate()}
-            disabled={!form.name || !form.host || save.isPending}
+            disabled={
+              !form.name || (!form.host && !optionalHost) || save.isPending
+            }
           >
             {t("Enregistrer")}
           </Button>

@@ -94,6 +94,7 @@
         { "name": "controllable", "type": "boolean", "doc": "false when read-only (for this user, or shared read-only by its node)." },
         { "name": "rights", "type": "InstallationUserRights", "doc": "What the signed-in user may change on it." },
         { "name": "record_demand", "type": "boolean", "doc": "The time each zone spends in demand is recorded (set on the server that owns it)." },
+        { "name": "airzone", "type": "boolean", "doc": "An Airzone WebServer is reached through it; false: a home of this server without one, whose devices all come from the modules." },
         { "name": "connection", "type": "Connection" },
         { "name": "zones", "type": "Zone[]" }
       ]

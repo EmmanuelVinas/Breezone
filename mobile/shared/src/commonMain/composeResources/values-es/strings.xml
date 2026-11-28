@@ -313,6 +313,7 @@
         <item quantity="other">%1$d zonas no han respondido</item>
     </plurals>
     <string name="installation_via">vía %1$s</string>
+    <string name="installation_without_airzone">sin WebServer Airzone</string>
     <string name="hub_read_only">Tiene acceso a «%1$s» solo en lectura</string>
     <string name="add_server_error_local_network">Android impide que Breezone acceda a la red local. Permita «Dispositivos cercanos» en Ajustes › Aplicaciones › Breezone › Permisos y vuelva a intentarlo.</string>
     <plurals name="hub_zones_switched_on">

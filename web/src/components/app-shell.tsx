@@ -258,12 +258,12 @@ export function AppShell({
   const energy = useEnergy()
   const modules = useModules()
   const here = useModulesHere()
-  // Climatisation as soon as there is an installation (its own or through another server).
+  // Climatisation as soon as an installation has Airzone (its own or through another server).
   const climate = !!useQuery({
     queryKey: ["status"],
     queryFn: api.status,
     staleTime: 60_000,
-  }).data?.length
+  }).data?.some((i) => i.airzone)
   const location = useLocation()
   const shown = (n: NavItem) =>
     n.when === undefined ||

@@ -42,7 +42,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { t, tn } from "@/lib/i18n"
-import { errorText } from "@/lib/format"
+import { errorText, installationAddress } from "@/lib/format"
 
 /** How this server reaches an installation's WebServer. */
 export function accessSummary(
@@ -244,7 +244,7 @@ export function AccessDialog({
                     {i.name} ·{" "}
                     {i.node_id !== null
                       ? t("via {name}", { name: i.host })
-                      : `${i.host}:${i.port}`}
+                      : installationAddress(i)}
                   </SelectItem>
                 ))}
               </SelectContent>

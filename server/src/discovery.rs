@@ -389,7 +389,7 @@ pub async fn global_subnet(db: &crate::db::Db, configured: Option<&str>) -> Opti
 
 /// The /24 most of the hardware already added is on (private addresses only).
 async fn known_subnet(db: &crate::db::Db) -> Option<String> {
-    let mut hosts: Vec<String> = crate::db::list_installations(db).await.ok()?.into_iter().map(|i| i.host).collect();
+    let mut hosts: Vec<String> = crate::db::list_installations(db).await.ok()?.into_iter().map(|i| i.host).filter(|h| !h.trim().is_empty()).collect();
     for source in crate::db::list_sources(db).await.ok()? {
         let config: serde_json::Value = serde_json::from_str(&source.config).unwrap_or_default();
         if let Some(h) = config["host"].as_str() {

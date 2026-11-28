@@ -51,7 +51,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { t, tn } from "@/lib/i18n"
-import { errorText } from "@/lib/format"
+import { errorText, installationAddress } from "@/lib/format"
 
 type Way = "existing" | "local"
 
@@ -119,7 +119,9 @@ function AccessBox({
         </span>
       </div>
       <div className="truncate text-xs text-muted-foreground">
-        WebServer {config?.host}:{config?.port}
+        {config?.host
+          ? `WebServer ${config.host}:${config.port}`
+          : t("sans WebServer Airzone")}
         {config?.mac ? ` · ${config.mac}` : ""}
       </div>
     </div>
@@ -280,7 +282,7 @@ function LinkDialog({
                 <SelectContent>
                   {candidates.map((i) => (
                     <SelectItem key={i.id} value={String(i.id)}>
-                      {i.name} · {i.host}:{i.port}
+                      {i.name} · {installationAddress(i)}
                     </SelectItem>
                   ))}
                 </SelectContent>

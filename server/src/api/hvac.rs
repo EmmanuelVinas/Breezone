@@ -88,13 +88,14 @@ fn default_port() -> i64 {
     3000
 }
 
-fn validate_installation(i: &InstallationInput) -> ApiResult<(String, String)> {
+/// The name and the WebServer's address; an empty address only for a home without Airzone.
+fn validate_installation(i: &InstallationInput, without_airzone: bool) -> ApiResult<(String, String)> {
     let name = i.name.trim().to_string();
     let host = i.host.trim().trim_start_matches("http://").trim_end_matches('/').to_string();
     if name.is_empty() || name.chars().count() > 80 {
         return Err(ApiError::bad_request("name must be 1-80 characters"));
     }
-    if host.is_empty() || host.contains(['/', ' ', '?', '#']) {
+    if (host.is_empty() && !without_airzone) || host.contains(['/', ' ', '?', '#']) {
         return Err(ApiError::bad_request("host must be an IP address or a hostname"));
     }
     if !(1..=65535).contains(&i.port) {
@@ -108,9 +109,9 @@ pub async fn create_installation(
     AdminUser(admin): AdminUser,
     Json(req): Json<InstallationInput>,
 ) -> ApiResult<(StatusCode, Json<InstallationView>)> {
-    let (name, host) = validate_installation(&req)?;
+    let (name, host) = validate_installation(&req, false)?;
     validate_place(&req)?;
-    let inst = db::insert_installation(&state.db, &name, &host, req.port, req.enabled).await?;
+    let inst = db::add_webserver(&state.db, &name, &host, req.port, req.enabled).await?;
     save_place(&state, inst.id, &req, None).await?;
     if let Some(record) = req.record_demand {
         db::set_installation_record_demand(&state.db, inst.id, record).await?;
@@ -141,7 +142,7 @@ pub async fn update_installation(State(state): State<AppState>, admin: AuthUser,
     access.manage(id)?;
     let current = db::installation_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("installation not found"))?;
     let (name, host, port) = if current.is_local() {
-        let (name, host) = validate_installation(&req)?;
+        let (name, host) = validate_installation(&req, true)?;
         (name, host, req.port)
     } else {
         // Reached through another node: only the name and the enabled flag can change here.
@@ -152,6 +153,9 @@ pub async fn update_installation(State(state): State<AppState>, admin: AuthUser,
         (name, current.host.clone(), current.port)
     };
     validate_place(&req)?;
+    if current.has_airzone() && host.is_empty() {
+        db::remove_webserver(&state.db, id).await?;
+    }
     db::update_installation(&state.db, id, &name, &host, port, req.enabled).await?;
     if current.is_local() {
         save_place(&state, id, &req, Some(&current)).await?;
@@ -177,7 +181,7 @@ pub async fn update_installation(State(state): State<AppState>, admin: AuthUser,
             None,
         )
         .await;
-    if req.enabled {
+    if req.enabled && !host.is_empty() {
         state.hub.poll_one(id).await;
         if current.host != host || current.port != port {
             // Another WebServer (another MAC address) is another installation: its zones only share
@@ -217,19 +221,17 @@ pub async fn update_installation(State(state): State<AppState>, admin: AuthUser,
 pub async fn delete_installation(State(state): State<AppState>, admin: AuthUser, Path(id): Path<i64>) -> ApiResult<StatusCode> {
     Access::of(&state.db, &admin).await?.manage(id)?;
     let inst = db::installation_by_id(&state.db, id).await?.ok_or_else(|| ApiError::not_found("installation not found"))?;
-    db::delete_installation(&state.db, id).await?;
+    // The last home of this server stays (its modules belong to it): only its WebServer goes.
+    let last_home = inst.is_local() && db::list_installations(&state.db).await?.iter().filter(|i| i.is_local()).count() == 1;
+    let message = if last_home {
+        db::remove_webserver(&state.db, id).await?;
+        crate::text!("WebServer Airzone retiré de « {0} »", "Airzone WebServer removed from “{0}”", "WebServer Airzone retirado de «{0}»", inst.name)
+    } else {
+        db::delete_installation(&state.db, id).await?;
+        crate::text!("Installation « {0} » supprimée", "Installation “{0}” deleted", "Instalación «{0}» eliminada", inst.name)
+    };
     state.hub.reload_installations().await?;
-    state
-        .hub
-        .log(
-            "system",
-            "info",
-            None,
-            Some(&admin.username),
-            crate::text!("Installation « {0} » supprimée", "Installation “{0}” deleted", "Instalación «{0}» eliminada", inst.name),
-            None,
-        )
-        .await;
+    state.hub.log("system", "info", last_home.then_some(id), Some(&admin.username), message, None).await;
     Ok(StatusCode::NO_CONTENT)
 }
 

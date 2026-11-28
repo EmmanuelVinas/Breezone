@@ -260,6 +260,8 @@ export type Installation = {
   rights: InstallationUserRights
   /** The time each zone spends in demand is recorded (set on the server that owns it). */
   record_demand: boolean
+  /** An Airzone WebServer is reached through it; false: a home of this server without one, whose devices all come from the modules. */
+  airzone: boolean
   connection: Connection
   zones: Zone[]
 }

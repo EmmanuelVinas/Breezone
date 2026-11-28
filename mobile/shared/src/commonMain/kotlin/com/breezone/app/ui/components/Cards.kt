@@ -99,7 +99,8 @@ fun InstallationCard(inst: Installation, serverLabel: String?, onClick: () -> Un
     val hue = hueOf(inst.name)
     val on = inst.zones.count { it.on }
     val temps = inst.zones.mapNotNull { it.roomTemp }
-    val zonesOn = pluralStringResource(Res.plurals.installation_zones_on, on, on, inst.zones.size)
+    // A home without Airzone has no zones: its place says so.
+    val zonesOn = if (inst.airzone) pluralStringResource(Res.plurals.installation_zones_on, on, on, inst.zones.size) else null
     Box(
         Modifier
             .fillMaxWidth()
@@ -116,10 +117,14 @@ fun InstallationCard(inst: Installation, serverLabel: String?, onClick: () -> Un
             modifier = Modifier.size(110.dp).align(Alignment.BottomEnd).padding(start = 8.dp),
         )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Pill(
-                text = connectionLabel(inst.connection.state),
-                leading = { StatusDot(inst.connection.online, inst.connection.state == "unknown") },
-            )
+            if (inst.airzone) {
+                Pill(
+                    text = connectionLabel(inst.connection.state),
+                    leading = { StatusDot(inst.connection.online, inst.connection.state == "unknown") },
+                )
+            } else {
+                Pill(stringResource(Res.string.house_title), leading = { Icon(FzIcons.House, null, Modifier.size(12.dp)) })
+            }
             if (temps.isNotEmpty()) {
                 Text(formatTemp(temps.average()), color = Color.White, style = TempStyle, fontSize = 16.sp)
             }
@@ -132,12 +137,9 @@ fun InstallationCard(inst: Installation, serverLabel: String?, onClick: () -> Un
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = 1,
             )
-            Text(
-                if (serverLabel != null) "$zonesOn · $serverLabel" else zonesOn,
-                color = Color.White.copy(alpha = 0.85f),
-                style = MaterialTheme.typography.bodySmall,
-                maxLines = 1,
-            )
+            listOfNotNull(zonesOn, serverLabel).joinToString(" · ").takeIf { it.isNotEmpty() }?.let {
+                Text(it, color = Color.White.copy(alpha = 0.85f), style = MaterialTheme.typography.bodySmall, maxLines = 1)
+            }
         }
     }
 }

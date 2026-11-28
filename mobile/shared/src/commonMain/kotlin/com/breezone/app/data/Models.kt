@@ -106,6 +106,8 @@ data class Installation(
     val rights: InstallationUserRights = InstallationUserRights(),
     /** The time each zone spends in demand is recorded with the history. */
     val recordDemand: Boolean = false,
+    /** False: a home of the server without an Airzone WebServer, whose devices come from the modules. */
+    val airzone: Boolean = true,
     val connection: Connection = Connection(),
     val zones: List<Zone> = emptyList(),
 )

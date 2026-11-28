@@ -122,6 +122,8 @@ pub struct InstallationView {
     /// The time each zone spends in demand is recorded with the history (set on the server that
     /// owns the installation).
     pub record_demand: bool,
+    /// An Airzone WebServer is reached through it (false: a home of this server without one).
+    pub airzone: bool,
     pub connection: ConnectionView,
     pub zones: Vec<ZoneView>,
 }
@@ -476,6 +478,7 @@ impl InstState {
             controllable: self.controllable,
             rights: InstallationUserRights::default(),
             record_demand: self.record_demand,
+            airzone: self.inst.has_airzone(),
             connection: self.conn.clone(),
             zones,
         }
@@ -747,6 +750,9 @@ impl Hub {
         let (backend, known) = {
             let state = self.state.read().await;
             let s = state.get(&id)?;
+            if !s.inst.has_airzone() {
+                return None;
+            }
             (s.backend.clone(), s.inst.mac.clone())
         };
         let known = known.filter(|m| !m.is_empty());
@@ -798,7 +804,7 @@ impl Hub {
     pub async fn poll_all(self: &Arc<Self>) {
         let ids: Vec<i64> = {
             let state = self.state.read().await;
-            state.values().filter(|s| s.inst.enabled && s.node_id().is_none()).map(|s| s.inst.id).collect()
+            state.values().filter(|s| s.inst.enabled && s.node_id().is_none() && s.inst.has_airzone()).map(|s| s.inst.id).collect()
         };
         // One request per node, for all the installations it exposes; nodes followed live by
         // their link need none.
@@ -816,8 +822,8 @@ impl Hub {
 
     pub async fn poll_one(&self, id: i64) {
         let (backend, commands) = match self.state.read().await.get(&id) {
-            Some(s) => (s.backend.clone(), s.commands),
-            None => return,
+            Some(s) if s.inst.has_airzone() => (s.backend.clone(), s.commands),
+            _ => return,
         };
         let client = match backend {
             Backend::Local(client) => client,

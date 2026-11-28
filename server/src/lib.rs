@@ -171,6 +171,9 @@ async fn bootstrap(state: &AppState) -> anyhow::Result<()> {
             tracing::info!("installation « {} » ({}:{}) added from BREEZONE_AIRZONE_HOSTS", b.name, b.host, b.port);
         }
     }
+    if db::ensure_home(&state.db).await?.is_some() {
+        tracing::info!("home « {} » created: its devices come from the modules, Airzone among them", db::HOME_NAME);
+    }
     Ok(())
 }
 

@@ -41,7 +41,7 @@ enum class AppPage(
     val shown: (PageContext) -> Boolean,
 ) {
     Home(Res.string.house_title, FzIcons.House, { true }),
-    Climate(Res.string.house_climate, FzIcons.Thermometer, { it.installation != null }),
+    Climate(Res.string.house_climate, FzIcons.Thermometer, { it.installation?.airzone == true }),
     Energy(Res.string.house_energy, FzIcons.Zap, { it.modulesHere && it.devices.modules.any { d -> d.role != null } }),
     Solar(Res.string.house_solar, FzIcons.SolarPanel, { it.has(TraitIds.INVERTER) || it.has(TraitIds.FORECAST) }),
     Charging(Res.string.house_charging, FzIcons.PlugZap, { it.has(TraitIds.CHARGER) }),
