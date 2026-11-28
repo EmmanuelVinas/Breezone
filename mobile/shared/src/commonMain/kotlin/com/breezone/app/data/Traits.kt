@@ -234,7 +234,7 @@ data class LightSet(
 @Serializable
 data class SolarInverterState(
     val energyToday: Double = 0.0,
-    val energyTotal: Double = 0.0,
+    val energyTotal: Double? = null,
     val temperature: Double? = null,
     val frequency: Double? = null,
     val panels: Long = 0,
@@ -247,7 +247,7 @@ data class SolarPanelState(
     val voltage: Double? = null,
     val current: Double? = null,
     val energyToday: Double = 0.0,
-    val energyTotal: Double = 0.0,
+    val energyTotal: Double? = null,
     val inverter: String? = null,
     val port: Long = 0,
 )

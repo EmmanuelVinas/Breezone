@@ -1,6 +1,6 @@
 {
   "id": "anker_cloud",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "name": {
     "en": "Anker SOLIX (cloud)",
     "es": "Anker SOLIX (cloud)",
@@ -16,7 +16,9 @@
   "provides": {
     "traits": [
       "energy.battery@1.0",
-      "energy.power@1.0"
+      "energy.power@1.0",
+      "solar.inverter@1.0",
+      "solar.panel@1.0"
     ]
   },
   "models": [

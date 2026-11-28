@@ -8,10 +8,14 @@
 //!   POST power_service/v1/site/get_site_list {} → {data: {site_list: [{site_id, site_name}]}}
 //!   POST power_service/v1/site/get_scen_info {site_id} → {data: {solarbank_info: {solarbank_list: [
 //!        {device_pn, device_sn, device_name, battery_power (%), bat_charge_power, photovoltaic_power,
-//!        output_power}], battery_discharge_power}}}
+//!        solar_power_1…4 (each input), output_power}], battery_discharge_power}}}
 //!
 //! An account logged in here may log the Anker app out: a second account, with which the system is
 //! shared, avoids it. Read only, every minute (the cloud refreshes a SolarBank 2 every few minutes).
+//!
+//! The panels wired to a SolarBank are shown as an inverter and its inputs. The cloud tells their
+//! power, not what they gave today: it is counted here from each read, since midnight (from the
+//! start of the module on its first day).
 
 use aes::cipher::{BlockModeEncrypt, KeyIvInit};
 use base64::engine::general_purpose::STANDARD;
@@ -31,6 +35,8 @@ const TIMEOUT_MS: u32 = 20_000;
 const LIST_EVERY: i64 = 3600;
 /// Below this, the battery neither charges nor discharges.
 const IDLE_W: f64 = 5.0;
+/// Two reads further apart than this are not counted in today's energy.
+const MAX_GAP_S: i64 = 900;
 
 fn md5_hex(s: &str) -> String {
     Md5::digest(s.as_bytes()).iter().map(|b| format!("{b:02x}")).collect()
@@ -228,6 +234,8 @@ pub struct Bank {
     pub sn: String,
     pub pn: String,
     pub name: String,
+    /// The solar inputs whose power the cloud tells (1 to 4).
+    pub ports: Vec<usize>,
 }
 
 /// A number the cloud gives as text ("75", "0.00", "") or as a number.
@@ -247,6 +255,24 @@ pub fn model_of(pn: &str) -> &'static str {
     }
 }
 
+/// The solar inputs of a model, when known (each input has its `solar_power_<n>`).
+fn inputs_of(pn: &str) -> Option<usize> {
+    match pn {
+        "A17C0" => Some(4),
+        "A17C1" | "A17C2" => Some(2),
+        _ => None,
+    }
+}
+
+/// The inputs the cloud tells the power of, up to those of the model.
+fn ports_of(pn: &str, bank: &Value) -> Vec<usize> {
+    let told: Vec<usize> = (1..=4).filter(|n| num(&bank[format!("solar_power_{n}")]).is_some()).collect();
+    match inputs_of(pn) {
+        Some(max) => told.into_iter().filter(|n| *n <= max).collect(),
+        None => told,
+    }
+}
+
 fn banks_of(site: &str, scene: &Value) -> Vec<Bank> {
     scene["solarbank_info"]["solarbank_list"]
         .as_array()
@@ -256,7 +282,8 @@ fn banks_of(site: &str, scene: &Value) -> Vec<Bank> {
             let sn = b["device_sn"].as_str().filter(|s| !s.is_empty())?.to_string();
             let pn = b["device_pn"].as_str().unwrap_or_default().to_string();
             let name = b["device_name"].as_str().filter(|n| !n.trim().is_empty()).map(str::to_string).unwrap_or_else(|| model_of(&pn).to_string());
-            Some(Bank { site: site.to_string(), sn, pn, name })
+            let ports = ports_of(&pn, b);
+            Some(Bank { site: site.to_string(), sn, pn, name, ports })
         })
         .collect()
 }
@@ -265,14 +292,40 @@ fn devices_of(banks: &[Bank]) -> Vec<DeviceInfo> {
     let mut out = vec![];
     for b in banks {
         out.push(device(format!("sb:{}", b.sn), "energy.battery", &["energy.battery@1", "energy.power@1"], b.name.clone()));
-        out.push(device(format!("pv:{}", b.sn), "energy.power", &["energy.power@1"], format!("{} · panneaux", b.name)));
+        out.push(device(format!("pv:{}", b.sn), "solar.inverter", &["energy.power@1", "solar.inverter@1"], format!("{} · panneaux", b.name)));
+        for port in &b.ports {
+            out.push(device(format!("pv:{}:{port}", b.sn), "solar.panel", &["solar.panel@1"], format!("Panneau {port} ({})", b.name)));
+        }
     }
     out
 }
 
+/// What a device gave today, counted from the power of each read.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Counter {
+    day: Option<chrono::NaiveDate>,
+    kwh: f64,
+    last: Option<(i64, f64)>,
+}
+
+impl Counter {
+    /// Adds the energy since the previous read (the mean of both powers), then gives today's.
+    pub fn add(&mut self, tz: chrono_tz::Tz, ts: i64, watts: f64) -> f64 {
+        let day = chrono::DateTime::from_timestamp(ts, 0).map(|t| t.with_timezone(&tz).date_naive());
+        if self.day != day {
+            *self = Counter { day, ..Counter::default() };
+        } else if let Some((at, w)) = self.last.filter(|(at, _)| (1..=MAX_GAP_S).contains(&(ts - at))) {
+            self.kwh += (w + watts) / 2.0 * (ts - at) as f64 / 3_600_000.0;
+        }
+        self.last = Some((ts, watts));
+        (self.kwh * 1000.0).round() / 1000.0
+    }
+}
+
 /// The battery (positive power: it charges, as the energy page counts a battery) and the panels
-/// wired to it.
-fn states_of(bank: &Bank, scene: &Value) -> Vec<(String, State)> {
+/// wired to it, as an inverter and its inputs; `today` gives what a device gave today from its
+/// power now.
+fn states_of(bank: &Bank, scene: &Value, today: &mut dyn FnMut(&str, f64) -> f64) -> Vec<(String, State)> {
     let info = &scene["solarbank_info"];
     let Some(b) = info["solarbank_list"].as_array().into_iter().flatten().find(|b| b["device_sn"].as_str() == Some(bank.sn.as_str())) else { return vec![] };
     let single = info["solarbank_list"].as_array().map_or(0, Vec::len) == 1;
@@ -302,9 +355,24 @@ fn states_of(bank: &Bank, scene: &Value) -> Vec<(String, State)> {
     if let Some(w) = num(&b["output_power"]) {
         battery.insert("output_power".into(), json!(w.max(0.0)));
     }
+    let solar = solar.unwrap_or(0.0).max(0.0);
+    let inverter = format!("pv:{}", bank.sn);
     let mut panels = State::new();
-    panels.insert("power".into(), json!(solar.unwrap_or(0.0).max(0.0)));
-    vec![(format!("sb:{}", bank.sn), battery), (format!("pv:{}", bank.sn), panels)]
+    panels.insert("power".into(), json!(solar));
+    panels.insert("energy_today".into(), json!(today(&inverter, solar)));
+    panels.insert("panels".into(), json!(bank.ports.len()));
+    let mut out = vec![(format!("sb:{}", bank.sn), battery), (inverter, panels)];
+    for port in &bank.ports {
+        let reference = format!("pv:{}:{port}", bank.sn);
+        let w = num(&b[format!("solar_power_{port}")]).unwrap_or(0.0).max(0.0);
+        let mut s = State::new();
+        s.insert("power".into(), json!(w));
+        s.insert("energy_today".into(), json!(today(&reference, w)));
+        s.insert("inverter".into(), json!(bank.sn));
+        s.insert("port".into(), json!(port));
+        out.push((reference, s));
+    }
+    out
 }
 
 fn sites(tz: chrono_tz::Tz) -> Result<Vec<(String, String)>> {
@@ -328,6 +396,7 @@ fn scene(tz: chrono_tz::Tz, site: &str) -> Result<Value> {
 pub struct AnkerCloud {
     tz: chrono_tz::Tz,
     banks: RefCell<(Vec<Bank>, Option<i64>)>,
+    today: RefCell<std::collections::HashMap<String, Counter>>,
 }
 
 impl AnkerCloud {
@@ -354,7 +423,7 @@ fn tz_of(config: &Value) -> chrono_tz::Tz {
 
 impl Driver for AnkerCloud {
     fn open(config: Value, _secret: Option<Value>) -> Result<Self> {
-        Ok(AnkerCloud { tz: tz_of(&config), banks: RefCell::new((vec![], None)) })
+        Ok(AnkerCloud { tz: tz_of(&config), banks: RefCell::new((vec![], None)), today: RefCell::new(Default::default()) })
     }
 
     fn describe(&self) -> Result<Described> {
@@ -373,8 +442,11 @@ impl Driver for AnkerCloud {
         sites.dedup();
         for site in sites {
             let s = scene(self.tz, site)?;
+            let now = host::now();
+            let mut counters = self.today.borrow_mut();
+            let mut today = |reference: &str, w: f64| counters.entry(reference.to_string()).or_default().add(self.tz, now, w);
             for b in banks.iter().filter(|b| b.site == site) {
-                out.extend(states_of(b, &s));
+                out.extend(states_of(b, &s, &mut today));
             }
         }
         Ok(out)
@@ -412,9 +484,27 @@ impl Driver for AnkerCloud {
                 "updated_time": info["updated_time"],
                 "scene_mode": s["scene_mode"],
                 "home_load_power": s["home_load_power"],
+                // The Smart Meter and the plugs of the site, and its totals: to read them later.
+                "grid_info": anonymous(&s["grid_info"]),
+                "smart_plug_info": anonymous(&s["smart_plug_info"]),
+                "statistics": s["statistics"],
             }));
         }
         Ok(json!({"sites": out}))
+    }
+}
+
+/// A value of the cloud without what tells who owns it (serial numbers, names, pictures).
+fn anonymous(v: &Value) -> Value {
+    match v {
+        Value::Object(o) => {
+            let mut o = o.clone();
+            o.retain(|k, _| !["device_sn", "device_name", "device_img", "site_id", "site_name"].contains(&k.as_str()));
+            o.values_mut().for_each(|v| *v = anonymous(v));
+            Value::Object(o)
+        }
+        Value::Array(a) => a.iter().map(anonymous).collect::<Vec<_>>().into(),
+        _ => v.clone(),
     }
 }
 
@@ -455,7 +545,8 @@ mod tests {
     fn scene_json() -> Value {
         json!({"code": 0, "data": {"solarbank_info": {
             "solarbank_list": [{"device_pn": "A17C2", "device_sn": "SB2AC0001", "device_name": "Garage", "battery_power": "75",
-                                "bat_charge_power": "120", "charging_power": "120", "photovoltaic_power": "300", "output_power": "180"}],
+                                "bat_charge_power": "120", "charging_power": "120", "photovoltaic_power": "300", "output_power": "180",
+                                "solar_power_1": "170", "solar_power_2": "130", "solar_power_3": "0", "solar_power_4": ""}],
             "battery_discharge_power": "0", "to_home_load": "180"}, "scene_mode": 1}})
     }
 
@@ -479,13 +570,28 @@ mod tests {
     #[test]
     fn a_solarbank_and_its_panels() {
         let banks = banks_of("s1", &scene_json()["data"]);
-        assert_eq!(banks, vec![Bank { site: "s1".into(), sn: "SB2AC0001".into(), pn: "A17C2".into(), name: "Garage".into() }]);
-        assert_eq!(devices_of(&banks).len(), 2);
-        let states: std::collections::HashMap<String, State> = states_of(&banks[0], &scene_json()["data"]).into_iter().collect();
+        assert_eq!(banks, vec![Bank { site: "s1".into(), sn: "SB2AC0001".into(), pn: "A17C2".into(), name: "Garage".into(), ports: vec![1, 2] }], "an AC has two inputs");
+        assert_eq!(devices_of(&banks).len(), 4);
+        let states: std::collections::HashMap<String, State> = states_of(&banks[0], &scene_json()["data"], &mut |_, _| 0.0).into_iter().collect();
         let b = &states["sb:SB2AC0001"];
         assert_eq!((b["soc"].clone(), b["power"].clone(), b["status"].clone()), (json!(75), json!(120.0), json!("charging")));
         assert_eq!((b["solar_power"].clone(), b["output_power"].clone()), (json!(300.0), json!(180.0)));
-        assert_eq!(states["pv:SB2AC0001"]["power"], 300.0);
+        assert_eq!((states["pv:SB2AC0001"]["power"].clone(), states["pv:SB2AC0001"]["panels"].clone()), (json!(300.0), json!(2)));
+        let panel = &states["pv:SB2AC0001:1"];
+        assert_eq!((panel["power"].clone(), panel["port"].clone(), panel["inverter"].clone()), (json!(170.0), json!(1), json!("SB2AC0001")));
+        assert_eq!(states["pv:SB2AC0001:2"]["power"], 130.0);
+    }
+
+    #[test]
+    fn today_counts_the_power_of_each_read_and_starts_again_at_midnight() {
+        let paris = chrono_tz::Europe::Paris;
+        // 2026-06-01 10:00 in Paris.
+        let t = 1_780_300_800;
+        let mut c = Counter::default();
+        assert_eq!(c.add(paris, t, 600.0), 0.0);
+        assert_eq!(c.add(paris, t + 60, 600.0), 0.01, "600 W for a minute");
+        assert_eq!(c.add(paris, t + 60 + 3600, 0.0), 0.01, "a gap is not counted");
+        assert_eq!(c.add(paris, t + 14 * 3600, 100.0), 0.0, "the next day");
     }
 
     #[test]
@@ -494,7 +600,7 @@ mod tests {
         s["solarbank_info"]["solarbank_list"][0]["bat_charge_power"] = json!("0");
         s["solarbank_info"]["solarbank_list"][0]["charging_power"] = json!("0");
         s["solarbank_info"]["battery_discharge_power"] = json!("250");
-        let states: std::collections::HashMap<String, State> = states_of(&banks_of("s1", &s)[0], &s).into_iter().collect();
+        let states: std::collections::HashMap<String, State> = states_of(&banks_of("s1", &s)[0], &s, &mut |_, _| 0.0).into_iter().collect();
         assert_eq!((states["sb:SB2AC0001"]["power"].clone(), states["sb:SB2AC0001"]["status"].clone()), (json!(-250.0), json!("discharging")));
     }
 
