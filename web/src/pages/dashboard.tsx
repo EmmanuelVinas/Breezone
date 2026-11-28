@@ -35,6 +35,10 @@ import { useGroupPower, useZoneControl } from "@/hooks/use-zone-control"
 import { cn } from "@/lib/utils"
 import { ConfirmDialog } from "@/components/confirm"
 import { PageHeader } from "@/components/app-shell"
+import { Board } from "@/components/overview/board"
+import { useOverview } from "@/components/overview/context"
+import { useHomeData } from "@/components/overview/home-data"
+import { climateLayout } from "@/components/overview/model"
 import { WeatherCard } from "@/components/weather-card"
 import { ConnectionDot } from "@/components/connection-badge"
 import { ZoneCard } from "@/components/zone-card"
@@ -67,9 +71,12 @@ function hue(seed: string) {
 function InstallationTile({
   inst,
   active,
+  devices,
 }: {
   inst: Installation
   active: boolean
+  /** The devices of the modules, shown on a home without Airzone. */
+  devices: number
 }) {
   const on = inst.zones.filter((z) => z.on).length
   const temps = inst.zones
@@ -94,14 +101,20 @@ function InstallationTile({
     >
       <Home className="absolute -right-4 -bottom-4 size-28 opacity-15" />
       <div className="flex items-center justify-between">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-black/25 px-2.5 py-1 text-[11px] font-medium backdrop-blur">
-          <ConnectionDot state={inst.connection.state} className="size-2" />
-          {inst.connection.state === "online"
-            ? t("Connectée")
-            : inst.connection.state === "offline"
-              ? t("Hors ligne")
-              : t("En attente")}
-        </span>
+        {inst.airzone ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-black/25 px-2.5 py-1 text-[11px] font-medium backdrop-blur">
+            <ConnectionDot state={inst.connection.state} className="size-2" />
+            {inst.connection.state === "online"
+              ? t("Connectée")
+              : inst.connection.state === "offline"
+                ? t("Hors ligne")
+                : t("En attente")}
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-black/25 px-2.5 py-1 text-[11px] font-medium backdrop-blur">
+            <Home className="size-3" /> {t("Maison")}
+          </span>
+        )}
         {avg !== null && (
           <span className="tabular inline-flex items-center gap-1 text-sm font-semibold">
             <Thermometer className="size-3.5" />
@@ -119,12 +132,14 @@ function InstallationTile({
             inst.node && t("via {name}", { name: inst.node.name }),
           ]
             .filter(Boolean)
-            .join(" · ") || installationAddress(inst)}
+            .join(" · ") || (inst.airzone ? installationAddress(inst) : "")}
         </div>
         <div className="mt-1 text-xs opacity-85">
-          {tn(on, "{n}/{total} zone allumée", "{n}/{total} zones allumées", {
-            total: inst.zones.length,
-          })}
+          {inst.airzone
+            ? tn(on, "{n}/{total} zone allumée", "{n}/{total} zones allumées", {
+                total: inst.zones.length,
+              })
+            : tn(devices, "{n} appareil", "{n} appareils")}
         </div>
       </div>
     </Link>
@@ -339,6 +354,42 @@ function ZoneGroup({
   )
 }
 
+/** A group of zones of the installation shown (`null`: the zones of no group), with their modes. */
+export function ClimateZonesBlock({ group }: { group: string | null }) {
+  const { installation } = useOverview()
+  const zones = useMemo(() => installation?.zones ?? [], [installation])
+  // History points are written every 5 minutes: no need to read the trends more often.
+  const trendQuery = useQuery({
+    queryKey: ["trends", installation?.id],
+    queryFn: () => api.trends(installation!.id),
+    enabled: installation !== undefined,
+    refetchInterval: 300_000,
+  })
+  const trends = useMemo(
+    () =>
+      new Map(
+        (trendQuery.data ?? []).map((z) => [
+          `${z.system_id}-${z.zone_id}`,
+          z.points,
+        ])
+      ),
+    [trendQuery.data]
+  )
+  const modes = useMemo(() => systemModePlacement(zones), [zones])
+  const g = groupZones(zones).find((x) => (x.name ?? null) === group)
+  if (!installation || !g) return null
+  return (
+    <ZoneGroup
+      name={g.name}
+      zones={g.zones}
+      readOnly={!installation.controllable}
+      masters={modes.byGroup.get(g.name) ?? []}
+      labelled={modes.systems > 1}
+      trends={trends}
+    />
+  )
+}
+
 function EmptyState() {
   const admin = currentUser()?.role === "admin"
   return (
@@ -351,6 +402,40 @@ function EmptyState() {
               "Connectez votre compte Airzone pour tout importer automatiquement, ou recherchez les WebServers Airzone sur votre réseau."
             )
           : t("Un administrateur doit d'abord ajouter une installation.")}
+      </p>
+      {admin && (
+        <div className="mt-6 flex flex-wrap justify-center gap-2">
+          <Button asChild>
+            <Link to="/settings?tab=modules&airzone=cloud">
+              {t("Importer depuis Airzone")}
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link to="/settings?tab=modules&airzone=installations">
+              <Search /> {t("Rechercher sur le réseau")}
+            </Link>
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** The climate of a home without Airzone: it comes from its WebServer, to add. */
+function NoAirzone() {
+  const admin = currentUser()?.role === "admin"
+  return (
+    <div className="flex flex-col items-center rounded-3xl border border-dashed bg-card/40 px-6 py-16 text-center">
+      <Thermometer className="size-10 text-muted-foreground" />
+      <h2 className="mt-4 text-lg font-semibold">
+        {t("Pas de climatisation Airzone")}
+      </h2>
+      <p className="mt-1 max-w-md text-sm text-muted-foreground">
+        {admin
+          ? t(
+              "Airzone est une intégration parmi d'autres : connectez votre compte Airzone, ou recherchez son WebServer sur votre réseau, pour l'ajouter à votre maison."
+            )
+          : t("Un administrateur doit d'abord ajouter le WebServer Airzone.")}
       </p>
       {admin && (
         <div className="mt-6 flex flex-wrap justify-center gap-2">
@@ -383,6 +468,7 @@ export function DashboardPage({
   const navigate = useNavigate()
   const status = useQuery({ queryKey: ["status"], queryFn: api.status })
   const cloud = useQuery({ queryKey: ["cloud"], queryFn: api.cloud })
+  const home = useHomeData()
   // Settings of the selected installation, for its administrators.
   const [settingsOpen, setSettingsOpen] = useState(false)
   const configs = useQuery({
@@ -406,7 +492,19 @@ export function DashboardPage({
     onError: (e) => toast.error(e instanceof Error ? e.message : String(e)),
   })
 
-  const installations = useMemo(() => status.data ?? [], [status.data])
+  const all = useMemo(() => status.data ?? [], [status.data])
+  // Airzone is one integration among others: the climate shows the installations that have it.
+  const installations = useMemo(
+    () => (view === "climate" ? all.filter((i) => i.airzone) : all),
+    [all, view]
+  )
+  const devices = useQuery({ queryKey: ["devices"], queryFn: api.devices })
+  const moduleDevices = (devices.data ?? []).filter(
+    (d) => d.installation_id === null
+  ).length
+  // The last home of this server stays: deleting it only removes its WebServer.
+  const lastHome = (i: Installation) =>
+    i.access === "local" && all.filter((x) => x.access === "local").length === 1
   const remote = (cloud.data?.installations ?? []).filter((c) => !c.reachable)
   const selectedId = Number(
     params.id ?? lastInstallationId() ?? installations[0]?.id
@@ -418,24 +516,6 @@ export function DashboardPage({
     () => systemModePlacement(selected?.zones ?? []),
     [selected]
   )
-  // History points are written every 5 minutes: no need to read the trends more often.
-  const trendQuery = useQuery({
-    queryKey: ["trends", selected?.id],
-    queryFn: () => api.trends(selected!.id),
-    enabled: selected !== undefined,
-    refetchInterval: 300_000,
-  })
-  const trends = useMemo(
-    () =>
-      new Map(
-        (trendQuery.data ?? []).map((z) => [
-          `${z.system_id}-${z.zone_id}`,
-          z.points,
-        ])
-      ),
-    [trendQuery.data]
-  )
-
   useEffect(() => {
     if (selected) rememberInstallation(selected.id)
     if (
@@ -463,12 +543,138 @@ export function DashboardPage({
     )
   }
 
+  const settingsDialog = settingsOpen && selected && (
+    <InstallationDialog
+      initial={configs.data?.find((c) => c.id === selected.id)}
+      onClose={() => setSettingsOpen(false)}
+    />
+  )
+  if (view === "climate" && selected) {
+    const intro = (
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div className="min-w-0">
+          <h2 className="truncate text-xl font-semibold">{selected.name}</h2>
+          <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+            {selected.location && (
+              <span className="inline-flex items-center gap-1">
+                <MapPin className="size-3.5" /> {selected.location}
+              </span>
+            )}
+            {!selected.enabled && (
+              <Badge variant="secondary">{t("Désactivée")}</Badge>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7"
+              onClick={() => refresh.mutate(selected.id)}
+              aria-label={t("Actualiser")}
+            >
+              <RefreshCw className={cn(refresh.isPending && "animate-spin")} />
+            </Button>
+            {selected.rights.admin && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  onClick={() => setSettingsOpen(true)}
+                  aria-label={t("Réglages de l'installation")}
+                >
+                  <Settings2 />
+                </Button>
+                <Confirm
+                  title={t("Supprimer « {name} » ?", {
+                    name: selected.name,
+                  })}
+                  description={
+                    lastHome(selected)
+                      ? t(
+                          "Le WebServer est retiré de cette maison : ses zones et leur historique sont supprimés. La maison, ses pièces et ses appareils restent. Le WebServer n'est pas modifié."
+                        )
+                      : t(
+                          "Son historique et ses réglages Breezone seront supprimés. Le WebServer n'est pas modifié."
+                        )
+                  }
+                  onConfirm={() => remove.mutate(selected.id)}
+                >
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7"
+                    aria-label={t("Supprimer")}
+                  >
+                    <Trash2 />
+                  </Button>
+                </Confirm>
+              </>
+            )}
+          </div>
+        </div>
+        {selected.controllable && (
+          <SystemModes masters={modes.header} labelled={modes.systems > 1} />
+        )}
+      </div>
+    )
+    if (selected.zones.length === 0)
+      return (
+        <>
+          <PageHeader title={t("Climatisation")} />
+          {intro}
+          <div className="rounded-3xl border border-dashed p-10 text-center text-sm text-muted-foreground">
+            {selected.connection.state === "offline"
+              ? selected.node
+                ? t(
+                    "Le serveur {node} ne transmet pas cette installation : {error}",
+                    {
+                      node: selected.node.name,
+                      error: selected.connection.last_error ?? "",
+                    }
+                  )
+                : t("Le WebServer {address} ne répond pas : {error}", {
+                    address: `${selected.host}:${selected.port}`,
+                    error: selected.connection.last_error ?? "",
+                  })
+              : t("En attente des données du WebServer…")}
+          </div>
+          {settingsDialog}
+        </>
+      )
+    return (
+      <>
+        <Board
+          page="climate"
+          title={t("Climatisation")}
+          data={{ ...home.page, installation: selected }}
+          generated={climateLayout(groups.map((g) => g.name))}
+          intro={intro}
+        />
+        {settingsDialog}
+      </>
+    )
+  }
+
   return (
     <>
       <PageHeader
         title={view === "climate" ? t("Climatisation") : t("Mes installations")}
+        actions={
+          view === "installations" &&
+          selected?.rights.admin && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSettingsOpen(true)}
+            >
+              <Settings2 />{" "}
+              {t("Réglages de « {name} »", { name: selected.name })}
+            </Button>
+          )
+        }
       />
-      {installations.length === 0 && remote.length === 0 ? (
+      {view === "climate" && all.length > 0 && installations.length === 0 ? (
+        <NoAirzone />
+      ) : installations.length === 0 && remote.length === 0 ? (
         <EmptyState />
       ) : (
         <>
@@ -479,6 +685,7 @@ export function DashboardPage({
                   key={i.id}
                   inst={i}
                   active={i.id === selected?.id}
+                  devices={moduleDevices}
                 />
               ))}
               {remote.map((c) => (
@@ -487,107 +694,6 @@ export function DashboardPage({
             </div>
           )}
           {view === "installations" && <WeatherCard />}
-
-          {view === "climate" && selected && (
-            <>
-              <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <h2 className="truncate text-xl font-semibold">
-                    {selected.name}
-                  </h2>
-                  <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                    {selected.location && (
-                      <span className="inline-flex items-center gap-1">
-                        <MapPin className="size-3.5" /> {selected.location}
-                      </span>
-                    )}
-                    {!selected.enabled && (
-                      <Badge variant="secondary">{t("Désactivée")}</Badge>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="size-7"
-                      onClick={() => refresh.mutate(selected.id)}
-                      aria-label={t("Actualiser")}
-                    >
-                      <RefreshCw
-                        className={cn(refresh.isPending && "animate-spin")}
-                      />
-                    </Button>
-                    {selected.rights.admin && (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-7"
-                          onClick={() => setSettingsOpen(true)}
-                          aria-label={t("Réglages de l'installation")}
-                        >
-                          <Settings2 />
-                        </Button>
-                        <Confirm
-                          title={t("Supprimer « {name} » ?", {
-                            name: selected.name,
-                          })}
-                          description={t(
-                            "Son historique et ses réglages Breezone seront supprimés. Le WebServer n'est pas modifié."
-                          )}
-                          onConfirm={() => remove.mutate(selected.id)}
-                        >
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-7"
-                            aria-label={t("Supprimer")}
-                          >
-                            <Trash2 />
-                          </Button>
-                        </Confirm>
-                      </>
-                    )}
-                  </div>
-                </div>
-                {selected.controllable && (
-                  <SystemModes
-                    masters={modes.header}
-                    labelled={modes.systems > 1}
-                  />
-                )}
-              </div>
-
-              {selected.zones.length === 0 ? (
-                <div className="rounded-3xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-                  {selected.connection.state === "offline"
-                    ? selected.node
-                      ? t(
-                          "Le serveur {node} ne transmet pas cette installation : {error}",
-                          {
-                            node: selected.node.name,
-                            error: selected.connection.last_error ?? "",
-                          }
-                        )
-                      : t("Le WebServer {address} ne répond pas : {error}", {
-                          address: `${selected.host}:${selected.port}`,
-                          error: selected.connection.last_error ?? "",
-                        })
-                    : t("En attente des données du WebServer…")}
-                </div>
-              ) : (
-                groups.map((g) => (
-                  <ZoneGroup
-                    key={g.name ?? "_"}
-                    name={g.name}
-                    zones={g.zones}
-                    readOnly={!selected.controllable}
-                    masters={modes.byGroup.get(g.name) ?? []}
-                    labelled={modes.systems > 1}
-                    trends={trends}
-                  />
-                ))
-              )}
-            </>
-          )}
         </>
       )}
       {settingsOpen && selected && (

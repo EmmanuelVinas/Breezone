@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import type { ReactNode } from "react"
 import { useQuery } from "@tanstack/react-query"
 import {
@@ -16,10 +16,13 @@ import { CalendarDays, CloudSun, Leaf, Sun, UtilityPole } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { api } from "@/lib/api"
 import { forecastAt, useSolarForecast } from "@/lib/forecast"
-import { SurplusProgramme } from "@/components/surplus"
 import { kwh, percent, stateNumber, time, watts } from "@/lib/format"
 import { locale, t, tn } from "@/lib/i18n"
 import { PageHeader } from "@/components/app-shell"
+import { Board } from "@/components/overview/board"
+import { useOverview } from "@/components/overview/context"
+import { useHomeData } from "@/components/overview/home-data"
+import { solarLayout } from "@/components/overview/model"
 import { PeriodPicker } from "@/components/period-picker"
 import type { HistoryPeriod } from "@/lib/periods"
 import { PERIOD_LABEL, periodsFor } from "@/lib/periods"
@@ -37,7 +40,6 @@ import {
 } from "@/components/ui/chart"
 import type { ChartConfig } from "@/components/ui/chart"
 import { Skeleton } from "@/components/ui/skeleton"
-import { SolarPanels } from "@/components/solar-panels"
 
 const SUN = "var(--warning)"
 
@@ -484,12 +486,9 @@ export function DaysCard() {
   )
 }
 
-export function SolarPage() {
-  const devices = useQuery({
-    queryKey: ["devices"],
-    queryFn: api.devices,
-    refetchInterval: 5_000,
-  })
+/** The production now and today, the share used at home, what went to the grid. */
+export function SolarKpisBlock() {
+  const { devices } = useOverview()
   const live = useQuery({
     queryKey: ["energy-live"],
     queryFn: api.energyLive,
@@ -501,11 +500,7 @@ export function SolarPage() {
     refetchInterval: 60_000,
   })
   const forecast = useSolarForecast()
-  const all = devices.data ?? []
-  const inverters = all.filter((d) => d.traits.includes("solar.inverter@1"))
-  const panels = all.filter((d) => d.traits.includes("solar.panel@1"))
-  const now0 = new Date()
-  const day = `${now0.getFullYear()}-${String(now0.getMonth() + 1).padStart(2, "0")}-${String(now0.getDate()).padStart(2, "0")}`
+  const inverters = devices.filter((d) => d.traits.includes("solar.inverter@1"))
   // The production as the energy page counts it (a meter on the line, else the inverters).
   const now =
     live.data?.solar ?? sum(inverters.map((i) => stateNumber(i, "power")))
@@ -517,33 +512,77 @@ export function SolarPage() {
     totals?.production && totals.self_consumed !== null
       ? totals.self_consumed / totals.production
       : null
-
   return (
-    <>
-      <PageHeader
-        title={t("Solaire")}
-        description={
-          inverters.length
-            ? [
-                tn(
-                  inverters.length,
-                  "{n} micro-onduleur",
-                  "{n} micro-onduleurs"
-                ),
-                tn(panels.length, "{n} panneau", "{n} panneaux"),
-              ].join(" · ")
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <Kpi
+        icon={Sun}
+        label={t("En ce moment")}
+        value={watts(now)}
+        color={SUN}
+      />
+      <Kpi
+        icon={CalendarDays}
+        label={t("Aujourd'hui")}
+        value={kwh(produced)}
+        sub={
+          forecast.today !== null
+            ? t("sur {kwh} prévus", { kwh: kwh(forecast.today) })
             : undefined
         }
+        color={SUN}
       />
-      {devices.isLoading ? (
+      <Kpi
+        icon={Leaf}
+        label={t("Autoconsommation")}
+        value={selfShare === null ? "–" : percent(selfShare)}
+        sub={t("de la production utilisée sur place")}
+        color="var(--primary)"
+      />
+      <Kpi
+        icon={UtilityPole}
+        label={t("Injectée")}
+        value={kwh(totals?.exported ?? null)}
+        sub={t("rendue au réseau aujourd'hui")}
+        color="var(--cool)"
+      />
+    </div>
+  )
+}
+
+export function SolarPage() {
+  useQuery({
+    queryKey: ["devices"],
+    queryFn: api.devices,
+    refetchInterval: 5_000,
+  })
+  const home = useHomeData()
+  const forecast = useSolarForecast()
+  const all = home.page.devices
+  const inverters = all.filter((d) => d.traits.includes("solar.inverter@1"))
+  const panels = all.filter((d) => d.traits.includes("solar.panel@1"))
+  const hasForecast = !!forecast.device
+  const generated = useMemo(
+    () => solarLayout(inverters.length > 0, hasForecast),
+    [inverters.length, hasForecast]
+  )
+  const description = inverters.length
+    ? [
+        tn(inverters.length, "{n} micro-onduleur", "{n} micro-onduleurs"),
+        tn(panels.length, "{n} panneau", "{n} panneaux"),
+      ]
+    : []
+
+  if (home.loading)
+    return (
+      <>
+        <PageHeader title={t("Solaire")} />
         <Skeleton className="h-96 w-full rounded-3xl" />
-      ) : inverters.length === 0 && forecast.device ? (
-        <div className="grid gap-6">
-          <ForecastCard />
-          <TodayCurve />
-          <SurplusProgramme />
-        </div>
-      ) : inverters.length === 0 ? (
+      </>
+    )
+  if (inverters.length === 0 && !hasForecast)
+    return (
+      <>
+        <PageHeader title={t("Solaire")} />
         <Card className="rounded-3xl">
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
             <span className="grid size-12 place-items-center rounded-2xl bg-warning/15 text-warning">
@@ -559,50 +598,15 @@ export function SolarPage() {
             </p>
           </CardContent>
         </Card>
-      ) : (
-        <div className="grid gap-6">
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            <Kpi
-              icon={Sun}
-              label={t("En ce moment")}
-              value={watts(now)}
-              color={SUN}
-            />
-            <Kpi
-              icon={CalendarDays}
-              label={t("Aujourd'hui")}
-              value={kwh(produced)}
-              sub={
-                forecast.today !== null
-                  ? t("sur {kwh} prévus", { kwh: kwh(forecast.today) })
-                  : undefined
-              }
-              color={SUN}
-            />
-            <Kpi
-              icon={Leaf}
-              label={t("Autoconsommation")}
-              value={selfShare === null ? "–" : percent(selfShare)}
-              sub={t("de la production utilisée sur place")}
-              color="var(--primary)"
-            />
-            <Kpi
-              icon={UtilityPole}
-              label={t("Injectée")}
-              value={kwh(totals?.exported ?? null)}
-              sub={t("rendue au réseau aujourd'hui")}
-              color="var(--cool)"
-            />
-          </div>
-          <SolarPanels devices={all} today={day} withCurve />
-          <div className="grid gap-4 lg:grid-cols-2">
-            <TodayCurve />
-            <DaysCard />
-          </div>
-          {forecast.device && <ForecastCard />}
-          <SurplusProgramme />
-        </div>
-      )}
-    </>
+      </>
+    )
+  return (
+    <Board
+      page="solar"
+      title={t("Solaire")}
+      description={description}
+      data={home.page}
+      generated={generated}
+    />
   )
 }

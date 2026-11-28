@@ -28,6 +28,9 @@ import {
 } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { t } from "@/lib/i18n"
+import { Board } from "@/components/overview/board"
+import { useHomeData } from "@/components/overview/home-data"
+import { chargingLayout } from "@/components/overview/model"
 import { PageHeader } from "@/components/app-shell"
 import {
   ChargeNowDialog,
@@ -659,57 +662,23 @@ export function ChargingPage() {
     queryFn: api.devices,
     refetchInterval: 5_000,
   })
-  const chargers = (devices.data ?? []).filter((d) =>
+  const home = useHomeData()
+  const chargers = home.page.devices.filter((d) =>
     d.traits.includes("ev.charger@1")
   )
   const admin = currentUser()?.role === "admin"
-  return (
-    <>
-      <PageHeader
-        title={t("Recharge")}
-        description={
-          chargers.length === 1
-            ? [
-                chargers[0].name,
-                DRIVER_LABEL[chargers[0].source] ?? chargers[0].source,
-                typeof chargers[0].state?.limit_max === "number"
-                  ? t("{kw} kW max", {
-                      kw: number(
-                        ((chargers[0].state.limit_max as number) * 230) / 1000,
-                        1
-                      ),
-                    })
-                  : null,
-              ]
-                .filter(Boolean)
-                .join(" · ")
-            : undefined
-        }
-        actions={
-          chargers.length > 0 && (
-            <Badge variant="outline" className="gap-1.5">
-              <span
-                className={cn(
-                  "size-2 rounded-full",
-                  chargers.every((c) => c.available)
-                    ? "bg-success"
-                    : "bg-destructive"
-                )}
-              />
-              {chargers.every((c) => c.available)
-                ? t("Connectée")
-                : t("Injoignable")}{" "}
-              ·{" "}
-              {t("relevé {when}", {
-                when: relativeTime(devices.dataUpdatedAt / 1000),
-              })}
-            </Badge>
-          )
-        }
-      />
-      {devices.isLoading ? (
+  const generated = chargingLayout(chargers)
+  if (home.loading)
+    return (
+      <>
+        <PageHeader title={t("Recharge")} />
         <Skeleton className="h-72 w-full rounded-3xl" />
-      ) : chargers.length === 0 ? (
+      </>
+    )
+  if (chargers.length === 0)
+    return (
+      <>
+        <PageHeader title={t("Recharge")} />
         <Card className="rounded-3xl">
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
             <span className="grid size-12 place-items-center rounded-2xl bg-primary/15 text-primary">
@@ -732,17 +701,49 @@ export function ChargingPage() {
             )}
           </CardContent>
         </Card>
-      ) : (
-        <div className="grid gap-8">
-          {chargers.map((d) => (
-            <ChargerCard
-              key={d.id}
-              device={d}
-              readAt={devices.dataUpdatedAt / 1000}
-            />
-          ))}
-        </div>
+      </>
+    )
+  return (
+    <Board
+      page="charging"
+      title={t("Recharge")}
+      description={
+        chargers.length === 1
+          ? [
+              chargers[0].name,
+              DRIVER_LABEL[chargers[0].source] ?? chargers[0].source,
+              typeof chargers[0].state?.limit_max === "number"
+                ? t("{kw} kW max", {
+                    kw: number(
+                      ((chargers[0].state.limit_max as number) * 230) / 1000,
+                      1
+                    ),
+                  })
+                : null,
+            ]
+          : []
+      }
+      data={home.page}
+      generated={generated}
+      actions={() => (
+        <Badge variant="outline" className="gap-1.5">
+          <span
+            className={cn(
+              "size-2 rounded-full",
+              chargers.every((c) => c.available)
+                ? "bg-success"
+                : "bg-destructive"
+            )}
+          />
+          {chargers.every((c) => c.available)
+            ? t("Connectée")
+            : t("Injoignable")}{" "}
+          ·{" "}
+          {t("relevé {when}", {
+            when: relativeTime(devices.dataUpdatedAt / 1000),
+          })}
+        </Badge>
       )}
-    </>
+    />
   )
 }

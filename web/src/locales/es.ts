@@ -1525,8 +1525,6 @@ const es: Record<string, string> = {
   "Vue enregistrée pour vous": "Vista guardada para usted",
   "Vue enregistrée pour tous": "Vista guardada para todos",
   "Vue par défaut rétablie": "Vista por defecto restablecida",
-  "Ajoutez une installation pour composer sa vue d'ensemble.":
-    "Añada una instalación para componer su vista general.",
   "Votre vue": "Su vista",
   "Vue de l'installation": "Vista de la instalación",
   "Vue proposée": "Vista propuesta",
@@ -2349,6 +2347,23 @@ const es: Record<string, string> = {
     "Por orden de prioridad: el excedente va primero al primero.",
   "Chaque ligne ouvre son automatisme ; l'ordre se change avec « Priorités » dans Automatismes.":
     "Cada línea abre su automatización; el orden se cambia con «Prioridades» en Automatizaciones.",
+  "Lumières d'une pièce": "Luces de una estancia",
+  "Volets d'une pièce": "Persianas de una estancia",
+  "Bouches de ventilation": "Bocas de ventilación",
+  "Chiffres du solaire": "Cifras solares",
+  "Zones de climatisation": "Zonas de climatización",
+  "Groupe de zones": "Grupo de zonas",
+  "Aucune scène sur plusieurs pièces.": "Ninguna escena en varias estancias.",
+  "WebServer Airzone (facultatif)": "WebServer Airzone (opcional)",
+  "Pas de climatisation Airzone": "Sin climatización Airzone",
+  "Airzone est une intégration parmi d'autres : connectez votre compte Airzone, ou recherchez son WebServer sur votre réseau, pour l'ajouter à votre maison.":
+    "Airzone es una integración entre otras: conecte su cuenta Airzone, o busque su WebServer en su red, para añadirlo a su casa.",
+  "Un administrateur doit d'abord ajouter le WebServer Airzone.":
+    "Un administrador debe añadir primero el WebServer Airzone.",
+  "Le WebServer est retiré de cette maison : ses zones et leur historique sont supprimés. La maison, ses pièces et ses appareils restent. Le WebServer n'est pas modifié.":
+    "El WebServer se retira de esta casa: sus zonas y su historial se eliminan. La casa, sus habitaciones y sus dispositivos permanecen. El WebServer no se modifica.",
+  "Réglages de « {name} »": "Ajustes de «{name}»",
+  "sans WebServer Airzone": "sin WebServer Airzone",
 }
 
 export default es

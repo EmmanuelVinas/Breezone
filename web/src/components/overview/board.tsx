@@ -148,6 +148,8 @@ export function Board({
   shows,
   actions,
   loading,
+  aside,
+  intro,
 }: {
   page: DashboardPage
   title: string
@@ -160,13 +162,19 @@ export function Board({
   /** Shown beside "Modifier" out of the edit mode. */
   actions?: (source: DashboardView["source"] | undefined) => ReactNode
   loading?: boolean
+  /** Beside the blocks on a large screen (the detail of the device chosen), kept while arranging. */
+  aside?: ReactNode
+  /** Between the title and the blocks (the installation of the climate page, its modes). */
+  intro?: ReactNode
 }) {
   const qc = useQueryClient()
-  const id = data.installation.id
+  // Without an installation there is nowhere to keep a layout: the page as it comes.
+  const id = data.installation?.id ?? 0
   const key = ["dashboard", id, page]
   const dashboard = useQuery({
     queryKey: key,
     queryFn: () => api.dashboard(id, page),
+    enabled: data.installation !== undefined,
   })
   const [draft, setDraft] = useState<DashboardBlock[] | null>(null)
   const [dialog, setDialog] = useState<{ block?: DashboardBlock } | null>(null)
@@ -275,18 +283,21 @@ export function Board({
                   {t("Revenir à la vue de l'installation")}
                 </Button>
               )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setDraft(blocks)}
-              >
-                <Pencil /> {t("Modifier")}
-              </Button>
+              {data.installation && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDraft(blocks)}
+                >
+                  <Pencil /> {t("Modifier")}
+                </Button>
+              )}
             </div>
           )
         }
       />
-      {dashboard.isLoading || loading ? (
+      {intro}
+      {(dashboard.isLoading && data.installation) || loading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[0, 1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-32 rounded-3xl" />
@@ -302,19 +313,27 @@ export function Board({
             items={blocks.map((b) => b.id)}
             strategy={rectSortingStrategy}
           >
-            <div className="grid grid-flow-dense gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {blocks.map((b) => (
-                <Slot
-                  key={b.id}
-                  block={b}
-                  editing={editing}
-                  onSize={(size) => change(b.id, { size })}
-                  onSettings={() => setDialog({ block: b })}
-                  onRemove={() =>
-                    setDraft((d) => (d ?? []).filter((x) => x.id !== b.id))
-                  }
-                />
-              ))}
+            <div
+              className={cn(
+                aside &&
+                  "grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]"
+              )}
+            >
+              <div className="grid grid-flow-dense gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {blocks.map((b) => (
+                  <Slot
+                    key={b.id}
+                    block={b}
+                    editing={editing}
+                    onSize={(size) => change(b.id, { size })}
+                    onSettings={() => setDialog({ block: b })}
+                    onRemove={() =>
+                      setDraft((d) => (d ?? []).filter((x) => x.id !== b.id))
+                    }
+                  />
+                ))}
+              </div>
+              {aside}
             </div>
           </SortableContext>
         </DndContext>

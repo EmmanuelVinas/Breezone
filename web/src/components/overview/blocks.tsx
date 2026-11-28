@@ -37,11 +37,30 @@ import {
 } from "@/components/electricity/electricity-tab"
 import { usePrice, useTariff } from "@/components/electricity/hooks"
 import { ZoneCard } from "@/components/zone-card"
-import { LIGHT_BRAND, LightCard, LightPanel, LightScenes } from "@/pages/lights"
-import { ShutterCard } from "@/pages/shutters"
-import { House, isRoom, isUnit, RoomCard } from "@/pages/ventilation"
+import {
+  LIGHT_BRAND,
+  LightCard,
+  LightPanel,
+  LightRoomBlock,
+  LightScenes,
+  wideScenes,
+} from "@/pages/lights"
+import { ShutterCard, ShutterRoomBlock } from "@/pages/shutters"
+import {
+  House,
+  isRoom,
+  isUnit,
+  RoomCard,
+  VentilationValvesBlock,
+} from "@/pages/ventilation"
 import { ChargerCard, PowerCurve } from "@/pages/charging"
-import { DaysCard, ForecastCard, TodayCurve } from "@/pages/solar"
+import {
+  DaysCard,
+  ForecastCard,
+  SolarKpisBlock,
+  TodayCurve,
+} from "@/pages/solar"
+import { ClimateZonesBlock } from "@/pages/dashboard"
 import { SolarPanels } from "@/components/solar-panels"
 import { ZoneHistory } from "@/components/zone-history"
 import { AirQualityCard } from "@/components/air-quality"
@@ -580,7 +599,7 @@ function DeviceBlock({ id, curve }: { id: number; curve?: string }) {
       return <RemoteCard device={d} />
     case "climate": {
       const ref = d.reference as { system_id?: number; zone_id?: number }
-      const zone = installation.zones.find(
+      const zone = installation?.zones.find(
         (z) => z.system_id === ref.system_id && z.zone_id === ref.zone_id
       )
       if (zone)
@@ -868,7 +887,7 @@ function ScenesBlock({ ids }: { ids?: number[] }) {
     ids && ids.length > 0
       ? ids.includes(r.id)
       : r.actions.some(
-          (a) => isDeviceAction(a) || a.installation_id === installation.id
+          (a) => isDeviceAction(a) || a.installation_id === installation?.id
         )
   )
   return (
@@ -903,7 +922,7 @@ function useZone(id: number) {
   const d = devices.find((x) => x.id === id)
   const ref = d ? zoneOf(d) : undefined
   return ref
-    ? installation.zones.find(
+    ? installation?.zones.find(
         (z) => z.system_id === ref.system_id && z.zone_id === ref.zone_id
       )
     : undefined
@@ -957,14 +976,35 @@ function VentilationBlock() {
   return <House unit={unit} rooms={rooms} canDrive={unit.can_control} />
 }
 
-function LightScenesBlock() {
+/** The scenes of the lights: all of them, or (`wide`, the lights page) those over several rooms. */
+function LightScenesBlock({
+  wide,
+  editing,
+}: {
+  wide: boolean
+  editing: boolean
+}) {
+  const { devices } = useOverview()
   const scenes = useQuery({
     queryKey: ["scenes"],
     queryFn: api.scenes,
     staleTime: 60_000,
   })
-  const list = scenes.data ?? []
-  if (list.length === 0) return <Placeholder label={t("Aucune scène.")} />
+  const all = scenes.data ?? []
+  const list = wide
+    ? wideScenes(
+        all,
+        devices.filter((d) => d.traits.includes("light@1"))
+      )
+    : all
+  if (list.length === 0)
+    return wide && !editing ? null : (
+      <Placeholder
+        label={
+          wide ? t("Aucune scène sur plusieurs pièces.") : t("Aucune scène.")
+        }
+      />
+    )
   return (
     <LightScenes scenes={list} canDrive={currentUser()?.role === "admin"} />
   )
@@ -1057,8 +1097,8 @@ function Placeholder({ label }: { label: string }) {
 function WeatherBlock({ editing }: { editing: boolean }) {
   const { installation } = useOverview()
   const weather = useQuery({
-    queryKey: ["weather", installation.id],
-    queryFn: () => api.weather(installation.id),
+    queryKey: ["weather", installation?.id],
+    queryFn: () => api.weather(installation?.id),
     refetchInterval: 10 * 60_000,
   })
   if (weather.data?.weather) return <WeatherCard className="h-full" />
@@ -1130,7 +1170,29 @@ export function BlockView({
     case "air_quality":
       return <AirQualityBlock id={Number(c.device_id)} />
     case "light_scenes":
-      return <LightScenesBlock />
+      return <LightScenesBlock wide={c.wide === true} editing={editing} />
+    case "light_room":
+      return (
+        <LightRoomBlock
+          room={typeof c.room_id === "number" ? c.room_id : null}
+        />
+      )
+    case "shutter_room":
+      return (
+        <ShutterRoomBlock
+          room={typeof c.room_id === "number" ? c.room_id : null}
+        />
+      )
+    case "ventilation_valves":
+      return <VentilationValvesBlock />
+    case "solar_kpis":
+      return <SolarKpisBlock />
+    case "climate_zones":
+      return (
+        <ClimateZonesBlock
+          group={typeof c.group === "string" ? c.group : null}
+        />
+      )
     case "light_panel":
       return <LightPanelBlock config={c} />
     case "charger":

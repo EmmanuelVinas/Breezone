@@ -20,6 +20,11 @@ import {
 import { t, tn } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { PageHeader } from "@/components/app-shell"
+import { Board } from "@/components/overview/board"
+import { useOverview } from "@/components/overview/context"
+import { useHomeData } from "@/components/overview/home-data"
+import { shuttersLayout } from "@/components/overview/model"
+import { SelectionContext, useSelection } from "@/components/overview/selection"
 import { RoomTitle } from "@/components/room-title"
 import { RoomSelect } from "@/components/room-select"
 import { Button } from "@/components/ui/button"
@@ -304,76 +309,100 @@ function Detail({
   )
 }
 
+/** The shutters of a room (`null`: without a room): all open or closed, and each one. */
+export function ShutterRoomBlock({ room }: { room: number | null }) {
+  const { devices, rooms } = useOverview()
+  const { selected, select } = useSelection()
+  const command = useCommand()
+  const covers = devices.filter(isCover).filter((d) => d.room_id === room)
+  if (covers.length === 0) return null
+  const opened = covers.filter(isOpen)
+  const every = (position: number) =>
+    command.mutate(
+      covers
+        .filter((d) => d.available && d.can_control)
+        .map((d) => ({ device: d, action: "set" as const, position }))
+    )
+  return (
+    <section className="grid gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-baseline gap-2">
+          <RoomTitle room={rooms.find((r) => r.id === room) ?? null} />
+          <span className="text-sm text-muted-foreground">
+            {tn(covers.length, "{n} volet", "{n} volets")} ·{" "}
+            {tn(opened.length, "{n} ouvert", "{n} ouverts")}
+          </span>
+        </div>
+        <div className="flex gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={command.isPending || !covers.some((d) => d.can_control)}
+            onClick={() => every(100)}
+          >
+            <ChevronUp /> {t("Tout ouvrir")}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={command.isPending || !covers.some((d) => d.can_control)}
+            onClick={() => every(0)}
+          >
+            <ChevronDown /> {t("Tout fermer")}
+          </Button>
+        </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {covers.map((d) => (
+          <ShutterCard
+            key={d.id}
+            device={d}
+            selected={selected === d.id}
+            onSelect={() => select(d.id)}
+            canDrive={d.can_control}
+          />
+        ))}
+      </div>
+    </section>
+  )
+}
+
 export function ShuttersPage() {
   const admin = currentUser()?.role === "admin"
-  const devices = useQuery({
+  // Faster while one moves: its position shows as it goes.
+  useQuery({
     queryKey: ["devices"],
     queryFn: api.devices,
-    // Faster while one moves: its position shows as it goes.
     refetchInterval: (q) =>
       (q.state.data ?? []).some((d) => isCover(d) && isMoving(d))
         ? 1_500
         : 5_000,
   })
-  const rooms = useQuery({ queryKey: ["rooms"], queryFn: api.rooms })
+  const home = useHomeData()
   const [selected, setSelected] = useState<number | null>(null)
   const command = useCommand()
-  const all = (devices.data ?? []).filter(isCover)
+  const all = home.page.devices.filter(isCover)
+  const rooms = home.page.rooms
   const open = all.filter(isOpen)
   const usable = all.filter((d) => d.available && d.can_control)
-  const groups: { room: Room | null; covers: DeviceView[] }[] = [
-    ...(rooms.data ?? []).map((r) => ({
-      room: r,
-      covers: all.filter((d) => d.room_id === r.id),
-    })),
-    { room: null, covers: all.filter((d) => d.room_id === null) },
-  ].filter((g) => g.covers.length > 0)
   const shown = all.find((d) => d.id === selected) ?? all[0]
-  const every = (list: DeviceView[], position: number) =>
+  const generated = shuttersLayout(rooms, all)
+  const every = (position: number) =>
     command.mutate(
-      list
-        .filter((d) => d.available && d.can_control)
-        .map((d) => ({ device: d, action: "set" as const, position }))
+      usable.map((d) => ({ device: d, action: "set" as const, position }))
     )
 
-  return (
-    <>
-      <PageHeader
-        title={t("Volets")}
-        description={
-          all.length
-            ? t("{open} ouvert(s) sur {total}", {
-                open: open.length,
-                total: all.length,
-              })
-            : undefined
-        }
-        actions={
-          all.length > 0 && (
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={command.isPending || usable.length === 0}
-                onClick={() => every(all, 100)}
-              >
-                <ChevronUp /> {t("Tout ouvrir")}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={command.isPending || usable.length === 0}
-                onClick={() => every(all, 0)}
-              >
-                <ChevronDown /> {t("Tout fermer")}
-              </Button>
-            </div>
-          )
-        }
-      />
-      {devices.isLoading ? (
+  if (home.loading)
+    return (
+      <>
+        <PageHeader title={t("Volets")} />
         <Skeleton className="h-72 w-full rounded-3xl" />
-      ) : all.length === 0 ? (
+      </>
+    )
+  if (all.length === 0)
+    return (
+      <>
+        <PageHeader title={t("Volets")} />
         <Card className="rounded-3xl">
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
             <span className="grid size-12 place-items-center rounded-2xl bg-primary/15 text-primary">
@@ -396,72 +425,55 @@ export function ShuttersPage() {
             )}
           </CardContent>
         </Card>
-      ) : (
-        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
-          <div className="grid gap-6">
-            {groups.map((g) => {
-              const opened = g.covers.filter(isOpen)
-              return (
-                <section key={g.room?.id ?? "none"} className="grid gap-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-baseline gap-2">
-                      <RoomTitle room={g.room} />
-                      <span className="text-sm text-muted-foreground">
-                        {tn(g.covers.length, "{n} volet", "{n} volets")} ·{" "}
-                        {tn(opened.length, "{n} ouvert", "{n} ouverts")}
-                      </span>
-                    </div>
-                    <div className="flex gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={
-                          command.isPending ||
-                          !g.covers.some((d) => d.can_control)
-                        }
-                        onClick={() => every(g.covers, 100)}
-                      >
-                        <ChevronUp /> {t("Tout ouvrir")}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={
-                          command.isPending ||
-                          !g.covers.some((d) => d.can_control)
-                        }
-                        onClick={() => every(g.covers, 0)}
-                      >
-                        <ChevronDown /> {t("Tout fermer")}
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                    {g.covers.map((d) => (
-                      <ShutterCard
-                        key={d.id}
-                        device={d}
-                        selected={shown?.id === d.id}
-                        onSelect={() => setSelected(d.id)}
-                        canDrive={d.can_control}
-                      />
-                    ))}
-                  </div>
-                </section>
-              )
-            })}
-          </div>
-          {shown && (
+      </>
+    )
+  return (
+    <SelectionContext.Provider
+      value={{ selected: shown?.id ?? null, select: setSelected }}
+    >
+      <Board
+        page="shutters"
+        title={t("Volets")}
+        description={[
+          t("{open} ouvert(s) sur {total}", {
+            open: open.length,
+            total: all.length,
+          }),
+        ]}
+        data={home.page}
+        generated={generated}
+        actions={() => (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={command.isPending || usable.length === 0}
+              onClick={() => every(100)}
+            >
+              <ChevronUp /> {t("Tout ouvrir")}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={command.isPending || usable.length === 0}
+              onClick={() => every(0)}
+            >
+              <ChevronDown /> {t("Tout fermer")}
+            </Button>
+          </>
+        )}
+        aside={
+          shown && (
             <Detail
               key={shown.id}
               device={shown}
-              rooms={rooms.data ?? []}
+              rooms={rooms}
               canDrive={shown.can_control}
               admin={admin}
             />
-          )}
-        </div>
-      )}
-    </>
+          )
+        }
+      />
+    </SelectionContext.Provider>
   )
 }

@@ -1,5 +1,12 @@
 package com.breezone.app.ui.screens
 
+import com.breezone.app.data.BlockTypes
+import com.breezone.app.data.MobilePages
+import com.breezone.app.data.fixedBlock
+import com.breezone.app.ui.home.HomeNav
+import com.breezone.app.ui.home.PageBoard
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -68,12 +75,15 @@ fun InstallationScreen(
     installationId: Long,
     section: Int,
     onBack: (() -> Unit)?,
-    onOpenZone: (Zone) -> Unit,
+    nav: HomeNav,
 ) {
     val hub = koinInject<Hub>()
     val servers by hub.servers.collectAsState()
-    val commandStatus by hub.commandStatus.collectAsState()
     val inst = servers.installation(serverId, installationId)
+    if (section == 0) {
+        ClimatePage(serverId, installationId, inst, nav, onBack)
+        return
+    }
 
     Scaffold(
         topBar = {
@@ -105,7 +115,6 @@ fun InstallationScreen(
         val content = Modifier.fillMaxSize().padding(padding)
         FzPullRefresh({ hub.reload(serverId) }, Modifier.fillMaxSize(), top = padding.calculateTopPadding()) {
             when (section) {
-                0 -> InstallationZones(serverId, inst, commandStatus, onOpenZone, content)
                 1 -> InstallationRoutines(serverId, inst, canEdit = inst.controllable && inst.rights.routines, content)
                 else -> InstallationSchedules(serverId, inst, canEdit = inst.controllable && inst.rights.schedules, content)
             }
@@ -121,29 +130,70 @@ internal val INSTALLATION_SECTIONS = listOf(
     Res.string.installation_tab_schedules to FzIcons.CalendarClock,
 )
 
+/** The connection of an installation in the top bar: a dot, and words when it is offline. */
 @Composable
-private fun InstallationZones(
-    serverId: String,
-    inst: Installation,
-    commandStatus: Map<String, CommandStatus>,
-    onOpenZone: (Zone) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val hub = koinInject<Hub>()
-    val modes = remember(inst.zones) { systemModePlacement(inst.zones) }
-    val labelled = modes.systems > 1
-    var pendingMode by remember { mutableStateOf<Pair<Zone, Mode>?>(null) }
-    var trends by remember(inst.id) { mutableStateOf<Map<Pair<Long, Long>, List<List<Double>>>>(emptyMap()) }
-    // History points are written every 5 minutes: no need to read the trends more often.
-    LaunchedEffect(serverId, inst.id) {
-        while (true) {
-            runCatching { hub.api(serverId)?.trends(inst.id) }.getOrNull()?.let { list ->
-                trends = list.associate { (it.systemId to it.zoneId) to it.points }
-            }
-            delay(300_000)
+private fun ConnectionMark(inst: Installation) {
+    val connection = inst.connection
+    Row(Modifier.padding(end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        StatusDot(connection.online, connection.state == "unknown")
+        // Online needs no words: the dot says it. Offline is worth spelling out.
+        if (!connection.online && connection.state != "unknown") {
+            Spacer(Modifier.size(6.dp))
+            Caption(stringResource(Res.string.connection_offline))
         }
     }
-    val onMode: (Zone, Mode) -> Unit = { master, mode -> pendingMode = master to mode }
+}
+
+/** The climate of an installation: its systems' modes, then a card per group of zones (arranged by each user). */
+@Composable
+private fun ClimatePage(serverId: String, installationId: Long, inst: Installation?, nav: HomeNav, onBack: (() -> Unit)?) {
+    PageBoard(
+        serverId = serverId,
+        installationId = installationId,
+        page = MobilePages.CLIMATE,
+        title = stringResource(Res.string.house_climate),
+        subtitle = inst?.let { listOfNotNull(it.name, it.location?.takeIf(String::isNotBlank)).joinToString(" · ") },
+        onBack = onBack,
+        nav = nav,
+        everyMs = 30_000,
+        generated = { ctx ->
+            groupZones(ctx.installation?.zones.orEmpty()).map { (group, _) ->
+                fixedBlock("group-${group.orEmpty()}", BlockTypes.CLIMATE_ZONES, config = mapOf("group" to (group?.let(::JsonPrimitive) ?: JsonNull)))
+            }
+        },
+        actions = { inst?.let { ConnectionMark(it) } },
+        header = {
+            if (inst == null) {
+                item(key = TYPE_MESSAGE, contentType = TYPE_MESSAGE) { Muted(stringResource(Res.string.installation_not_found)) }
+            } else {
+                item(key = TYPE_MODES, contentType = TYPE_MODES) { ClimateModes(serverId, inst, header = true, group = null) }
+                if (inst.zones.isEmpty()) {
+                    item(key = TYPE_MESSAGE, contentType = TYPE_MESSAGE) {
+                        Muted(
+                            if (inst.connection.state == "offline") {
+                                stringResource(Res.string.installation_offline, inst.connection.lastError.orEmpty())
+                            } else {
+                                stringResource(Res.string.installation_waiting)
+                            },
+                        )
+                    }
+                }
+            }
+        },
+    )
+}
+
+/**
+ * The modes of the systems: those whose zones span several groups ([header]), or those of one
+ * group. A mode is confirmed before it is sent (it is the whole system's).
+ */
+@Composable
+private fun ClimateModes(serverId: String, inst: Installation, header: Boolean, group: String?) {
+    val hub = koinInject<Hub>()
+    val modes = remember(inst.zones) { systemModePlacement(inst.zones) }
+    var pendingMode by remember { mutableStateOf<Pair<Zone, Mode>?>(null) }
+    val masters = if (header) modes.header else modes.byGroup[group].orEmpty()
+    if (!inst.controllable || masters.isEmpty()) return
     pendingMode?.let { (master, mode) ->
         ModeConfirmation(
             mode = mode,
@@ -155,50 +205,45 @@ private fun InstallationZones(
             onDismiss = { pendingMode = null },
         )
     }
-    LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 160.dp),
-            modifier = modifier,
-            contentPadding = SectionListPadding,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            if (inst.controllable && modes.header.isNotEmpty()) {
-                item(key = TYPE_MODES, span = { GridItemSpan(maxLineSpan) }, contentType = TYPE_MODES) {
-                    SystemModes(modes.header, labelled, onMode)
+    SystemModes(masters, modes.systems > 1) { master, mode -> pendingMode = master to mode }
+}
+
+/** A group of zones of the installation (`null`: those of no group): all on or off, its modes, its zones. */
+@Composable
+internal fun ClimateGroupCard(serverId: String, inst: Installation, group: String?, onOpenZone: (Zone) -> Unit) {
+    val hub = koinInject<Hub>()
+    val commandStatus by hub.commandStatus.collectAsState()
+    var trends by remember(inst.id) { mutableStateOf<Map<Pair<Long, Long>, List<List<Double>>>>(emptyMap()) }
+    // History points are written every 5 minutes: no need to read the trends more often.
+    LaunchedEffect(serverId, inst.id) {
+        while (true) {
+            runCatching { hub.api(serverId)?.trends(inst.id) }.getOrNull()?.let { list ->
+                trends = list.associate { (it.systemId to it.zoneId) to it.points }
+            }
+            delay(300_000)
+        }
+    }
+    val zones = groupZones(inst.zones).firstOrNull { it.first == group }?.second ?: return
+    val on = zones.count { it.on }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(group ?: stringResource(Res.string.installation_group_default), style = MaterialTheme.typography.titleMedium)
+                    Caption(pluralStringResource(Res.plurals.installation_group_on, on, on, zones.size))
+                }
+                TextButton(onClick = { hub.setPower(serverId, zones, true, group) }, enabled = on < zones.size) {
+                    Text(stringResource(Res.string.installation_all_on))
+                }
+                TextButton(onClick = { hub.setPower(serverId, zones, false, group) }, enabled = on > 0) {
+                    Text(stringResource(Res.string.installation_all_off))
                 }
             }
-            if (inst.zones.isEmpty()) {
-                item(key = TYPE_MESSAGE, span = { GridItemSpan(maxLineSpan) }, contentType = TYPE_MESSAGE) {
-                    Muted(
-                        if (inst.connection.state == "offline") {
-                            stringResource(Res.string.installation_offline, inst.connection.lastError.orEmpty())
-                        } else {
-                            stringResource(Res.string.installation_waiting)
-                        },
-                    )
-                }
-            }
-            groupZones(inst.zones).forEach { (group, zones) ->
-                item(key = "group-${group.orEmpty()}", span = { GridItemSpan(maxLineSpan) }, contentType = TYPE_GROUP) {
-                    val on = zones.count { it.on }
-                    Column(Modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text(group ?: stringResource(Res.string.installation_group_default), style = MaterialTheme.typography.titleMedium)
-                                Caption(pluralStringResource(Res.plurals.installation_group_on, on, on, zones.size))
-                            }
-                            TextButton(onClick = { hub.setPower(serverId, zones, true, group) }, enabled = on < zones.size) {
-                                Text(stringResource(Res.string.installation_all_on))
-                            }
-                            TextButton(onClick = { hub.setPower(serverId, zones, false, group) }, enabled = on > 0) {
-                                Text(stringResource(Res.string.installation_all_off))
-                            }
-                        }
-                        val masters = modes.byGroup[group].orEmpty()
-                        if (inst.controllable && masters.isNotEmpty()) SystemModes(masters, labelled, onMode)
-                    }
-                }
-                items(zones, key = { "zone-${it.systemId}-${it.zoneId}" }, contentType = { TYPE_ZONE }) { zone ->
+            ClimateModes(serverId, inst, header = false, group = group)
+        }
+        zones.chunked(2).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                row.forEach { zone ->
                     ZoneCard(
                         zone = zone,
                         status = commandStatus[commandKey(serverId, zone)],
@@ -206,9 +251,12 @@ private fun InstallationZones(
                         onSetpoint = { hub.control(serverId, zone, ZoneCommand(setpoint = it)) },
                         onClick = { onOpenZone(zone) },
                         trend = trends[zone.systemId to zone.zoneId],
+                        modifier = Modifier.weight(1f),
                     )
                 }
+                if (row.size == 1) Spacer(Modifier.weight(1f))
             }
+        }
     }
 }
 

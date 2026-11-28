@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Link } from "react-router"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
@@ -12,6 +12,11 @@ import type {
 import { t, tn } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { PageHeader } from "@/components/app-shell"
+import { Board } from "@/components/overview/board"
+import { useOverview } from "@/components/overview/context"
+import { useHomeData } from "@/components/overview/home-data"
+import { ventilationLayout } from "@/components/overview/model"
+import { SelectionContext, useSelection } from "@/components/overview/selection"
 import { RoomSelect } from "@/components/room-select"
 import { Sparkline, fieldFormat } from "@/components/sparkline"
 import { PeriodPicker } from "@/components/period-picker"
@@ -579,16 +584,37 @@ export function House({
   )
 }
 
+/** The valves of the ventilation unit, each with its air and its controls. */
+export function VentilationValvesBlock() {
+  const { devices } = useOverview()
+  const { selected, select } = useSelection()
+  const unit = devices.find(isUnit)
+  const valves = devices.filter(
+    (d) => isRoom(d) && (!unit || d.source_id === unit.source_id)
+  )
+  if (valves.length === 0) return null
+  const worst = unit ? unitState(unit).worst_room : undefined
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {valves.map((d) => (
+        <RoomCard
+          key={d.id}
+          device={d}
+          demanding={!!worst && worst === d.name}
+          selected={selected === d.id}
+          onSelect={() => select(d.id)}
+          canDrive={d.can_control}
+        />
+      ))}
+    </div>
+  )
+}
+
 export function VentilationPage() {
   const admin = currentUser()?.role === "admin"
-  const devices = useQuery({
-    queryKey: ["devices"],
-    queryFn: api.devices,
-    refetchInterval: 15_000,
-  })
-  const rooms = useQuery({ queryKey: ["rooms"], queryFn: api.rooms })
+  const home = useHomeData()
   const [selected, setSelected] = useState<number | null>(null)
-  const all = devices.data ?? []
+  const all = home.page.devices
   const unit = all.find(isUnit)
   const valves = all.filter(
     (d) => isRoom(d) && (!unit || d.source_id === unit.source_id)
@@ -597,27 +623,19 @@ export function VentilationPage() {
   const cause = unit ? CAUSE[unitState(unit).main_pollutant ?? "other"] : null
   const shown = valves.find((d) => d.id === selected) ?? valves[0]
   const boosting = valves.filter((d) => roomState(d).boost)
+  const generated = useMemo(() => ventilationLayout(), [])
 
-  return (
-    <>
-      <PageHeader
-        title={t("Ventilation")}
-        description={
-          valves.length
-            ? [
-                tn(valves.length, "{n} bouche", "{n} bouches"),
-                boosting.length > 0 &&
-                  tn(boosting.length, "{n} en boost", "{n} en boost"),
-                t("API locale"),
-              ]
-                .filter(Boolean)
-                .join(" · ")
-            : undefined
-        }
-      />
-      {devices.isLoading ? (
+  if (home.loading)
+    return (
+      <>
+        <PageHeader title={t("Ventilation")} />
         <Skeleton className="h-72 w-full rounded-3xl" />
-      ) : !unit ? (
+      </>
+    )
+  if (!unit)
+    return (
+      <>
+        <PageHeader title={t("Ventilation")} />
         <Card className="rounded-3xl">
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
             <span className="grid size-12 place-items-center rounded-2xl bg-air/15 text-air">
@@ -640,36 +658,38 @@ export function VentilationPage() {
             )}
           </CardContent>
         </Card>
-      ) : (
-        <div className="grid gap-5">
-          <House unit={unit} rooms={valves} canDrive={unit.can_control} />
-          <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
-            <div className="grid gap-3 sm:grid-cols-2">
-              {valves.map((d) => (
-                <RoomCard
-                  key={d.id}
-                  device={d}
-                  demanding={!!worst && worst === d.name}
-                  selected={shown?.id === d.id}
-                  onSelect={() => setSelected(d.id)}
-                  canDrive={d.can_control}
-                />
-              ))}
-            </div>
-            {shown && (
-              <Detail
-                key={shown.id}
-                device={shown}
-                demanding={!!worst && worst === shown.name}
-                cause={cause}
-                rooms={rooms.data ?? []}
-                canDrive={shown.can_control}
-                admin={admin}
-              />
-            )}
-          </div>
-        </div>
-      )}
-    </>
+      </>
+    )
+  return (
+    <SelectionContext.Provider
+      value={{ selected: shown?.id ?? null, select: setSelected }}
+    >
+      <Board
+        page="ventilation"
+        title={t("Ventilation")}
+        description={[
+          tn(valves.length, "{n} bouche", "{n} bouches"),
+          boosting.length > 0
+            ? tn(boosting.length, "{n} en boost", "{n} en boost")
+            : null,
+          t("API locale"),
+        ]}
+        data={home.page}
+        generated={generated}
+        aside={
+          shown && (
+            <Detail
+              key={shown.id}
+              device={shown}
+              demanding={!!worst && worst === shown.name}
+              cause={cause}
+              rooms={home.page.rooms}
+              canDrive={shown.can_control}
+              admin={admin}
+            />
+          )
+        }
+      />
+    </SelectionContext.Provider>
   )
 }

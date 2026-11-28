@@ -456,8 +456,14 @@ sans pièce) ou `{type}` (un type d'appareil), avec `hidden` (appareils masqués
 `{routine_ids?}` (aucune : toutes). Un client ignore un type qu'il ne connaît pas.
 
 `?page=` choisit la page (vue d'ensemble par défaut) : `overview`, `energy`, `climate`, `lights`,
-`ventilation`, `charging`, `shutters`, et `mobile`, l'accueil de l'app, que chacun arrange dans l'app,
-à part de la vue d'ensemble du web. L'app y ajoute ses propres types : `pages` (raccourcis des pages),
+`ventilation`, `charging`, `shutters`, `solar` (les pages du web), `mobile`, l'accueil de l'app, et
+`mobile_energy`, `mobile_solar`, `mobile_charging`, `mobile_lights`, `mobile_shutters`,
+`mobile_ventilation`, `mobile_climate`, les pages de l'app, que chacun arrange dans l'app à part de
+celles du web. Les pages du web ajoutent `light_room` `{room_id}` (les lumières d'une pièce, `null` :
+sans pièce), `shutter_room` `{room_id}`, `ventilation_valves`, `solar_kpis`, `climate_zones`
+`{group}` (un groupe de zones de l'installation, `null` : sans groupe) et `light_scenes` `{wide?}`
+(les scènes sur plusieurs pièces seulement) ; l'app, `charger_page` `{device_id?}` (la borne de sa
+page Recharge). L'app y ajoute ses propres types : `pages` (raccourcis des pages),
 `presence`, `zones` `{group?}` (cartes des zones, toutes sans `group`), `energy_flow`,
 `energy_curve`, `energy_breakdown` (les parties de son écran Énergie), et `chart`
 `{device_id, fields, hours}`.

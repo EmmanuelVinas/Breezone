@@ -185,6 +185,18 @@ fun App() {
             }
         }
 
+        // What the cards of a page open: a page of the bar, a device, a zone, the charging profiles.
+        val homeNav: (String) -> HomeNav = { serverId ->
+            HomeNav(
+                openPage = { page -> current?.let { switchTo(nav, page.route(it)) } },
+                openDevice = { d -> openDevice(serverId, d) },
+                openZone = { z -> nav.navigate(ZoneRoute(serverId, z.installationId, z.systemId, z.zoneId)) },
+                openChargeProfiles = { nav.navigate(ChargeProfilesRoute(serverId)) },
+            )
+        }
+        // The installation whose layouts the pages of a server keep: the one shown, if it is this server's.
+        val layoutOf: (String) -> Long? = { serverId -> current?.takeIf { it.serverId == serverId }?.installationId }
+
         Scaffold(
             snackbarHost = { SnackbarHost(snackbar) },
             bottomBar = { if (onRoot) PageBar(nav, destination, items) },
@@ -208,40 +220,40 @@ fun App() {
                     HomeBoard(
                         serverId = r.serverId,
                         installationId = r.installationId,
-                        nav = HomeNav(
-                            openPage = { page -> current?.let { switchTo(nav, page.route(it)) } },
-                            openDevice = { d -> openDevice(r.serverId, d) },
-                            openZone = { z -> nav.navigate(ZoneRoute(r.serverId, z.installationId, z.systemId, z.zoneId)) },
-                        ),
+                        nav = homeNav(r.serverId),
                         onInstallations = { nav.navigate(HomeRoute) },
                     )
                 }
                 composable<InstallationRoute> { entry ->
                     val r = entry.toRoute<InstallationRoute>()
-                    InstallationScreen(r.serverId, r.installationId, section = 0, onBack = null) { z ->
-                        nav.navigate(ZoneRoute(r.serverId, z.installationId, z.systemId, z.zoneId))
-                    }
+                    InstallationScreen(r.serverId, r.installationId, section = 0, onBack = null, nav = homeNav(r.serverId))
                 }
                 composable<RoutinesRoute> { entry ->
                     val r = entry.toRoute<RoutinesRoute>()
-                    InstallationScreen(r.serverId, r.installationId, section = 1, onBack = null) {}
+                    InstallationScreen(r.serverId, r.installationId, section = 1, onBack = null, nav = homeNav(r.serverId))
                 }
                 composable<SchedulesRoute> { entry ->
                     val r = entry.toRoute<SchedulesRoute>()
-                    InstallationScreen(r.serverId, r.installationId, section = 2, onBack = null) {}
+                    InstallationScreen(r.serverId, r.installationId, section = 2, onBack = null, nav = homeNav(r.serverId))
                 }
-                composable<EnergyRoute> { entry -> EnergyScreen(entry.toRoute<EnergyRoute>().serverId) }
-                composable<SolarRoute> { entry -> SolarScreen(entry.toRoute<SolarRoute>().serverId) }
+                composable<EnergyRoute> { entry ->
+                    val id = entry.toRoute<EnergyRoute>().serverId
+                    EnergyScreen(id, layoutOf(id), homeNav(id))
+                }
+                composable<SolarRoute> { entry ->
+                    val id = entry.toRoute<SolarRoute>().serverId
+                    SolarScreen(id, layoutOf(id), homeNav(id))
+                }
                 composable<ChargingRoute> { entry ->
-                    val r = entry.toRoute<ChargingRoute>()
-                    ChargingScreen(r.serverId, onProfiles = { nav.navigate(ChargeProfilesRoute(r.serverId)) })
+                    val id = entry.toRoute<ChargingRoute>().serverId
+                    ChargingScreen(id, layoutOf(id), homeNav(id))
                 }
                 composable<ChargeProfilesRoute> { entry ->
                     ChargeProfilesScreen(entry.toRoute<ChargeProfilesRoute>().serverId, onBack = { nav.popBackStack() })
                 }
                 composable<LightsRoute> { entry ->
                     val r = entry.toRoute<LightsRoute>()
-                    LightsScreen(r.serverId, onBack = null) { nav.navigate(LightRoute(r.serverId, it)) }
+                    LightsScreen(r.serverId, layoutOf(r.serverId), homeNav(r.serverId), onBack = null)
                 }
                 composable<LightRoute> { entry ->
                     val r = entry.toRoute<LightRoute>()
@@ -249,7 +261,7 @@ fun App() {
                 }
                 composable<ShuttersRoute> { entry ->
                     val r = entry.toRoute<ShuttersRoute>()
-                    ShuttersScreen(r.serverId, onBack = null) { nav.navigate(ShutterRoute(r.serverId, it)) }
+                    ShuttersScreen(r.serverId, layoutOf(r.serverId), homeNav(r.serverId), onBack = null)
                 }
                 composable<ShutterRoute> { entry ->
                     val r = entry.toRoute<ShutterRoute>()
@@ -257,7 +269,7 @@ fun App() {
                 }
                 composable<VentilationRoute> { entry ->
                     val r = entry.toRoute<VentilationRoute>()
-                    VentilationScreen(r.serverId, onBack = null) { nav.navigate(VentilationRoomRoute(r.serverId, it)) }
+                    VentilationScreen(r.serverId, layoutOf(r.serverId), homeNav(r.serverId), onBack = null)
                 }
                 composable<VentilationRoomRoute> { entry ->
                     val r = entry.toRoute<VentilationRoomRoute>()

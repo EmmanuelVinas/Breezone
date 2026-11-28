@@ -1,5 +1,12 @@
 package com.breezone.app.ui.screens
 
+import com.breezone.app.data.BlockTypes
+import com.breezone.app.data.MobilePages
+import com.breezone.app.data.fixedBlock
+import com.breezone.app.ui.home.HomeNav
+import com.breezone.app.ui.home.PageBoard
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -128,28 +135,29 @@ internal fun Stat(label: String, value: String, color: Color = MaterialTheme.col
 }
 
 @Composable
-fun EnergyScreen(serverId: String, onBack: (() -> Unit)? = null) {
+fun EnergyScreen(serverId: String, installationId: Long?, nav: HomeNav, onBack: (() -> Unit)? = null) {
     val hub = koinInject<Hub>()
-    val (live, day) = rememberEnergy(hub, serverId)
-    val roles = live?.roles
-    Scaffold(topBar = { FzTopBar(stringResource(Res.string.house_energy), null, onBack) }) { padding ->
-        FzPullRefresh({ hub.reload(serverId) }, Modifier.fillMaxSize(), top = padding.calculateTopPadding()) {
-            LazyColumn(
-                Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                if (live != null && roles?.any == false) {
-                    item(key = "empty", contentType = "note") { SectionCard { Muted(stringResource(Res.string.energy_empty)) } }
-                }
-                if (live != null && roles?.any == true) {
-                    item(key = "now", contentType = "now") { EnergyNowCard(live) }
-                    item(key = "history", contentType = "history") { EnergyHistoryCard(hub, serverId, live.roles) }
-                    if (live.hasUses()) item(key = "uses", contentType = "uses") { EnergyUsesCard(live) }
-                }
-            }
-        }
-    }
+    val (live, _) = rememberEnergy(hub, serverId)
+    PageBoard(
+        serverId = serverId,
+        installationId = installationId,
+        page = MobilePages.ENERGY,
+        readsEnergy = true,
+        title = stringResource(Res.string.house_energy),
+        subtitle = null,
+        onBack = onBack,
+        nav = nav,
+        everyMs = 10_000,
+        generated = { ctx ->
+            if (ctx.live?.roles?.any != true) emptyList()
+            else listOfNotNull(
+                fixedBlock("now", BlockTypes.ENERGY_FLOW),
+                fixedBlock("history", BlockTypes.ENERGY_BARS),
+                fixedBlock("uses", BlockTypes.ENERGY_BREAKDOWN).takeIf { ctx.live.hasUses() },
+            )
+        },
+        header = { if (live != null && !live.roles.any) item(key = "empty", contentType = "note") { SectionCard { Muted(stringResource(Res.string.energy_empty)) } } },
+    )
 }
 
 /** The day's curves of solar and home, with what was made, used and drawn. */
@@ -198,33 +206,27 @@ internal fun EnergyUsesCard(live: EnergyLive) {
 }
 
 @Composable
-fun SolarScreen(serverId: String, onBack: (() -> Unit)? = null) {
-    val hub = koinInject<Hub>()
-    val all by hub.devices.collectAsState()
-    LaunchedEffect(serverId) { hub.followDevices(serverId, everyMs = 10_000) }
-    val (live, day) = rememberEnergy(hub, serverId)
-    val data = all[serverId] ?: ServerDevices()
-    val inverters = data.withTrait(TraitIds.INVERTER)
-    val panels = data.withTrait(TraitIds.PANEL)
-    val sun = data.withTrait(TraitIds.FORECAST).firstOrNull()
-    val forecast = rememberSolarForecast(hub, serverId, sun?.id)
-    val surplus = rememberSurplus(hub, serverId)
-    Scaffold(topBar = { FzTopBar(stringResource(Res.string.house_solar), null, onBack) }) { padding ->
-        FzPullRefresh({ hub.reload(serverId) }, Modifier.fillMaxSize(), top = padding.calculateTopPadding()) {
-            LazyColumn(
-                Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                if (inverters.isNotEmpty() || sun == null) item(key = "now", contentType = "now") { SolarNowCard(live, day, inverters, forecast) }
-                if (sun != null) item(key = "forecast", contentType = "forecast") { SolarForecastCard(sun, forecast, day) }
-                inverters.forEach { inv ->
-                    item(key = "inv-${inv.id}", contentType = "inverter") { InverterCard(inv, panels) }
-                }
-                if (surplus != null && surplus.loads.isNotEmpty()) item(key = "surplus", contentType = "surplus") { SurplusCard(surplus) }
-            }
-        }
-    }
+fun SolarScreen(serverId: String, installationId: Long?, nav: HomeNav, onBack: (() -> Unit)? = null) {
+    PageBoard(
+        serverId = serverId,
+        installationId = installationId,
+        page = MobilePages.SOLAR,
+        title = stringResource(Res.string.house_solar),
+        subtitle = null,
+        onBack = onBack,
+        nav = nav,
+        everyMs = 10_000,
+        generated = { ctx ->
+            val inverters = ctx.server.withTrait(TraitIds.INVERTER)
+            val sun = ctx.server.withTrait(TraitIds.FORECAST).firstOrNull()
+            listOfNotNull(
+                fixedBlock("now", BlockTypes.SOLAR_TODAY).takeIf { inverters.isNotEmpty() || sun == null },
+                fixedBlock("forecast", BlockTypes.SOLAR_FORECAST).takeIf { sun != null },
+                fixedBlock("panels", BlockTypes.SOLAR_PANELS).takeIf { inverters.isNotEmpty() },
+                fixedBlock("surplus", BlockTypes.ENERGY_SURPLUS),
+            )
+        },
+    )
 }
 
 /** The power a forecast device expects along today and tomorrow, read again every 10 minutes. */
@@ -390,39 +392,24 @@ fun chargerLabel(shown: ChargerShown): String = stringResource(
     },
 )
 
+/**
+ * A charger as its page shows it: what it does now, its plan and profile, its power over time and
+ * its settings (the block of the charging page).
+ */
 @Composable
-fun ChargingScreen(serverId: String, onBack: (() -> Unit)? = null, onProfiles: (() -> Unit)? = null) {
+internal fun ChargerPanel(serverId: String, charger: DeviceView, onProfiles: (() -> Unit)?) {
     val hub = koinInject<Hub>()
-    val all by hub.devices.collectAsState()
-    val status by hub.deviceStatus.collectAsState()
-    LaunchedEffect(serverId) { hub.followDevices(serverId, everyMs = 5_000) }
-    val data = all[serverId] ?: ServerDevices()
-    val charger: DeviceView? = data.withTrait(TraitIds.CHARGER).firstOrNull()
-    val plan = charger?.let { rememberCharging(hub, serverId, it.id) }
+    val plan = rememberCharging(hub, serverId, charger.id)
     var chargeNow by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val change: (suspend BreezoneApi.() -> ChargingView) -> Unit = { call ->
-        scope.launch { hub.changeCharging(serverId, call)?.let { plan?.value = it } }
+        scope.launch { hub.changeCharging(serverId, call)?.let { plan.value = it } }
     }
-    Scaffold(topBar = {
-        FzTopBar(stringResource(Res.string.house_charging), charger?.name, onBack) {
-            charger?.let { CommandIndicator(status["$serverId/${it.id}"], Modifier.padding(end = 16.dp)) }
-        }
-    }) { padding ->
-        FzPullRefresh({ hub.reload(serverId) }, Modifier.fillMaxSize(), top = padding.calculateTopPadding()) {
-            LazyColumn(
-                Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                if (data.loaded && charger == null) {
-                    item(key = "empty", contentType = "note") { SectionCard { Muted(stringResource(Res.string.charging_empty)) } }
-                }
-                if (charger != null) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     val s = charger.stateAs(EvChargerState.serializer()) ?: EvChargerState()
                     val act: (String, JsonObject, JsonObject?) -> Unit = { action, params, optimistic -> hub.act(serverId, charger, "ev.charger", action, params, optimistic) }
-                    val view = plan?.value
-                    item(key = "hero", contentType = "hero") {
+                    val view = plan.value
+                    run {
                         ChargerHero(
                             serverId,
                             charger,
@@ -431,14 +418,14 @@ fun ChargingScreen(serverId: String, onBack: (() -> Unit)? = null, onProfiles: (
                         )
                     }
                     if (view != null) {
-                        item(key = "plan", contentType = "plan") { PlanCard(view) { change { cancelChargeNow(charger.id) } } }
-                        item(key = "profile", contentType = "profile") {
+                        PlanCard(view) { change { cancelChargeNow(charger.id) } }
+                        run {
                             val admin = hub.api(serverId)?.user?.isAdmin == true
                             ProfileCard(view, onManage = onProfiles.takeIf { admin })
                         }
                     }
-                    item(key = "history", contentType = "history") { ChargerPowerCard(serverId, charger) }
-                    item(key = "settings", contentType = "settings") {
+                    ChargerPowerCard(serverId, charger)
+                    run {
                         SectionCard {
                             SectionTitle(stringResource(Res.string.charger_settings))
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -484,16 +471,35 @@ fun ChargingScreen(serverId: String, onBack: (() -> Unit)? = null, onProfiles: (
                             }
                         }
                     }
-                }
-            }
-        }
+
     }
-    if (chargeNow && charger != null) {
+    if (chargeNow) {
         ChargeNowSheet(charger, onDismiss = { chargeNow = false }) { input ->
             chargeNow = false
             change { chargeNow(charger.id, input) }
         }
     }
+}
+
+@Composable
+fun ChargingScreen(serverId: String, installationId: Long?, nav: HomeNav, onBack: (() -> Unit)? = null) {
+    val hub = koinInject<Hub>()
+    val all by hub.devices.collectAsState()
+    val status by hub.deviceStatus.collectAsState()
+    val data = all[serverId] ?: ServerDevices()
+    val charger: DeviceView? = data.withTrait(TraitIds.CHARGER).firstOrNull()
+    PageBoard(
+        serverId = serverId,
+        installationId = installationId,
+        page = MobilePages.CHARGING,
+        title = stringResource(Res.string.house_charging),
+        subtitle = charger?.name,
+        onBack = onBack,
+        nav = nav,
+        generated = { ctx -> ctx.server.withTrait(TraitIds.CHARGER).map { fixedBlock("charger-${it.id}", BlockTypes.CHARGER_PAGE, config = mapOf("device_id" to JsonPrimitive(it.id))) } },
+        actions = { charger?.let { CommandIndicator(status["$serverId/${it.id}"], Modifier.padding(end = 4.dp)) } },
+        header = { if (data.loaded && charger == null) item(key = "empty", contentType = "note") { SectionCard { Muted(stringResource(Res.string.charging_empty)) } } },
+    )
 }
 
 /** A charger now: what it does, the power it draws, its goal, and pause or start. */

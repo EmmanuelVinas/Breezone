@@ -1,5 +1,12 @@
 package com.breezone.app.ui.screens
 
+import com.breezone.app.data.BlockTypes
+import com.breezone.app.data.MobilePages
+import com.breezone.app.data.fixedBlock
+import com.breezone.app.ui.home.HomeNav
+import com.breezone.app.ui.home.PageBoard
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -128,42 +135,38 @@ private fun rememberHistory(hub: Hub, serverId: String, deviceId: Long, hours: I
     return history
 }
 
+/** The valves of the ventilation unit, each with its air: one opens its room. */
 @Composable
-fun VentilationScreen(serverId: String, onBack: (() -> Unit)?, onOpen: (Long) -> Unit) {
+internal fun ValvesCard(data: ServerDevices, onOpen: (Long) -> Unit) {
+    val unit = data.withTrait(TraitIds.VENTILATION_UNIT).firstOrNull() ?: return
+    val valves = data.withTrait(TraitIds.VENTILATION_ROOM).filter { it.sourceId == unit.sourceId }
+    val u = unit.stateAs(VentilationUnitState.serializer()) ?: VentilationUnitState()
+    DeviceGroupCard(stringResource(Res.string.ventilation_rooms), null) {
+        valves.forEach { d -> ValveRow(d, demanding = u.worstRoom == d.name, cause = causeText(u.mainPollutant)) { onOpen(d.id) } }
+    }
+}
+
+@Composable
+fun VentilationScreen(serverId: String, installationId: Long?, nav: HomeNav, onBack: (() -> Unit)?) {
     val hub = koinInject<Hub>()
     val all by hub.devices.collectAsState()
     val status by hub.deviceStatus.collectAsState()
-    LaunchedEffect(serverId) { hub.followDevices(serverId, everyMs = 15_000) }
     val data = all[serverId] ?: ServerDevices()
     val unit = data.withTrait(TraitIds.VENTILATION_UNIT).firstOrNull()
     val valves = data.withTrait(TraitIds.VENTILATION_ROOM).filter { unit == null || it.sourceId == unit.sourceId }
-    val u = unit?.stateAs(VentilationUnitState.serializer()) ?: VentilationUnitState()
-
-    Scaffold(topBar = {
-        FzTopBar(stringResource(Res.string.house_ventilation), pluralStringResource(Res.plurals.ventilation_valves, valves.size, valves.size), onBack) {
-            unit?.let { CommandIndicator(status["$serverId/${it.id}"], Modifier.padding(end = 16.dp)) }
-        }
-    }) { padding ->
-        FzPullRefresh({ hub.reload(serverId) }, Modifier.fillMaxSize(), top = padding.calculateTopPadding()) {
-            LazyColumn(
-                Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                if (data.loaded && unit == null) {
-                    item(key = "empty", contentType = "note") { SectionCard { Muted(stringResource(Res.string.ventilation_empty)) } }
-                }
-                if (unit != null) {
-                    item(key = "house", contentType = "house") { VentilationHouseCard(serverId, unit, valves) }
-                    item(key = "rooms", contentType = "rooms") {
-                        DeviceGroupCard(stringResource(Res.string.ventilation_rooms), null) {
-                            valves.forEach { d -> ValveRow(d, demanding = u.worstRoom == d.name, cause = causeText(u.mainPollutant)) { onOpen(d.id) } }
-                        }
-                    }
-                }
-            }
-        }
-    }
+    PageBoard(
+        serverId = serverId,
+        installationId = installationId,
+        page = MobilePages.VENTILATION,
+        title = stringResource(Res.string.house_ventilation),
+        subtitle = pluralStringResource(Res.plurals.ventilation_valves, valves.size, valves.size),
+        onBack = onBack,
+        nav = nav,
+        everyMs = 15_000,
+        generated = { listOf(fixedBlock("house", BlockTypes.VENTILATION_HOUSE), fixedBlock("valves", BlockTypes.VENTILATION_VALVES)) },
+        actions = { unit?.let { CommandIndicator(status["$serverId/${it.id}"], Modifier.padding(end = 4.dp)) } },
+        header = { if (data.loaded && unit == null) item(key = "empty", contentType = "note") { SectionCard { Muted(stringResource(Res.string.ventilation_empty)) } } },
+    )
 }
 
 @Composable

@@ -15,6 +15,8 @@ import type {
   TraitInfo,
 } from "@/lib/api"
 import { deviceType, typeOrder } from "@/lib/device-icons"
+import { isCover } from "@/lib/covers"
+import { groupZones } from "@/lib/format"
 import { t } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { ROOM_ICONS, roomIconName } from "@/lib/room-icons"
@@ -190,7 +192,11 @@ function available(home: Home): BlockType[] {
       return home.devices.some((d) => zoneOf(d) !== undefined)
     if (b === "air_quality")
       return home.devices.some((d) => measuresAir(d, home))
-    if (b === "light_scenes" || b === "light_panel") return has("light@1")
+    if (b === "light_scenes" || b === "light_panel" || b === "light_room")
+      return has("light@1")
+    if (b === "shutter_room") return home.devices.some(isCover)
+    if (b === "ventilation_valves") return has("ventilation.room@1")
+    if (b === "climate_zones") return (home.installation?.zones.length ?? 0) > 0
     if (b === "charger" || b === "charger_curve") return has("ev.charger@1")
     if (b === "solar_forecast") return has("solar.forecast@1")
     if (b.startsWith("solar_")) return has("solar.inverter@1")
@@ -213,6 +219,9 @@ export function complete(b: DashboardBlock) {
       (c.view === "comfort" || chartSeries(c).length > 0)
     )
   if (b.type === "group") return "room_id" in c || "type" in c
+  if (b.type === "light_room" || b.type === "shutter_room")
+    return "room_id" in c
+  if (b.type === "climate_zones") return "group" in c
   if (b.type === "light_panel")
     return typeof c.device_id === "number" || typeof c.room_id === "number"
   if (b.type === "energy" && Array.isArray(c.flows)) return c.flows.length > 0
@@ -808,6 +817,47 @@ function Settings({
               </label>
             ))}
           </div>
+        </Field>
+      )
+    }
+    case "light_room":
+    case "shutter_room": {
+      const members = home.devices.filter(
+        block.type === "light_room"
+          ? (d) => d.traits.includes("light@1")
+          : isCover
+      )
+      return (
+        <Field label={t("Pièce")}>
+          <Pick
+            value={"room_id" in c ? String(c.room_id ?? "none") : undefined}
+            placeholder={t("Choisir")}
+            onChange={(v) => set({ room_id: v === "none" ? null : Number(v) })}
+            choices={[
+              ...home.rooms
+                .filter((r) => members.some((d) => d.room_id === r.id))
+                .map((r): Choice => ({ value: String(r.id), label: r.name })),
+              ...(members.some((d) => d.room_id === null)
+                ? [{ value: "none", label: t("Sans pièce") }]
+                : []),
+            ]}
+          />
+        </Field>
+      )
+    }
+    case "climate_zones": {
+      const groups = groupZones(home.installation?.zones ?? [])
+      return (
+        <Field label={t("Groupe de zones")}>
+          <Pick
+            value={"group" in c ? String(c.group ?? "") : undefined}
+            placeholder={t("Choisir")}
+            onChange={(v) => set({ group: v === "" ? null : v })}
+            choices={groups.map((g) => ({
+              value: g.name ?? "",
+              label: g.name ?? t("Zones"),
+            }))}
+          />
         </Field>
       )
     }

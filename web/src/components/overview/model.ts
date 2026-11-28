@@ -42,6 +42,11 @@ export type BlockType =
   | "ventilation_rooms"
   | "spacer"
   | "linky"
+  | "light_room"
+  | "shutter_room"
+  | "ventilation_valves"
+  | "solar_kpis"
+  | "climate_zones"
 
 export type EnergyFlow = "solar" | "home" | "battery" | "grid"
 
@@ -76,6 +81,11 @@ export const BLOCK_LABEL: Record<BlockType, string> = {
   ventilation_rooms: t("Graphique des pièces ventilées"),
   spacer: t("Espace vide"),
   linky: t("Consommation Linky"),
+  light_room: t("Lumières d'une pièce"),
+  shutter_room: t("Volets d'une pièce"),
+  ventilation_valves: t("Bouches de ventilation"),
+  solar_kpis: t("Chiffres du solaire"),
+  climate_zones: t("Zones de climatisation"),
 }
 
 /** Where a type of block comes from: the page it is a part of (the menu of blocks groups them). */
@@ -110,6 +120,11 @@ export const BLOCK_GROUP: Record<BlockType, string> = {
   ventilation_rooms: t("Ventilation"),
   spacer: t("Vue d'ensemble"),
   linky: t("Énergie"),
+  light_room: t("Lumières"),
+  shutter_room: t("Volets"),
+  ventilation_valves: t("Ventilation"),
+  solar_kpis: t("Solaire"),
+  climate_zones: t("Climatisation"),
 }
 
 export const FLOW_LABEL: Record<EnergyFlow, string> = {
@@ -157,6 +172,11 @@ export const DEFAULT_SIZE: Record<BlockType, DashboardSize> = {
   ventilation_rooms: "full",
   spacer: "quarter",
   linky: "half",
+  light_room: "full",
+  shutter_room: "full",
+  ventilation_valves: "full",
+  solar_kpis: "full",
+  climate_zones: "full",
 }
 
 export const newId = () => Math.random().toString(36).slice(2, 10)
@@ -329,4 +349,90 @@ export function energyLayout(priced: boolean): DashboardBlock[] {
     block("energy_measures"),
     block("energy_surplus"),
   ]
+}
+
+/** A block of a layout composed by the page: its id stays the same from one render to the next. */
+const fixed = (
+  id: string,
+  type: BlockType,
+  config: Record<string, unknown> = {},
+  size?: DashboardSize
+): DashboardBlock => ({ ...block(type, config, size), id })
+
+/** The rooms that have devices of a kind, in their order, then « without a room » when some have none. */
+function roomsOf(rooms: Room[], devices: DeviceView[]): (number | null)[] {
+  return [
+    ...rooms
+      .filter((r) => devices.some((d) => d.room_id === r.id))
+      .map((r) => r.id),
+    ...(devices.some((d) => d.room_id === null) ? [null] : []),
+  ]
+}
+
+/** The lights page as it comes: the scenes over several rooms, then a block per room. */
+export function lightsLayout(
+  rooms: Room[],
+  lights: DeviceView[]
+): DashboardBlock[] {
+  return [
+    fixed("scenes", "light_scenes", { wide: true }),
+    ...roomsOf(rooms, lights).map((r) =>
+      fixed(`room-${r}`, "light_room", { room_id: r })
+    ),
+  ]
+}
+
+/** The shutters page as it comes: a block per room. */
+export function shuttersLayout(
+  rooms: Room[],
+  covers: DeviceView[]
+): DashboardBlock[] {
+  return roomsOf(rooms, covers).map((r) =>
+    fixed(`room-${r}`, "shutter_room", { room_id: r })
+  )
+}
+
+/** The ventilation page as it comes: the house, then its valves. */
+export function ventilationLayout(): DashboardBlock[] {
+  return [
+    fixed("house", "ventilation_house"),
+    fixed("valves", "ventilation_valves"),
+  ]
+}
+
+/** The charging page as it comes: each charger with its controls. */
+export function chargingLayout(chargers: DeviceView[]): DashboardBlock[] {
+  return chargers.map((d) =>
+    fixed(`charger-${d.id}`, "charger", { device_id: d.id })
+  )
+}
+
+/** The solar page as it comes: its figures, the panels, the curve and the days, the forecast. */
+export function solarLayout(
+  inverters: boolean,
+  forecast: boolean
+): DashboardBlock[] {
+  if (!inverters)
+    return forecast
+      ? [
+          fixed("forecast", "solar_forecast", {}, "full"),
+          fixed("today", "solar_today", {}, "full"),
+          fixed("surplus", "energy_surplus"),
+        ]
+      : []
+  return [
+    fixed("kpis", "solar_kpis"),
+    fixed("panels", "solar_panels"),
+    fixed("today", "solar_today", {}, "half"),
+    fixed("days", "solar_days", {}, "half"),
+    ...(forecast ? [fixed("forecast", "solar_forecast", {}, "full")] : []),
+    fixed("surplus", "energy_surplus"),
+  ]
+}
+
+/** The climate page as it comes: a block per group of zones of the installation. */
+export function climateLayout(groups: (string | null)[]): DashboardBlock[] {
+  return groups.map((g) =>
+    fixed(`group-${g ?? ""}`, "climate_zones", { group: g })
+  )
 }

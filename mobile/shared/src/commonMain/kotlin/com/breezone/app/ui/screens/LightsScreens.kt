@@ -1,5 +1,12 @@
 package com.breezone.app.ui.screens
 
+import com.breezone.app.data.Room
+import com.breezone.app.data.BlockTypes
+import com.breezone.app.data.MobilePages
+import com.breezone.app.data.fixedBlock
+import com.breezone.app.ui.home.HomeNav
+import com.breezone.app.ui.home.PageBoard
+import kotlinx.serialization.json.JsonNull
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -105,69 +112,76 @@ private fun describe(s: LightState): String = when {
 /** Sets a light: what is asked shows at once. */
 internal fun Hub.setLight(serverId: String, d: DeviceView, params: JsonObject) = act(serverId, d, "light", "set", params, optimistic = params)
 
+/** The scenes of the lights, and all of them off at once. */
 @Composable
-fun LightsScreen(serverId: String, onBack: (() -> Unit)?, onOpen: (Long) -> Unit) {
+internal fun LightScenesRow(serverId: String, data: ServerDevices) {
+    val hub = koinInject<Hub>()
+    val on = data.withTrait(TraitIds.LIGHT).filter { it.available && it.stateAs(LightState.serializer())?.on == true }
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(data.scenes, key = { "${it.sourceId}/${it.id}" }) { scene ->
+            AssistChip(
+                onClick = { hub.activateScene(serverId, scene) },
+                label = { Text(scene.name) },
+                leadingIcon = { Icon(FzIcons.Palette, null, Modifier.size(16.dp)) },
+            )
+        }
+        item(key = "all-off") {
+            AssistChip(
+                onClick = { on.filter { it.usable }.forEach { hub.setLight(serverId, it, buildJsonObject { put("on", false) }) } },
+                enabled = on.any { it.usable },
+                label = { Text(stringResource(Res.string.lights_all_off)) },
+                leadingIcon = { Icon(FzIcons.Power, null, Modifier.size(16.dp)) },
+            )
+        }
+    }
+}
+
+/** The lights of a room (`null`: without a room): all on or off, and each one. */
+@Composable
+internal fun LightRoomCard(serverId: String, room: Room?, list: List<DeviceView>, onOpen: (Long) -> Unit) {
+    val hub = koinInject<Hub>()
+    val status by hub.deviceStatus.collectAsState()
+    val lit = list.count { it.available && it.stateAs(LightState.serializer())?.on == true }
+    // The whole room at once: on when any of its lights is.
+    val reachable = list.filter { it.usable && it.stateAs(LightState.serializer())?.reachable != false }
+    DeviceGroupCard(
+        room?.name ?: stringResource(Res.string.room_none),
+        pluralStringResource(Res.plurals.lights_on_of, lit, lit, list.size),
+        trailing = {
+            Switch(
+                checked = lit > 0,
+                enabled = reachable.isNotEmpty(),
+                onCheckedChange = { on -> reachable.forEach { hub.setLight(serverId, it, buildJsonObject { put("on", on) }) } },
+                modifier = Modifier.padding(start = 10.dp),
+            )
+        },
+    ) {
+        list.forEach { d -> LightRow(d, status["$serverId/${d.id}"], onOpen = { onOpen(d.id) }, onSet = { hub.setLight(serverId, d, it) }) }
+    }
+}
+
+@Composable
+fun LightsScreen(serverId: String, installationId: Long?, nav: HomeNav, onBack: (() -> Unit)?) {
     val hub = koinInject<Hub>()
     val all by hub.devices.collectAsState()
-    val status by hub.deviceStatus.collectAsState()
-    LaunchedEffect(serverId) { hub.followDevices(serverId, withScenes = true) }
     val data = all[serverId] ?: ServerDevices()
     val lights = data.withTrait(TraitIds.LIGHT)
     val on = lights.filter { it.available && it.stateAs(LightState.serializer())?.on == true }
-    val groups = groupByRoom(lights, data.rooms)
-    val noRoom = stringResource(Res.string.room_none)
-
-    Scaffold(topBar = { FzTopBar(stringResource(Res.string.house_lights), pluralStringResource(Res.plurals.lights_on_of, on.size, on.size, lights.size), onBack) }) { padding ->
-        FzPullRefresh({ hub.reload(serverId) }, Modifier.fillMaxSize(), top = padding.calculateTopPadding()) {
-            LazyColumn(
-                Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                item(key = "scenes", contentType = "scenes") {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(data.scenes, key = { "${it.sourceId}/${it.id}" }) { scene ->
-                            AssistChip(
-                                onClick = { hub.activateScene(serverId, scene) },
-                                label = { Text(scene.name) },
-                                leadingIcon = { Icon(FzIcons.Palette, null, Modifier.size(16.dp)) },
-                            )
-                        }
-                        item(key = "all-off") {
-                            AssistChip(
-                                onClick = { on.filter { it.usable }.forEach { hub.setLight(serverId, it, buildJsonObject { put("on", false) }) } },
-                                enabled = on.any { it.usable },
-                                label = { Text(stringResource(Res.string.lights_all_off)) },
-                                leadingIcon = { Icon(FzIcons.Power, null, Modifier.size(16.dp)) },
-                            )
-                        }
-                    }
-                }
-                if (data.loaded && lights.isEmpty()) {
-                    item(key = "empty", contentType = "note") { SectionCard { Muted(stringResource(Res.string.lights_empty)) } }
-                }
-                items(groups, key = { it.first?.id ?: -1L }, contentType = { "room" }) { (room, list) ->
-                    val lit = list.count { it.available && it.stateAs(LightState.serializer())?.on == true }
-                    // The whole room at once: on when any of its lights is.
-                    val reachable = list.filter { it.usable && it.stateAs(LightState.serializer())?.reachable != false }
-                    DeviceGroupCard(
-                        room?.name ?: noRoom,
-                        pluralStringResource(Res.plurals.lights_on_of, lit, lit, list.size),
-                        trailing = {
-                            Switch(
-                                checked = lit > 0,
-                                enabled = reachable.isNotEmpty(),
-                                onCheckedChange = { on -> reachable.forEach { hub.setLight(serverId, it, buildJsonObject { put("on", on) }) } },
-                                modifier = Modifier.padding(start = 10.dp),
-                            )
-                        },
-                    ) {
-                        list.forEach { d -> LightRow(d, status["$serverId/${d.id}"], onOpen = { onOpen(d.id) }, onSet = { hub.setLight(serverId, d, it) }) }
-                    }
-                }
-            }
-        }
-    }
+    PageBoard(
+        serverId = serverId,
+        installationId = installationId,
+        page = MobilePages.LIGHTS,
+        title = stringResource(Res.string.house_lights),
+        subtitle = pluralStringResource(Res.plurals.lights_on_of, on.size, on.size, lights.size),
+        onBack = onBack,
+        nav = nav,
+        generated = { ctx ->
+            val list = ctx.server.withTrait(TraitIds.LIGHT)
+            listOf(fixedBlock("scenes", BlockTypes.LIGHT_SCENES)) +
+                groupByRoom(list, ctx.rooms).map { (room, _) -> fixedBlock("room-${room?.id}", BlockTypes.LIGHT_ROOM, config = mapOf("room_id" to (room?.id?.let(::JsonPrimitive) ?: JsonNull))) }
+        },
+        header = { if (data.loaded && lights.isEmpty()) item(key = "empty", contentType = "note") { SectionCard { Muted(stringResource(Res.string.lights_empty)) } } },
+    )
 }
 
 @Composable

@@ -100,8 +100,8 @@ function Curves({
     refetchInterval: 5 * 60_000,
   })
   const outdoor = useQuery({
-    queryKey: ["outdoor", installation.id, String(hours)],
-    queryFn: () => api.outdoorHistory(hours, installation.id),
+    queryKey: ["outdoor", installation?.id, String(hours)],
+    queryFn: () => api.outdoorHistory(hours, installation?.id),
     enabled: outdoorWanted,
     staleTime: 10 * 60_000,
   })

@@ -4,11 +4,16 @@ import { Link } from "react-router"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Lightbulb, LightbulbOff, Loader2, Power, Sparkles } from "lucide-react"
-import type { DeviceView, Room, SceneView } from "@/lib/api"
+import type { DeviceView, SceneView } from "@/lib/api"
 import { api, currentUser } from "@/lib/api"
 import { t, tn } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { PageHeader } from "@/components/app-shell"
+import { Board } from "@/components/overview/board"
+import { useOverview } from "@/components/overview/context"
+import { useHomeData } from "@/components/overview/home-data"
+import { lightsLayout } from "@/components/overview/model"
+import { SelectionContext, useSelection } from "@/components/overview/selection"
 import { RoomTitle } from "@/components/room-title"
 import { Level } from "@/components/level"
 import { Button } from "@/components/ui/button"
@@ -479,36 +484,21 @@ function sceneRoom(scene: SceneView, lights: DeviceView[]) {
   return rooms.size === 1 ? only : null
 }
 
-export function LightsPage() {
-  const admin = currentUser()?.role === "admin"
-  const qc = useQueryClient()
-  const devices = useQuery({
-    queryKey: ["devices"],
-    queryFn: api.devices,
-    refetchInterval: 5_000,
-  })
-  const rooms = useQuery({ queryKey: ["rooms"], queryFn: api.rooms })
-  const scenes = useQuery({
-    queryKey: ["scenes"],
-    queryFn: api.scenes,
-    staleTime: 60_000,
-  })
-  const [selected, setSelected] = useState<number | null>(null)
-  const all = (devices.data ?? []).filter((d) => d.traits.includes("light@1"))
-  const roomOf = new Map(
-    (scenes.data ?? []).map((s) => [s, sceneRoom(s, all)] as const)
-  )
-  const scenesIn = (room: number | null) =>
-    (scenes.data ?? []).filter((s) => roomOf.get(s) === room)
-  // Scenes over several rooms (or with no light known here): above the rooms.
-  const wide = (scenes.data ?? []).filter(
+const isLight = (d: DeviceView) => d.traits.includes("light@1")
+
+/** The scenes over several rooms (or with no light known here): shown above the rooms. */
+export function wideScenes(scenes: SceneView[], lights: DeviceView[]) {
+  return scenes.filter(
     (s) =>
-      roomOf.get(s) === null &&
-      !all.some((d) => d.room_id === null && s.device_ids.includes(d.id))
+      sceneRoom(s, lights) === null &&
+      !lights.some((d) => d.room_id === null && s.device_ids.includes(d.id))
   )
-  const lit = all.filter((d) => stateOf(d).on && d.available)
-  // Drives several lights at once ("Tout allumer").
-  const many = useMutation({
+}
+
+/** Drives several lights at once ("Tout allumer"). */
+function useSwitchMany() {
+  const qc = useQueryClient()
+  return useMutation({
     mutationFn: (input: { ids: number[]; on: boolean }) =>
       Promise.all(
         input.ids.map((id) => api.act(id, "light", "set", { on: input.on }))
@@ -516,45 +506,112 @@ export function LightsPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["devices"] }),
     onError: (e) => toast.error(errorText(e)),
   })
-  const groups: { room: Room | null; lights: DeviceView[] }[] = [
-    ...(rooms.data ?? []).map((r) => ({
-      room: r,
-      lights: all.filter((d) => d.room_id === r.id),
-    })),
-    { room: null, lights: all.filter((d) => d.room_id === null) },
-  ].filter((g) => g.lights.length > 0)
-  const shown = all.find((d) => d.id === selected) ?? all[0]
+}
 
+/** The lights of a room (`null`: without a room): its scenes, its lights, all on or off. */
+export function LightRoomBlock({ room }: { room: number | null }) {
+  const { devices, rooms } = useOverview()
+  const { selected, select } = useSelection()
+  const admin = currentUser()?.role === "admin"
+  const scenes = useQuery({
+    queryKey: ["scenes"],
+    queryFn: api.scenes,
+    staleTime: 60_000,
+  })
+  const many = useSwitchMany()
+  const all = devices.filter(isLight)
+  const lights = all.filter((d) => d.room_id === room)
+  if (lights.length === 0) return null
+  const wide = wideScenes(scenes.data ?? [], all)
+  const own = (scenes.data ?? []).filter(
+    (s) => sceneRoom(s, all) === room && (room !== null || !wide.includes(s))
+  )
+  const on = lights.filter((d) => stateOf(d).on && d.available)
+  const drivable = lights.filter((d) => d.can_control)
   return (
-    <>
-      <PageHeader
-        title={t("Lumières")}
-        description={
-          all.length
-            ? t("{lit} allumée(s) sur {total}", {
-                lit: lit.length,
-                total: all.length,
-              })
-            : undefined
-        }
-        actions={
-          all.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={many.isPending || lit.length === 0}
-              onClick={() =>
-                many.mutate({ ids: lit.map((d) => d.id), on: false })
-              }
-            >
-              <Power /> {t("Tout éteindre")}
-            </Button>
-          )
-        }
-      />
-      {devices.isLoading ? (
+    <section className="grid gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-baseline gap-2">
+          <RoomTitle room={rooms.find((r) => r.id === room) ?? null} />
+          <span className="text-sm text-muted-foreground">
+            {tn(on.length, "{n} allumée", "{n} allumées")} / {lights.length}
+          </span>
+        </div>
+        <div className="flex gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!drivable.length || many.isPending}
+            onClick={() =>
+              many.mutate({ ids: drivable.map((d) => d.id), on: true })
+            }
+          >
+            <Power /> {t("Tout allumer")}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!drivable.length || many.isPending}
+            onClick={() =>
+              many.mutate({ ids: drivable.map((d) => d.id), on: false })
+            }
+          >
+            {t("Tout éteindre")}
+          </Button>
+        </div>
+      </div>
+      <LightScenes scenes={own} canDrive={admin} />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {lights.map((d) => (
+          <LightCard
+            key={d.id}
+            light={d}
+            selected={selected === d.id}
+            onSelect={() => select(d.id)}
+            canDrive={d.can_control}
+          />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+export function LightsPage() {
+  const admin = currentUser()?.role === "admin"
+  // Read more often than the other pages: a light switched from its own app shows soon.
+  useQuery({
+    queryKey: ["devices"],
+    queryFn: api.devices,
+    refetchInterval: 5_000,
+  })
+  const home = useHomeData()
+  const [selected, setSelected] = useState<number | null>(null)
+  const many = useSwitchMany()
+  const all = home.page.devices.filter(isLight)
+  const rooms = home.page.rooms
+  const lit = all.filter((d) => stateOf(d).on && d.available)
+  const shown = all.find((d) => d.id === selected) ?? all[0]
+  const generated = lightsLayout(rooms, all)
+  const description = all.length
+    ? [
+        t("{lit} allumée(s) sur {total}", {
+          lit: lit.length,
+          total: all.length,
+        }),
+      ]
+    : []
+
+  if (home.loading)
+    return (
+      <>
+        <PageHeader title={t("Lumières")} />
         <Skeleton className="h-72 w-full rounded-3xl" />
-      ) : all.length === 0 ? (
+      </>
+    )
+  if (all.length === 0)
+    return (
+      <>
+        <PageHeader title={t("Lumières")} />
         <Card className="rounded-3xl">
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
             <span className="grid size-12 place-items-center rounded-2xl bg-warning/15 text-warning">
@@ -577,89 +634,47 @@ export function LightsPage() {
             )}
           </CardContent>
         </Card>
-      ) : (
-        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
-          <div className="grid gap-6">
-            {wide.length > 0 && <LightScenes scenes={wide} canDrive={admin} />}
-            {groups.map((g) => {
-              const on = g.lights.filter((d) => stateOf(d).on && d.available)
-              const drivable = g.lights.filter((d) => d.can_control)
-              return (
-                <section key={g.room?.id ?? "none"} className="grid gap-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-baseline gap-2">
-                      <RoomTitle room={g.room} />
-                      <span className="text-sm text-muted-foreground">
-                        {tn(on.length, "{n} allumée", "{n} allumées")} /{" "}
-                        {g.lights.length}
-                      </span>
-                    </div>
-                    <div className="flex gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={!drivable.length || many.isPending}
-                        onClick={() =>
-                          many.mutate({
-                            ids: drivable.map((d) => d.id),
-                            on: true,
-                          })
-                        }
-                      >
-                        <Power /> {t("Tout allumer")}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={!drivable.length || many.isPending}
-                        onClick={() =>
-                          many.mutate({
-                            ids: drivable.map((d) => d.id),
-                            on: false,
-                          })
-                        }
-                      >
-                        {t("Tout éteindre")}
-                      </Button>
-                    </div>
-                  </div>
-                  <LightScenes
-                    scenes={scenesIn(g.room?.id ?? null).filter(
-                      (s) => g.room !== null || !wide.includes(s)
-                    )}
-                    canDrive={admin}
-                  />
-                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                    {g.lights.map((d) => (
-                      <LightCard
-                        key={d.id}
-                        light={d}
-                        selected={shown?.id === d.id}
-                        onSelect={() => setSelected(d.id)}
-                        canDrive={d.can_control}
-                      />
-                    ))}
-                  </div>
-                </section>
-              )
-            })}
-          </div>
-          {shown && (
+      </>
+    )
+  return (
+    <SelectionContext.Provider
+      value={{ selected: shown?.id ?? null, select: setSelected }}
+    >
+      <Board
+        page="lights"
+        title={t("Lumières")}
+        description={description}
+        data={home.page}
+        generated={generated}
+        actions={() => (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={many.isPending || lit.length === 0}
+            onClick={() =>
+              many.mutate({ ids: lit.map((d) => d.id), on: false })
+            }
+          >
+            <Power /> {t("Tout éteindre")}
+          </Button>
+        )}
+        aside={
+          shown && (
             <LightPanel
               key={shown.id}
               lights={[shown]}
               title={shown.name}
               subtitle={[
-                rooms.data?.find((r) => r.id === shown.room_id)?.name,
+                rooms.find((r) => r.id === shown.room_id)?.name,
                 LIGHT_BRAND[shown.source] ?? shown.source,
               ]
                 .filter(Boolean)
                 .join(" · ")}
               className="lg:sticky lg:top-4"
             />
-          )}
-        </div>
-      )}
-    </>
+          )
+        }
+      />
+    </SelectionContext.Provider>
   )
 }

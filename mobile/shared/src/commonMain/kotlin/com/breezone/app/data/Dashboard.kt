@@ -17,6 +17,17 @@ import kotlin.random.Random
 /** The page of the server that keeps the home of the app, apart from the web's overview. */
 const val MOBILE_PAGE = "mobile"
 
+/** The pages of the app the server keeps a layout of, apart from the web's. */
+object MobilePages {
+    const val ENERGY = "mobile_energy"
+    const val SOLAR = "mobile_solar"
+    const val CHARGING = "mobile_charging"
+    const val LIGHTS = "mobile_lights"
+    const val SHUTTERS = "mobile_shutters"
+    const val VENTILATION = "mobile_ventilation"
+    const val CLIMATE = "mobile_climate"
+}
+
 /** How much of a row a card takes on a phone: half (two side by side) or the whole width. */
 enum class BlockSize(val wire: String) {
     Half("half"),
@@ -71,6 +82,10 @@ fun newBlockId(): String = Random.nextLong().toULong().toString(36).take(8)
 fun block(type: String, size: BlockSize = BlockSize.Full, config: Map<String, JsonElement> = emptyMap()) =
     DashboardBlock(newBlockId(), type, size.wire, JsonObject(config))
 
+/** A card of a page as it comes: its id stays the same from one composition to the next. */
+fun fixedBlock(id: String, type: String, size: BlockSize = BlockSize.Full, config: Map<String, JsonElement> = emptyMap()) =
+    DashboardBlock(id, type, size.wire, JsonObject(config))
+
 fun DashboardBlock.withConfig(key: String, value: JsonElement) = copy(config = JsonObject(config + (key to value)))
 
 fun DashboardBlock.withoutConfig(key: String) = copy(config = JsonObject(config - key))
@@ -102,6 +117,19 @@ object BlockTypes {
     const val PRICE_NOW = "price_now"
     const val PRICE = "price"
     const val SPACER = "spacer"
+    const val ENERGY_KPIS = "energy_kpis"
+    const val ENERGY_BARS = "energy_bars"
+    const val ENERGY_MEASURES = "energy_measures"
+    const val ENERGY_SURPLUS = "energy_surplus"
+    const val SOLAR_DAYS = "solar_days"
+    const val LIGHT_SCENES = "light_scenes"
+    const val LIGHT_ROOM = "light_room"
+    const val SHUTTER_ROOM = "shutter_room"
+    const val VENTILATION_VALVES = "ventilation_valves"
+    const val LINKY = "linky"
+    const val CLIMATE_ZONES = "climate_zones"
+    /** The whole charger of the charging page (the app's only). */
+    const val CHARGER_PAGE = "charger_page"
 }
 
 /** What the home has, to compose a first layout from. */

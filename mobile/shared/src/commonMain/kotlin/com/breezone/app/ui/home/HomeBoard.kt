@@ -71,7 +71,7 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 
 /** The cards that read the energy of the home now: it is read only while one is on the home. */
-private val ENERGY_BLOCKS = setOf(BlockTypes.ENERGY, BlockTypes.ENERGY_FLOW, BlockTypes.ENERGY_CURVE, BlockTypes.ENERGY_BREAKDOWN, BlockTypes.SOLAR_TODAY)
+internal val ENERGY_BLOCKS = setOf(BlockTypes.ENERGY, BlockTypes.ENERGY_FLOW, BlockTypes.ENERGY_CURVE, BlockTypes.ENERGY_BREAKDOWN, BlockTypes.SOLAR_TODAY)
 
 /**
  * The home of an installation: cards each user arranges for the phone, apart from the web's
@@ -264,7 +264,7 @@ fun HomeBoard(serverId: String, installationId: Long, nav: HomeNav, onInstallati
  * not every content answers them (a chart).
  */
 @Composable
-private fun EqualPair(gap: Dp, first: @Composable () -> Unit, second: @Composable () -> Unit) {
+internal fun EqualPair(gap: Dp, first: @Composable () -> Unit, second: @Composable () -> Unit) {
     SubcomposeLayout(Modifier.fillMaxWidth()) { constraints ->
         val gapPx = gap.roundToPx()
         val width = ((constraints.maxWidth - gapPx) / 2).coerceAtLeast(0)
@@ -282,7 +282,7 @@ private fun EqualPair(gap: Dp, first: @Composable () -> Unit, second: @Composabl
 }
 
 /** The rows of the home: two half cards that follow each other share one. */
-private fun rows(blocks: List<DashboardBlock>): List<List<DashboardBlock>> {
+internal fun rows(blocks: List<DashboardBlock>): List<List<DashboardBlock>> {
     val out = mutableListOf<List<DashboardBlock>>()
     var i = 0
     while (i < blocks.size) {
@@ -304,7 +304,7 @@ private val HALVES = setOf(BlockKind.Pages, BlockKind.Energy, BlockKind.Presence
 
 /** A card while the home is arranged: its name and its handles above what it shows. */
 @Composable
-private fun EditFrame(
+internal fun EditFrame(
     b: DashboardBlock,
     ctx: HomeContext,
     first: Boolean,

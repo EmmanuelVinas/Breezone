@@ -94,6 +94,13 @@ import com.breezone.app.ui.screens.SolarForecastCard
 import com.breezone.app.ui.screens.SolarNowCard
 import com.breezone.app.ui.screens.rememberSolarForecast
 import com.breezone.app.ui.screens.VentilationHouseCard
+import com.breezone.app.ui.screens.ChargerPanel
+import com.breezone.app.ui.screens.ClimateGroupCard
+import com.breezone.app.ui.screens.EnergyHistoryCard
+import com.breezone.app.ui.screens.LightRoomCard
+import com.breezone.app.ui.screens.LightScenesRow
+import com.breezone.app.ui.screens.ShutterRoomCard
+import com.breezone.app.ui.screens.ValvesCard
 import com.breezone.app.ui.screens.ZoneHistorySection
 import com.breezone.app.ui.screens.ventilationLevel
 import com.breezone.app.ui.theme.Fz
@@ -116,6 +123,8 @@ class HomeNav(
     val openPage: (AppPage) -> Unit,
     val openDevice: (DeviceView) -> Unit,
     val openZone: (Zone) -> Unit,
+    /** The charging profiles (the charger of the charging page manages them). */
+    val openChargeProfiles: (() -> Unit)? = null,
 )
 
 /** What the cards of an installation read: read once for the whole home, shared by its cards. */
@@ -187,11 +196,31 @@ enum class BlockKind(
     PriceNow(BlockTypes.PRICE_NOW, Res.string.block_price_now, FzIcons.Euro, BlockSize.Half),
     PriceToday(BlockTypes.PRICE, Res.string.block_price_today, FzIcons.Euro, BlockSize.Full),
     Spacer(BlockTypes.SPACER, Res.string.block_spacer, FzIcons.Square, BlockSize.Half),
+    EnergyKpis(BlockTypes.ENERGY_KPIS, Res.string.block_energy_kpis, FzIcons.Activity, BlockSize.Full),
+    EnergyDays(BlockTypes.ENERGY_BARS, Res.string.block_energy_days, FzIcons.ChartLine, BlockSize.Full),
+    EnergyMeasures(BlockTypes.ENERGY_MEASURES, Res.string.block_energy_measures, FzIcons.PlugZap, BlockSize.Full),
+    EnergySurplus(BlockTypes.ENERGY_SURPLUS, Res.string.block_energy_surplus, FzIcons.Sun, BlockSize.Full),
+    Linky(BlockTypes.LINKY, Res.string.block_linky, FzIcons.Zap, BlockSize.Full),
+    SolarDays(BlockTypes.SOLAR_DAYS, Res.string.block_solar_days, FzIcons.Sun, BlockSize.Full),
+    LightScenes(BlockTypes.LIGHT_SCENES, Res.string.block_light_scenes, FzIcons.Palette, BlockSize.Full),
+    LightRoom(BlockTypes.LIGHT_ROOM, Res.string.block_light_room, FzIcons.Lightbulb, BlockSize.Full, BlockChoice.Room),
+    ShutterRoom(BlockTypes.SHUTTER_ROOM, Res.string.block_shutter_room, FzIcons.Blinds, BlockSize.Full, BlockChoice.Room),
+    VentilationValves(BlockTypes.VENTILATION_VALVES, Res.string.block_ventilation_valves, FzIcons.Fan, BlockSize.Full),
+    ClimateZones(BlockTypes.CLIMATE_ZONES, Res.string.block_climate_zones, FzIcons.Thermometer, BlockSize.Full, BlockChoice.ZoneGroup),
+    ChargerPage(BlockTypes.CHARGER_PAGE, Res.string.block_charger_page, FzIcons.PlugZap, BlockSize.Full),
     ;
 
     /** Worth offering for this home: an energy card needs a measure, a zone card zones… */
     fun offered(ctx: HomeContext): Boolean = when (this) {
-        Energy, EnergyNow, EnergyToday, EnergyUses -> ctx.live?.roles?.any == true || ctx.server.modules.any { it.role != null }
+        Energy, EnergyNow, EnergyToday, EnergyUses, EnergyKpis, EnergyDays, EnergyMeasures, Linky ->
+            ctx.live?.roles?.any == true || ctx.server.modules.any { it.role != null }
+        EnergySurplus -> AppPage.Solar in ctx.pages || ctx.server.modules.any { it.role != null }
+        SolarDays -> ctx.server.withTrait(TraitIds.INVERTER).isNotEmpty() && AppPage.Solar in ctx.pages
+        LightScenes, LightRoom -> ctx.server.withTrait(TraitIds.LIGHT).isNotEmpty() && AppPage.Lights in ctx.pages
+        ShutterRoom -> ctx.server.withTrait(TraitIds.COVER).isNotEmpty()
+        VentilationValves -> ctx.server.withTrait(TraitIds.VENTILATION_ROOM).isNotEmpty() && AppPage.Ventilation in ctx.pages
+        ClimateZones -> ctx.installation?.zones?.isNotEmpty() == true
+        ChargerPage -> ctx.server.withTrait(TraitIds.CHARGER).isNotEmpty() && AppPage.Charging in ctx.pages
         Zones -> ctx.installation?.zones?.isNotEmpty() == true
         Room, Kind, Device -> ctx.devices.isNotEmpty()
         Chart -> ctx.devices.isNotEmpty()
@@ -229,6 +258,9 @@ fun blockTitle(b: DashboardBlock, ctx: HomeContext): String {
         BlockKind.Kind -> DeviceKind.byId(b.string("type"))?.let { stringResource(it.label) } ?: stringResource(kind.label)
         BlockKind.Device, BlockKind.Chart -> ctx.devices.firstOrNull { it.id == b.long("device_id") }?.name ?: stringResource(kind.label)
         BlockKind.Zones -> b.string("group") ?: stringResource(kind.label)
+        BlockKind.ClimateZones -> b.string("group") ?: stringResource(Res.string.installation_group_default)
+        BlockKind.LightRoom, BlockKind.ShutterRoom ->
+            listOf(stringResource(kind.label), ctx.rooms.firstOrNull { it.id == b.long("room_id") }?.name ?: stringResource(Res.string.block_no_room)).joinToString(" · ")
         BlockKind.Pages -> b.strings("pages").mapNotNull { id -> AppPage.entries.firstOrNull { it.name == id } }.takeIf { it.isNotEmpty() }
             ?.map { stringResource(it.label) }?.joinToString(" · ") ?: stringResource(kind.label)
         BlockKind.ZoneHistory, BlockKind.AirQuality -> listOfNotNull(stringResource(kind.label), ctx.devices.firstOrNull { it.id == b.long("device_id") }?.name).joinToString(" · ")
@@ -283,8 +315,31 @@ fun BlockContent(b: DashboardBlock, ctx: HomeContext, editing: Boolean) {
         BlockKind.PriceToday -> PriceTodayBlock(ctx, editing)
         // An empty cell, to leave room: seen only while arranging.
         BlockKind.Spacer -> if (editing) SectionCard { Muted(stringResource(Res.string.block_spacer)) }
+        BlockKind.EnergyKpis -> EnergyKpisBlock(ctx)
+        BlockKind.EnergyDays -> ctx.live?.roles?.let { EnergyHistoryCard(ctx.hub, ctx.serverId, it) } ?: Waiting(b, ctx, editing)
+        BlockKind.EnergyMeasures -> EnergyMeasuresBlock(ctx)
+        BlockKind.EnergySurplus -> EnergySurplusBlock(ctx, editing)
+        BlockKind.Linky -> LinkyBlock(ctx, editing)
+        BlockKind.SolarDays -> SolarDaysBlock(ctx)
+        BlockKind.LightScenes -> LightScenesRow(ctx.serverId, ctx.server)
+        BlockKind.LightRoom -> {
+            val list = ctx.server.withTrait(TraitIds.LIGHT).filter { it.roomId == b.long("room_id") }
+            if (list.isNotEmpty()) LightRoomCard(ctx.serverId, ctx.rooms.firstOrNull { it.id == b.long("room_id") }, list) { id -> openDevice(ctx, id) }
+        }
+        BlockKind.ShutterRoom -> {
+            val list = ctx.server.withTrait(TraitIds.COVER).filter { it.roomId == b.long("room_id") }
+            if (list.isNotEmpty()) ShutterRoomCard(ctx.serverId, ctx.rooms.firstOrNull { it.id == b.long("room_id") }, list) { id -> openDevice(ctx, id) }
+        }
+        BlockKind.VentilationValves -> ValvesCard(ctx.server) { id -> openDevice(ctx, id) }
+        BlockKind.ClimateZones -> ctx.installation?.let { ClimateGroupCard(ctx.serverId, it, b.string("group"), ctx.nav.openZone) }
+        BlockKind.ChargerPage -> charger(b, ctx)?.let { ChargerPanel(ctx.serverId, it, ctx.nav.openChargeProfiles) } ?: Gone()
         null -> if (editing) Waiting(b, ctx, true)
     }
+}
+
+/** Opens the page of a device of the server. */
+private fun openDevice(ctx: HomeContext, id: Long) {
+    ctx.server.devices.firstOrNull { it.id == id }?.let(ctx.nav.openDevice)
 }
 
 /** The lights a light card drives: those of its room, or the one chosen. */

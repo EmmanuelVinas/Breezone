@@ -41,6 +41,7 @@ import com.breezone.app.data.Charted
 import com.breezone.app.data.DashboardBlock
 import com.breezone.app.data.TraitIds
 import com.breezone.app.data.block
+import com.breezone.app.data.MobilePages
 import com.breezone.app.data.groupConfig
 import com.breezone.app.data.shownOnCards
 import com.breezone.app.data.typeConfig
@@ -67,18 +68,27 @@ private enum class Group(val label: StringResource) {
 }
 
 /** The filters of the sheet: the cards and the devices of a part of the home. */
-private enum class Category(val label: StringResource, val kinds: Set<BlockKind>, val devices: Set<DeviceKind>) {
-    Climate(Res.string.house_climate, setOf(BlockKind.Zones, BlockKind.ZoneHistory, BlockKind.AirQuality), setOf(DeviceKind.Climate, DeviceKind.Sensor)),
+private enum class Category(val label: StringResource, val kinds: Set<BlockKind>, val devices: Set<DeviceKind>, val page: String) {
+    Climate(Res.string.house_climate, setOf(BlockKind.Zones, BlockKind.ClimateZones, BlockKind.ZoneHistory, BlockKind.AirQuality), setOf(DeviceKind.Climate, DeviceKind.Sensor), MobilePages.CLIMATE),
     Energy(
         Res.string.house_energy,
-        setOf(BlockKind.Energy, BlockKind.EnergyNow, BlockKind.EnergyToday, BlockKind.EnergyUses, BlockKind.PriceNow, BlockKind.PriceToday),
+        setOf(
+            BlockKind.Energy, BlockKind.EnergyNow, BlockKind.EnergyToday, BlockKind.EnergyUses, BlockKind.EnergyKpis, BlockKind.EnergyDays,
+            BlockKind.EnergyMeasures, BlockKind.EnergySurplus, BlockKind.Linky, BlockKind.PriceNow, BlockKind.PriceToday,
+        ),
         setOf(DeviceKind.Energy, DeviceKind.Battery, DeviceKind.Switch),
+        MobilePages.ENERGY,
     ),
-    Lights(Res.string.house_lights, setOf(BlockKind.LightPanel), setOf(DeviceKind.Light)),
-    Shutters(Res.string.house_shutters, emptySet(), setOf(DeviceKind.Shutter, DeviceKind.Window, DeviceKind.Door)),
-    Solar(Res.string.house_solar, setOf(BlockKind.SolarToday, BlockKind.SolarPanels, BlockKind.SolarForecast), setOf(DeviceKind.Solar)),
-    Charging(Res.string.house_charging, setOf(BlockKind.Charger, BlockKind.ChargerCurve), setOf(DeviceKind.Charger)),
-    Ventilation(Res.string.house_ventilation, setOf(BlockKind.VentilationHouse, BlockKind.VentilationRooms), setOf(DeviceKind.Ventilation, DeviceKind.RoomAir)),
+    Lights(Res.string.house_lights, setOf(BlockKind.LightPanel, BlockKind.LightScenes, BlockKind.LightRoom), setOf(DeviceKind.Light), MobilePages.LIGHTS),
+    Shutters(Res.string.house_shutters, setOf(BlockKind.ShutterRoom), setOf(DeviceKind.Shutter, DeviceKind.Window, DeviceKind.Door), MobilePages.SHUTTERS),
+    Solar(Res.string.house_solar, setOf(BlockKind.SolarToday, BlockKind.SolarDays, BlockKind.SolarPanels, BlockKind.SolarForecast, BlockKind.EnergySurplus), setOf(DeviceKind.Solar), MobilePages.SOLAR),
+    Charging(Res.string.house_charging, setOf(BlockKind.ChargerPage, BlockKind.Charger, BlockKind.ChargerCurve), setOf(DeviceKind.Charger), MobilePages.CHARGING),
+    Ventilation(
+        Res.string.house_ventilation,
+        setOf(BlockKind.VentilationHouse, BlockKind.VentilationValves, BlockKind.VentilationRooms),
+        setOf(DeviceKind.Ventilation, DeviceKind.RoomAir),
+        MobilePages.VENTILATION,
+    ),
 }
 
 private val ACCENTS = mapOf('à' to 'a', 'â' to 'a', 'ä' to 'a', 'á' to 'a', 'ç' to 'c', 'é' to 'e', 'è' to 'e', 'ê' to 'e', 'ë' to 'e', 'î' to 'i', 'ï' to 'i', 'í' to 'i', 'ô' to 'o', 'ö' to 'o', 'ó' to 'o', 'ù' to 'u', 'û' to 'u', 'ü' to 'u', 'ú' to 'u', 'ñ' to 'n', 'ÿ' to 'y', 'œ' to 'o', 'æ' to 'a')
@@ -118,12 +128,13 @@ private fun highlighted(text: String, query: String): AnnotatedString {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddBlockSheet(ctx: HomeContext, onDismiss: () -> Unit, onAdd: (DashboardBlock) -> Unit) {
+fun AddBlockSheet(ctx: HomeContext, onDismiss: () -> Unit, first: String? = null, onAdd: (DashboardBlock) -> Unit) {
     var kind by remember { mutableStateOf<BlockKind?>(null) }
     var chartDevice by remember { mutableStateOf<Long?>(null) }
     var charted by remember { mutableStateOf<List<Charted>?>(null) }
     var query by remember { mutableStateOf("") }
-    var filter by remember { mutableStateOf<Category?>(null) }
+    // On a page of the app, its own cards first.
+    var filter by remember { mutableStateOf(Category.entries.firstOrNull { it.page == first }) }
     val searching = kind == null && (query.isNotBlank() || filter != null)
     LaunchedEffect(kind, searching) {
         if ((kind == BlockKind.Chart || kind == BlockKind.VentilationRooms || searching) && charted == null) charted = runCatching { ctx.hub.api(ctx.serverId)?.charted() }.getOrNull().orEmpty()
@@ -344,4 +355,16 @@ private fun BlockKind.hint() = when (this) {
     BlockKind.PriceNow -> Res.string.block_price_now_hint
     BlockKind.PriceToday -> Res.string.block_price_today_hint
     BlockKind.Spacer -> Res.string.block_spacer_hint
+    BlockKind.EnergyKpis -> Res.string.block_energy_kpis_hint
+    BlockKind.EnergyDays -> Res.string.block_energy_days_hint
+    BlockKind.EnergyMeasures -> Res.string.block_energy_measures_hint
+    BlockKind.EnergySurplus -> Res.string.block_energy_surplus_hint
+    BlockKind.Linky -> Res.string.block_linky_hint
+    BlockKind.SolarDays -> Res.string.block_solar_days_hint
+    BlockKind.LightScenes -> Res.string.block_light_scenes_hint
+    BlockKind.LightRoom -> Res.string.block_light_room_hint
+    BlockKind.ShutterRoom -> Res.string.block_shutter_room_hint
+    BlockKind.VentilationValves -> Res.string.block_ventilation_valves_hint
+    BlockKind.ClimateZones -> Res.string.block_climate_zones_hint
+    BlockKind.ChargerPage -> Res.string.block_charger_page_hint
 }

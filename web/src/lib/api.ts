@@ -1305,6 +1305,7 @@ export type DashboardPage =
   | "ventilation"
   | "charging"
   | "shutters"
+  | "solar"
 
 export type DashboardSize = "quarter" | "half" | "full"
 

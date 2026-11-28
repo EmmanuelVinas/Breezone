@@ -75,26 +75,26 @@ export function useHomeData() {
   const surplusHere = (surplus.data?.loads ?? []).some((l) =>
     mine.some((d) => d.id === l.device_id)
   )
-  const data: OverviewData | null = installation
-    ? {
-        installation,
-        devices: mine,
-        rooms: rooms.data ?? [],
-        live: energyHere ? live.data : undefined,
-        today: energyHere ? today.data : undefined,
-        surplus: surplusHere ? surplus.data : undefined,
-        routines: routines.data ?? [],
-        traits: traits.data ?? [],
-        charted: charted.data ?? [],
-        priced,
-        energy:
-          modulesHere && Object.values(live.data?.roles ?? {}).some(Boolean),
-        linky: modulesHere && !!linky.data?.prm,
-      }
-    : null
+  const page: OverviewData = {
+    installation: installation ?? undefined,
+    devices: mine,
+    rooms: rooms.data ?? [],
+    live: energyHere ? live.data : undefined,
+    today: energyHere ? today.data : undefined,
+    surplus: surplusHere ? surplus.data : undefined,
+    routines: routines.data ?? [],
+    traits: traits.data ?? [],
+    charted: charted.data ?? [],
+    priced,
+    energy: modulesHere && Object.values(live.data?.roles ?? {}).some(Boolean),
+    linky: modulesHere && !!linky.data?.prm,
+  }
+  const data: OverviewData | null = installation ? page : null
   return {
     installation,
     data,
+    /** The same, also without an installation (the pages of the modules show all the same). */
+    page,
     mine,
     roles,
     energyHere,

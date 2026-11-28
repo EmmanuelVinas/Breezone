@@ -1,5 +1,13 @@
 package com.breezone.app.ui.screens
 
+import com.breezone.app.data.Room
+import com.breezone.app.data.BlockTypes
+import com.breezone.app.data.MobilePages
+import com.breezone.app.data.fixedBlock
+import com.breezone.app.ui.home.HomeNav
+import com.breezone.app.ui.home.PageBoard
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
@@ -169,55 +177,64 @@ private fun Hub.stopCover(serverId: String, d: DeviceView) {
     act(serverId, d, "cover.position", "stop", JsonObject(emptyMap()), optimistic = buildJsonObject { put("moving", "stopped") })
 }
 
+/** Every shutter open or closed at once. */
 @Composable
-fun ShuttersScreen(serverId: String, onBack: (() -> Unit)?, onOpen: (Long) -> Unit) {
+internal fun ShuttersAllRow(serverId: String, covers: List<DeviceView>) {
+    val hub = koinInject<Hub>()
+    val usable = covers.filter { it.usable }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        AssistChip(
+            onClick = { usable.forEach { hub.setCover(serverId, it, 100) } },
+            enabled = usable.isNotEmpty(),
+            label = { Text(stringResource(Res.string.shutters_open_all)) },
+            leadingIcon = { Icon(FzIcons.ChevronUp, null, Modifier.size(16.dp)) },
+        )
+        AssistChip(
+            onClick = { usable.forEach { hub.setCover(serverId, it, 0) } },
+            enabled = usable.isNotEmpty(),
+            label = { Text(stringResource(Res.string.shutters_close_all)) },
+            leadingIcon = { Icon(FzIcons.ChevronDown, null, Modifier.size(16.dp)) },
+        )
+    }
+}
+
+/** The shutters of a room (`null`: without a room), each with its buttons. */
+@Composable
+internal fun ShutterRoomCard(serverId: String, room: Room?, list: List<DeviceView>, onOpen: (Long) -> Unit) {
+    val hub = koinInject<Hub>()
+    val status by hub.deviceStatus.collectAsState()
+    DeviceGroupCard(room?.name ?: stringResource(Res.string.room_none), pluralStringResource(Res.plurals.shutters_open_of, list.count { it.isOpen() }, list.count { it.isOpen() }, list.size)) {
+        list.forEach { d -> ShutterRow(d, status["$serverId/${d.id}"], onOpen = { onOpen(d.id) }, hub = hub, serverId = serverId) }
+    }
+}
+
+@Composable
+fun ShuttersScreen(serverId: String, installationId: Long?, nav: HomeNav, onBack: (() -> Unit)?) {
     val hub = koinInject<Hub>()
     val all by hub.devices.collectAsState()
-    val status by hub.deviceStatus.collectAsState()
     val data = all[serverId] ?: ServerDevices()
     val covers = data.withTrait(TraitIds.COVER)
     // Faster while one moves: its position shows as it goes.
     val anyMoving = covers.any { hub.coverView(serverId, it).moving() }
-    LaunchedEffect(serverId, anyMoving) { hub.followDevices(serverId, everyMs = if (anyMoving) 1_500 else 5_000) }
-    val usable = covers.filter { it.usable }
-    val noRoom = stringResource(Res.string.room_none)
-
-    Scaffold(topBar = {
-        FzTopBar(stringResource(Res.string.house_shutters), pluralStringResource(Res.plurals.shutters_open_of, covers.count { it.isOpen() }, covers.count { it.isOpen() }, covers.size), onBack)
-    }) { padding ->
-        FzPullRefresh({ hub.reload(serverId) }, Modifier.fillMaxSize(), top = padding.calculateTopPadding()) {
-            LazyColumn(
-                Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                item(key = "all", contentType = "all") {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        AssistChip(
-                            onClick = { usable.forEach { hub.setCover(serverId, it, 100) } },
-                            enabled = usable.isNotEmpty(),
-                            label = { Text(stringResource(Res.string.shutters_open_all)) },
-                            leadingIcon = { Icon(FzIcons.ChevronUp, null, Modifier.size(16.dp)) },
-                        )
-                        AssistChip(
-                            onClick = { usable.forEach { hub.setCover(serverId, it, 0) } },
-                            enabled = usable.isNotEmpty(),
-                            label = { Text(stringResource(Res.string.shutters_close_all)) },
-                            leadingIcon = { Icon(FzIcons.ChevronDown, null, Modifier.size(16.dp)) },
-                        )
-                    }
-                }
-                if (data.loaded && covers.isEmpty()) {
-                    item(key = "empty", contentType = "note") { SectionCard { Muted(stringResource(Res.string.shutters_empty)) } }
-                }
-                items(groupByRoom(covers, data.rooms), key = { it.first?.id ?: -1L }, contentType = { "room" }) { (room, list) ->
-                    DeviceGroupCard(room?.name ?: noRoom, pluralStringResource(Res.plurals.shutters_open_of, list.count { it.isOpen() }, list.count { it.isOpen() }, list.size)) {
-                        list.forEach { d -> ShutterRow(d, status["$serverId/${d.id}"], onOpen = { onOpen(d.id) }, hub = hub, serverId = serverId) }
-                    }
-                }
+    PageBoard(
+        serverId = serverId,
+        installationId = installationId,
+        page = MobilePages.SHUTTERS,
+        title = stringResource(Res.string.house_shutters),
+        subtitle = pluralStringResource(Res.plurals.shutters_open_of, covers.count { it.isOpen() }, covers.count { it.isOpen() }, covers.size),
+        onBack = onBack,
+        nav = nav,
+        everyMs = if (anyMoving) 1_500 else 5_000,
+        generated = { ctx ->
+            groupByRoom(ctx.server.withTrait(TraitIds.COVER), ctx.rooms).map { (room, _) ->
+                fixedBlock("room-${room?.id}", BlockTypes.SHUTTER_ROOM, config = mapOf("room_id" to (room?.id?.let(::JsonPrimitive) ?: JsonNull)))
             }
-        }
-    }
+        },
+        header = {
+            item(key = "all", contentType = "all") { ShuttersAllRow(serverId, covers) }
+            if (data.loaded && covers.isEmpty()) item(key = "empty", contentType = "note") { SectionCard { Muted(stringResource(Res.string.shutters_empty)) } }
+        },
+    )
 }
 
 @Composable

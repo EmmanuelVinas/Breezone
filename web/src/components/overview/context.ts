@@ -13,7 +13,8 @@ import type {
 
 /** What the blocks read: fetched once by the page. */
 export type OverviewData = {
-  installation: Installation
+  /** None on a server without an installation: its pages of modules show all the same. */
+  installation?: Installation
   devices: DeviceView[]
   rooms: Room[]
   live: EnergyLive | undefined
