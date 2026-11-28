@@ -6,6 +6,8 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.13.0-beta.13] - 2026-11-28
+
 ### Added
 
 - The Anker Smart Meter of a SolarBank (the first one, without local access) is read from Anker's
