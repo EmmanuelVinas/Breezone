@@ -1,6 +1,6 @@
 [package]
 name = "breezone-module-anker"
-version = "1.0.0"
+version = "1.0.1"
 edition.workspace = true
 description = "Anker SOLIX Smart Plug Gen 2 and Smart Meter Gen 2, through their local Modbus TCP"
 
