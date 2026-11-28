@@ -10,7 +10,8 @@
 //! - Meter: type 10630 (1 single phase, 2 three phase), power 10638–10644 (W), energies 10650–10664
 //!   (kWh ÷10, forward and reverse), the second set of clamps (CT 2) at 10666–10694.
 //!
-//! The SolarBank 2 has no local access: it goes through Anker's cloud, in a module of its own.
+//! The SolarBank 2 and the Smart Meter Gen 1 (`A17X7`, no Modbus) have no local access: they go
+//! through Anker's cloud, in a module of its own (`anker_cloud`, which says what it reads of each).
 
 use breezone_module_sdk::{device, host, json, module, Described, DeviceInfo, Driver, Error, Found, LengthPrefix, Map, ReadUntil, Result, State, Value};
 use std::cell::{Cell, RefCell};

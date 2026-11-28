@@ -18,6 +18,19 @@
 //! The panels wired to a SolarBank are shown as an inverter and its inputs. The cloud tells their
 //! power, not what they gave today: it is counted here from each read, since midnight (from the
 //! start of the module on its first day).
+//!
+//! The hardware of Anker, and where Breezone reads it. Each line seen on a real system keeps a
+//! test built on its answer (`tests/*.json`): a new device must not change how these are read.
+//!
+//! - SolarBank 2 E1600 AC (`A17C2`): here, the only way (no local access). Seen 2026-11-28: no
+//!   `solar_power_<n>` at night (`pv_power` null), so its inverter has no panel then; the
+//!   `statistics` of the site (type 1) give what it produced since the start.
+//! - Smart Meter Gen 1 (`A17X7`): here, the only way: it has no Modbus, the local module `anker`
+//!   never finds it. Seen 2026-11-28 in `grid_info`: `grid_to_home_power` and
+//!   `photovoltaic_to_grid_power`, its `grid_list` entry without any value of its own.
+//! - Smart Meter Gen 2 (`AE1X0`) and Smart Plug Gen 2 (`A17X8`): read locally by the module
+//!   `anker` (Modbus TCP). The plugs are also in `smart_plug_info`, not read here: they would be
+//!   the same devices twice. Whether a Gen 2 meter shows in `grid_list` is not known yet.
 
 use aes::cipher::{BlockModeEncrypt, KeyIvInit};
 use base64::engine::general_purpose::STANDARD;
@@ -290,7 +303,11 @@ fn banks_of(site: &str, scene: &Value) -> Vec<Bank> {
         .collect()
 }
 
-/// A Smart Meter of a site (the first one, `A17X7`, has no local access): the grid of the home.
+/// The first Smart Meter: no Modbus, the cloud is its only access.
+pub const SMART_METER_GEN1: &str = "A17X7";
+
+/// A Smart Meter of a site, from `grid_info` (the Gen 1 there, seen on a real system): the grid of
+/// the home.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Meter {
     pub site: String,
@@ -310,7 +327,8 @@ fn meters_of(site: &str, scene: &Value) -> Vec<Meter> {
         .collect()
 }
 
-/// The power at the meter: positive drawn from the grid, negative returned to it.
+/// The power at the meter: positive drawn from the grid, negative returned to it. It is told for
+/// the site, not in the meter's own entry of `grid_list` (a Gen 1 has none there).
 fn meter_state(scene: &Value) -> Option<State> {
     let grid = &scene["grid_info"];
     let drawn = num(&grid["grid_to_home_power"]);
@@ -634,6 +652,22 @@ mod tests {
         assert_eq!((panel["power"].clone(), panel["port"].clone(), panel["inverter"].clone()), (json!(170.0), json!(1), json!("SB2AC0001")));
         assert_eq!(states["pv:SB2AC0001:2"]["power"], 130.0);
         assert_eq!(states["pv:SB2AC0001"]["energy_total"], 2390.29);
+    }
+
+    #[test]
+    fn a_real_solarbank_2_ac_with_a_smart_meter_gen_1() {
+        // Its real answer (see the head of this file).
+        let scene: Value = breezone_module_sdk::serde_json::from_str(include_str!("../tests/solarbank2-ac-smart-meter-gen1.json")).unwrap();
+        let meters = meters_of("s1", &scene);
+        assert_eq!(meters, vec![Meter { site: "s1".into(), reference: "meter:SM1G0001".into(), pn: SMART_METER_GEN1.into() }], "the Gen 1 is read here");
+        assert_eq!(meter_state(&scene).unwrap()["power"], 315.0, "drawn from the grid");
+        let banks = banks_of("s1", &scene);
+        assert_eq!((banks.len(), banks[0].ports.len()), (1, 0), "no power per input at night");
+        let devices = devices_of(&banks, &meters);
+        assert!(devices.iter().all(|d| !d.reference.contains("SP000")), "the plugs are read locally");
+        let states: std::collections::HashMap<String, State> = states_of(&banks[0], &scene, &mut |_, _| 0.0).into_iter().collect();
+        assert_eq!(states["sb:SB2AC0001"]["soc"], 10);
+        assert_eq!((states["pv:SB2AC0001"]["panels"].clone(), states["pv:SB2AC0001"]["energy_total"].clone()), (json!(0), json!(2390.29)));
     }
 
     #[test]
